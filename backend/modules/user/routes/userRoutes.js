@@ -14,6 +14,7 @@ import { authenticate } from '../../auth/middleware/auth.js';
 import { uploadMiddleware } from '../../../shared/utils/cloudinaryService.js';
 import userWalletRoutes from './userWalletRoutes.js';
 import complaintRoutes from './complaintRoutes.js';
+import referralRoutes from './referralRoutes.js';
 
 const router = express.Router();
 
@@ -46,6 +47,9 @@ router.use('/wallet', userWalletRoutes);
 
 // Complaint routes
 router.use('/complaints', complaintRoutes);
+
+// Referral routes
+router.use('/referral', referralRoutes);
 
 export default router;
 

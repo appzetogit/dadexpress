@@ -28,16 +28,11 @@ export default function RestaurantWithdraws() {
     actions: true,
   })
 
-  // Fetch withdrawal requests
-  useEffect(() => {
-    fetchWithdrawals()
-  }, [activeTab])
-
-  const fetchWithdrawals = async () => {
+  const fetchWithdrawals = async (tab = activeTab) => {
     try {
       setLoading(true)
-      const status = activeTab === "All" ? undefined : activeTab
-      const response = await adminAPI.getWithdrawalRequests({ status, search: searchQuery || undefined })
+      const status = tab === "All" ? undefined : tab
+      const response = await adminAPI.getWithdrawalRequests({ status })
       if (response.data?.success) {
         setWithdraws(response.data.data?.requests || [])
       } else {
@@ -52,15 +47,10 @@ export default function RestaurantWithdraws() {
     }
   }
 
-  // Refetch when search changes (with debounce)
+  // Fetch ONLY on mount and when activeTab changes — search is handled client-side
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (searchQuery !== undefined) {
-        fetchWithdrawals()
-      }
-    }, 500)
-    return () => clearTimeout(timer)
-  }, [searchQuery])
+    fetchWithdrawals(activeTab)
+  }, [activeTab])
 
   const filteredWithdraws = useMemo(() => {
     let result = [...withdraws]
@@ -241,8 +231,8 @@ export default function RestaurantWithdraws() {
                 key={tab}
                 onClick={() => setActiveTab(tab)}
                 className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${activeTab === tab
-                    ? "border-blue-600 text-blue-600"
-                    : "border-transparent text-slate-600 hover:text-slate-900"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-slate-600 hover:text-slate-900"
                   }`}
               >
                 {tab}

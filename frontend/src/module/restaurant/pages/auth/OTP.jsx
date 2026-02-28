@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { restaurantAPI } from "@/lib/api"
 import { setAuthData as setRestaurantAuthData } from "@/lib/utils/auth"
 import { checkOnboardingStatus } from "../../utils/onboardingUtils"
+import { requestFcmToken } from "@/lib/firebase"
 
 export default function RestaurantOTP() {
   const navigate = useNavigate()
@@ -200,7 +201,13 @@ export default function RestaurantOTP() {
         nameToSend = authData.name
       }
 
-      const response = await restaurantAPI.verifyOTP(phone, code, purpose, nameToSend, email)
+      // Get FCM token
+      const fcmToken = await requestFcmToken();
+      if (fcmToken) {
+        console.log('[PUSH-NOTIFICATION] Sending FCM token for restaurant verification:', fcmToken);
+      }
+
+      const response = await restaurantAPI.verifyOTP(phone, code, purpose, nameToSend, email, null, fcmToken, "web")
 
       // Extract restaurant and token or special flags (like needsName) from backend response
       const data = response?.data?.data || response?.data
@@ -244,27 +251,8 @@ export default function RestaurantOTP() {
         sessionStorage.removeItem("restaurantLoginPhone")
 
         setTimeout(async () => {
-          console.log({ authData })
-          // After signup, send to onboarding
-          if (authData?.isSignUp) {
-            navigate("/restaurant/onboarding", { replace: true })
-          } else {
-            // After login, check if onboarding is incomplete
-            try {
-              const incompleteStep = await checkOnboardingStatus()
-              if (incompleteStep) {
-                // Navigate to onboarding with the incomplete step
-                navigate(`/restaurant/onboarding?step=${incompleteStep}`, { replace: true })
-              } else {
-                // Onboarding is complete, go to restaurant home
-                navigate("/restaurant", { replace: true })
-              }
-            } catch (err) {
-              console.error("Failed to check onboarding status:", err)
-              // Fallback to restaurant home
-              navigate("/restaurant", { replace: true })
-            }
-          }
+          // Skip onboarding redirect as per user request
+          navigate("/restaurant", { replace: true })
         }, 500)
       }
     } catch (err) {
@@ -416,8 +404,8 @@ export default function RestaurantOTP() {
                 }}
                 placeholder="Enter your full name"
                 className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 ${nameError
-                    ? "border-red-500 focus:ring-red-500"
-                    : "border-gray-300 focus:ring-blue-500"
+                  ? "border-red-500 focus:ring-red-500"
+                  : "border-gray-300 focus:ring-blue-500"
                   }`}
                 disabled={isLoading}
               />
@@ -481,8 +469,8 @@ export default function RestaurantOTP() {
             onClick={() => handleVerify()}
             disabled={isLoading || !isOtpComplete}
             className={`w-full h-12 rounded-lg font-bold text-base transition-colors ${!isLoading && isOtpComplete
-                ? "bg-blue-600 hover:bg-blue-700 text-white"
-                : "bg-gray-300 text-gray-500 cursor-not-allowed"
+              ? "bg-blue-600 hover:bg-blue-700 text-white"
+              : "bg-gray-300 text-gray-500 cursor-not-allowed"
               }`}
           >
             {isLoading ? "Verifying..." : "Continue"}

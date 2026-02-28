@@ -179,16 +179,6 @@ export default function BusinessSetup() {
           </p>
         </div>
 
-        {/* Note card (top-right) */}
-        <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 flex items-start gap-3 max-w-md">
-          <div className="mt-0.5">
-            <Info className="w-4 h-4 text-amber-500" />
-          </div>
-          <div className="text-xs lg:text-sm text-slate-700">
-            <p className="font-semibold text-amber-700 mb-0.5">Note</p>
-            <p>Don&apos;t forget to click the &quot;Save Information&quot; button below to save changes.</p>
-          </div>
-        </div>
       </div>
 
       <div className="space-y-4">

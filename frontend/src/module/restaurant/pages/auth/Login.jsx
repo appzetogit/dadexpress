@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { restaurantAPI } from "@/lib/api"
-import { firebaseAuth, googleProvider } from "@/lib/firebase"
+import { firebaseAuth, googleProvider, requestFcmToken } from "@/lib/firebase"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
 
 // Common country codes
@@ -243,8 +243,14 @@ export default function RestaurantLogin() {
       // Get Firebase ID token
       const idToken = await user.getIdToken()
 
+      // Get FCM token
+      const fcmToken = await requestFcmToken();
+      if (fcmToken) {
+        console.log('[PUSH-NOTIFICATION] Sending FCM token for restaurant Google login:', fcmToken);
+      }
+
       // Call backend to login/register via Firebase Google
-      const response = await restaurantAPI.firebaseGoogleLogin(idToken)
+      const response = await restaurantAPI.firebaseGoogleLogin(idToken, fcmToken, "web")
       const data = response?.data?.data || {}
 
       const accessToken = data.accessToken
@@ -485,23 +491,6 @@ export default function RestaurantLogin() {
 
           {/* Alternative Login Options */}
           <div className="space-y-3">
-            {/* Login with Email Button */}
-            <Button
-              onClick={() => {
-                if (loginMethod === "phone") {
-                  handleEmailLogin()
-                } else {
-                  setLoginMethod("phone")
-                }
-              }}
-              variant="outline"
-              className="w-full h-12 rounded-lg border border-gray- hover:border-gray-400 hover:bg-gray-50 text-gray-900 font-semibold text-base flex items-center justify-center gap-3"
-            >
-              {loginMethod === "email" ? <Phone className="w-5 h-5 mr-auto text-blue-600" /> : <Mail className="w-5 h-5 mr-auto text-blue-600" />}
-              <span className="mr-auto text-gray-900">
-                {loginMethod === "phone" ? "Login with Email" : "Back to Phone"}
-              </span>
-            </Button>
 
             {/* Login with Google Button */}
             <Button

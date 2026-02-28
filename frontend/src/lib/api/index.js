@@ -75,11 +75,15 @@ export const authAPI = {
     email = null,
     role = "user",
     password = null,
+    fcmToken = null,
+    platform = "web",
   ) => {
     const payload = {
       otp,
       purpose,
       role,
+      fcmToken,
+      platform,
     };
     if (phone != null) payload.phone = phone;
     if (email != null) payload.email = email;
@@ -89,34 +93,43 @@ export const authAPI = {
   },
 
   // Register with email/password
-  register: (name, email, password, phone = null, role = "user") => {
+  register: (name, email, password, phone = null, role = "user", fcmToken = null, platform = "web") => {
     return apiClient.post(API_ENDPOINTS.AUTH.REGISTER, {
       name,
       email,
       password,
       phone,
       role,
+      fcmToken,
+      platform,
     });
   },
 
   // Login with email/password
-  login: (email, password, role = null) => {
-    const payload = { email, password };
+  login: (email, password, role = null, fcmToken = null, platform = "web") => {
+    const payload = { email, password, fcmToken, platform };
     if (role) payload.role = role;
     return apiClient.post(API_ENDPOINTS.AUTH.LOGIN, payload);
   },
 
   // Login/Register via Firebase Google ID token
-  firebaseGoogleLogin: (idToken, role = "restaurant") => {
+  firebaseGoogleLogin: (idToken, role = "restaurant", fcmToken = null, platform = "web") => {
     return apiClient.post(API_ENDPOINTS.AUTH.FIREBASE_GOOGLE_LOGIN, {
       idToken,
       role,
+      fcmToken,
+      platform,
     });
   },
 
   // Refresh token
   refreshToken: () => {
     return apiClient.post(API_ENDPOINTS.AUTH.REFRESH_TOKEN);
+  },
+
+  // Update FCM Token (for already logged-in users)
+  updateFcmToken: (fcmToken, platform = 'web') => {
+    return apiClient.put('/auth/update-fcm-token', { fcmToken, platform });
   },
 
   // Logout
@@ -232,6 +245,18 @@ export const userAPI = {
   updateLocation: (locationData) => {
     return apiClient.put(API_ENDPOINTS.USER.LOCATION, locationData);
   },
+  // Get referral stats
+  getReferralStats: () => {
+    return apiClient.get(API_ENDPOINTS.REFERRAL.STATS);
+  },
+  // Get referral logs
+  getReferralLogs: (params = {}) => {
+    return apiClient.get(API_ENDPOINTS.REFERRAL.LOGS, { params });
+  },
+  // Calculate order pricing
+  calculateOrder: (data) => {
+    return apiClient.post(API_ENDPOINTS.ORDER.CALCULATE, data);
+  },
 };
 
 // Export location API helper functions
@@ -277,10 +302,14 @@ export const restaurantAPI = {
     name = null,
     email = null,
     password = null,
+    fcmToken = null,
+    platform = "web",
   ) => {
     const payload = {
       otp,
       purpose,
+      fcmToken,
+      platform,
     };
     if (phone != null) payload.phone = phone;
     if (email != null) payload.email = email;
@@ -297,6 +326,8 @@ export const restaurantAPI = {
     ownerName = null,
     ownerEmail = null,
     ownerPhone = null,
+    fcmToken = null,
+    platform = "web",
   ) => {
     return apiClient.post(API_ENDPOINTS.RESTAURANT.AUTH.REGISTER, {
       name,
@@ -306,19 +337,25 @@ export const restaurantAPI = {
       ownerName,
       ownerEmail,
       ownerPhone,
+      fcmToken,
+      platform,
     });
   },
 
-  login: (email, password) => {
+  login: (email, password, fcmToken = null, platform = "web") => {
     return apiClient.post(API_ENDPOINTS.RESTAURANT.AUTH.LOGIN, {
       email,
       password,
+      fcmToken,
+      platform,
     });
   },
 
-  firebaseGoogleLogin: (idToken) => {
+  firebaseGoogleLogin: (idToken, fcmToken = null, platform = "web") => {
     return apiClient.post(API_ENDPOINTS.RESTAURANT.AUTH.FIREBASE_GOOGLE_LOGIN, {
       idToken,
+      fcmToken,
+      platform,
     });
   },
 
@@ -780,8 +817,8 @@ export const deliveryAPI = {
       purpose,
     });
   },
-  verifyOTP: (phone, otp, purpose = "login", name = null) => {
-    const payload = { phone, otp, purpose };
+  verifyOTP: (phone, otp, purpose = "login", name = null, fcmToken = null, platform = "web") => {
+    const payload = { phone, otp, purpose, fcmToken, platform };
     // Only include name if it's provided and is a string
     if (name && typeof name === "string" && name.trim()) {
       payload.name = name.trim();
@@ -997,6 +1034,18 @@ export const deliveryAPI = {
 
 // Export admin API helper functions
 export const adminAPI = {
+  // Push Notification
+  sendPushNotification: (data) => {
+    if (data instanceof FormData) {
+      return apiClient.post('/admin/push-notification', data, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+    }
+    return apiClient.post('/admin/push-notification', data);
+  },
+
   // Admin Auth
   signup: (name, email, password, phone = null) => {
     const payload = { name, email, password };
@@ -1078,6 +1127,15 @@ export const adminAPI = {
       API_ENDPOINTS.ADMIN.RESTAURANT_BY_ID.replace(":id", id),
     );
   },
+
+  // Update restaurant by ID
+  updateRestaurant: (id, data) => {
+    return apiClient.put(
+      API_ENDPOINTS.ADMIN.RESTAURANT_BY_ID.replace(":id", id),
+      data,
+    );
+  },
+
 
   // Get restaurant analytics
   getRestaurantAnalytics: (restaurantId) => {
@@ -1790,10 +1848,20 @@ export const adminAPI = {
     );
   },
 
-  deleteFeedbackExperience: (id) => {
-    return apiClient.delete(
-      API_ENDPOINTS.ADMIN.FEEDBACK_EXPERIENCE_BY_ID.replace(":id", id),
-    );
+  // Referral Settings
+  getReferralSettings: () => {
+    return apiClient.get(API_ENDPOINTS.REFERRAL.SETTINGS);
+  },
+  updateReferralSettings: (data) => {
+    return apiClient.put(API_ENDPOINTS.REFERRAL.SETTINGS, data);
+  },
+  // Referral Analytics
+  getReferralAnalytics: (params = {}) => {
+    return apiClient.get(API_ENDPOINTS.REFERRAL.ANALYTICS, { params });
+  },
+  // Referral Users/Logs
+  getReferralUsers: (params = {}) => {
+    return apiClient.get(API_ENDPOINTS.REFERRAL.USERS, { params });
   },
 };
 

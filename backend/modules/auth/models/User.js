@@ -15,7 +15,7 @@ const userSchema = new mongoose.Schema({
   phone: {
     type: String,
     // Phone is required only if email and googleId are not provided
-    required: function() {
+    required: function () {
       return !this.email && !this.googleId;
     },
     trim: true
@@ -200,6 +200,34 @@ const userSchema = new mongoose.Schema({
   isActive: {
     type: Boolean,
     default: true
+  },
+  referralCode: {
+    type: String,
+    unique: true,
+    sparse: true
+  },
+  referredBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  referralStats: {
+    invited: { type: Number, default: 0 },
+    completed: { type: Number, default: 0 },
+    pending: { type: Number, default: 0 },
+    earned: { type: Number, default: 0 }
+  },
+  fcmToken: {
+    type: String,
+    default: null
+  },
+  fcmTokenMobile: {
+    type: String,
+    default: null
+  },
+  platform: {
+    type: String,
+    enum: ['web', 'ios', 'android', 'app'],
+    default: 'web'
   }
 }, {
   timestamps: true
@@ -210,16 +238,16 @@ const userSchema = new mongoose.Schema({
 // But prevent duplicate email+role or phone+role combinations
 // Use partial index to only index non-null emails to avoid duplicate key errors with null emails
 userSchema.index(
-  { email: 1, role: 1 }, 
-  { 
-    unique: true, 
+  { email: 1, role: 1 },
+  {
+    unique: true,
     partialFilterExpression: { email: { $exists: true, $type: 'string' } }
   }
 );
 userSchema.index(
-  { phone: 1, role: 1 }, 
-  { 
-    unique: true, 
+  { phone: 1, role: 1 },
+  {
+    unique: true,
     partialFilterExpression: { phone: { $exists: true, $type: 'string' } }
   }
 );
@@ -230,21 +258,21 @@ userSchema.index({ 'currentLocation.location': '2dsphere' }); // GeoJSON index f
 userSchema.index({ role: 1 });
 
 // Hash password before saving
-userSchema.pre('save', async function(next) {
+userSchema.pre('save', async function (next) {
   if (!this.isModified('password')) {
     return next();
   }
-  
+
   if (this.password) {
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
   }
-  
+
   next();
 });
 
 // Method to compare password
-userSchema.methods.comparePassword = async function(candidatePassword) {
+userSchema.methods.comparePassword = async function (candidatePassword) {
   if (!this.password) {
     return false;
   }

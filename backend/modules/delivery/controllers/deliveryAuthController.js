@@ -87,13 +87,19 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         phoneVerified: true,
         signupMethod: 'phone',
         status: 'pending', // New delivery boys start as pending approval
-        isActive: true // Allow login to see verification message
+        isActive: true, // Allow login to see verification message
+        fcmToken: req.body.fcmToken || null,
+        platform: req.body.platform || 'web'
       };
 
       try {
         delivery = await Delivery.create(deliveryData);
-        logger.info(`New delivery boy registered: ${delivery._id}`, { 
-          phone, 
+        if (delivery.fcmToken) {
+          console.log(`[PUSH-NOTIFICATION] FCM Token stored for new delivery registration ${delivery._id}: ${delivery.fcmToken} (${delivery.platform})`);
+        }
+
+        logger.info(`New delivery boy registered: ${delivery._id}`, {
+          phone,
           deliveryId: delivery._id,
           deliveryIdField: delivery.deliveryId
         });
@@ -119,19 +125,29 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       if (!delivery) {
         // New user - create minimal record for signup flow
         // Use provided name or placeholder
+        const { fcmToken, platform = 'web' } = req.body;
         const deliveryData = {
           name: normalizedName || 'Delivery Partner', // Placeholder if not provided
           phone,
           phoneVerified: true,
           signupMethod: 'phone',
           status: 'pending', // New delivery boys start as pending approval
-          isActive: true // Allow login to see verification message
+          isActive: true, // Allow login to see verification message
+          platform: platform || 'web'
         };
+
+        if (fcmToken) {
+          if (['android', 'ios', 'app'].includes(platform?.toLowerCase())) {
+            deliveryData.fcmTokenMobile = fcmToken;
+          } else {
+            deliveryData.fcmToken = fcmToken;
+          }
+        }
 
         try {
           delivery = await Delivery.create(deliveryData);
-          logger.info(`New delivery boy created for signup: ${delivery._id}`, { 
-            phone, 
+          logger.info(`New delivery boy created for signup: ${delivery._id}`, {
+            phone,
             deliveryId: delivery._id,
             deliveryIdField: delivery.deliveryId,
             hasName: !!normalizedName
@@ -151,18 +167,32 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         // Existing delivery boy login - update verification status if needed
         if (!delivery.phoneVerified) {
           delivery.phoneVerified = true;
-          await delivery.save();
         }
+
+        // Update FCM Token and platform on login
+        if (req.body.fcmToken) {
+          const { fcmToken, platform } = req.body;
+          delivery.platform = platform || delivery.platform || 'web';
+
+          if (['android', 'ios', 'app'].includes(delivery.platform?.toLowerCase())) {
+            delivery.fcmTokenMobile = fcmToken;
+          } else {
+            delivery.fcmToken = fcmToken;
+          }
+
+          console.log(`[PUSH-NOTIFICATION] FCM Token stored for delivery login ${delivery._id}: ${fcmToken} (${delivery.platform})`);
+        }
+        await delivery.save();
       }
 
       // Check if signup needs to be completed (missing required fields)
-      const needsSignup = !delivery.location?.city || 
-                         !delivery.vehicle?.number || 
-                         !delivery.documents?.pan?.number ||
-                         !delivery.documents?.aadhar?.number ||
-                         !delivery.documents?.aadhar?.document ||
-                         !delivery.documents?.pan?.document ||
-                         !delivery.documents?.drivingLicense?.document;
+      const needsSignup = !delivery.location?.city ||
+        !delivery.vehicle?.number ||
+        !delivery.documents?.pan?.number ||
+        !delivery.documents?.aadhar?.number ||
+        !delivery.documents?.aadhar?.document ||
+        !delivery.documents?.pan?.document ||
+        !delivery.documents?.drivingLicense?.document;
 
       if (needsSignup) {
         // Generate tokens for signup flow
@@ -181,7 +211,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
           httpOnly: true,
           secure: process.env.NODE_ENV === 'production',
           sameSite: 'strict',
-          maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+          maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
         });
 
         return successResponse(res, 200, 'OTP verified. Please complete your profile.', {
@@ -222,7 +252,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+      maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
     });
 
     // Update last login

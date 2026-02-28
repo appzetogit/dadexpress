@@ -30,7 +30,9 @@ const verifyOTPSchema = Joi.object({
   purpose: Joi.string()
     .valid('login', 'register', 'reset-password', 'verify-phone')
     .default('login'),
-  name: Joi.string().allow(null, '').optional()
+  name: Joi.string().allow(null, '').optional(),
+  fcmToken: Joi.string().optional().allow(null, ''),
+  platform: Joi.string().valid('web', 'ios', 'android', 'app').optional().default('web')
 });
 
 // Public routes
@@ -43,4 +45,3 @@ router.post('/logout', authenticate, logout);
 router.get('/me', authenticate, getCurrentDelivery);
 
 export default router;
-

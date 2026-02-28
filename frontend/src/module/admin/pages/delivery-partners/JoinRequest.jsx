@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect, useRef } from "react"
 import { Search, Filter, Eye, Check, X, Package, ArrowUpDown, FileText, FileSpreadsheet, Loader2, Download, ExternalLink, Calendar, MapPin, CreditCard, User, Mail, Phone, Bike, FileCheck } from "lucide-react"
 import { adminAPI } from "@/lib/api"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
@@ -27,9 +27,14 @@ export default function JoinRequest() {
   // Fetch join requests from API
   const fetchJoinRequests = async () => {
     try {
-      setLoading(true)
+      // Determine if we already have data to show - if so, don't show full loader
+      const hasData = requests && requests.length > 0
+
+      if (!hasData) {
+        setLoading(true)
+      }
       setError(null)
-      
+
       const params = {
         status: activeTab === "pending" ? "pending" : "denied",
         page: 1,
@@ -50,7 +55,7 @@ export default function JoinRequest() {
       }
 
       const response = await adminAPI.getDeliveryPartnerJoinRequests(params)
-      
+
       if (response.data && response.data.success) {
         setRequests(response.data.data.requests || [])
       } else {
@@ -59,10 +64,10 @@ export default function JoinRequest() {
       }
     } catch (err) {
       console.error("Error fetching join requests:", err)
-      
+
       // Better error handling
       let errorMessage = "Failed to fetch join requests. Please try again."
-      
+
       if (err.code === 'ERR_NETWORK') {
         errorMessage = "Network error. Please check if backend server is running."
       } else if (err.response?.status === 401) {
@@ -74,7 +79,7 @@ export default function JoinRequest() {
       } else if (err.message) {
         errorMessage = err.message
       }
-      
+
       setError(errorMessage)
       setRequests([])
     } finally {
@@ -82,34 +87,28 @@ export default function JoinRequest() {
     }
   }
 
-  // Fetch requests when tab changes
-  useEffect(() => {
-    fetchJoinRequests()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab])
+  // Track initial mount to prevent double fetch
+  const isInitialMount = useRef(true)
 
-  // Debounced search effect
+  // Combined fetch effect for tab, search and filters
   useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false
+      fetchJoinRequests()
+      return
+    }
+
     const timer = setTimeout(() => {
       fetchJoinRequests()
-    }, 500) // Wait 500ms after user stops typing
+    }, searchQuery ? 500 : 0)
 
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchQuery])
-
-  // Fetch when filters change (only when filter dialog is closed)
-  useEffect(() => {
-    if (!isFilterOpen) {
-      // Only fetch when filter dialog is closed (after applying)
-      fetchJoinRequests()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters, isFilterOpen])
+  }, [activeTab, searchQuery, filters, isFilterOpen])
 
   const filteredRequests = useMemo(() => {
     let result = [...requests]
-    
+
     // Client-side filtering for additional filters not supported by backend
     if (filters.jobType) {
       result = result.filter(request => request.jobType === filters.jobType)
@@ -129,13 +128,13 @@ export default function JoinRequest() {
     try {
       setProcessing(true)
       await adminAPI.approveDeliveryPartner(selectedRequest._id)
-      
+
       // Refresh the list
       await fetchJoinRequests()
-      
+
       setIsApproveOpen(false)
       setSelectedRequest(null)
-      
+
       // Show success message
       alert(`Successfully approved ${selectedRequest.name}'s join request!`)
     } catch (err) {
@@ -164,14 +163,14 @@ export default function JoinRequest() {
     try {
       setProcessing(true)
       await adminAPI.rejectDeliveryPartner(selectedRequest._id, rejectionReason.trim())
-      
+
       // Refresh the list
       await fetchJoinRequests()
-      
+
       setIsDenyOpen(false)
       setSelectedRequest(null)
       setRejectionReason("")
-      
+
       // Show success message
       alert(`Successfully rejected ${selectedRequest.name}'s join request.`)
     } catch (err) {
@@ -186,7 +185,7 @@ export default function JoinRequest() {
     try {
       setLoading(true)
       const response = await adminAPI.getDeliveryPartnerById(request._id)
-      
+
       if (response.data && response.data.success) {
         setViewDetails(response.data.data.delivery)
         setIsViewOpen(true)
@@ -247,21 +246,19 @@ export default function JoinRequest() {
           <div className="flex items-center gap-2 border-b border-slate-200 mb-6">
             <button
               onClick={() => handleTabChange("pending")}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === "pending"
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === "pending"
                   ? "border-blue-600 text-blue-600"
                   : "border-transparent text-slate-600 hover:text-slate-900"
-              }`}
+                }`}
             >
               Pending Delivery Man
             </button>
             <button
               onClick={() => handleTabChange("denied")}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === "denied"
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === "denied"
                   ? "border-blue-600 text-blue-600"
                   : "border-transparent text-slate-600 hover:text-slate-900"
-              }`}
+                }`}
             >
               Denied Deliveryman
             </button>
@@ -282,11 +279,10 @@ export default function JoinRequest() {
             </div>
 
             <div className="flex items-center gap-2">
-              <button 
+              <button
                 onClick={() => setIsFilterOpen(true)}
-                className={`px-4 py-2.5 text-sm font-medium rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 flex items-center gap-2 transition-all relative ${
-                  activeFiltersCount > 0 ? "border-emerald-500 bg-emerald-50" : ""
-                }`}
+                className={`px-4 py-2.5 text-sm font-medium rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 flex items-center gap-2 transition-all relative ${activeFiltersCount > 0 ? "border-emerald-500 bg-emerald-50" : ""
+                  }`}
               >
                 <Filter className="w-4 h-4" />
                 <span className="text-black font-bold">Filter</span>
@@ -424,13 +420,12 @@ export default function JoinRequest() {
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex flex-col gap-1">
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium inline-block w-fit ${
-                              request.status === "Pending" || request.status === "pending"
+                            <span className={`px-3 py-1 rounded-full text-xs font-medium inline-block w-fit ${request.status === "Pending" || request.status === "pending"
                                 ? "bg-blue-100 text-blue-700"
                                 : request.status === "Denied" || request.status === "denied" || request.status === "blocked"
-                                ? "bg-red-100 text-red-700"
-                                : "bg-green-100 text-green-700"
-                            }`}>
+                                  ? "bg-red-100 text-red-700"
+                                  : "bg-green-100 text-green-700"
+                              }`}>
                               {request.status === "blocked" || request.status === "Blocked" || request.status === "Denied" || request.status === "denied" ? "Rejected" : request.status}
                             </span>
                             {request.rejectionReason && (
@@ -575,8 +570,8 @@ export default function JoinRequest() {
                 <div className="flex items-start gap-6 pb-6 border-b border-slate-200">
                   <div className="flex-shrink-0">
                     {viewDetails.profileImage?.url ? (
-                      <img 
-                        src={viewDetails.profileImage.url} 
+                      <img
+                        src={viewDetails.profileImage.url}
                         alt={viewDetails.name}
                         className="w-24 h-24 rounded-full object-cover border-2 border-slate-200"
                       />
@@ -611,12 +606,11 @@ export default function JoinRequest() {
                     </div>
                     <div>
                       <label className="text-xs font-semibold text-slate-500 uppercase">Status</label>
-                      <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium mt-1 ${
-                        viewDetails.status === 'pending' ? 'bg-blue-100 text-blue-700' :
-                        viewDetails.status === 'approved' || viewDetails.status === 'active' ? 'bg-green-100 text-green-700' :
-                        viewDetails.status === 'blocked' ? 'bg-red-100 text-red-700' :
-                        'bg-slate-100 text-slate-700'
-                      }`}>
+                      <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium mt-1 ${viewDetails.status === 'pending' ? 'bg-blue-100 text-blue-700' :
+                          viewDetails.status === 'approved' || viewDetails.status === 'active' ? 'bg-green-100 text-green-700' :
+                            viewDetails.status === 'blocked' ? 'bg-red-100 text-red-700' :
+                              'bg-slate-100 text-slate-700'
+                        }`}>
                         {viewDetails.status === 'blocked' ? 'Rejected' : (viewDetails.status?.charAt(0).toUpperCase() + viewDetails.status?.slice(1) || "N/A")}
                       </span>
                     </div>
@@ -753,9 +747,9 @@ export default function JoinRequest() {
                               <p className="text-sm text-slate-700 mb-1">Number: {viewDetails.documents.aadhar.number}</p>
                             )}
                             {viewDetails.documents.aadhar.document && (
-                              <a 
-                                href={viewDetails.documents.aadhar.document} 
-                                target="_blank" 
+                              <a
+                                href={viewDetails.documents.aadhar.document}
+                                target="_blank"
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
                               >
@@ -775,9 +769,9 @@ export default function JoinRequest() {
                               <p className="text-sm text-slate-700 mb-1">Number: {viewDetails.documents.pan.number}</p>
                             )}
                             {viewDetails.documents.pan.document && (
-                              <a 
-                                href={viewDetails.documents.pan.document} 
-                                target="_blank" 
+                              <a
+                                href={viewDetails.documents.pan.document}
+                                target="_blank"
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
                               >
@@ -802,9 +796,9 @@ export default function JoinRequest() {
                               </p>
                             )}
                             {viewDetails.documents.drivingLicense.document && (
-                              <a 
-                                href={viewDetails.documents.drivingLicense.document} 
-                                target="_blank" 
+                              <a
+                                href={viewDetails.documents.drivingLicense.document}
+                                target="_blank"
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
                               >
@@ -824,9 +818,9 @@ export default function JoinRequest() {
                               <p className="text-sm text-slate-700 mb-1">Number: {viewDetails.documents.vehicleRC.number}</p>
                             )}
                             {viewDetails.documents.vehicleRC.document && (
-                              <a 
-                                href={viewDetails.documents.vehicleRC.document} 
-                                target="_blank" 
+                              <a
+                                href={viewDetails.documents.vehicleRC.document}
+                                target="_blank"
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
                               >
@@ -886,9 +880,8 @@ export default function JoinRequest() {
                   {viewDetails.phoneVerified !== undefined && (
                     <div>
                       <label className="text-xs font-semibold text-slate-500 uppercase">Phone Verified</label>
-                      <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium mt-1 ${
-                        viewDetails.phoneVerified ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                      }`}>
+                      <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium mt-1 ${viewDetails.phoneVerified ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                        }`}>
                         {viewDetails.phoneVerified ? 'Verified' : 'Not Verified'}
                       </span>
                     </div>

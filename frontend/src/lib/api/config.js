@@ -443,6 +443,15 @@ export const API_ENDPOINTS = {
     BOOKING_STATUS_RESTAURANT: "/dining/bookings/:bookingId/status/restaurant",
     REVIEW_CREATE: "/dining/reviews",
   },
+  // Referral endpoints
+  REFERRAL: {
+    SETTINGS: "/admin/referral/settings",
+    STATS: "/user/referral/stats",
+    LOGS: "/user/referral/logs",
+    ANALYTICS: "/admin/referral/analytics",
+    USERS: "/admin/referral/users",
+    ADJUSTMENTS: "/admin/referral/adjustments",
+  },
 };
 
 export default {

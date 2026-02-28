@@ -19,6 +19,8 @@ import {
   updateUserStatus,
   getRestaurants,
   createRestaurant,
+  getRestaurantById,
+  updateRestaurant,
   updateRestaurantStatus,
   getRestaurantJoinRequests,
   approveRestaurant,
@@ -30,9 +32,11 @@ import {
   getRestaurantAnalytics,
   getCustomerWalletReport,
 } from "../controllers/adminController.js";
+import { sendPushNotification } from "../controllers/pushNotificationController.js";
 import {
   getBusinessSettings,
   updateBusinessSettings,
+  updateReferralSettings,
 } from "../controllers/businessSettingsController.js";
 import {
   getCategories,
@@ -218,6 +222,12 @@ import {
   getFeeSettingsHistory,
   getPublicFeeSettings,
 } from "../controllers/feeSettingsController.js";
+import {
+  getReferralAnalytics,
+  getReferralUsers,
+  getManualAdjustments,
+  addManualAdjustment,
+} from "../../user/controllers/referralController.js";
 import zoneRoutes from "./zoneRoutes.js";
 import { authenticateAdmin } from "../middleware/adminAuth.js";
 import { uploadMiddleware } from "../../../shared/utils/cloudinaryService.js";
@@ -248,6 +258,13 @@ router.use((req, res, next) => {
 
 // Dashboard
 router.get("/dashboard/stats", getDashboardStats);
+
+// Push Notification
+router.post(
+  "/push-notification",
+  uploadMiddleware.single("image"),
+  sendPushNotification,
+);
 
 // Delivery Partner global cash limit (applies to all delivery boys)
 router.get("/delivery-cash-limit", getDeliveryCashLimit);
@@ -287,6 +304,8 @@ router.get("/restaurants", getRestaurants);
 router.post("/restaurants", createRestaurant);
 router.get("/restaurants/requests", getRestaurantJoinRequests);
 router.get("/restaurant-analytics/:restaurantId", getRestaurantAnalytics);
+router.get("/restaurants/:id", getRestaurantById);
+router.put("/restaurants/:id", updateRestaurant);
 router.post("/restaurants/:id/approve", approveRestaurant);
 router.post("/restaurants/:id/reject", rejectRestaurant);
 router.post("/restaurants/:id/reverify", reverifyRestaurant);
@@ -549,6 +568,14 @@ router.put(
   ]),
   updateBusinessSettings,
 );
+
+// Referral Management
+router.get("/referral/settings", getBusinessSettings);
+router.put("/referral/settings", updateReferralSettings);
+router.get("/referral/analytics", getReferralAnalytics);
+router.get("/referral/users", getReferralUsers);
+router.get("/referral/adjustments", getManualAdjustments);
+router.post("/referral/adjustments", addManualAdjustment);
 
 // Settlement Routes
 router.get("/settlements/order/:orderId", getOrderSettlementDetails);

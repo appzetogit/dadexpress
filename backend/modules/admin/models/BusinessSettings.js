@@ -96,6 +96,18 @@ const businessSettingsSchema = new mongoose.Schema(
       default: 100,
       min: 0,
     },
+    referral: {
+      isEnabled: { type: Boolean, default: true },
+      referrerReward: { type: Number, default: 100 },
+      refereeReward: { type: Number, default: 50 },
+      minOrderValue: { type: Number, default: 199 },
+      expiryDays: { type: Number, default: 30 },
+      maxRedemptionPercentage: { type: Number, default: 20 }
+    },
+    restaurantReferral: {
+      commissionPercentage: { type: Number, default: 5 },
+      applyOn: { type: String, default: 'First Order Only' }
+    },
     updatedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Admin",

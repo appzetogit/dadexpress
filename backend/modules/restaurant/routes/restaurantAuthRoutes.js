@@ -40,7 +40,9 @@ const verifyOTPSchema = Joi.object({
     then: Joi.required(),
     otherwise: Joi.optional()
   }),
-  password: Joi.string().min(6).max(100).optional()
+  password: Joi.string().min(6).max(100).optional(),
+  fcmToken: Joi.string().optional().allow(null, ''),
+  platform: Joi.string().valid('web', 'ios', 'android', 'app').optional().default('web')
 }).or('phone', 'email');
 
 const registerSchema = Joi.object({
@@ -50,12 +52,16 @@ const registerSchema = Joi.object({
   phone: Joi.string().optional(),
   ownerName: Joi.string().optional(),
   ownerEmail: Joi.string().email().optional(),
-  ownerPhone: Joi.string().optional()
+  ownerPhone: Joi.string().optional(),
+  fcmToken: Joi.string().optional().allow(null, ''),
+  platform: Joi.string().valid('web', 'ios', 'android', 'app').optional().default('web')
 });
 
 const loginSchema = Joi.object({
   email: Joi.string().email().required(),
-  password: Joi.string().required()
+  password: Joi.string().required(),
+  fcmToken: Joi.string().optional().allow(null, ''),
+  platform: Joi.string().valid('web', 'ios', 'android', 'app').optional().default('web')
 });
 
 const resetPasswordSchema = Joi.object({
@@ -65,7 +71,9 @@ const resetPasswordSchema = Joi.object({
 });
 
 const firebaseGoogleLoginSchema = Joi.object({
-  idToken: Joi.string().required()
+  idToken: Joi.string().required(),
+  fcmToken: Joi.string().optional().allow(null, ''),
+  platform: Joi.string().valid('web', 'ios', 'android', 'app').optional().default('web')
 });
 
 // Public routes
@@ -83,4 +91,3 @@ router.get('/me', authenticate, getCurrentRestaurant);
 router.post('/reverify', authenticate, reverifyRestaurant);
 
 export default router;
-

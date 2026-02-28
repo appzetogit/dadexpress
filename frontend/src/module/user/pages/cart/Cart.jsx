@@ -16,6 +16,7 @@ import { API_BASE_URL } from "@/lib/api/config"
 import { initRazorpayPayment } from "@/lib/utils/razorpay"
 import { toast } from "sonner"
 import { getCompanyNameAsync } from "@/lib/utils/businessSettings"
+import LocationSelectorOverlay from "../../components/LocationSelectorOverlay"
 
 
 // Removed hardcoded suggested items - now fetching approved addons from backend
@@ -83,7 +84,7 @@ export default function Cart() {
   }
 
   const { cart, updateQuantity, addToCart, getCartCount, clearCart, cleanCartForRestaurant } = cartContext;
-  const { getDefaultAddress, getDefaultPaymentMethod, addresses, paymentMethods, userProfile } = useProfile()
+  const { getDefaultAddress, getDefaultPaymentMethod, addresses, paymentMethods, userProfile, setDefaultAddress } = useProfile()
   const { createOrder } = useOrders()
   const { location: currentLocation } = useUserLocation() // Get live location address
   const { zoneId } = useZone(currentLocation) // Get user's zone
@@ -125,6 +126,7 @@ export default function Cart() {
   const [orderProgress, setOrderProgress] = useState(0)
   const [showOrderSuccess, setShowOrderSuccess] = useState(false)
   const [placedOrderId, setPlacedOrderId] = useState(null)
+  const [showAddressSheet, setShowAddressSheet] = useState(false)
 
   // Restaurant and pricing state
   const [restaurantData, setRestaurantData] = useState(null)
@@ -1287,7 +1289,7 @@ export default function Cart() {
           </div>
           <h2 className="text-lg font-semibold text-gray-800 dark:text-white mb-1">Your cart is empty</h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 text-center">Add items from a restaurant to start a new order</p>
-          <Link>
+          <Link to="/">
             <Button className="bg-primary-orange hover:opacity-90 text-white">Browse Restaurants</Button>
           </Link>
         </div>
@@ -1642,7 +1644,10 @@ export default function Cart() {
 
               {/* Delivery Address */}
               <div className="bg-white dark:bg-[#1a1a1a] px-4 md:px-6 py-3 md:py-4 rounded-lg md:rounded-xl">
-                <Link className="flex items-center justify-between">
+                <button
+                  onClick={() => setShowAddressSheet(true)}
+                  className="flex items-center justify-between w-full text-left"
+                >
                   <div className="flex items-center gap-3 md:gap-4">
                     <MapPin className="h-4 w-4 md:h-5 md:w-5 text-gray-500 dark:text-gray-400" />
                     <div className="flex-1">
@@ -1650,24 +1655,27 @@ export default function Cart() {
                         Delivery at <span className="font-semibold">Location</span>
                       </p>
                       <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400 line-clamp-2">
-                        {defaultAddress ? (formatFullAddress(defaultAddress) || defaultAddress?.formattedAddress || defaultAddress?.address || "Add delivery address") : "Add delivery address"}
+                        {defaultAddress ? (formatFullAddress(defaultAddress) || defaultAddress?.formattedAddress || defaultAddress?.address || "Add delivery address") : "Tap to select delivery address"}
                       </p>
                       {/* Address Selection Buttons */}
                       <div className="flex gap-2 mt-2">
                         {["Home", "Office", "Other"].map((label) => {
-                          const addressExists = addresses.some(addr => addr.label === label)
+                          const addr = addresses.find(a => a.label === label)
+                          const isSelected = defaultAddress?.label === label
                           return (
                             <button
                               key={label}
                               onClick={(e) => {
                                 e.preventDefault()
                                 e.stopPropagation()
-                                handleSelectAddressByLabel(label)
+                                if (addr) setDefaultAddress(addr.id || addr._id)
                               }}
-                              disabled={!addressExists}
-                              className={`text-xs md:text-sm px-2 md:px-3 py-1 md:py-1.5 rounded-md border transition-colors ${addressExists
-                                ? 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 bg-white dark:bg-[#1a1a1a]'
-                                : 'border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-50'
+                              disabled={!addr}
+                              className={`text-xs md:text-sm px-2 md:px-3 py-1 md:py-1.5 rounded-md border transition-colors ${isSelected
+                                ? 'border-[#EB590E] bg-orange-50 dark:bg-orange-900/20 text-[#EB590E] font-semibold'
+                                : addr
+                                  ? 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 bg-white dark:bg-[#1a1a1a]'
+                                  : 'border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-50'
                                 }`}
                             >
                               {label}
@@ -1678,7 +1686,7 @@ export default function Cart() {
                     </div>
                   </div>
                   <ChevronRight className="h-4 w-4 md:h-5 md:w-5 text-gray-400" />
-                </Link>
+                </button>
               </div>
 
               {/* Contact */}
@@ -1826,7 +1834,7 @@ export default function Cart() {
                     className="appearance-none bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200 rounded-lg px-3 py-2 pr-9 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-[#EB590E]/40"
                   >
                     <option value="razorpay">Razorpay</option>
-                    <option value="wallet">Wallet {walletBalance > 0 ? `(₹${walletBalance.toFixed(0)})` : ''}</option>
+                    <option value="wallet">Wallet (₹{walletBalance.toFixed(0)})</option>
                     <option value="cash">COD</option>
                   </select>
                   <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 dark:text-gray-400" />
@@ -1836,7 +1844,7 @@ export default function Cart() {
               <Button
                 size="lg"
                 onClick={handlePlaceOrder}
-                disabled={isPlacingOrder || (selectedPaymentMethod === "wallet" && walletBalance < total)}
+                disabled={isPlacingOrder || !defaultAddress || (selectedPaymentMethod === "wallet" && walletBalance < total)}
                 className="w-full bg-[#EB590E] hover:bg-[#D94F0C] dark:bg-[#EB590E] dark:hover:bg-[#D94F0C] text-white px-6 md:px-10 h-14 md:h-16 rounded-lg md:rounded-xl text-base md:text-lg font-bold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {(selectedPaymentMethod === "razorpay" || selectedPaymentMethod === "wallet") && (
@@ -1848,13 +1856,15 @@ export default function Cart() {
                 <span className="font-bold text-base md:text-lg">
                   {isPlacingOrder
                     ? "Processing..."
-                    : selectedPaymentMethod === "razorpay"
-                      ? "Select Payment"
-                      : selectedPaymentMethod === "wallet"
-                        ? walletBalance >= total
-                          ? "Place Order"
-                          : "Insufficient Balance"
-                        : "Place Order"}
+                    : !defaultAddress
+                      ? "Select Delivery Address"
+                      : selectedPaymentMethod === "razorpay"
+                        ? "Select Payment"
+                        : selectedPaymentMethod === "wallet"
+                          ? walletBalance >= total
+                            ? "Place Order"
+                            : "Insufficient Balance"
+                          : "Place Order"}
                 </span>
                 <ChevronRight className="h-5 w-5 md:h-6 md:w-6 ml-2" />
               </Button>
@@ -1952,8 +1962,15 @@ export default function Cart() {
         </div>
       )}
 
+      {/* Address Selection - LocationSelectorOverlay */}
+      <LocationSelectorOverlay
+        isOpen={showAddressSheet}
+        onClose={() => setShowAddressSheet(false)}
+      />
+
       {/* Order Success Celebration Page */}
       {showOrderSuccess && (
+
         <div
           className="fixed inset-0 z-[70] bg-white flex flex-col items-center justify-center h-screen w-screen overflow-hidden"
           style={{ animation: 'fadeIn 0.3s ease-out' }}

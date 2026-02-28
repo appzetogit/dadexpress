@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { deliveryAPI } from "@/lib/api"
 import { setAuthData as storeAuthData } from "@/lib/utils/auth"
+import { requestFcmToken } from "@/lib/firebase"
 
 export default function DeliveryOTP() {
   const navigate = useNavigate()
@@ -185,8 +186,14 @@ export default function DeliveryOTP() {
         return
       }
 
+      // Get FCM token
+      const fcmToken = await requestFcmToken();
+      if (fcmToken) {
+        console.log('[PUSH-NOTIFICATION] Sending FCM token for delivery verification:', fcmToken);
+      }
+
       // First attempt: verify OTP for login
-      const response = await deliveryAPI.verifyOTP(phone, code, "login")
+      const response = await deliveryAPI.verifyOTP(phone, code, "login", null, fcmToken, "web")
       const data = response?.data?.data || {}
 
       // Check if user needs to complete signup
@@ -314,8 +321,14 @@ export default function DeliveryOTP() {
         return
       }
 
+      // Get FCM token
+      const fcmToken = await requestFcmToken();
+      if (fcmToken) {
+        console.log('[PUSH-NOTIFICATION] Sending FCM token for delivery name submission:', fcmToken);
+      }
+
       // Second call with name to auto-register and login
-      const response = await deliveryAPI.verifyOTP(phone, verifiedOtp, "login", trimmedName)
+      const response = await deliveryAPI.verifyOTP(phone, verifiedOtp, "login", trimmedName, fcmToken, "web")
       const data = response?.data?.data || {}
 
       const accessToken = data.accessToken

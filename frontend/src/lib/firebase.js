@@ -1,15 +1,17 @@
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 
 // Firebase configuration - fallback to hardcoded values if env vars are not available
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyC_TqpDR7LNHxFEPd8cGjl_ka_Rj0ebECA",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "zomato-607fa.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "zomato-607fa",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:1065631021082:web:7424afd0ad2054ed6879a3",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "1065631021082",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "zomato-607fa.firebasestorage.app",
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-7JJV7JYVRX"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyABoUSSx4Z63LoC0vR4xCIruCV_SZvykgc",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "dad-express.firebaseapp.com",
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || "https://dad-express-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "dad-express",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "dad-express.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "210018822653",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:210018822653:web:8d3b2845d6803e48d41194",
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-4ZZY5KMHVM"
 };
 
 // Validate Firebase configuration
@@ -19,20 +21,14 @@ const missingFields = requiredFields.filter(field => !firebaseConfig[field] || f
 if (missingFields.length > 0) {
   console.error('Firebase configuration is missing required fields:', missingFields);
   console.error('Current config:', firebaseConfig);
-  console.error('Environment variables:', {
-    VITE_FIREBASE_API_KEY: import.meta.env.VITE_FIREBASE_API_KEY,
-    VITE_FIREBASE_AUTH_DOMAIN: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-    VITE_FIREBASE_PROJECT_ID: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-    VITE_FIREBASE_APP_ID: import.meta.env.VITE_FIREBASE_APP_ID,
-    VITE_FIREBASE_MESSAGING_SENDER_ID: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  });
-  throw new Error(`Firebase configuration error: Missing fields: ${missingFields.join(', ')}. Please check your .env file and restart the dev server.`);
+  throw new Error(`Firebase configuration error: Missing fields: ${missingFields.join(', ')}`);
 }
 
 // Initialize Firebase app only once
 let app;
 let firebaseAuth;
 let googleProvider;
+let messaging;
 
 // Function to ensure Firebase is initialized
 function ensureFirebaseInitialized() {
@@ -40,40 +36,33 @@ function ensureFirebaseInitialized() {
     const existingApps = getApps();
     if (existingApps.length === 0) {
       app = initializeApp(firebaseConfig);
-      console.log('Firebase initialized successfully with config:', {
-        projectId: firebaseConfig.projectId,
-        authDomain: firebaseConfig.authDomain,
-        apiKey: firebaseConfig.apiKey ? firebaseConfig.apiKey.substring(0, 20) + '...' : 'missing'
-      });
+      console.log('Firebase initialized successfully');
     } else {
       app = existingApps[0];
-      console.log('Firebase app already initialized, reusing existing instance');
     }
 
-    // Initialize Auth - ensure it's connected to the app
+    // Initialize Auth
     if (!firebaseAuth) {
       firebaseAuth = getAuth(app);
-      if (!firebaseAuth) {
-        throw new Error('Failed to get Firebase Auth instance');
-      }
-      console.log('Firebase Auth initialized successfully', {
-        app: app.name,
-        authApp: firebaseAuth.app.name
-      });
     }
 
     // Initialize Google Provider
     if (!googleProvider) {
       googleProvider = new GoogleAuthProvider();
-      // Add scopes if needed
       googleProvider.addScope('email');
       googleProvider.addScope('profile');
-      // Note: Don't set custom client_id - Firebase uses its own OAuth client
-      console.log('Google Auth Provider initialized');
+    }
+
+    // Initialize Messaging (only in browser)
+    if (!messaging && typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      try {
+        messaging = getMessaging(app);
+      } catch (err) {
+        console.warn('Firebase Messaging not supported in this browser', err);
+      }
     }
   } catch (error) {
     console.error('Firebase initialization error:', error);
-    console.error('Firebase config used:', firebaseConfig);
     throw error;
   }
 }
@@ -81,7 +70,66 @@ function ensureFirebaseInitialized() {
 // Initialize immediately
 ensureFirebaseInitialized();
 
+/**
+ * Request FCM Token
+ */
+export const requestFcmToken = async () => {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    if (!messaging) return null;
+
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
+      console.warn('[PUSH-NOTIFICATION] Permission not granted for notifications');
+      return null;
+    }
+
+    // Use the dad-express VAPID key for proper FCM token generation
+    const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY || 'BLd26y4PbOmBzFABPEfLNhQAsGDKYVpbyUdk_zKRO0Q5jy7tKOMr7IRuri1tLy6jdtVtevqmdZTs1I-psrM96HM';
+
+    let token = null;
+    try {
+      token = await getToken(messaging, { vapidKey });
+      console.log('[PUSH-NOTIFICATION] FCM Token generated with VAPID key');
+    } catch (fallbackErr) {
+      console.error('[PUSH-NOTIFICATION] Token generation failed:', fallbackErr);
+    }
+
+    if (token) {
+      console.log('[PUSH-NOTIFICATION] FCM Token:', token);
+      return token;
+    } else {
+      console.warn('[PUSH-NOTIFICATION] No registration token available. Request permission to generate one.');
+      return null;
+    }
+  } catch (error) {
+    console.error('[PUSH-NOTIFICATION] Error getting FCM token:', error);
+    return null;
+  }
+};
+
+/**
+ * Listen for foreground messages
+ */
+export const onForegroundMessage = (callback) => {
+  if (messaging) {
+    return onMessage(messaging, (payload) => {
+      console.log('[PUSH-NOTIFICATION] Foreground message received:', payload);
+      if (callback) callback(payload);
+    });
+  }
+};
+
 export const firebaseApp = app;
-export { firebaseAuth, googleProvider, ensureFirebaseInitialized };
+export {
+  firebaseAuth,
+  googleProvider,
+  messaging,
+  getToken,
+  onMessage,
+  deleteToken,
+  ensureFirebaseInitialized
+};
 
 

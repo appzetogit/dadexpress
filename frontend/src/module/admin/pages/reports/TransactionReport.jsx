@@ -64,12 +64,12 @@ export default function TransactionReport() {
     const fetchTransactionReport = async () => {
       try {
         setLoading(true)
-        
+
         // Build date range based on time filter
         let fromDate = null
         let toDate = null
         const now = new Date()
-        
+
         if (filters.time === "Today") {
           fromDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
           toDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59)
@@ -163,16 +163,6 @@ export default function TransactionReport() {
     return `$ ${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   }
 
-  if (loading) {
-    return (
-      <div className="p-2 lg:p-3 bg-slate-50 min-h-screen flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
-          <p className="text-gray-600">Loading transaction report...</p>
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="p-2 lg:p-3 bg-slate-50 min-h-screen">
@@ -232,11 +222,10 @@ export default function TransactionReport() {
               <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-500 pointer-events-none" />
             </div>
 
-            <button 
+            <button
               onClick={handleFilterApply}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all whitespace-nowrap relative ${
-                activeFiltersCount > 0 ? "ring-2 ring-blue-300" : ""
-              }`}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all whitespace-nowrap relative ${activeFiltersCount > 0 ? "ring-2 ring-blue-300" : ""
+                }`}
             >
               Filter
               {activeFiltersCount > 0 && (
@@ -245,7 +234,7 @@ export default function TransactionReport() {
                 </span>
               )}
             </button>
-            <button 
+            <button
               onClick={handleResetFilters}
               className="px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-all whitespace-nowrap"
             >
@@ -395,7 +384,7 @@ export default function TransactionReport() {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <button 
+              <button
                 onClick={() => setIsSettingsOpen(true)}
                 className="p-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 transition-all"
               >
@@ -449,11 +438,10 @@ export default function TransactionReport() {
                         <span className="text-[10px] text-slate-700 truncate block">{transaction.restaurant}</span>
                       </td>
                       <td className="px-1.5 py-1">
-                        <span className={`text-[10px] truncate block ${
-                          transaction.customerName === "Invalid Customer Data" 
-                            ? "text-red-600 font-semibold" 
+                        <span className={`text-[10px] truncate block ${transaction.customerName === "Invalid Customer Data"
+                            ? "text-red-600 font-semibold"
                             : "text-slate-700"
-                        }`}>
+                          }`}>
                           {transaction.customerName}
                         </span>
                       </td>
@@ -471,7 +459,7 @@ export default function TransactionReport() {
                       </td>
                       <td className="px-1.5 py-1">
                         <span className="text-[10px] text-slate-700">
-                          {transaction.discountedAmount >= 1000 
+                          {transaction.discountedAmount >= 1000
                             ? formatCurrency(transaction.discountedAmount)
                             : formatFullCurrency(transaction.discountedAmount)
                           }

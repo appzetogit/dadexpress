@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { Search, Download, ChevronDown, Eye, Settings, ArrowUpDown, Loader2, X, MapPin, Phone, Mail, Clock, Star, Building2, User, FileText, CreditCard, Calendar, Image as ImageIcon, ExternalLink, ShieldX, AlertTriangle, Trash2, Plus } from "lucide-react"
+import { Search, Download, ChevronDown, Eye, Settings, ArrowUpDown, Loader2, X, MapPin, Phone, Mail, Clock, Star, Building2, User, FileText, CreditCard, Calendar, Image as ImageIcon, ExternalLink, ShieldX, AlertTriangle, Trash2, Plus, Pencil } from "lucide-react"
 import { adminAPI, restaurantAPI } from "../../../../lib/api"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { exportRestaurantsToPDF } from "../../components/restaurants/restaurantsExportUtils"
@@ -688,6 +688,13 @@ export default function RestaurantsList() {
                               title="View Details"
                             >
                               <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => navigate(`/admin/restaurants/edit/${restaurant._id || restaurant.id}`)}
+                              className="p-1.5 rounded text-amber-600 hover:bg-amber-50 transition-colors"
+                              title="Edit Restaurant"
+                            >
+                              <Pencil className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => handleBanRestaurant(restaurant)}

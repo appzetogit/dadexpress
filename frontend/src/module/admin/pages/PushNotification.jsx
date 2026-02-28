@@ -1,6 +1,7 @@
-import { useState, useMemo, useRef } from "react"
+import { useState, useMemo, useRef, useEffect } from "react"
 import { Search, Download, ChevronDown, Bell, Edit, Trash2, Upload, Settings, Image as ImageIcon } from "lucide-react"
 import { pushNotificationsDummy } from "../data/pushNotificationsDummy"
+import { adminAPI } from "../../../lib/api";
 // Using placeholders for notification images
 const notificationImage1 = "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&h=400&fit=crop"
 const notificationImage2 = "https://images.unsplash.com/photo-1559339352-11d035aa65de?w=800&h=400&fit=crop"
@@ -23,12 +24,29 @@ export default function PushNotification() {
   const [bannerPreview, setBannerPreview] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
   const [notifications, setNotifications] = useState(pushNotificationsDummy)
+  const [zones, setZones] = useState([])
+
+  useEffect(() => {
+    const fetchZones = async () => {
+      try {
+        const response = await adminAPI.getZones({ limit: 1000 })
+        if (response?.data?.success && response.data?.data?.zones) {
+          setZones(response.data.data.zones)
+        } else if (Array.isArray(response?.data?.data)) {
+          setZones(response.data.data)
+        }
+      } catch (error) {
+        console.error("Failed to fetch zones:", error)
+      }
+    }
+    fetchZones()
+  }, [])
 
   const filteredNotifications = useMemo(() => {
     if (!searchQuery.trim()) {
       return notifications
     }
-    
+
     const query = searchQuery.toLowerCase().trim()
     return notifications.filter(notification =>
       notification.title.toLowerCase().includes(query) ||
@@ -40,31 +58,61 @@ export default function PushNotification() {
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     if (!formData.title.trim() || !formData.description.trim()) {
       alert("Title and description are required")
       return
     }
 
-    const nextSl =
-      notifications.length > 0
-        ? Math.max(...notifications.map((n) => Number(n.sl) || 0)) + 1
-        : 1
+    try {
+      const file = fileInputRef.current?.files?.[0];
+      let response;
+      if (file) {
+        const payload = new FormData();
+        payload.append("title", formData.title.trim());
+        payload.append("description", formData.description.trim());
+        payload.append("zone", formData.zone);
+        payload.append("sendTo", formData.sendTo);
+        payload.append("image", file);
+        response = await adminAPI.sendPushNotification(payload);
+      } else {
+        const payload = {
+          title: formData.title.trim(),
+          description: formData.description.trim(),
+          zone: formData.zone,
+          sendTo: formData.sendTo
+        };
+        response = await adminAPI.sendPushNotification(payload);
+      }
 
-    const newNotification = {
-      sl: nextSl,
-      title: formData.title.trim(),
-      description: formData.description.trim(),
-      zone: formData.zone,
-      target: formData.sendTo,
-      status: true,
-      image: Boolean(bannerPreview),
-      imageUrl: bannerPreview || null,
+      if (response && response.data && response.data.success) {
+        alert(response.data.message || "Push notifications sent successfully!");
+        const nextSl =
+          notifications.length > 0
+            ? Math.max(...notifications.map((n) => Number(n.sl) || 0)) + 1
+            : 1
+
+        const newNotification = {
+          sl: nextSl,
+          title: formData.title.trim(),
+          description: formData.description.trim(),
+          zone: formData.zone,
+          target: formData.sendTo,
+          status: true,
+          image: Boolean(bannerPreview),
+          imageUrl: bannerPreview || null,
+        }
+
+        setNotifications((prev) => [newNotification, ...prev])
+        handleReset()
+      } else {
+        alert(response?.data?.message || "Failed to send notifications");
+      }
+    } catch (error) {
+      console.error("Error sending push notification:", error);
+      alert("Error sending push notification. " + (error.response?.data?.message || error.message));
     }
-
-    setNotifications((prev) => [newNotification, ...prev])
-    handleReset()
   }
 
   const handleReset = () => {
@@ -144,8 +192,11 @@ export default function PushNotification() {
                   className="w-full px-4 py-2.5 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                 >
                   <option value="All">All</option>
-                  <option value="Asia">Asia</option>
-                  <option value="Europe">Europe</option>
+                  {zones.map((zone) => (
+                    <option key={zone._id} value={zone.name}>
+                      {zone.name}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -316,14 +367,12 @@ export default function PushNotification() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <button
                         onClick={() => handleToggleStatus(notification.sl)}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                          notification.status ? "bg-blue-600" : "bg-slate-300"
-                        }`}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${notification.status ? "bg-blue-600" : "bg-slate-300"
+                          }`}
                       >
                         <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            notification.status ? "translate-x-6" : "translate-x-1"
-                          }`}
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${notification.status ? "translate-x-6" : "translate-x-1"
+                            }`}
                         />
                       </button>
                     </td>

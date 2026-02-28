@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Search, History, Info, Settings, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Search, History, Info, Settings, ArrowUpCircle, ArrowDownCircle, Loader2 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,11 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-
-const WALLET_HISTORY = [
-  { id: 1, user: "Rahul Sharma", action: "Credit", coins: "100", reason: "Correction: Missed referral", date: "22 Feb, 14:30" },
-  { id: 2, user: "Priya Patel", action: "Debit", coins: "50", reason: "Order canceled after reward", date: "21 Feb, 11:15" },
-];
+import api, { API_ENDPOINTS } from "@/lib/api";
 
 export default function ReferralAdjustment() {
   const [formData, setFormData] = useState({
@@ -27,19 +23,50 @@ export default function ReferralAdjustment() {
     note: ""
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [walletHistory, setWalletHistory] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(true);
 
-  const handleSubmit = (e) => {
+  useEffect(() => {
+    fetchHistory();
+  }, []);
+
+  const fetchHistory = async () => {
+    try {
+      setLoadingHistory(true);
+      const res = await api.get(API_ENDPOINTS.REFERRAL.ADJUSTMENTS);
+      if (res.data?.success) {
+        setWalletHistory(res.data.data);
+      }
+    } catch (error) {
+      console.error("Failed to load adjustment history:", error);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.userSearch || !formData.coins) {
       toast.error("User and amount are required!");
       return;
     }
-    setIsSubmitting(true);
-    setTimeout(() => {
+
+    try {
+      setIsSubmitting(true);
+      const res = await api.post(API_ENDPOINTS.REFERRAL.ADJUSTMENTS, formData);
+      if (res.data?.success) {
+        toast.success("Adjustment saved successfully!");
+        setFormData({ userSearch: "", action: "add", coins: "", note: "" });
+        fetchHistory(); // Refresh history
+      } else {
+        toast.error(res.data?.message || "Failed to save adjustment");
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to process adjustment");
+      console.error("Failed to process adjustment:", error);
+    } finally {
       setIsSubmitting(false);
-      toast.success("Adjustment saved successfully!");
-      setFormData({ userSearch: "", action: "add", coins: "", note: "" });
-    }, 1000);
+    }
   };
 
   return (
@@ -77,8 +104,8 @@ export default function ReferralAdjustment() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label className="text-[13px] font-bold text-slate-700">Adjustment Type</Label>
-                    <Select 
-                      value={formData.action} 
+                    <Select
+                      value={formData.action}
                       onValueChange={(val) => setFormData({ ...formData, action: val })}
                     >
                       <SelectTrigger className="h-11 border-slate-200 rounded-lg focus:ring-green-500 font-medium text-sm">
@@ -129,34 +156,42 @@ export default function ReferralAdjustment() {
                 <History className="h-5 w-5 text-slate-400" />
                 <h3 className="text-md font-bold text-slate-800">Recent Wallet History</h3>
               </div>
-              
+
               <div className="space-y-6">
-                {WALLET_HISTORY.map((log) => (
-                  <div key={log.id} className="flex items-start gap-3 group">
-                    <div className={`mt-0.5 p-2 rounded-lg shrink-0 ${log.action === 'Credit' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
-                      {log.action === 'Credit' ? <ArrowUpCircle size={18} strokeWidth={2.5} /> : <ArrowDownCircle size={18} strokeWidth={2.5} />}
-                    </div>
-                    <div className="flex-1 space-y-1">
-                      <div className="flex justify-between items-start">
-                        <p className="font-bold text-slate-800 text-sm">{log.user}</p>
-                        <p className={`font-black text-sm ${log.action === 'Credit' ? 'text-green-600' : 'text-red-500'}`}>
-                          {log.action === 'Credit' ? '+' : '-'}{log.coins}
-                        </p>
-                      </div>
-                      <p className="text-[11px] font-medium text-slate-400 line-clamp-1 italic">"{log.reason}"</p>
-                      <p className="text-[10px] font-bold text-slate-300 uppercase">{log.date}</p>
-                    </div>
+                {loadingHistory ? (
+                  <div className="flex justify-center py-6">
+                    <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
                   </div>
-                ))}
+                ) : walletHistory.length === 0 ? (
+                  <div className="text-center text-slate-500 font-medium py-4 text-sm">No recent manual adjustments found.</div>
+                ) : (
+                  walletHistory.map((log) => (
+                    <div key={log.id} className="flex items-start gap-3 group">
+                      <div className={`mt-0.5 p-2 rounded-lg shrink-0 ${log.action === 'Credit' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
+                        {log.action === 'Credit' ? <ArrowUpCircle size={18} strokeWidth={2.5} /> : <ArrowDownCircle size={18} strokeWidth={2.5} />}
+                      </div>
+                      <div className="flex-1 space-y-1">
+                        <div className="flex justify-between items-start">
+                          <p className="font-bold text-slate-800 text-sm">{log.user}</p>
+                          <p className={`font-black text-sm ${log.action === 'Credit' ? 'text-green-600' : 'text-red-500'}`}>
+                            {log.action === 'Credit' ? '+' : '-'}{log.coins}
+                          </p>
+                        </div>
+                        <p className="text-[11px] font-medium text-slate-400 line-clamp-1 italic">"{log.reason}"</p>
+                        <p className="text-[10px] font-bold text-slate-300 uppercase">{log.date}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
 
               <div className="mt-8 pt-6 border-t border-slate-50">
-                 <div className="bg-slate-50 rounded-xl p-4 flex gap-3">
-                    <Info className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
-                    <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-                      Changes made here will be instantly reflected in the user's wallet balance and history.
-                    </p>
-                 </div>
+                <div className="bg-slate-50 rounded-xl p-4 flex gap-3">
+                  <Info className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+                    Changes made here will be instantly reflected in the user's wallet balance and history.
+                  </p>
+                </div>
               </div>
             </Card>
           </div>

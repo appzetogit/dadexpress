@@ -1,7 +1,6 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-
-import { CheckCircle, MapPin, CreditCard, ArrowLeft, Coins } from "lucide-react"
+import { CheckCircle, MapPin, CreditCard, ArrowLeft, Coins, Loader2 } from "lucide-react"
 import { Switch } from "@/components/ui/switch"
 import { Link } from "react-router-dom"
 import AnimatedPage from "../../components/AnimatedPage"
@@ -14,71 +13,173 @@ import { Badge } from "@/components/ui/badge"
 import { useCart } from "../../context/CartContext"
 import { useProfile } from "../../context/ProfileContext"
 import { useOrders } from "../../context/OrdersContext"
+import { userAPI, orderAPI } from "@/lib/api"
+import { toast } from "sonner"
 
 export default function Checkout() {
   const navigate = useNavigate()
   const { cart, clearCart } = useCart()
-  const { getDefaultAddress, getDefaultPaymentMethod, addresses, paymentMethods } = useProfile()
+  const { userProfile, getDefaultAddress, getDefaultPaymentMethod, addresses, paymentMethods } = useProfile()
   const { createOrder } = useOrders()
+
   const [selectedAddress, setSelectedAddress] = useState(getDefaultAddress()?.id || "")
   const [selectedPayment, setSelectedPayment] = useState(getDefaultPaymentMethod()?.id || "")
   const [isPlacingOrder, setIsPlacingOrder] = useState(false)
   const [useRewards, setUseRewards] = useState(false)
-  
-  // Mock Reward Balance
-  const rewardBalance = 100 // Coins
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+
+  const [referralSettings, setReferralSettings] = useState({
+    maxRedemptionPercentage: 20,
+    isEnabled: true
+  })
+
+  // State for order calculation from API
+  const [calculations, setCalculations] = useState({
+    subtotal: 0,
+    deliveryFee: 0,
+    tax: 0,
+    total: 0,
+    rewardDiscount: 0
+  })
+
+  const rewardBalance = userProfile?.wallet?.balance || 0
   const coinsToInr = 1 // 1 Coin = ₹1
+
+  // Fetch referral settings
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const response = await userAPI.getReferralStats()
+        const data = response?.data?.data || response?.data
+        if (data?.referralSettings) {
+          setReferralSettings(data.referralSettings)
+        }
+      } catch (err) {
+        console.error("Error fetching referral settings:", err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchSettings()
+  }, [])
+
+  // Call calculateOrderPricing whenever dependencies change
+  useEffect(() => {
+    const calculate = async () => {
+      if (cart.length === 0) return
+
+      try {
+        setRefreshing(true)
+        const items = cart.map(item => ({
+          id: item.id,
+          name: item.name,
+          price: item.price,
+          quantity: item.quantity,
+          image: item.image,
+          restaurantId: item.restaurantId
+        }))
+
+        // Call our specialized calculateOrder helper from orderAPI
+        const response = await orderAPI.calculateOrder({
+          items,
+          useRewardCoins: useRewards,
+          rewardCoins: useRewards ? rewardBalance : 0,
+          addressId: selectedAddress
+        })
+
+        const data = response?.data?.data || response?.data
+        if (data) {
+          setCalculations({
+            subtotal: data.pricing?.subtotal || 0,
+            deliveryFee: data.pricing?.deliveryFee || 0,
+            tax: data.pricing?.tax || 0,
+            total: data.pricing?.total || 0,
+            rewardDiscount: data.pricing?.rewardDiscount || 0
+          })
+        }
+      } catch (err) {
+        console.error("Error calculating order:", err)
+        // Fallback to local calculation if API fails
+        const sub = cart.reduce((sum, item) => sum + item.price * item.quantity * 83, 0)
+        const df = 2.99 * 83
+        const tx = sub * 0.08
+        const maxRedeem = sub * (referralSettings.maxRedemptionPercentage / 100)
+        const disc = useRewards ? Math.min(rewardBalance * coinsToInr, maxRedeem) : 0
+
+        setCalculations({
+          subtotal: sub,
+          deliveryFee: df,
+          tax: tx,
+          total: sub + df + tx - disc,
+          rewardDiscount: disc
+        })
+      } finally {
+        setRefreshing(false)
+      }
+    }
+
+    calculate()
+  }, [cart, useRewards, selectedAddress, rewardBalance, referralSettings])
 
   const defaultAddress = addresses.find(addr => addr.id === selectedAddress) || getDefaultAddress()
   const defaultPayment = paymentMethods.find(pm => pm.id === selectedPayment) || getDefaultPaymentMethod()
 
-  const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity * 83, 0)
-  const deliveryFee = 2.99 * 83
-  const tax = subtotal * 0.08
-  
-  // Calculate potential discount (max 20% of subtotal)
-  const maxRedeemAmount = subtotal * 0.20
-  const rewardInr = rewardBalance * coinsToInr
-  const actualRewardDiscount = useRewards ? Math.min(rewardInr, maxRedeemAmount) : 0
-  
-  const total = subtotal + deliveryFee + tax - actualRewardDiscount
+  // Destructure calculations for ease of use
+  const { subtotal, deliveryFee, tax, total, rewardDiscount } = calculations
+  const actualRewardDiscount = rewardDiscount
 
   const handlePlaceOrder = async () => {
     if (!selectedAddress || !selectedPayment) {
-      alert("Please select a delivery address and payment method")
+      toast.error("Please select a delivery address and payment method")
       return
     }
 
     if (cart.length === 0) {
-      alert("Your cart is empty")
+      toast.error("Your cart is empty")
       return
     }
 
     setIsPlacingOrder(true)
 
-    // Simulate API call
-    setTimeout(() => {
-      const orderId = createOrder({
+    try {
+      // Create order via API
+      const orderData = {
         items: cart.map(item => ({
-          id: item.id,
+          productId: item.id,
           name: item.name,
           price: item.price,
           quantity: item.quantity,
-          image: item.image
+          restaurantId: item.restaurantId
         })),
-        address: defaultAddress,
-        paymentMethod: defaultPayment,
-        subtotal,
-        deliveryFee,
-        tax,
-        total,
-        restaurant: cart[0]?.restaurant || cart[0]?.name || "Multiple Restaurants"
-      })
+        addressId: selectedAddress,
+        paymentMethod: selectedPayment === "cod" ? "cod" : "online",
+        useRewardCoins: useRewards,
+        rewardCoins: useRewards ? rewardBalance : 0,
+      }
 
-      clearCart()
+      const response = await orderAPI.createOrder(orderData)
+      const data = response?.data?.data || response?.data
+
+      if (data?.orderId || data?.id) {
+        toast.success("Order placed successfully!")
+        clearCart()
+        navigate(`/user/orders/${data.orderId || data.id}?confirmed=true`)
+      }
+    } catch (err) {
+      console.error("Error placing order:", err)
+      toast.error(err.response?.data?.message || "Failed to place order")
+    } finally {
       setIsPlacingOrder(false)
-      navigate(`/user/orders/${orderId}?confirmed=true`)
-    }, 1500)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-[#0a0a0a]">
+        <Loader2 className="h-10 w-10 text-[#E07832] animate-spin" />
+      </div>
+    )
   }
 
   if (cart.length === 0) {
@@ -144,8 +245,8 @@ export default function Checkout() {
                           <div
                             key={address.id}
                             className={`border-2 rounded-lg p-4 cursor-pointer transition-colors ${isSelected
-                                ? "border-[#EB590E] bg-orange-50"
-                                : "border-gray-200 hover:border-orange-300"
+                              ? "border-[#EB590E] bg-orange-50"
+                              : "border-gray-200 hover:border-orange-300"
                               }`}
                             onClick={() => setSelectedAddress(address.id)}
                           >
@@ -196,8 +297,8 @@ export default function Checkout() {
                           <div
                             key={payment.id}
                             className={`border-2 rounded-lg p-4 cursor-pointer transition-colors ${isSelected
-                                ? "border-[#EB590E] bg-orange-50"
-                                : "border-gray-200 hover:border-orange-300"
+                              ? "border-[#EB590E] bg-orange-50"
+                              : "border-gray-200 hover:border-orange-300"
                               }`}
                             onClick={() => setSelectedPayment(payment.id)}
                           >
@@ -256,21 +357,21 @@ export default function Checkout() {
                   </div>
                   <div className="flex items-center gap-3">
                     {useRewards && (
-                       <span className="text-xs font-black text-green-600">-₹{actualRewardDiscount.toFixed(0)}</span>
+                      <span className="text-xs font-black text-green-600">-₹{actualRewardDiscount.toFixed(0)}</span>
                     )}
-                    <Switch 
-                      checked={useRewards} 
+                    <Switch
+                      checked={useRewards}
                       onCheckedChange={setUseRewards}
                       className="data-[state=checked]:bg-[#EB590E]"
                     />
                   </div>
                 </CardContent>
-                {useRewards && actualRewardDiscount < rewardInr && (
-                   <div className="px-4 pb-3">
-                      <p className="text-[10px] text-orange-600 font-bold italic">
-                        *Max 20% of subtotal can be redeemed per order
-                      </p>
-                   </div>
+                {useRewards && actualRewardDiscount < (rewardBalance * coinsToInr) && (
+                  <div className="px-4 pb-3">
+                    <p className="text-[10px] text-orange-600 font-bold italic">
+                      *Max {referralSettings.maxRedemptionPercentage}% of subtotal can be redeemed per order
+                    </p>
+                  </div>
                 )}
               </Card>
             </ScrollReveal>

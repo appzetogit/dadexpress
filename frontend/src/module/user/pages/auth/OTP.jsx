@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { authAPI } from "@/lib/api"
 import { setAuthData as setUserAuthData } from "@/lib/utils/auth"
+import { requestFcmToken } from "@/lib/firebase"
 
 export default function OTP() {
   const navigate = useNavigate()
@@ -180,8 +181,14 @@ export default function OTP() {
       const email = authData?.method === "email" ? authData.email : null
       const purpose = authData?.isSignUp ? "register" : "login"
 
+      // Get FCM token
+      const fcmToken = await requestFcmToken();
+      if (fcmToken) {
+        console.log('[PUSH-NOTIFICATION] Sending FCM token for user verification:', fcmToken);
+      }
+
       // First attempt: verify OTP for login/register with user role
-      const response = await authAPI.verifyOTP(phone, code, purpose, null, email, "user")
+      const response = await authAPI.verifyOTP(phone, code, purpose, null, email, "user", null, fcmToken, "web")
       const data = response?.data?.data || {}
 
       // If backend tells us this is a new user, ask for name
@@ -258,8 +265,14 @@ export default function OTP() {
       const email = authData?.method === "email" ? authData.email : null
       const purpose = authData?.isSignUp ? "register" : "login"
 
+      // Get FCM token
+      const fcmToken = await requestFcmToken();
+      if (fcmToken) {
+        console.log('[PUSH-NOTIFICATION] Sending FCM token for user name submission:', fcmToken);
+      }
+
       // Second call with name to auto-register and login
-      const response = await authAPI.verifyOTP(phone, verifiedOtp, purpose, trimmedName, email, "user")
+      const response = await authAPI.verifyOTP(phone, verifiedOtp, purpose, trimmedName, email, "user", null, fcmToken, "web")
       const data = response?.data?.data || {}
 
       const accessToken = data.accessToken
@@ -481,7 +494,7 @@ export default function OTP() {
                   />
                   {referral && (
                     <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                       <div className="bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400 text-[10px] font-black px-2 py-1 rounded">APPLIED</div>
+                      <div className="bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400 text-[10px] font-black px-2 py-1 rounded">APPLIED</div>
                     </div>
                   )}
                 </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { Outlet } from "react-router-dom"
 import AdminSidebar from "./AdminSidebar"
 import AdminNavbar from "./AdminNavbar"
@@ -49,8 +49,10 @@ export default function AdminLayout() {
         <AdminNavbar onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
 
         {/* Page Content */}
-        <main className="flex-1  w-full max-w-full overflow-x-hidden bg-neutral-100">
-          <Outlet />
+        <main className="flex-1 w-full max-w-full overflow-x-hidden bg-neutral-100">
+          <Suspense fallback={<div className="h-full w-full flex items-center justify-center bg-white/50 backdrop-blur-sm shadow-sm rounded-3xl m-4"><div className="flex items-center gap-3 rounded-full bg-white px-4 py-2 text-sm text-neutral-700 ring-1 ring-neutral-200 shadow-sm"><span className="h-3 w-3 animate-ping rounded-full bg-neutral-800/70" /><span>Loading Section...</span></div></div>}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
     </div>

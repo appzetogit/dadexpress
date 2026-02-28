@@ -2,6 +2,8 @@ import Order from '../models/Order.js';
 import Payment from '../../payment/models/Payment.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
 import mongoose from 'mongoose';
+import notificationService from '../../../shared/services/notificationService.js';
+import { notifyUserOrderUpdate } from './userNotificationService.js';
 
 // Dynamic import to avoid circular dependency
 let getIO = null;
@@ -32,7 +34,7 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
     // CRITICAL: Validate restaurantId matches order's restaurantId
     const orderRestaurantId = order.restaurantId?.toString() || order.restaurantId;
     const providedRestaurantId = restaurantId?.toString() || restaurantId;
-    
+
     if (orderRestaurantId !== providedRestaurantId) {
       console.error('❌ CRITICAL: RestaurantId mismatch in notification!', {
         orderRestaurantId: orderRestaurantId,
@@ -57,7 +59,7 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
         ]
       }).lean();
     }
-    
+
     // Validate restaurant name matches order
     if (restaurant && order.restaurantName && restaurant.name !== order.restaurantName) {
       console.warn('⚠️ Restaurant name mismatch:', {
@@ -155,6 +157,31 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
         console.log(`📤 Sent notification to room: ${room}`);
       });
       console.log(`✅ Notified restaurant ${normalizedRestaurantId} about new order ${order.orderId} (${socketsInRoom.length} socket(s) connected)`);
+
+      // Also send Push Notification if FCM token exists
+      const fcmTokens = [];
+      if (restaurant?.fcmToken) fcmTokens.push({ token: restaurant.fcmToken, plat: 'web' });
+      if (restaurant?.fcmTokenMobile) fcmTokens.push({ token: restaurant.fcmTokenMobile, plat: 'app' });
+
+      for (const { token, plat } of fcmTokens) {
+        notificationService.sendPushNotification(
+          token,
+          {
+            title: 'New Order Received! 🍕',
+            body: `You have a new order ${order.orderId} for ₹${order.pricing.total}`
+          },
+          {
+            orderId: order.orderId,
+            type: 'new_order',
+            click_action: '/restaurant/orders'
+          },
+          restaurant.platform || plat || 'web'
+        ).then(res => {
+          if (res) console.log(`✅ Push notification sent to restaurant ${normalizedRestaurantId} (${plat})`);
+        }).catch(err => {
+          console.error(`❌ Failed to send push notification to restaurant ${normalizedRestaurantId} (${plat}):`, err);
+        });
+      }
     } else {
       // No sockets found in restaurant room - log error but DO NOT broadcast to all restaurants
       console.error(`❌ CRITICAL: No sockets found for restaurant ${normalizedRestaurantId} in any room!`);
@@ -163,7 +190,7 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
       console.error(`❌ Restaurant name: ${order.restaurantName}`);
       console.error(`❌ Restaurant ID from order: ${order.restaurantId}`);
       console.error(`❌ Normalized restaurant ID: ${normalizedRestaurantId}`);
-      
+
       // Log all connected restaurant sockets for debugging (but don't send to them)
       const allSockets = await restaurantNamespace.fetchSockets();
       console.log(`📊 Total restaurant sockets connected: ${allSockets.length}`);
@@ -179,7 +206,7 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
         }
         console.log(`📊 Connected restaurant sockets and their rooms:`, socketRooms);
       }
-      
+
       // Still try to emit to room variations (in case socket connects later)
       // But DO NOT broadcast to all restaurants
       roomVariations.forEach(room => {
@@ -191,7 +218,7 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
         });
         console.log(`📤 Emitted to room ${room} (no sockets found, but room exists for future connections)`);
       });
-      
+
       // Return error instead of success
       return {
         success: false,
@@ -241,6 +268,35 @@ export async function notifyRestaurantOrderUpdate(orderId, status) {
     });
 
     console.log(`📢 Notified restaurant ${order.restaurantId} about order ${order.orderId} status: ${status}`);
+
+    // Fetch restaurant for FCM token
+    const restaurant = await Restaurant.findById(order.restaurantId).select('fcmToken fcmTokenMobile platform').lean();
+    const fcmTokens = [];
+    if (restaurant?.fcmToken) fcmTokens.push({ token: restaurant.fcmToken, plat: 'web' });
+    if (restaurant?.fcmTokenMobile) fcmTokens.push({ token: restaurant.fcmTokenMobile, plat: 'app' });
+
+    for (const { token, plat } of fcmTokens) {
+      notificationService.sendPushNotification(
+        token,
+        {
+          title: `Order Update: ${status}`,
+          body: `Order ${order.orderId} status changed to ${status}`
+        },
+        {
+          orderId: order.orderId,
+          type: 'order_update',
+          click_action: `/restaurant/orders`
+        },
+        restaurant.platform || plat || 'web'
+      ).catch(err => console.error(`Error sending push notification to restaurant (${plat}):`, err));
+    }
+
+    // Notify customer via userNotificationService
+    try {
+      await notifyUserOrderUpdate(orderId, status);
+    } catch (userNotifError) {
+      console.error('Error sending user notification from restaurant service:', userNotifError);
+    }
   } catch (error) {
     console.error('Error notifying restaurant about order update:', error);
     throw error;

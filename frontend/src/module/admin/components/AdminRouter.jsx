@@ -22,6 +22,7 @@ const AllZonesMap = lazy(() => import("../pages/restaurant/AllZonesMap"));
 const DeliveryBoyViewMap = lazy(() => import("../pages/restaurant/DeliveryBoyViewMap"));
 const RestaurantsList = lazy(() => import("../pages/restaurant/RestaurantsList"));
 const AddRestaurant = lazy(() => import("../pages/restaurant/AddRestaurant"));
+const EditRestaurant = lazy(() => import("../pages/restaurant/EditRestaurant"));
 const JoiningRequest = lazy(() => import("../pages/restaurant/JoiningRequest"));
 const RestaurantCommission = lazy(() => import("../pages/restaurant/RestaurantCommission"));
 const RestaurantReferralCommission = lazy(() => import("../pages/restaurant/RestaurantReferralCommission"));
@@ -131,7 +132,7 @@ const ReferralAdjustment = lazy(() => import("../pages/referral/ReferralAdjustme
 
 export default function AdminRouter() {
   return (
-    <Suspense fallback={<Loader />}>
+    <>
       <Routes>
         {/* Protected Routes - With Layout */}
         <Route
@@ -182,6 +183,7 @@ export default function AdminRouter() {
           {/* Restaurants */}
           <Route path="restaurants" element={<RestaurantsList />} />
           <Route path="restaurants/add" element={<AddRestaurant />} />
+          <Route path="restaurants/edit/:id" element={<EditRestaurant />} />
           <Route path="restaurants/joining-request" element={<JoiningRequest />} />
           <Route path="restaurants/commission" element={<RestaurantCommission />} />
           <Route path="restaurants/referral-commission" element={<RestaurantReferralCommission />} />
@@ -330,6 +332,6 @@ export default function AdminRouter() {
         {/* Redirect /admin to /admin/ */}
         <Route path="" element={<Navigate to="/admin/login" replace />} />
       </Routes >
-    </Suspense>
+    </ >
   );
 }

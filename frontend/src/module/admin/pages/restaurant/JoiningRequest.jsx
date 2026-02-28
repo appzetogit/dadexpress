@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect } from "react"
-import { 
+import { useState, useMemo, useEffect, useRef } from "react"
+import {
   Search, Filter, Eye, Check, X, UtensilsCrossed, ArrowUpDown, Loader2,
   FileText, Image as ImageIcon, ExternalLink, CreditCard, Calendar, Star, Building2, User, Phone, Mail, MapPin, Clock
 } from "lucide-react"
@@ -27,24 +27,35 @@ export default function JoiningRequest() {
     dateTo: ""
   })
 
-  // Fetch restaurant join requests
-  useEffect(() => {
-    fetchRequests()
-  }, [activeTab])
+  // Track initial mount to prevent double fetch
+  const isInitialMount = useRef(true)
 
-  // Debounced search effect
+  // Combined fetch effect
   useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false
+      fetchRequests()
+      return
+    }
+
     const timer = setTimeout(() => {
       fetchRequests()
-    }, 500) // Wait 500ms after user stops typing
+    }, searchQuery ? 500 : 0)
 
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchQuery])
+  }, [activeTab, searchQuery])
 
   const fetchRequests = async () => {
+    // Determine if we already have data to show - if so, don't show full loader
+    const currentData = activeTab === "pending" ? pendingRequests : rejectedRequests
+    const hasData = currentData && currentData.length > 0
+
     try {
-      setLoading(true)
+      // Only show full loading state if we have no data
+      if (!hasData) {
+        setLoading(true)
+      }
       setError(null)
 
       const status = activeTab === "pending" ? "pending" : "rejected"
@@ -150,10 +161,10 @@ export default function JoiningRequest() {
       try {
         setProcessing(true)
         await adminAPI.approveRestaurant(request._id)
-        
+
         // Refresh the list
         await fetchRequests()
-        
+
         alert(`Successfully approved ${request.restaurantName}'s join request!`)
       } catch (err) {
         console.error("Error approving request:", err)
@@ -179,14 +190,14 @@ export default function JoiningRequest() {
     try {
       setProcessing(true)
       await adminAPI.rejectRestaurant(selectedRequest._id, rejectionReason)
-      
+
       // Refresh the list
       await fetchRequests()
-      
+
       setShowRejectDialog(false)
       setSelectedRequest(null)
       setRejectionReason("")
-      
+
       alert(`Successfully rejected ${selectedRequest.restaurantName}'s join request!`)
     } catch (err) {
       console.error("Error rejecting request:", err)
@@ -207,7 +218,7 @@ export default function JoiningRequest() {
     setShowDetailsModal(true)
     setLoadingDetails(true)
     setRestaurantDetails(null)
-    
+
     try {
       // First, use fullData if available (has all details from API)
       if (request.fullData) {
@@ -216,11 +227,11 @@ export default function JoiningRequest() {
         setLoadingDetails(false)
         return
       }
-      
+
       // Try to fetch full restaurant details from API
       const restaurantId = request._id || request.id
       let response = null
-      
+
       if (restaurantId) {
         try {
           // Try admin API first
@@ -230,7 +241,7 @@ export default function JoiningRequest() {
         } catch (err) {
           console.log("Admin API failed, trying restaurant API:", err)
         }
-        
+
         // Fallback to regular restaurant API
         if (!response || !response?.data?.success) {
           try {
@@ -240,7 +251,7 @@ export default function JoiningRequest() {
           }
         }
       }
-      
+
       // Check response structure
       if (response?.data?.success) {
         const data = response.data.data
@@ -285,21 +296,19 @@ export default function JoiningRequest() {
           <div className="flex items-center gap-2 border-b border-slate-200 mb-6">
             <button
               onClick={() => setActiveTab("pending")}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === "pending"
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-slate-600 hover:text-slate-900"
-              }`}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === "pending"
+                ? "border-blue-600 text-blue-600"
+                : "border-transparent text-slate-600 hover:text-slate-900"
+                }`}
             >
               Pending Requests
             </button>
             <button
               onClick={() => setActiveTab("rejected")}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === "rejected"
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-slate-600 hover:text-slate-900"
-              }`}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === "rejected"
+                ? "border-blue-600 text-blue-600"
+                : "border-transparent text-slate-600 hover:text-slate-900"
+                }`}
             >
               Rejected Request
             </button>
@@ -320,13 +329,12 @@ export default function JoiningRequest() {
             </div>
 
             <div className="flex items-center gap-2">
-              <button 
+              <button
                 onClick={() => setShowFilterDialog(true)}
-                className={`px-4 py-2.5 text-sm font-medium rounded-lg border transition-all flex items-center gap-2 ${
-                  hasActiveFilters 
-                    ? "border-blue-500 bg-blue-50 text-blue-700 hover:bg-blue-100" 
-                    : "border-slate-300 bg-white hover:bg-slate-50 text-slate-700"
-                }`}
+                className={`px-4 py-2.5 text-sm font-medium rounded-lg border transition-all flex items-center gap-2 ${hasActiveFilters
+                  ? "border-blue-500 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                  : "border-slate-300 bg-white hover:bg-slate-50 text-slate-700"
+                  }`}
               >
                 <Filter className="w-4 h-4" />
                 Filter
@@ -441,11 +449,10 @@ export default function JoiningRequest() {
                         <span className="text-sm text-slate-700">{request.businessModel}</span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                          request.status === "Pending"
-                            ? "bg-blue-100 text-blue-700"
-                            : "bg-red-100 text-red-700"
-                        }`}>
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${request.status === "Pending"
+                          ? "bg-blue-100 text-blue-700"
+                          : "bg-red-100 text-red-700"
+                          }`}>
                           {request.status}
                         </span>
                       </td>
@@ -613,7 +620,7 @@ export default function JoiningRequest() {
                   <p className="text-sm text-slate-600">{selectedRequest.restaurantName}</p>
                 </div>
               </div>
-              
+
               <p className="text-sm text-slate-700 mb-4">
                 Are you sure you want to reject this restaurant request? Please provide a reason for rejection.
               </p>
@@ -717,9 +724,8 @@ export default function JoiningRequest() {
                           <Building2 className="w-4 h-4" />
                           <span className="text-sm">{restaurantDetails?.restaurantId || restaurantDetails?._id || selectedRequest?._id || "N/A"}</span>
                         </div>
-                        <div className={`px-3 py-1 rounded-full text-xs font-medium ${
-                          restaurantDetails?.isActive !== false ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
-                        }`}>
+                        <div className={`px-3 py-1 rounded-full text-xs font-medium ${restaurantDetails?.isActive !== false ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
+                          }`}>
                           {restaurantDetails?.isActive !== false ? "Active" : "Pending Approval"}
                         </div>
                       </div>
@@ -866,9 +872,8 @@ export default function JoiningRequest() {
                         )}
                         <div>
                           <p className="text-xs text-slate-500 mb-1">Status</p>
-                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                            restaurantDetails?.isActive !== false ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
-                          }`}>
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${restaurantDetails?.isActive !== false ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
+                            }`}>
                             {restaurantDetails?.isActive !== false ? "Active" : "Pending Approval"}
                           </span>
                         </div>

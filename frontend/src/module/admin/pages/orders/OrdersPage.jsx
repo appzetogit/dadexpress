@@ -89,7 +89,7 @@ export default function OrdersPage({ statusKey = "all" }) {
 
           setTimeout(() => {
             if (ctx.state === "running") {
-              ctx.suspend().catch(() => {})
+              ctx.suspend().catch(() => { })
             }
           }, 1200)
         }
@@ -104,7 +104,7 @@ export default function OrdersPage({ statusKey = "all" }) {
 
       if (fallbackAudioRef.current) {
         fallbackAudioRef.current.currentTime = 0
-        fallbackAudioRef.current.play().catch(() => {})
+        fallbackAudioRef.current.play().catch(() => { })
       }
     } catch (error) {
       console.warn("Ring sound could not be played:", error)
@@ -162,7 +162,7 @@ export default function OrdersPage({ statusKey = "all" }) {
   useEffect(() => {
     return () => {
       if (audioContextRef.current && audioContextRef.current.state !== "closed") {
-        audioContextRef.current.close().catch(() => {})
+        audioContextRef.current.close().catch(() => { })
       }
     }
   }, [])
@@ -298,7 +298,7 @@ export default function OrdersPage({ statusKey = "all" }) {
   // Handle refund button click - show modal for wallet payments, confirm dialog for others
   const handleRefund = (order) => {
     const isWalletPayment = order.paymentType === "Wallet" || order.payment?.method === "wallet";
-    
+
     if (isWalletPayment) {
       // Show modal for wallet refunds
       setSelectedOrderForRefund(order)
@@ -306,11 +306,11 @@ export default function OrdersPage({ statusKey = "all" }) {
     } else {
       // For non-wallet payments, use the old confirm dialog flow
       const confirmMessage = `Are you sure you want to process refund for order ${order.orderId}?\n\nThis will initiate a Razorpay refund to the customer's original payment method.`;
-      
+
       if (!confirm(confirmMessage)) {
         return
       }
-      
+
       processRefund(order, null) // null amount means use default
     }
   }
@@ -321,13 +321,13 @@ export default function OrdersPage({ statusKey = "all" }) {
     // Backend accepts either MongoDB ObjectId (24 chars) or orderId string
     // Using MongoDB _id is more reliable for route matching (no dashes/special chars)
     const orderIdToUse = order.id || order._id || order.orderId
-    
+
     if (!orderIdToUse) {
       console.error('❌ No orderId found in order object:', order)
       toast.error('Order ID not found. Please refresh the page and try again.')
       return
     }
-    
+
     console.log('🔍 Order details for refund:', {
       orderIdString: order.orderId,
       mongoId: order.id,
@@ -338,7 +338,7 @@ export default function OrdersPage({ statusKey = "all" }) {
 
     try {
       setProcessingRefund(orderIdToUse)
-      
+
       console.log('🔍 Processing refund for order:', {
         orderId: order.orderId,
         id: order.id,
@@ -347,20 +347,20 @@ export default function OrdersPage({ statusKey = "all" }) {
         refundAmount,
         url: `/api/admin/orders/${orderIdToUse}/refund`
       })
-      
+
       // Include refundAmount in request body if provided (ensure it's a number)
       const requestData = refundAmount !== null ? { refundAmount: parseFloat(refundAmount) } : {}
       console.log('📤 Request data being sent:', requestData)
       const response = await adminAPI.processRefund(orderIdToUse, requestData)
-      
+
       if (response.data?.success) {
         const isWalletPayment = order.paymentType === "Wallet" || order.payment?.method === "wallet";
-        toast.success(response.data?.message || (isWalletPayment 
+        toast.success(response.data?.message || (isWalletPayment
           ? `Wallet refund of ₹${refundAmount || order.totalAmount} processed successfully for order ${order.orderId}`
           : `Refund initiated successfully for order ${order.orderId}`))
         // Update the order in the local state immediately to show "Refunded" status
-        setOrders(prevOrders => 
-          prevOrders.map(o => 
+        setOrders(prevOrders =>
+          prevOrders.map(o =>
             (o.id === order.id || o.orderId === order.orderId)
               ? { ...o, refundStatus: 'processed' } // Wallet refunds are instant, so mark as processed
               : o
@@ -373,7 +373,7 @@ export default function OrdersPage({ statusKey = "all" }) {
       }
     } catch (error) {
       console.error("❌ Error processing refund:", error)
-      
+
       // Log full error details for debugging
       const errorDetails = {
         message: error.message,
@@ -393,10 +393,10 @@ export default function OrdersPage({ statusKey = "all" }) {
         stack: error.stack
       }
       console.error("❌ Error details:", JSON.stringify(errorDetails, null, 2))
-      
+
       // Show more specific error message
       let errorMessage = "Failed to process refund"
-      
+
       if (error.response) {
         // Server responded with error
         if (error.response.status === 404) {
@@ -417,7 +417,7 @@ export default function OrdersPage({ statusKey = "all" }) {
         // Error in setting up the request
         errorMessage = error.message || "Failed to process refund"
       }
-      
+
       console.error("❌ Final error message:", errorMessage)
       toast.error(errorMessage)
     } finally {
@@ -462,22 +462,12 @@ export default function OrdersPage({ statusKey = "all" }) {
     resetColumns,
   } = useOrdersManagement(normalizedOrders, statusKey, config.title)
 
-  if (isLoading) {
-    return (
-      <div className="p-4 lg:p-6 bg-slate-50 min-h-screen w-full max-w-full overflow-x-hidden flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-          <p className="text-gray-600">Loading orders...</p>
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="p-4 lg:p-6 bg-slate-50 min-h-screen w-full max-w-full overflow-x-hidden">
-      <OrdersTopbar 
-        title={config.title} 
-        count={count} 
+      <OrdersTopbar
+        title={config.title}
+        count={count}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
         onFilterClick={() => setIsFilterOpen(true)}
@@ -513,8 +503,8 @@ export default function OrdersPage({ statusKey = "all" }) {
         onConfirm={handleRefundConfirm}
         isProcessing={processingRefund !== null}
       />
-      <OrdersTable 
-        orders={filteredOrders} 
+      <OrdersTable
+        orders={filteredOrders}
         visibleColumns={visibleColumns}
         onViewOrder={handleViewOrder}
         onPrintOrder={handlePrintOrder}

@@ -10,7 +10,7 @@ function resolveServiceAccountFromFile() {
   const configPath = path.resolve(
     process.cwd(),
     'config',
-    'zomato-607fa-firebase-adminsdk-fbsvc-f5f782c2cc.json'
+    'dad-express-firebase-adminsdk-fbsvc-b5eadad2f5.json'
   );
   const rootPath = path.resolve(process.cwd(), 'firebaseconfig.json');
 
@@ -48,6 +48,19 @@ function resolveFirebaseCredentials() {
     clientEmail = clientEmail || fileCreds.clientEmail;
     privateKey = privateKey || fileCreds.privateKey;
   }
+
+  const cleanValue = (val) => {
+    if (!val || typeof val !== 'string') return val;
+    let v = val.trim();
+    if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+      v = v.slice(1, -1).trim();
+    }
+    return v;
+  };
+
+  projectId = cleanValue(projectId);
+  clientEmail = cleanValue(clientEmail);
+  privateKey = cleanValue(privateKey);
 
   if (privateKey && privateKey.includes('\\n')) {
     privateKey = privateKey.replace(/\\n/g, '\n');

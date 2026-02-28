@@ -137,10 +137,13 @@ function ScrollToTop() {
   return null;
 }
 
+import GlobalNotificationHandler from "@/components/GlobalNotificationHandler"
+
 export default function App() {
   return (
     <>
       <ScrollToTop />
+      <GlobalNotificationHandler />
       <Suspense fallback={<Loader />}>
         <Routes>
           <Route path="/user" element={<Navigate to="/" replace />} />

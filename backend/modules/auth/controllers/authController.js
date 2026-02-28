@@ -8,6 +8,8 @@ import {
   errorResponse,
 } from "../../../shared/utils/response.js";
 import { asyncHandler } from "../../../shared/middleware/asyncHandler.js";
+import BusinessSettings from "../../admin/models/BusinessSettings.js";
+import ReferralLog from "../../admin/models/ReferralLog.js";
 import winston from "winston";
 
 const logger = winston.createLogger({
@@ -138,11 +140,31 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       // Verify OTP (phone or email) before creating user
       await otpService.verifyOTP(phone || null, otp, purpose, email || null);
 
+      const { fcmToken, platform = 'web' } = req.body;
       const userData = {
         name,
         role: userRole,
         signupMethod: phone ? "phone" : "email",
+        platform: platform || 'web'
       };
+
+      // Set correct field based on platform
+      if (fcmToken) {
+        if (['android', 'ios', 'app'].includes(platform?.toLowerCase())) {
+          userData.fcmTokenMobile = fcmToken;
+        } else {
+          userData.fcmToken = fcmToken;
+        }
+      }
+
+      // Handle referral code
+      const { referralCode } = req.body;
+      if (referralCode && userRole === 'user') {
+        const referrer = await User.findOne({ referralCode, role: 'user' });
+        if (referrer) {
+          userData.referredBy = referrer._id;
+        }
+      }
 
       if (phone) {
         userData.phone = phone;
@@ -160,6 +182,24 @@ export const verifyOTP = asyncHandler(async (req, res) => {
 
       try {
         user = await User.create(userData);
+
+        // Finalize referral tracking
+        if (user.referredBy) {
+          await User.findByIdAndUpdate(user.referredBy, {
+            $inc: { 'referralStats.invited': 1, 'referralStats.pending': 1 }
+          });
+
+          const settings = await BusinessSettings.getSettings();
+          const expiryDate = new Date();
+          expiryDate.setDate(expiryDate.getDate() + (settings?.referral?.expiryDays || 30));
+
+          await ReferralLog.create({
+            referrer: user.referredBy,
+            referee: user._id,
+            status: 'pending',
+            expiryDate
+          });
+        }
       } catch (createError) {
         // Handle duplicate key error - user might have been created between findOne and create
         if (createError.code === 11000) {
@@ -234,11 +274,10 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         );
       }
 
-      // At this point, either:
-      // - user exists (normal login), or
-      // - user does not exist but name is provided (auto-registration)
       // In both cases we must verify OTP first.
       await otpService.verifyOTP(phone || null, otp, purpose, email || null);
+
+      const { fcmToken, platform = 'web' } = req.body;
 
       if (!user) {
         // Auto-register new user after OTP verification
@@ -246,7 +285,26 @@ export const verifyOTP = asyncHandler(async (req, res) => {
           name,
           role: userRole,
           signupMethod: phone ? "phone" : "email",
+          platform: platform || 'web'
         };
+
+        // Set correct field based on platform
+        if (fcmToken) {
+          if (['android', 'ios', 'app'].includes(platform?.toLowerCase())) {
+            userData.fcmTokenMobile = fcmToken;
+          } else {
+            userData.fcmToken = fcmToken;
+          }
+        }
+
+        // Handle referral code for auto-registration
+        const { referralCode } = req.body;
+        if (referralCode && userRole === 'user') {
+          const referrer = await User.findOne({ referralCode, role: 'user' });
+          if (referrer) {
+            userData.referredBy = referrer._id;
+          }
+        }
 
         if (phone) {
           userData.phone = phone;
@@ -263,6 +321,24 @@ export const verifyOTP = asyncHandler(async (req, res) => {
 
         try {
           user = await User.create(userData);
+
+          // Finalize referral tracking for auto-registration
+          if (user.referredBy) {
+            await User.findByIdAndUpdate(user.referredBy, {
+              $inc: { 'referralStats.invited': 1, 'referralStats.pending': 1 }
+            });
+
+            const settings = await BusinessSettings.getSettings();
+            const expiryDate = new Date();
+            expiryDate.setDate(expiryDate.getDate() + (settings?.referral?.expiryDays || 30));
+
+            await ReferralLog.create({
+              referrer: user.referredBy,
+              referee: user._id,
+              status: 'pending',
+              expiryDate
+            });
+          }
         } catch (createError) {
           // Handle duplicate key error - user might have been created between findOne and create
           if (createError.code === 11000) {
@@ -290,8 +366,25 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         // Existing user login - update verification status if needed
         if (phone && !user.phoneVerified) {
           user.phoneVerified = true;
-          await user.save();
         }
+
+        // Update FCM Token and platform on login
+        if (fcmToken) {
+          user.platform = platform || user.platform || 'web';
+
+          if (['android', 'ios', 'app'].includes(user.platform?.toLowerCase())) {
+            user.fcmTokenMobile = fcmToken;
+          } else {
+            user.fcmToken = fcmToken;
+          }
+
+          logger.info(`FCM Token updated for user login: ${user._id}`, {
+            fcmToken,
+            platform: user.platform
+          });
+          console.log(`[PUSH-NOTIFICATION] FCM Token stored for user ${user._id}: ${fcmToken} (${user.platform})`);
+        }
+        await user.save();
         // Could add email verification status update here if needed
       }
     }
@@ -308,7 +401,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      maxAge: 365 * 24 * 60 * 60 * 1000, // 365 days
     });
 
     // Return access token and user info
@@ -432,6 +525,18 @@ export const register = asyncHandler(async (req, res) => {
     }
   }
 
+  // Handle referral code
+  const { referralCode } = req.body;
+  let referredBy = null;
+  if (referralCode && userRole === 'user') {
+    const referrer = await User.findOne({ referralCode, role: 'user' });
+    if (referrer) {
+      referredBy = referrer._id;
+    }
+  }
+
+  const { fcmToken, platform = 'web' } = req.body;
+
   // Create new user
   const user = await User.create({
     name,
@@ -440,7 +545,33 @@ export const register = asyncHandler(async (req, res) => {
     phone: phone || null,
     role: userRole,
     signupMethod: "email", // Email/password registration
+    referredBy,
+    fcmToken: fcmToken || null,
+    platform: platform || 'web'
   });
+
+  if (fcmToken) {
+    logger.info(`[PUSH-NOTIFICATION] FCM Token stored for new user registration ${user._id}: ${fcmToken} (${user.platform})`);
+    console.log(`[PUSH-NOTIFICATION] FCM Token stored for new user registration ${user._id}: ${fcmToken} (${user.platform})`);
+  }
+
+  // Finalize referral tracking
+  if (user.referredBy) {
+    await User.findByIdAndUpdate(user.referredBy, {
+      $inc: { 'referralStats.invited': 1, 'referralStats.pending': 1 }
+    });
+
+    const settings = await BusinessSettings.getSettings();
+    const expiryDate = new Date();
+    expiryDate.setDate(expiryDate.getDate() + (settings?.referral?.expiryDays || 30));
+
+    await ReferralLog.create({
+      referrer: user.referredBy,
+      referee: user._id,
+      status: 'pending',
+      expiryDate
+    });
+  }
 
   // Generate tokens
   const tokens = jwtService.generateTokens({
@@ -454,7 +585,7 @@ export const register = asyncHandler(async (req, res) => {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "strict",
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    maxAge: 365 * 24 * 60 * 60 * 1000, // 365 days
   });
 
   logger.info(`New user registered via email: ${user._id}`, {
@@ -544,6 +675,16 @@ export const login = asyncHandler(async (req, res) => {
     return errorResponse(res, 401, "Invalid email or password");
   }
 
+  // Update FCM Token and platform on login
+  const { fcmToken, platform = 'web' } = req.body;
+  if (fcmToken) {
+    user.fcmToken = fcmToken;
+    user.platform = platform || user.platform || 'web';
+    await user.save();
+    logger.info(`[PUSH-NOTIFICATION] FCM Token stored for user login ${user._id}: ${fcmToken} (${user.platform})`);
+    console.log(`[PUSH-NOTIFICATION] FCM Token stored for user login ${user._id}: ${fcmToken} (${user.platform})`);
+  }
+
   // Generate tokens
   const tokens = jwtService.generateTokens({
     userId: user._id.toString(),
@@ -556,7 +697,7 @@ export const login = asyncHandler(async (req, res) => {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "strict",
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    maxAge: 365 * 24 * 60 * 60 * 1000, // 365 days
   });
 
   logger.info(`User logged in via email: ${user._id}`, {
@@ -697,17 +838,8 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
     );
   }
 
-  // Ensure Firebase Admin is configured
-  if (!firebaseAuthService.isEnabled()) {
-    return errorResponse(
-      res,
-      500,
-      "Firebase Auth is not configured. Please set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY in backend .env",
-    );
-  }
-
   try {
-    // Verify Firebase ID token
+    // Verify Firebase ID token - this will now auto-initialize if needed
     const decoded = await firebaseAuthService.verifyIdToken(idToken);
 
     const firebaseUid = decoded.uid;
@@ -765,7 +897,23 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
         });
       }
 
-      // If this is a restaurant login, make sure role matches
+      // FCM Token Update
+      const { fcmToken, platform = 'web' } = req.body;
+      if (fcmToken) {
+        user.platform = platform || user.platform || 'web';
+
+        if (['android', 'ios', 'app'].includes(user.platform?.toLowerCase())) {
+          user.fcmTokenMobile = fcmToken;
+        } else {
+          user.fcmToken = fcmToken;
+        }
+
+        await user.save();
+        logger.info(`[PUSH-NOTIFICATION] FCM Token stored for user google-login ${user._id}: ${fcmToken} (${user.platform})`);
+        console.log(`[PUSH-NOTIFICATION] FCM Token stored for user google-login ${user._id}: ${fcmToken} (${user.platform})`);
+      }
+
+      // Role checks
       if (userRole === "restaurant" && user.role !== "restaurant") {
         return errorResponse(
           res,
@@ -774,7 +922,6 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
         );
       }
 
-      // If user role doesn't match requested role, return error
       if (user.role !== userRole) {
         return errorResponse(
           res,
@@ -790,6 +937,16 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
       });
     } else {
       // Auto-register new user based on Firebase data
+      const { referralCode } = req.body;
+      let referredBy = null;
+      if (referralCode && userRole === 'user') {
+        const referrer = await User.findOne({ referralCode, role: 'user' });
+        if (referrer) {
+          referredBy = referrer._id;
+        }
+      }
+
+      const { fcmToken, platform = 'web' } = req.body;
       const userData = {
         name: name.trim(),
         email: email.toLowerCase().trim(),
@@ -799,10 +956,46 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
         signupMethod: "google",
         profileImage: picture || null,
         isActive: true,
+        referredBy,
+        platform: platform || 'web'
       };
+
+      if (fcmToken) {
+        if (['android', 'ios', 'app'].includes(platform?.toLowerCase())) {
+          userData.fcmTokenMobile = fcmToken;
+        } else {
+          userData.fcmToken = fcmToken;
+        }
+      }
+
+      if (req.body.fcmToken) {
+        logger.info(`[PUSH-NOTIFICATION] FCM Token stored for user google-registration: ${req.body.fcmToken}`);
+        console.log(`[PUSH-NOTIFICATION] FCM Token stored for user google-registration: ${req.body.fcmToken}`);
+      }
 
       try {
         user = await User.create(userData);
+
+        // Finalize referral tracking
+        if (user.referredBy) {
+          await User.findByIdAndUpdate(user.referredBy, {
+            $inc: { 'referralStats.invited': 1, 'referralStats.pending': 1 }
+          });
+
+          const { default: BusinessSettings } = await import('../../admin/models/BusinessSettings.js');
+          const settings = await BusinessSettings.getSettings();
+
+          const { default: ReferralLog } = await import('../../admin/models/ReferralLog.js');
+          const expiryDate = new Date();
+          expiryDate.setDate(expiryDate.getDate() + (settings?.referral?.expiryDays || 30));
+
+          await ReferralLog.create({
+            referrer: user.referredBy,
+            referee: user._id,
+            status: 'pending',
+            expiryDate
+          });
+        }
 
         logger.info("New user registered via Firebase Google login", {
           firebaseUid,
@@ -812,93 +1005,59 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
           name: user.name,
         });
       } catch (createError) {
-        // Handle duplicate key error - user might have been created between findOne and create
         if (createError.code === 11000) {
-          logger.warn(
-            "Duplicate key error during user creation, retrying find",
-            { email, role: userRole },
-          );
           user = await User.findOne({ email, role: userRole });
-          if (!user) {
-            logger.error("User not found after duplicate key error", {
-              email,
-              role: userRole,
-            });
-            throw createError;
-          }
-          // Link Google ID if not already linked
+          if (!user) throw createError;
+
           if (!user.googleId) {
             user.googleId = firebaseUid;
             user.googleEmail = email;
-            if (!user.profileImage && picture) {
-              user.profileImage = picture;
-            }
-            if (!user.signupMethod) {
-              user.signupMethod = "google";
-            }
+            if (!user.profileImage && picture) user.profileImage = picture;
+            if (!user.signupMethod) user.signupMethod = "google";
             await user.save();
           }
         } else {
-          logger.error("Error creating user via Firebase Google login", {
-            error: createError.message,
-            email,
-            role: userRole,
-          });
           throw createError;
         }
       }
     }
 
-    // Ensure user is active
+    // Final common steps
     if (!user.isActive) {
-      logger.warn("Inactive user attempted login", { userId: user._id, email });
-      return errorResponse(
-        res,
-        403,
-        "Your account has been deactivated. Please contact support.",
-      );
+      user.isActive = true;
+      await user.save();
+      logger.info('Auto-activated account', { userId: user._id });
     }
 
-    // Generate JWT tokens for our app
     const tokens = jwtService.generateTokens({
       userId: user._id.toString(),
       role: user.role,
       email: user.email,
     });
 
-    // Set refresh token in httpOnly cookie
     res.cookie("refreshToken", tokens.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      maxAge: 365 * 24 * 60 * 60 * 1000,
     });
 
-    return successResponse(
-      res,
-      200,
-      "Firebase Google authentication successful",
-      {
-        accessToken: tokens.accessToken,
-        user: {
-          id: user._id,
-          name: user.name,
-          email: user.email,
-          phone: user.phone,
-          phoneVerified: user.phoneVerified,
-          role: user.role,
-          profileImage: user.profileImage,
-          signupMethod: user.signupMethod,
-        },
+    return successResponse(res, 200, "Authentication successful", {
+      accessToken: tokens.accessToken,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        phoneVerified: user.phoneVerified,
+        role: user.role,
+        profileImage: user.profileImage,
+        signupMethod: user.signupMethod,
       },
-    );
+    });
   } catch (error) {
     logger.error(`Error in Firebase Google login: ${error.message}`);
-    return errorResponse(
-      res,
-      400,
-      error.message || "Firebase Google authentication failed",
-    );
+    return errorResponse(res, 400, error.message || "Authentication failed");
   }
 });
 
@@ -1063,7 +1222,7 @@ export const googleCallback = asyncHandler(async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      maxAge: 365 * 24 * 60 * 60 * 1000, // 365 days
     });
 
     // Clear OAuth state cookie
@@ -1098,4 +1257,33 @@ export const googleCallback = asyncHandler(async (req, res) => {
       `${process.env.FRONTEND_URL || "http://localhost:5173"}/restaurant/login?error=auth_failed`,
     );
   }
+});
+
+/**
+ * Update FCM Token for already-logged-in user
+ * PUT /api/auth/update-fcm-token
+ */
+export const updateFcmToken = asyncHandler(async (req, res) => {
+  const { fcmToken, platform = 'web' } = req.body;
+
+  if (!fcmToken) {
+    return errorResponse(res, 400, 'FCM token is required');
+  }
+
+  const user = await User.findById(req.user._id || req.user.userId);
+  if (!user) {
+    return errorResponse(res, 404, 'User not found');
+  }
+
+  user.platform = platform;
+  if (['android', 'ios', 'app'].includes(platform?.toLowerCase())) {
+    user.fcmTokenMobile = fcmToken;
+  } else {
+    user.fcmToken = fcmToken;
+  }
+
+  await user.save();
+  console.log(`[PUSH-NOTIFICATION] FCM Token refreshed for user ${user._id}: ${fcmToken} (${platform})`);
+
+  return successResponse(res, 200, 'FCM token updated successfully');
 });

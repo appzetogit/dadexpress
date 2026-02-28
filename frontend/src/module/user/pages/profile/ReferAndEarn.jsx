@@ -1,15 +1,52 @@
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { ArrowLeft, Copy, Share2, Users, Gift, CheckCircle, Clock, Smartphone, MessageCircle } from "lucide-react"
+import { ArrowLeft, Copy, Share2, Users, Gift, CheckCircle, Clock, Smartphone, MessageCircle, Loader2 } from "lucide-react"
 import AnimatedPage from "../../components/AnimatedPage"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
+import { userAPI } from "@/lib/api"
 
 export default function ReferAndEarn() {
   const navigate = useNavigate()
-  const referralCode = "PAYAL1234" 
-  const referralLink = `https://dadexpress.com/auth?ref=${referralCode}`
+  const [referralCode, setReferralCode] = useState("")
+  const [stats, setStats] = useState({
+    invited: 0,
+    completed: 0,
+    pending: 0,
+    earned: 0
+  })
+  const [settings, setSettings] = useState({
+    minOrderValue: 199,
+    referrerReward: 100,
+    refereeReward: 50
+  })
+  const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
+
+  const referralLink = `https://dadexpress.com/auth?ref=${referralCode}`
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const response = await userAPI.getReferralStats()
+        // Extract data based on standard response structure
+        const resData = response?.data?.data || response?.data
+        if (resData) {
+          setReferralCode(resData.referralCode || "")
+          setStats(resData.referralStats || { invited: 0, completed: 0, pending: 0, earned: 0 })
+          if (resData.referralSettings) {
+            setSettings(resData.referralSettings)
+          }
+        }
+      } catch (err) {
+        toast.error("Failed to load referral stats")
+        console.error("Error fetching referral stats:", err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchData()
+  }, [])
 
   const handleCopy = () => {
     navigator.clipboard.writeText(referralCode)
@@ -40,6 +77,14 @@ export default function ReferAndEarn() {
     window.open(`https://wa.me/?text=${text}`, "_blank")
   }
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-[#0a0a0a]">
+        <Loader2 className="h-10 w-10 text-[#E07832] animate-spin" />
+      </div>
+    )
+  }
+
   return (
     <AnimatedPage className="min-h-screen bg-[#FDFDFD] dark:bg-[#0a0a0a] pb-10">
       {/* Header */}
@@ -58,35 +103,35 @@ export default function ReferAndEarn() {
           </div>
           <h2 className="text-[22px] font-black mb-2 relative z-10 leading-tight">Invite Friends & Earn Rewards</h2>
           <p className="text-[13px] font-semibold text-white/90 relative z-10 leading-relaxed max-w-[280px]">
-            Share Dad Express with your friends and get reward coins when they complete their first order.
+            Share Dad Express with your friends and get {settings.referrerReward} reward coins when they complete their first order.
           </p>
         </div>
 
         {/* Code Section */}
-        <div className="bg-white dark:bg-[#1a1a1a] rounded-[24px] p-8 shadow-md shadow-gray-100 dark:shadow-none border border-gray-50 dark:border-gray-800 text-center">
+        <div className="bg-white dark:bg-[#1a1a1a] rounded-[24px] p-8 pb-10 shadow-sm border border-gray-100 dark:border-gray-800 text-center">
           <p className="text-gray-400 dark:text-gray-500 text-[11px] font-black mb-4 uppercase tracking-[2px]">Your Referral Code</p>
-          <div className="flex items-center justify-center gap-4 bg-gray-50/50 dark:bg-gray-900 border-2 border-dashed border-gray-100 dark:border-gray-700 rounded-2xl p-5 mb-8">
+          <div className="flex items-center justify-center gap-4 border-2 border-dashed border-gray-100 dark:border-gray-700 rounded-2xl p-5 mb-6">
             <span className="text-2xl font-black text-[#E07832] tracking-[3px] ml-6">{referralCode}</span>
-            <button 
+            <button
               onClick={handleCopy}
-              className="p-2 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-xl transition-all active:scale-90"
+              className="p-2 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-xl transition-all active:scale-95"
             >
               <Copy className={`h-6 w-6 ${copied ? "text-green-500" : "text-[#E07832]"}`} strokeWidth={2.5} />
             </button>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <Button 
+          <div className="flex items-center gap-4 mt-2">
+            <Button
               onClick={handleWhatsAppShare}
-              className="bg-[#25D366] hover:bg-[#128C7E] text-white flex items-center justify-center gap-2 h-14 rounded-2xl font-black text-sm shadow-lg shadow-green-500/20 transition-all active:scale-95"
+              className="flex-1 bg-[#25D366] hover:bg-[#128C7E] text-white flex items-center justify-center gap-2 h-14 rounded-2xl font-black text-sm shadow-sm transition-all active:scale-95"
             >
-              <MessageCircle className="h-5 w-5 fill-white/20" />
+              <MessageCircle className="h-5 w-5" />
               WhatsApp
             </Button>
-            <Button 
+            <Button
               onClick={handleShare}
               variant="outline"
-              className="border-gray-100 dark:border-gray-700 flex items-center justify-center gap-2 h-14 rounded-2xl font-black text-sm text-slate-700 dark:text-gray-300 transition-all active:scale-95"
+              className="flex-1 border border-gray-100 dark:border-gray-800 flex items-center justify-center gap-2 h-14 rounded-2xl font-black text-sm text-slate-700 dark:text-gray-300 transition-all active:scale-95 hover:bg-gray-50 dark:hover:bg-gray-800"
             >
               <Share2 className="h-5 w-5" />
               Share Link
@@ -98,10 +143,10 @@ export default function ReferAndEarn() {
         <div className="bg-white dark:bg-[#1a1a1a] rounded-[24px] p-7 shadow-md shadow-gray-100 dark:shadow-none border border-gray-50 dark:border-gray-800">
           <h3 className="text-lg font-black text-black dark:text-white mb-8">Referral Stats</h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-8">
-            <StatItem icon={Users} color="blue" label="Invited" value="6" />
-            <StatItem icon={CheckCircle} color="green" label="Completed" value="3" />
-            <StatItem icon={Clock} color="orange" label="Pending" value="3" />
-            <StatItem icon={Smartphone} color="theme" label="Earned" value="300" />
+            <StatItem icon={Users} color="blue" label="Invited" value={stats.invited} />
+            <StatItem icon={CheckCircle} color="green" label="Completed" value={stats.completed} />
+            <StatItem icon={Clock} color="orange" label="Pending" value={stats.pending} />
+            <StatItem icon={Smartphone} color="theme" label="Earned" value={stats.earned} />
           </div>
         </div>
 
@@ -112,8 +157,8 @@ export default function ReferAndEarn() {
             {[
               { title: "Invite your friends", desc: "Share your referral link or code with friends." },
               { title: "Friend registers", desc: "Your friend signs up using your referral code." },
-              { title: "They place first order", desc: "Friend completes their first order of min ₹199." },
-              { title: "You get rewards!", desc: "100 reward coins will be credited to your account." }
+              { title: "They place first order", desc: `Friend completes their first order of min ₹${settings.minOrderValue}.` },
+              { title: "You get rewards!", desc: `${settings.referrerReward} reward coins will be credited to your account.` }
             ].map((step, i) => (
               <div key={i} className="flex gap-4 bg-white dark:bg-[#1a1a1a] p-5 rounded-2xl shadow-sm border border-gray-50 dark:border-gray-800 transition-all hover:border-gray-200">
                 <div className="w-9 h-9 rounded-full bg-gray-50 dark:bg-gray-800 flex items-center justify-center shrink-0 font-black text-sm text-gray-400">

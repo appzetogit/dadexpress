@@ -612,7 +612,7 @@ export default function OrdersMain() {
             isLoading: false
           })
 
-          // Check if onboarding is incomplete and redirect if needed
+          /* Skip forced onboarding redirect as per user request
           const completedSteps = restaurant.onboarding?.completedSteps || 0
           if (completedSteps < 4) {
             // Onboarding is incomplete, redirect to onboarding page
@@ -622,6 +622,7 @@ export default function OrdersMain() {
               return
             }
           }
+          */
         }
       } catch (error) {
         // Only log error if it's not a network/timeout error (backend might be down/slow)
@@ -1385,67 +1386,67 @@ export default function OrdersMain() {
         {(showReferrerCard || showReferredCard) && (
           <div className="mt-4 flex flex-col gap-3">
             {showReferrerCard && (
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="bg-[#1a1c1e] rounded-2xl p-5 shadow-lg shadow-slate-200/40 relative overflow-hidden border border-white/5"
               >
                 <div className="absolute -top-6 -right-6 opacity-[0.03] pointer-events-none rotate-12">
-                   <Gift className="w-24 h-24 text-orange-400" />
+                  <Gift className="w-24 h-24 text-orange-400" />
                 </div>
                 <div className="flex items-start justify-between relative z-10">
-                   <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                         <span className="text-[9px] font-black uppercase tracking-[0.15em] text-orange-400/80 bg-orange-400/5 border border-orange-400/10 px-2.5 py-1 rounded-full">
-                           Reward Active 🎉
-                         </span>
-                      </div>
-                      <h3 className="text-white font-black text-xl leading-tight uppercase tracking-tight italic">
-                        Referral Perk <span className="text-orange-400">Unlocked</span>
-                      </h3>
-                      <p className="text-slate-400 text-xs mt-1.5 font-medium leading-relaxed">
-                        Your special commission is set to <span className="text-slate-200 font-bold underline decoration-orange-400/30 decoration-2 underline-offset-4">5% only</span> for your very next order!
-                      </p>
-                   </div>
-                   <button 
-                     onClick={() => setShowReferrerCard(false)} 
-                     className="bg-white/5 hover:bg-white/10 p-1.5 rounded-full text-white/20 hover:text-white/40 transition-all active:scale-90"
-                   >
-                      <X className="w-3.5 h-3.5" />
-                   </button>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-[9px] font-black uppercase tracking-[0.15em] text-orange-400/80 bg-orange-400/5 border border-orange-400/10 px-2.5 py-1 rounded-full">
+                        Reward Active 🎉
+                      </span>
+                    </div>
+                    <h3 className="text-white font-black text-xl leading-tight uppercase tracking-tight italic">
+                      Referral Perk <span className="text-orange-400">Unlocked</span>
+                    </h3>
+                    <p className="text-slate-400 text-xs mt-1.5 font-medium leading-relaxed">
+                      Your special commission is set to <span className="text-slate-200 font-bold underline decoration-orange-400/30 decoration-2 underline-offset-4">5% only</span> for your very next order!
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowReferrerCard(false)}
+                    className="bg-white/5 hover:bg-white/10 p-1.5 rounded-full text-white/20 hover:text-white/40 transition-all active:scale-90"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
                 </div>
                 <div className="mt-5 pt-4 border-t border-white/5 flex items-center justify-between">
-                   <div className="flex flex-col">
-                      <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Valid for</span>
-                      <span className="text-[11px] text-white/90 font-black uppercase tracking-tighter mt-0.5">First Order Only</span>
-                   </div>
-                   <div className="flex items-center gap-2 px-3 py-1.5 bg-orange-600/80 rounded-xl shadow-md border border-orange-400/10">
-                      <div className="w-1.5 h-1.5 bg-white/80 rounded-full animate-pulse" />
-                      <span className="text-[10px] text-white/90 font-black uppercase tracking-wider">Active Now</span>
-                   </div>
+                  <div className="flex flex-col">
+                    <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Valid for</span>
+                    <span className="text-[11px] text-white/90 font-black uppercase tracking-tighter mt-0.5">First Order Only</span>
+                  </div>
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-orange-600/80 rounded-xl shadow-md border border-orange-400/10">
+                    <div className="w-1.5 h-1.5 bg-white/80 rounded-full animate-pulse" />
+                    <span className="text-[10px] text-white/90 font-black uppercase tracking-wider">Active Now</span>
+                  </div>
                 </div>
               </motion.div>
             )}
 
             {showReferredCard && (
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="bg-white border-2 border-slate-100 rounded-2xl p-4 shadow-sm flex items-center gap-4 group transition-all hover:border-orange-100"
               >
                 <div className="w-12 h-12 bg-orange-50 rounded-xl flex items-center justify-center shrink-0 transition-colors group-hover:bg-orange-100">
-                   <Users className="w-6 h-6 text-orange-500" />
+                  <Users className="w-6 h-6 text-orange-500" />
                 </div>
                 <div className="flex-1">
-                   <h3 className="text-slate-900 font-bold text-sm tracking-tight">Joined via referral</h3>
-                   <p className="text-slate-500 text-[11px] font-medium leading-tight mt-0.5">Source: <span className="text-orange-600 font-bold underline">Cafe Coffee Day</span></p>
+                  <h3 className="text-slate-900 font-bold text-sm tracking-tight">Joined via referral</h3>
+                  <p className="text-slate-500 text-[11px] font-medium leading-tight mt-0.5">Source: <span className="text-orange-600 font-bold underline">Cafe Coffee Day</span></p>
                 </div>
                 <div className="flex flex-col items-end gap-1">
-                   <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Pricing</span>
-                   <span className="text-[10px] font-bold text-slate-700 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded-md">Standard Comm.</span>
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Pricing</span>
+                  <span className="text-[10px] font-bold text-slate-700 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded-md">Standard Comm.</span>
                 </div>
                 <button onClick={() => setShowReferredCard(false)} className="pl-2">
-                   <X className="w-4 h-4 text-slate-300 hover:text-slate-500 transition-colors" />
+                  <X className="w-4 h-4 text-slate-300 hover:text-slate-500 transition-colors" />
                 </button>
               </motion.div>
             )}

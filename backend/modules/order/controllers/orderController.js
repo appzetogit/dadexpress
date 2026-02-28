@@ -2,12 +2,13 @@ import Order from '../models/Order.js';
 import Payment from '../../payment/models/Payment.js';
 import { createOrder as createRazorpayOrder, verifyPayment } from '../../payment/services/razorpayService.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
+import User from '../../auth/models/User.js';
 import Zone from '../../admin/models/Zone.js';
 import mongoose from 'mongoose';
 import winston from 'winston';
 import { calculateOrderPricing } from '../services/orderCalculationService.js';
 import { getRazorpayCredentials } from '../../../shared/utils/envService.js';
-import { notifyRestaurantNewOrder } from '../services/restaurantNotificationService.js';
+import { notifyRestaurantNewOrder, notifyRestaurantOrderUpdate } from '../services/restaurantNotificationService.js';
 import { calculateOrderSettlement } from '../services/orderSettlementService.js';
 import { holdEscrow } from '../services/escrowWalletService.js';
 import { processCancellationRefund } from '../services/cancellationRefundService.js';
@@ -172,7 +173,7 @@ export const createOrder = async (req, res) => {
     // CRITICAL: Validate that restaurant's location (pin) is within an active zone
     const restaurantLat = restaurant.location?.latitude || restaurant.location?.coordinates?.[1];
     const restaurantLng = restaurant.location?.longitude || restaurant.location?.coordinates?.[0];
-    
+
     if (!restaurantLat || !restaurantLng) {
       logger.error('❌ Restaurant location not found:', {
         restaurantId: restaurant._id?.toString() || restaurant.restaurantId,
@@ -191,7 +192,7 @@ export const createOrder = async (req, res) => {
 
     for (const zone of activeZones) {
       if (!zone.coordinates || zone.coordinates.length < 3) continue;
-      
+
       let isInZone = false;
       if (typeof zone.containsPoint === 'function') {
         isInZone = zone.containsPoint(restaurantLat, restaurantLng);
@@ -205,16 +206,16 @@ export const createOrder = async (req, res) => {
           const yi = typeof coordI === 'object' ? (coordI.longitude || coordI.lng) : null;
           const xj = typeof coordJ === 'object' ? (coordJ.latitude || coordJ.lat) : null;
           const yj = typeof coordJ === 'object' ? (coordJ.longitude || coordJ.lng) : null;
-          
+
           if (xi === null || yi === null || xj === null || yj === null) continue;
-          
-          const intersect = ((yi > restaurantLng) !== (yj > restaurantLng)) && 
-                           (restaurantLat < (xj - xi) * (restaurantLng - yi) / (yj - yi) + xi);
+
+          const intersect = ((yi > restaurantLng) !== (yj > restaurantLng)) &&
+            (restaurantLat < (xj - xi) * (restaurantLng - yi) / (yj - yi) + xi);
           if (intersect) inside = !inside;
         }
         isInZone = inside;
       }
-      
+
       if (isInZone) {
         restaurantInZone = true;
         restaurantZone = zone;
@@ -244,10 +245,10 @@ export const createOrder = async (req, res) => {
 
     // CRITICAL: Validate user's zone matches restaurant's zone (strict zone matching)
     const { zoneId: userZoneId } = req.body; // User's zone ID from frontend
-    
+
     if (userZoneId) {
       const restaurantZoneId = restaurantZone._id.toString();
-      
+
       if (restaurantZoneId !== userZoneId) {
         logger.warn('⚠️ Zone mismatch - user and restaurant are in different zones:', {
           userZoneId,
@@ -260,7 +261,7 @@ export const createOrder = async (req, res) => {
           message: 'This restaurant is not available in your zone. Please select a restaurant from your current delivery zone.'
         });
       }
-      
+
       logger.info('✅ Zone match validated - user and restaurant are in the same zone:', {
         zoneId: userZoneId,
         restaurantId: restaurant._id?.toString() || restaurant.restaurantId
@@ -285,11 +286,33 @@ export const createOrder = async (req, res) => {
     // Generate order ID before creating order
     const timestamp = Date.now();
     const random = Math.floor(Math.random() * 1000);
-    const generatedOrderId = `ORD-${timestamp}-${random}`;
+    const generatedOrderId = `ORD - ${timestamp} -${random} `;
 
     // Ensure couponCode is included in pricing
     if (!pricing.couponCode && pricing.appliedCoupon?.code) {
       pricing.couponCode = pricing.appliedCoupon.code;
+    }
+
+    // Re-calculate pricing on backend to handle referral coins and ensure correctness
+    const { useReferralCoins, coinsToUse } = req.body;
+    const finalPricing = await calculateOrderPricing({
+      items,
+      restaurantId,
+      deliveryAddress: address,
+      couponCode: pricing.couponCode || pricing.appliedCoupon?.code || null,
+      deliveryFleet: deliveryFleet || 'standard',
+      userId,
+      useReferralCoins,
+      coinsToUse
+    });
+
+    // Deduct referral coins if used
+    if (finalPricing.referralDiscount > 0) {
+      const User = (await import('../../auth/models/User.js')).default;
+      await User.findByIdAndUpdate(userId, {
+        $inc: { 'wallet.balance': -finalPricing.referralDiscount }
+      });
+      logger.info(`Deducted ${finalPricing.referralDiscount} referral coins from user ${userId} for order ${generatedOrderId}`);
     }
 
     // Create order in database with pending status
@@ -300,10 +323,7 @@ export const createOrder = async (req, res) => {
       restaurantName: assignedRestaurantName,
       items,
       address,
-      pricing: {
-        ...pricing,
-        couponCode: pricing.couponCode || null
-      },
+      pricing: finalPricing,
       deliveryFleet: deliveryFleet || 'standard',
       note: note || '',
       sendCutlery: sendCutlery !== false,
@@ -339,18 +359,18 @@ export const createOrder = async (req, res) => {
 
     // Calculate initial ETA
     try {
-      const restaurantLocation = restaurant.location 
+      const restaurantLocation = restaurant.location
         ? {
-            latitude: restaurant.location.latitude,
-            longitude: restaurant.location.longitude
-          }
+          latitude: restaurant.location.latitude,
+          longitude: restaurant.location.longitude
+        }
         : null;
 
       const userLocation = address.location?.coordinates
         ? {
-            latitude: address.location.coordinates[1],
-            longitude: address.location.coordinates[0]
-          }
+          latitude: address.location.coordinates[1],
+          longitude: address.location.coordinates[0]
+        }
         : null;
 
       if (restaurantLocation && userLocation) {
@@ -389,9 +409,9 @@ export const createOrder = async (req, res) => {
 
         logger.info('✅ ETA calculated for order:', {
           orderId: order.orderId,
-          eta: `${finalMinETA}-${finalMaxETA} mins`,
+          eta: `${finalMinETA} -${finalMaxETA} mins`,
           preparationTime: maxPreparationTime,
-          baseETA: `${etaResult.minETA}-${etaResult.maxETA} mins`
+          baseETA: `${etaResult.minETA} -${etaResult.maxETA} mins`
         });
       } else {
         logger.warn('⚠️ Could not calculate ETA - missing location data');
@@ -411,7 +431,7 @@ export const createOrder = async (req, res) => {
       userId: order.userId,
       status: order.status,
       total: order.pricing.total,
-      eta: order.eta ? `${order.eta.min}-${order.eta.max} mins` : 'N/A',
+      eta: order.eta ? `${order.eta.min} -${order.eta.max} mins` : 'N/A',
       paymentMethod: normalizedPaymentMethod
     });
 
@@ -420,7 +440,7 @@ export const createOrder = async (req, res) => {
       try {
         // Find or create wallet
         const wallet = await UserWallet.findOrCreateByUserId(userId);
-        
+
         // Check if sufficient balance
         if (pricing.total > wallet.balance) {
           return res.status(400).json({
@@ -450,7 +470,7 @@ export const createOrder = async (req, res) => {
             amount: pricing.total,
             type: 'deduction',
             status: 'Completed',
-            description: `Order payment - Order #${order.orderId}`,
+            description: `Order payment - Order #${order.orderId} `,
             orderId: order._id
           });
 
@@ -475,7 +495,7 @@ export const createOrder = async (req, res) => {
         // Create payment record
         try {
           const payment = new Payment({
-            paymentId: `PAY-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            paymentId: `PAY - ${Date.now()} -${Math.floor(Math.random() * 1000)} `,
             orderId: order._id,
             userId,
             amount: pricing.total,
@@ -552,7 +572,7 @@ export const createOrder = async (req, res) => {
       // Best-effort payment record; even if it fails we still proceed with order.
       try {
         const payment = new Payment({
-          paymentId: `PAY-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          paymentId: `PAY - ${Date.now()} -${Math.floor(Math.random() * 1000)} `,
           orderId: order._id,
           userId,
           amount: order.pricing.total,
@@ -640,13 +660,13 @@ export const createOrder = async (req, res) => {
         order.payment.razorpayOrderId = razorpayOrder.id;
         await order.save();
       } catch (razorpayError) {
-        logger.error(`Error creating Razorpay order: ${razorpayError.message}`);
+        logger.error(`Error creating Razorpay order: ${razorpayError.message} `);
         // Continue with order creation even if Razorpay fails
         // Payment can be handled later
       }
     }
 
-    logger.info(`Order created: ${order.orderId}`, {
+    logger.info(`Order created: ${order.orderId} `, {
       orderId: order.orderId,
       userId,
       amount: pricing.total,
@@ -660,7 +680,7 @@ export const createOrder = async (req, res) => {
         const credentials = await getRazorpayCredentials();
         razorpayKeyId = credentials.keyId || process.env.RAZORPAY_KEY_ID || process.env.RAZORPAY_API_KEY;
       } catch (error) {
-        logger.warn(`Failed to get Razorpay key ID from env service: ${error.message}`);
+        logger.warn(`Failed to get Razorpay key ID from env service: ${error.message} `);
         razorpayKeyId = process.env.RAZORPAY_KEY_ID || process.env.RAZORPAY_API_KEY;
       }
     }
@@ -683,7 +703,7 @@ export const createOrder = async (req, res) => {
       }
     });
   } catch (error) {
-    logger.error(`Error creating order: ${error.message}`, {
+    logger.error(`Error creating order: ${error.message} `, {
       error: error.message,
       stack: error.stack
     });
@@ -721,7 +741,7 @@ export const verifyOrderPayment = async (req, res) => {
           userId
         });
       }
-      
+
       // If not found, try by orderId string
       if (!order) {
         order = await Order.findOne({
@@ -763,7 +783,7 @@ export const verifyOrderPayment = async (req, res) => {
 
     // Create payment record
     const payment = new Payment({
-      paymentId: `PAY-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      paymentId: `PAY - ${Date.now()} -${Math.floor(Math.random() * 1000)} `,
       orderId: order._id,
       userId,
       amount: order.pricing.total,
@@ -804,13 +824,13 @@ export const verifyOrderPayment = async (req, res) => {
     try {
       // Calculate settlement breakdown
       await calculateOrderSettlement(order._id);
-      
+
       // Hold funds in escrow
       await holdEscrow(order._id, userId, order.pricing.total);
-      
+
       logger.info(`✅ Order settlement calculated and escrow held for order ${order.orderId}`);
     } catch (settlementError) {
-      logger.error(`❌ Error calculating settlement for order ${order.orderId}:`, settlementError);
+      logger.error(`❌ Error calculating settlement for order ${order.orderId}: `, settlementError);
       // Don't fail payment verification if settlement calculation fails
       // But log it for investigation
     }
@@ -819,7 +839,7 @@ export const verifyOrderPayment = async (req, res) => {
     try {
       const restaurantId = order.restaurantId?.toString() || order.restaurantId;
       const restaurantName = order.restaurantName;
-      
+
       // CRITICAL: Log detailed info before notification
       logger.info('🔔 CRITICAL: Attempting to notify restaurant about confirmed order:', {
         orderId: order.orderId,
@@ -833,7 +853,7 @@ export const verifyOrderPayment = async (req, res) => {
         orderCreatedAt: order.createdAt,
         orderItems: order.items.map(item => ({ name: item.name, quantity: item.quantity }))
       });
-      
+
       // Verify order has restaurantId before notifying
       if (!restaurantId) {
         logger.error('❌ CRITICAL: Cannot notify restaurant - order.restaurantId is missing!', {
@@ -846,7 +866,7 @@ export const verifyOrderPayment = async (req, res) => {
         });
         throw new Error('Order restaurantId is missing');
       }
-      
+
       // Verify order has restaurantName before notifying
       if (!restaurantName) {
         logger.warn('⚠️ Order restaurantName is missing:', {
@@ -854,17 +874,17 @@ export const verifyOrderPayment = async (req, res) => {
           restaurantId: restaurantId
         });
       }
-      
+
       const notificationResult = await notifyRestaurantNewOrder(order, restaurantId);
-      
-      logger.info(`✅ Successfully notified restaurant about confirmed order:`, {
+
+      logger.info(`✅ Successfully notified restaurant about confirmed order: `, {
         orderId: order.orderId,
         restaurantId: restaurantId,
         restaurantName: restaurantName,
         notificationResult: notificationResult
       });
     } catch (notificationError) {
-      logger.error(`❌ CRITICAL: Error notifying restaurant after payment verification:`, {
+      logger.error(`❌ CRITICAL: Error notifying restaurant after payment verification: `, {
         error: notificationError.message,
         stack: notificationError.stack,
         orderId: order.orderId,
@@ -878,7 +898,7 @@ export const verifyOrderPayment = async (req, res) => {
       // But log it as critical for debugging
     }
 
-    logger.info(`Order payment verified: ${order.orderId}`, {
+    logger.info(`Order payment verified: ${order.orderId} `, {
       orderId: order.orderId,
       paymentId: payment.paymentId,
       razorpayPaymentId
@@ -900,7 +920,7 @@ export const verifyOrderPayment = async (req, res) => {
       }
     });
   } catch (error) {
-    logger.error(`Error verifying order payment: ${error.message}`, {
+    logger.error(`Error verifying order payment: ${error.message} `, {
       error: error.message,
       stack: error.stack
     });
@@ -932,7 +952,7 @@ export const getUserOrders = async (req, res) => {
     // But we'll try both formats to be safe
     const mongoose = (await import('mongoose')).default;
     const query = { userId };
-    
+
     // If userId is a string that looks like ObjectId, also try ObjectId format
     if (typeof userId === 'string' && mongoose.Types.ObjectId.isValid(userId)) {
       query.$or = [
@@ -941,7 +961,7 @@ export const getUserOrders = async (req, res) => {
       ];
       delete query.userId; // Remove direct userId since we're using $or
     }
-    
+
     // Add status filter if provided
     if (status) {
       if (query.$or) {
@@ -957,7 +977,7 @@ export const getUserOrders = async (req, res) => {
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    logger.info(`Fetching orders for user: ${userId}, query: ${JSON.stringify(query)}`);
+    logger.info(`Fetching orders for user: ${userId}, query: ${JSON.stringify(query)} `);
 
     const orders = await Order.find(query)
       .sort({ createdAt: -1 })
@@ -970,7 +990,7 @@ export const getUserOrders = async (req, res) => {
 
     const total = await Order.countDocuments(query);
 
-    logger.info(`Found ${orders.length} orders for user ${userId} (total: ${total})`);
+    logger.info(`Found ${orders.length} orders for user ${userId}(total: ${total})`);
 
     res.json({
       success: true,
@@ -985,8 +1005,8 @@ export const getUserOrders = async (req, res) => {
       }
     });
   } catch (error) {
-    logger.error(`Error fetching user orders: ${error.message}`);
-    logger.error(`Error stack: ${error.stack}`);
+    logger.error(`Error fetching user orders: ${error.message} `);
+    logger.error(`Error stack: ${error.stack} `);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch orders'
@@ -1004,7 +1024,7 @@ export const getOrderDetails = async (req, res) => {
 
     // Try to find order by MongoDB _id or orderId (custom order ID)
     let order = null;
-    
+
     // First try MongoDB _id if it's a valid ObjectId
     if (mongoose.Types.ObjectId.isValid(id) && id.length === 24) {
       order = await Order.findOne({
@@ -1015,7 +1035,7 @@ export const getOrderDetails = async (req, res) => {
         .populate('userId', 'name fullName phone email')
         .lean();
     }
-    
+
     // If not found, try by orderId (custom order ID like "ORD-123456-789")
     if (!order) {
       order = await Order.findOne({
@@ -1047,7 +1067,7 @@ export const getOrderDetails = async (req, res) => {
       }
     });
   } catch (error) {
-    logger.error(`Error fetching order details: ${error.message}`);
+    logger.error(`Error fetching order details: ${error.message} `);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch order details'
@@ -1138,16 +1158,23 @@ export const cancelOrder = async (req, res) => {
         logger.info(`Cancellation refund calculated for order ${order.orderId} - awaiting admin approval`);
         refundMessage = ' Refund will be processed after admin approval.';
       } catch (refundError) {
-        logger.error(`Error calculating cancellation refund for order ${order.orderId}:`, refundError);
+        logger.error(`Error calculating cancellation refund for order ${order.orderId}: `, refundError);
         // Don't fail the cancellation if refund calculation fails
       }
     } else if (actualPaymentMethod === 'cash') {
       refundMessage = ' No refund required as payment was not made.';
     }
 
+    // Notify restaurant about cancellation
+    try {
+      await notifyRestaurantOrderUpdate(order._id.toString(), 'cancelled');
+    } catch (notifError) {
+      console.error('Error notifying restaurant about user cancellation:', notifError);
+    }
+
     res.json({
       success: true,
-      message: `Order cancelled successfully.${refundMessage}`,
+      message: `Order cancelled successfully.${refundMessage} `,
       data: {
         order: {
           orderId: order.orderId,
@@ -1158,7 +1185,7 @@ export const cancelOrder = async (req, res) => {
       }
     });
   } catch (error) {
-    logger.error(`Error cancelling order: ${error.message}`, {
+    logger.error(`Error cancelling order: ${error.message} `, {
       error: error.message,
       stack: error.stack
     });
@@ -1174,7 +1201,9 @@ export const cancelOrder = async (req, res) => {
  */
 export const calculateOrder = async (req, res) => {
   try {
-    const { items, restaurantId, deliveryAddress, couponCode, deliveryFleet } = req.body;
+    const { items, restaurantId, deliveryAddress, couponCode, deliveryFleet, useReferralCoins, coinsToUse } = req.body;
+    // Route is public (no auth middleware) so req.user may be undefined
+    const userId = req.user?.id || null;
 
     // Validate required fields
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -1190,7 +1219,10 @@ export const calculateOrder = async (req, res) => {
       restaurantId,
       deliveryAddress,
       couponCode,
-      deliveryFleet: deliveryFleet || 'standard'
+      deliveryFleet: deliveryFleet || 'standard',
+      userId,
+      useReferralCoins,
+      coinsToUse
     });
 
     res.json({
@@ -1200,7 +1232,7 @@ export const calculateOrder = async (req, res) => {
       }
     });
   } catch (error) {
-    logger.error(`Error calculating order pricing: ${error.message}`, {
+    logger.error(`Error calculating order pricing: ${error.message} `, {
       error: error.message,
       stack: error.stack
     });

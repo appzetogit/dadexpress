@@ -77,6 +77,7 @@ export const updateBusinessSettings = asyncHandler(async (req, res) => {
       pincode,
       region,
       maintenanceMode,
+      restaurantReferral,
     } = req.body;
 
     // Get existing settings
@@ -113,6 +114,18 @@ export const updateBusinessSettings = asyncHandler(async (req, res) => {
       }
       if (maintenanceMode.endDate) {
         settings.maintenanceMode.endDate = new Date(maintenanceMode.endDate);
+      }
+    }
+
+    if (restaurantReferral !== undefined) {
+      if (!settings.restaurantReferral) {
+        settings.restaurantReferral = {};
+      }
+      if (restaurantReferral.commissionPercentage !== undefined) {
+        settings.restaurantReferral.commissionPercentage = restaurantReferral.commissionPercentage;
+      }
+      if (restaurantReferral.applyOn !== undefined) {
+        settings.restaurantReferral.applyOn = restaurantReferral.applyOn;
       }
     }
 
@@ -248,7 +261,58 @@ export const updateBusinessSettings = asyncHandler(async (req, res) => {
       settings,
     );
   } catch (error) {
-    console.error("Error updating business settings:", error);
     return errorResponse(res, 500, "Failed to update business settings");
+  }
+});
+
+/**
+ * Update Referral Settings
+ * PUT /api/admin/business-settings/referral
+ */
+export const updateReferralSettings = asyncHandler(async (req, res) => {
+  try {
+    const {
+      isEnabled,
+      referrerReward,
+      refereeReward,
+      minOrderValue,
+      expiryDays,
+      maxRedemptionPercentage,
+    } = req.body;
+
+    let settings = await BusinessSettings.findOne();
+    if (!settings) {
+      settings = new BusinessSettings();
+    }
+
+    if (!settings.referral) {
+      settings.referral = {
+        isEnabled: true,
+        referrerReward: 100,
+        refereeReward: 50,
+        minOrderValue: 199,
+        expiryDays: 30,
+        maxRedemptionPercentage: 20
+      };
+    }
+
+    if (isEnabled !== undefined) settings.referral.isEnabled = isEnabled;
+    if (referrerReward !== undefined) settings.referral.referrerReward = referrerReward;
+    if (refereeReward !== undefined) settings.referral.refereeReward = refereeReward;
+    if (minOrderValue !== undefined) settings.referral.minOrderValue = minOrderValue;
+    if (expiryDays !== undefined) settings.referral.expiryDays = expiryDays;
+    if (maxRedemptionPercentage !== undefined) settings.referral.maxRedemptionPercentage = maxRedemptionPercentage;
+
+    await settings.save();
+
+    return successResponse(
+      res,
+      200,
+      "Referral settings updated successfully",
+      settings.referral
+    );
+  } catch (error) {
+    console.error("Error updating referral settings:", error);
+    return errorResponse(res, 500, "Failed to update referral settings");
   }
 });

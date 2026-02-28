@@ -71,7 +71,7 @@ export const adminSignup = asyncHandler(async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+      maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
     });
 
     // Remove password from response
@@ -86,11 +86,11 @@ export const adminSignup = asyncHandler(async (req, res) => {
     });
   } catch (error) {
     logger.error(`Error in admin signup: ${error.message}`);
-    
+
     if (error.code === 11000) {
       return errorResponse(res, 400, 'Admin with this email already exists');
     }
-    
+
     return errorResponse(res, 500, 'Failed to register admin');
   }
 });
@@ -140,7 +140,7 @@ export const adminLogin = asyncHandler(async (req, res) => {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict',
-    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
   });
 
   // Remove password from response
@@ -221,7 +221,7 @@ export const adminSignupWithOTP = asyncHandler(async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+      maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
     });
 
     // Remove password from response
@@ -236,11 +236,11 @@ export const adminSignupWithOTP = asyncHandler(async (req, res) => {
     });
   } catch (error) {
     logger.error(`Error in admin signup with OTP: ${error.message}`);
-    
+
     if (error.code === 11000) {
       return errorResponse(res, 400, 'Admin with this email already exists');
     }
-    
+
     return errorResponse(res, 500, 'Failed to register admin');
   }
 });

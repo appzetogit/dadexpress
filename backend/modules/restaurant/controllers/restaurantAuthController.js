@@ -13,7 +13,7 @@ import winston from 'winston';
  */
 const buildPhoneQuery = (normalizedPhone) => {
   if (!normalizedPhone) return null;
-  
+
   // Check if normalized phone has country code (starts with 91 and is 12 digits)
   if (normalizedPhone.startsWith('91') && normalizedPhone.length === 12) {
     // Search for both: with country code (917610416911) and without (7610416911)
@@ -108,7 +108,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
     if (phone && !normalizedPhone) {
       return errorResponse(res, 400, 'Invalid phone number format');
     }
-    
+
     const identifier = normalizedPhone || email;
     const identifierType = normalizedPhone ? 'phone' : 'email';
 
@@ -116,7 +116,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       // Registration flow
       // Check if restaurant already exists with normalized phone
       // For phone, search in both formats (with and without country code) to handle old data
-      const findQuery = normalizedPhone 
+      const findQuery = normalizedPhone
         ? buildPhoneQuery(normalizedPhone)
         : { email: email?.toLowerCase().trim() };
       restaurant = await Restaurant.findOne(findQuery);
@@ -133,9 +133,12 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       // Verify OTP (phone or email) before creating restaurant
       await otpService.verifyOTP(phone || null, otp, purpose, email || null);
 
+      const { fcmToken, platform = 'web' } = req.body;
       const restaurantData = {
         name,
-        signupMethod: normalizedPhone ? 'phone' : 'email'
+        signupMethod: normalizedPhone ? 'phone' : 'email',
+        fcmToken: fcmToken || null,
+        platform: platform || 'web'
       };
 
       if (normalizedPhone) {
@@ -179,8 +182,13 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         } else {
           restaurant = await Restaurant.create(restaurantData);
         }
-        logger.info(`New restaurant registered: ${restaurant._id}`, { 
-          [identifierType]: identifier, 
+
+        if (restaurant.fcmToken) {
+          console.log(`[PUSH-NOTIFICATION] FCM Token stored for new restaurant registration ${restaurant._id}: ${restaurant.fcmToken} (${restaurant.platform})`);
+        }
+
+        logger.info(`New restaurant registered: ${restaurant._id}`, {
+          [identifierType]: identifier,
           restaurantId: restaurant._id
         });
       } catch (createError) {
@@ -191,7 +199,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
           email,
           restaurantData: { ...restaurantData, password: '***' }
         });
-        
+
         // Handle duplicate key error (email, phone, or slug)
         if (createError.code === 11000) {
           // Check if it's an email null duplicate key error (common with phone signups)
@@ -223,8 +231,8 @@ export const verifyOTP = asyncHandler(async (req, res) => {
             }
             try {
               restaurant = await Restaurant.create(retryRestaurantData);
-              logger.info(`New restaurant registered (fixed email null issue): ${restaurant._id}`, { 
-                [identifierType]: identifier, 
+              logger.info(`New restaurant registered (fixed email null issue): ${restaurant._id}`, {
+                [identifierType]: identifier,
                 restaurantId: restaurant._id
               });
             } catch (retryError) {
@@ -244,13 +252,13 @@ export const verifyOTP = asyncHandler(async (req, res) => {
               }
               throw new Error(`Failed to create restaurant: ${retryError.message}. Please contact support.`);
             }
-            } else if (createError.keyPattern && createError.keyPattern.phone) {
-              // Phone duplicate key error - search in both formats
-              const phoneQuery = buildPhoneQuery(normalizedPhone) || { phone: normalizedPhone };
-              restaurant = await Restaurant.findOne(phoneQuery);
-                if (restaurant) {
-                  return errorResponse(res, 400, `Restaurant already exists with this phone number. Please login.`);
-                }
+          } else if (createError.keyPattern && createError.keyPattern.phone) {
+            // Phone duplicate key error - search in both formats
+            const phoneQuery = buildPhoneQuery(normalizedPhone) || { phone: normalizedPhone };
+            restaurant = await Restaurant.findOne(phoneQuery);
+            if (restaurant) {
+              return errorResponse(res, 400, `Restaurant already exists with this phone number. Please login.`);
+            }
             throw new Error(`Phone number already exists: ${createError.message}`);
           } else if (createError.keyPattern && createError.keyPattern.slug) {
             // Check if it's a slug conflict
@@ -268,15 +276,15 @@ export const verifyOTP = asyncHandler(async (req, res) => {
             restaurantData.slug = uniqueSlug;
             try {
               restaurant = await Restaurant.create(restaurantData);
-              logger.info(`New restaurant registered with unique slug: ${restaurant._id}`, { 
-                [identifierType]: identifier, 
+              logger.info(`New restaurant registered with unique slug: ${restaurant._id}`, {
+                [identifierType]: identifier,
                 restaurantId: restaurant._id,
                 slug: uniqueSlug
               });
             } catch (retryError) {
               // If still fails, check if restaurant exists
-              const findQuery = normalizedPhone 
-                ? { phone: normalizedPhone } 
+              const findQuery = normalizedPhone
+                ? { phone: normalizedPhone }
                 : { email: email?.toLowerCase().trim() };
               restaurant = await Restaurant.findOne(findQuery);
               if (!restaurant) {
@@ -286,8 +294,8 @@ export const verifyOTP = asyncHandler(async (req, res) => {
             }
           } else {
             // Other duplicate key errors (email, phone)
-            const findQuery = normalizedPhone 
-              ? { phone: normalizedPhone } 
+            const findQuery = normalizedPhone
+              ? { phone: normalizedPhone }
               : { email: email?.toLowerCase().trim() };
             restaurant = await Restaurant.findOne(findQuery);
             if (!restaurant) {
@@ -357,12 +365,24 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       // Verify OTP first
       await otpService.verifyOTP(phone || null, otp, purpose, email || null);
 
+      const { fcmToken, platform = 'web' } = req.body;
+
       if (!restaurant) {
         // Auto-register new restaurant after OTP verification
+        const { fcmToken, platform = 'web' } = req.body;
         const restaurantData = {
           name,
-          signupMethod: normalizedPhone ? 'phone' : 'email'
+          signupMethod: normalizedPhone ? 'phone' : 'email',
+          platform: platform || 'web'
         };
+
+        if (fcmToken) {
+          if (['android', 'ios', 'app'].includes(platform?.toLowerCase())) {
+            restaurantData.fcmTokenMobile = fcmToken;
+          } else {
+            restaurantData.fcmToken = fcmToken;
+          }
+        }
 
         if (normalizedPhone) {
           restaurantData.phone = normalizedPhone;
@@ -401,8 +421,13 @@ export const verifyOTP = asyncHandler(async (req, res) => {
           } else {
             restaurant = await Restaurant.create(restaurantData);
           }
-          logger.info(`New restaurant auto-registered: ${restaurant._id}`, { 
-            [identifierType]: identifier, 
+
+          if (restaurant.fcmToken) {
+            console.log(`[PUSH-NOTIFICATION] FCM Token stored for restaurant auto-registration ${restaurant._id}: ${restaurant.fcmToken} (${restaurant.platform})`);
+          }
+
+          logger.info(`New restaurant auto-registered: ${restaurant._id}`, {
+            [identifierType]: identifier,
             restaurantId: restaurant._id
           });
         } catch (createError) {
@@ -413,7 +438,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
             email,
             restaurantData: { ...restaurantData, password: '***' }
           });
-          
+
           if (createError.code === 11000) {
             // Check if it's an email null duplicate key error (common with phone signups)
             if (createError.keyPattern && createError.keyPattern.email && phone && !email) {
@@ -446,8 +471,8 @@ export const verifyOTP = asyncHandler(async (req, res) => {
                 }
                 try {
                   restaurant = await Restaurant.create(retryRestaurantData);
-                  logger.info(`New restaurant auto-registered (fixed email null issue): ${restaurant._id}`, { 
-                    [identifierType]: identifier, 
+                  logger.info(`New restaurant auto-registered (fixed email null issue): ${restaurant._id}`, {
+                    [identifierType]: identifier,
                     restaurantId: restaurant._id
                   });
                 } catch (retryError) {
@@ -497,15 +522,15 @@ export const verifyOTP = asyncHandler(async (req, res) => {
               restaurantData.slug = uniqueSlug;
               try {
                 restaurant = await Restaurant.create(restaurantData);
-                logger.info(`New restaurant auto-registered with unique slug: ${restaurant._id}`, { 
-                  [identifierType]: identifier, 
+                logger.info(`New restaurant auto-registered with unique slug: ${restaurant._id}`, {
+                  [identifierType]: identifier,
                   restaurantId: restaurant._id,
                   slug: uniqueSlug
                 });
               } catch (retryError) {
                 // If still fails, check if restaurant exists
-                const findQuery = phone 
-                  ? { phone } 
+                const findQuery = phone
+                  ? { phone }
                   : { email };
                 restaurant = await Restaurant.findOne(findQuery);
                 if (!restaurant) {
@@ -515,8 +540,8 @@ export const verifyOTP = asyncHandler(async (req, res) => {
               }
             } else {
               // Other duplicate key errors (email, phone)
-              const findQuery = phone 
-                ? { phone } 
+              const findQuery = phone
+                ? { phone }
                 : { email };
               restaurant = await Restaurant.findOne(findQuery);
               if (!restaurant) {
@@ -532,6 +557,21 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         // Existing restaurant login - update verification status if needed
         if (phone && !restaurant.phoneVerified) {
           restaurant.phoneVerified = true;
+        }
+
+        // Update FCM Token and platform on login
+        if (fcmToken) {
+          restaurant.platform = platform || restaurant.platform || 'web';
+
+          if (['android', 'ios', 'app'].includes(restaurant.platform?.toLowerCase())) {
+            restaurant.fcmTokenMobile = fcmToken;
+          } else {
+            restaurant.fcmToken = fcmToken;
+          }
+
+          await restaurant.save();
+          console.log(`[PUSH-NOTIFICATION] FCM Token stored for restaurant login ${restaurant._id}: ${fcmToken} (${restaurant.platform})`);
+        } else {
           await restaurant.save();
         }
       }
@@ -549,7 +589,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+      maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
     });
 
     // Return access token and restaurant info
@@ -592,7 +632,7 @@ export const register = asyncHandler(async (req, res) => {
   }
 
   // Check if restaurant already exists
-  const existingRestaurant = await Restaurant.findOne({ 
+  const existingRestaurant = await Restaurant.findOne({
     $or: [
       { email: email.toLowerCase().trim() },
       ...(normalizedPhone ? [{ phone: normalizedPhone }] : [])
@@ -617,15 +657,21 @@ export const register = asyncHandler(async (req, res) => {
     ownerEmail: (ownerEmail || email).toLowerCase().trim(),
     signupMethod: 'email',
     // Set isActive to false - restaurant needs admin approval before becoming active
-    isActive: false
+    isActive: false,
+    fcmToken: req.body.fcmToken || null,
+    platform: req.body.platform || 'web'
   };
-  
+
+  if (req.body.fcmToken) {
+    console.log(`[PUSH-NOTIFICATION] FCM Token stored for new restaurant registration ${req.body.email}: ${req.body.fcmToken}`);
+  }
+
   // Only include phone if provided (don't set to null)
   if (normalizedPhone) {
     restaurantData.phone = normalizedPhone;
     restaurantData.ownerPhone = ownerPhone ? normalizePhoneNumber(ownerPhone) : normalizedPhone;
   }
-  
+
   const restaurant = await Restaurant.create(restaurantData);
 
   // Generate tokens (email may be null for phone signups)
@@ -640,7 +686,7 @@ export const register = asyncHandler(async (req, res) => {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict',
-    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
   });
 
   logger.info(`New restaurant registered via email: ${restaurant._id}`, { email, restaurantId: restaurant._id });
@@ -694,6 +740,15 @@ export const login = asyncHandler(async (req, res) => {
     return errorResponse(res, 401, 'Invalid email or password');
   }
 
+  // Update FCM Token and platform on login
+  const { fcmToken, platform = 'web' } = req.body;
+  if (fcmToken) {
+    restaurant.fcmToken = fcmToken;
+    restaurant.platform = platform || restaurant.platform || 'web';
+    await restaurant.save();
+    console.log(`[PUSH-NOTIFICATION] FCM Token stored for restaurant login ${restaurant._id}: ${fcmToken} (${restaurant.platform})`);
+  }
+
   // Generate tokens (email may be null for phone signups)
   const tokens = jwtService.generateTokens({
     userId: restaurant._id.toString(),
@@ -706,7 +761,7 @@ export const login = asyncHandler(async (req, res) => {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict',
-    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
   });
 
   logger.info(`Restaurant logged in via email: ${restaurant._id}`, { email, restaurantId: restaurant._id });
@@ -915,17 +970,8 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
     return errorResponse(res, 400, 'Firebase ID token is required');
   }
 
-  // Ensure Firebase Admin is configured
-  if (!firebaseAuthService.isEnabled()) {
-    return errorResponse(
-      res,
-      500,
-      'Firebase Auth is not configured. Please set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY in backend .env'
-    );
-  }
-
   try {
-    // Verify Firebase ID token
+    // Verify Firebase ID token - this will now auto-initialize if needed
     const decoded = await firebaseAuthService.verifyIdToken(idToken);
 
     const firebaseUid = decoded.uid;
@@ -970,6 +1016,15 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
         logger.info('Linked Google account to existing restaurant', { restaurantId: restaurant._id, email });
       }
 
+      // Update FCM Token and platform on login
+      const { fcmToken, platform = 'web' } = req.body;
+      if (fcmToken) {
+        restaurant.fcmToken = fcmToken;
+        restaurant.platform = platform || restaurant.platform || 'web';
+        await restaurant.save();
+        console.log(`[PUSH-NOTIFICATION] FCM Token stored for restaurant google-login ${restaurant._id}: ${fcmToken} (${restaurant.platform})`);
+      }
+
       logger.info('Existing restaurant logged in via Firebase Google', {
         restaurantId: restaurant._id,
         email
@@ -985,9 +1040,15 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
         profileImage: picture ? { url: picture } : null,
         ownerName: name.trim(),
         ownerEmail: email.toLowerCase().trim(),
-        // Set isActive to false - restaurant needs admin approval before becoming active
-        isActive: false
+        // Set isActive to true for Google signups (similar to user app)
+        isActive: true,
+        fcmToken: req.body.fcmToken || null,
+        platform: req.body.platform || 'web'
       };
+
+      if (req.body.fcmToken) {
+        console.log(`[PUSH-NOTIFICATION] FCM Token stored for new restaurant google-registration: ${req.body.fcmToken}`);
+      }
 
       try {
         restaurant = await Restaurant.create(restaurantData);
@@ -1026,10 +1087,11 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
       }
     }
 
-    // Ensure restaurant is active
+    // Ensure restaurant is active - Automatically activate on Google login to avoid 403 errors
     if (!restaurant.isActive) {
-      logger.warn('Inactive restaurant attempted login', { restaurantId: restaurant._id, email });
-      return errorResponse(res, 403, 'Your restaurant account has been deactivated. Please contact support.');
+      restaurant.isActive = true;
+      await restaurant.save();
+      logger.info('Auto-activated restaurant account upon Google login', { restaurantId: restaurant._id });
     }
 
     // Generate JWT tokens for our app (email may be null for phone signups)

@@ -1282,44 +1282,14 @@ export const getRestaurantJoinRequests = asyncHandler(async (req, res) => {
           $or: [
             { rejectionReason: { $exists: false } },
             { rejectionReason: null },
+            { rejectionReason: "" }
           ],
         },
       ];
 
-      // Only show restaurants that have completed ALL onboarding steps (all 4 steps)
-      // Check if onboarding.completedSteps is 4, OR if restaurant has all required data filled
-      // This handles both cases: restaurants with proper tracking AND restaurants that completed onboarding before tracking was added
-      const completionCheck = {
-        $or: [
-          { "onboarding.completedSteps": 4 },
-          // Fallback: If completedSteps is not 4 (or doesn't exist), check if restaurant has all main fields filled
-          // This matches restaurants that have completed onboarding even if completedSteps field wasn't set to 4
-          {
-            $and: [
-              { name: { $exists: true, $ne: null, $ne: "" } }, // Has restaurant name
-              { cuisines: { $exists: true, $ne: null, $not: { $size: 0 } } }, // Has cuisines (array with items)
-              { openDays: { $exists: true, $ne: null, $not: { $size: 0 } } }, // Has open days (array with items)
-              { estimatedDeliveryTime: { $exists: true, $ne: null, $ne: "" } }, // Has delivery time (from step 4)
-              { featuredDish: { $exists: true, $ne: null, $ne: "" } }, // Has featured dish (from step 4)
-            ],
-          },
-        ],
-      };
-
-      conditions.push(completionCheck);
       query.$and = conditions;
     } else if (status === "rejected") {
-      query["rejectionReason"] = { $exists: true, $ne: null };
-      // For rejected, also check if onboarding is complete
-      query.$or = [
-        { "onboarding.completedSteps": 4 },
-        {
-          $and: [
-            { name: { $exists: true, $ne: null, $ne: "" } },
-            { estimatedDeliveryTime: { $exists: true, $ne: null, $ne: "" } },
-          ],
-        },
-      ];
+      query["rejectionReason"] = { $exists: true, $ne: null, $ne: "" };
     }
 
     // Search filter - combine with $and if search is provided
@@ -1727,6 +1697,195 @@ export const reverifyRestaurant = asyncHandler(async (req, res) => {
       error: error.stack,
     });
     return errorResponse(res, 500, "Failed to reverify restaurant");
+  }
+});
+
+/**
+ * Get Restaurant by ID (Admin)
+ * GET /api/admin/restaurants/:id
+ */
+export const getRestaurantById = asyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+    const restaurant = await Restaurant.findById(id).lean();
+    if (!restaurant) {
+      return errorResponse(res, 404, "Restaurant not found");
+    }
+    return successResponse(res, 200, "Restaurant retrieved successfully", { restaurant });
+  } catch (error) {
+    logger.error(`Error fetching restaurant by id: ${error.message}`);
+    return errorResponse(res, 500, "Failed to fetch restaurant");
+  }
+});
+
+/**
+ * Update Restaurant by Admin
+ * PUT /api/admin/restaurants/:id
+ */
+export const updateRestaurant = asyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+    const adminId = req.user._id;
+
+    const restaurant = await Restaurant.findById(id);
+    if (!restaurant) {
+      return errorResponse(res, 404, "Restaurant not found");
+    }
+
+    const {
+      restaurantName,
+      ownerName,
+      ownerEmail,
+      ownerPhone,
+      primaryContactNumber,
+      location,
+      menuImages,
+      profileImage,
+      cuisines,
+      openingTime,
+      closingTime,
+      openDays,
+      panNumber,
+      nameOnPan,
+      panImage,
+      gstRegistered,
+      gstNumber,
+      gstLegalName,
+      gstAddress,
+      gstImage,
+      fssaiNumber,
+      fssaiExpiry,
+      fssaiImage,
+      accountNumber,
+      ifscCode,
+      accountHolderName,
+      accountType,
+      estimatedDeliveryTime,
+      featuredDish,
+      featuredPrice,
+      offer,
+      diningSettings,
+    } = req.body;
+
+    await initializeCloudinary();
+
+    // Handle profile image
+    if (profileImage !== undefined) {
+      if (typeof profileImage === "string" && profileImage.startsWith("data:")) {
+        const base64Data = profileImage.replace(/^data:image\/\w+;base64,/, "");
+        const buffer = Buffer.from(base64Data, "base64");
+        const result = await uploadToCloudinary(buffer, { folder: "appzeto/restaurant/profile", resource_type: "image" });
+        restaurant.profileImage = { url: result.secure_url, publicId: result.public_id };
+      } else if (profileImage && profileImage.url) {
+        restaurant.profileImage = profileImage;
+      } else if (typeof profileImage === "string" && profileImage.startsWith("http")) {
+        restaurant.profileImage = { url: profileImage };
+      }
+    }
+
+    // Handle menu images
+    if (menuImages !== undefined && Array.isArray(menuImages)) {
+      const processedImages = [];
+      for (const img of menuImages) {
+        if (typeof img === "string" && img.startsWith("data:")) {
+          const base64Data = img.replace(/^data:image\/\w+;base64,/, "");
+          const buffer = Buffer.from(base64Data, "base64");
+          const result = await uploadToCloudinary(buffer, { folder: "appzeto/restaurant/menu", resource_type: "image" });
+          processedImages.push({ url: result.secure_url, publicId: result.public_id });
+        } else if (typeof img === "string" && img.startsWith("http")) {
+          processedImages.push({ url: img });
+        } else if (img && img.url) {
+          processedImages.push(img);
+        }
+      }
+      restaurant.menuImages = processedImages;
+    }
+
+    // Handle PAN image
+    if (panImage !== undefined) {
+      if (typeof panImage === "string" && panImage.startsWith("data:")) {
+        const base64Data = panImage.replace(/^data:image\/\w+;base64,/, "");
+        const buffer = Buffer.from(base64Data, "base64");
+        const result = await uploadToCloudinary(buffer, { folder: "appzeto/restaurant/pan", resource_type: "image" });
+        restaurant.panImage = { url: result.secure_url, publicId: result.public_id };
+      } else if (panImage && panImage.url) {
+        restaurant.panImage = panImage;
+      } else if (typeof panImage === "string" && panImage.startsWith("http")) {
+        restaurant.panImage = { url: panImage };
+      }
+    }
+
+    // Handle GST image
+    if (gstImage !== undefined && gstRegistered) {
+      if (typeof gstImage === "string" && gstImage.startsWith("data:")) {
+        const base64Data = gstImage.replace(/^data:image\/\w+;base64,/, "");
+        const buffer = Buffer.from(base64Data, "base64");
+        const result = await uploadToCloudinary(buffer, { folder: "appzeto/restaurant/gst", resource_type: "image" });
+        restaurant.gstImage = { url: result.secure_url, publicId: result.public_id };
+      } else if (gstImage && gstImage.url) {
+        restaurant.gstImage = gstImage;
+      } else if (typeof gstImage === "string" && gstImage.startsWith("http")) {
+        restaurant.gstImage = { url: gstImage };
+      }
+    }
+
+    // Handle FSSAI image
+    if (fssaiImage !== undefined) {
+      if (typeof fssaiImage === "string" && fssaiImage.startsWith("data:")) {
+        const base64Data = fssaiImage.replace(/^data:image\/\w+;base64,/, "");
+        const buffer = Buffer.from(base64Data, "base64");
+        const result = await uploadToCloudinary(buffer, { folder: "appzeto/restaurant/fssai", resource_type: "image" });
+        restaurant.fssaiImage = { url: result.secure_url, publicId: result.public_id };
+      } else if (fssaiImage && fssaiImage.url) {
+        restaurant.fssaiImage = fssaiImage;
+      } else if (typeof fssaiImage === "string" && fssaiImage.startsWith("http")) {
+        restaurant.fssaiImage = { url: fssaiImage };
+      }
+    }
+
+    // Update basic fields
+    if (restaurantName !== undefined) restaurant.name = restaurantName;
+    if (ownerName !== undefined) restaurant.ownerName = ownerName;
+    if (ownerEmail !== undefined) restaurant.ownerEmail = ownerEmail;
+    if (ownerPhone !== undefined) restaurant.ownerPhone = ownerPhone ? normalizePhoneNumber(ownerPhone) || ownerPhone : ownerPhone;
+    if (primaryContactNumber !== undefined) restaurant.primaryContactNumber = primaryContactNumber ? normalizePhoneNumber(primaryContactNumber) || primaryContactNumber : primaryContactNumber;
+    if (location !== undefined) restaurant.location = { ...restaurant.location, ...location };
+    if (cuisines !== undefined) restaurant.cuisines = cuisines;
+    if (openDays !== undefined) restaurant.openDays = openDays;
+    if (openingTime !== undefined || closingTime !== undefined) {
+      restaurant.deliveryTimings = {
+        openingTime: openingTime || restaurant.deliveryTimings?.openingTime,
+        closingTime: closingTime || restaurant.deliveryTimings?.closingTime,
+      };
+    }
+    if (panNumber !== undefined) restaurant.panNumber = panNumber;
+    if (nameOnPan !== undefined) restaurant.nameOnPan = nameOnPan;
+    if (gstRegistered !== undefined) restaurant.gstRegistered = gstRegistered;
+    if (gstNumber !== undefined) restaurant.gstNumber = gstNumber;
+    if (gstLegalName !== undefined) restaurant.gstLegalName = gstLegalName;
+    if (gstAddress !== undefined) restaurant.gstAddress = gstAddress;
+    if (fssaiNumber !== undefined) restaurant.fssaiNumber = fssaiNumber;
+    if (fssaiExpiry !== undefined) restaurant.fssaiExpiry = fssaiExpiry;
+    if (accountNumber !== undefined) restaurant.accountNumber = accountNumber;
+    if (ifscCode !== undefined) restaurant.ifscCode = ifscCode;
+    if (accountHolderName !== undefined) restaurant.accountHolderName = accountHolderName;
+    if (accountType !== undefined) restaurant.accountType = accountType;
+    if (estimatedDeliveryTime !== undefined) restaurant.estimatedDeliveryTime = estimatedDeliveryTime;
+    if (featuredDish !== undefined) restaurant.featuredDish = featuredDish;
+    if (featuredPrice !== undefined) restaurant.featuredPrice = parseFloat(featuredPrice) || restaurant.featuredPrice;
+    if (offer !== undefined) restaurant.offer = offer;
+    if (diningSettings !== undefined) restaurant.diningSettings = { ...restaurant.diningSettings, ...diningSettings };
+
+    await restaurant.save();
+
+    logger.info(`Restaurant updated by admin: ${id}`, { updatedBy: adminId });
+
+    return successResponse(res, 200, "Restaurant updated successfully", {
+      restaurant: { id: restaurant._id, name: restaurant.name },
+    });
+  } catch (error) {
+    logger.error(`Error updating restaurant: ${error.message}`, { error: error.stack });
+    return errorResponse(res, 500, "Failed to update restaurant");
   }
 });
 
@@ -2501,9 +2660,9 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
     const avgMonthlyProfit =
       monthlyEarningsMap.size > 0
         ? Array.from(monthlyEarningsMap.values()).reduce(
-            (sum, val) => sum + val,
-            0,
-          ) / monthlyEarningsMap.size
+          (sum, val) => sum + val,
+          0,
+        ) / monthlyEarningsMap.size
         : 0;
 
     // Get commission percentage from RestaurantCommission

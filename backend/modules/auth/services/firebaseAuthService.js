@@ -42,7 +42,7 @@ class FirebaseAuthService {
           const configFolderPath = path.resolve(
             process.cwd(),
             "config",
-            "zomato-607fa-firebase-adminsdk-fbsvc-f5f782c2cc.json",
+            "dad-express-firebase-adminsdk-fbsvc-b5eadad2f5.json",
           );
           const rootPath = path.resolve(process.cwd(), "firebaseconfig.json");
 
@@ -65,15 +65,23 @@ class FirebaseAuthService {
         }
       }
 
-      if (!projectId || !clientEmail || !privateKey) {
-        logger.warn(
-          "Firebase Admin not fully configured. Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY in ENV Setup or .env or provide firebaseconfig.json in backend root to enable Firebase auth.",
-        );
-        return;
-      }
+
+      // Handle quotes in strings (dotenv fallback)
+      const cleanValue = (val) => {
+        if (!val || typeof val !== 'string') return val;
+        let v = val.trim();
+        if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+          v = v.slice(1, -1).trim();
+        }
+        return v;
+      };
+
+      projectId = cleanValue(projectId);
+      clientEmail = cleanValue(clientEmail);
+      privateKey = cleanValue(privateKey);
 
       // Handle escaped newlines in private key
-      if (privateKey.includes("\\n")) {
+      if (privateKey && privateKey.includes("\\n")) {
         privateKey = privateKey.replace(/\\n/g, "\n");
       }
 
@@ -115,9 +123,16 @@ class FirebaseAuthService {
    * @returns {Promise<admin.auth.DecodedIdToken>}
    */
   async verifyIdToken(idToken) {
+    // If not initialized, try one more time (could be waiting for DB)
     if (!this.initialized) {
+      logger.info("Firebase not initialized, attempting on-the-fly initialization...");
+      await this.init();
+    }
+
+    if (!this.initialized) {
+      logger.error("Firebase Admin could not be initialized even after retry.");
       throw new Error(
-        "Firebase Admin is not configured. Please set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY in .env",
+        "Firebase Admin is not configured. Please check your credentials and .env file.",
       );
     }
 
