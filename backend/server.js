@@ -357,14 +357,20 @@ app.use(mongoSanitize());
 
 // Rate limiting (disabled in development mode)
 if (process.env.NODE_ENV === 'production') {
+  // Trust proxy is required if the app is behind a reverse proxy (Nginx, Cloudflare, etc.)
+  // Without this, all users might be seen as having the same IP adress
+  app.set('trust proxy', true);
+
   const limiter = rateLimit({
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-    max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
-    message: 'Too many requests from this IP, please try again later.'
+    max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 5000, // limit each IP to 5000 requests per windowMs
+    message: 'Too many requests from this IP, please try again later.',
+    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+    legacyHeaders: false, // Disable the `X-RateLimit-*` headers
   });
 
   app.use('/api/', limiter);
-  console.log('Rate limiting enabled (production mode)');
+  console.log('Rate limiting enabled (production mode) with limit: 5000 requests/15min');
 } else {
   console.log('Rate limiting disabled (development mode)');
 }
