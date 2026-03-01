@@ -28,31 +28,52 @@ export const sendPushNotification = asyncHandler(async (req, res) => {
     }
 
     if (sendTo === "Customer") {
-        const query = { fcmToken: { $exists: true, $ne: null } };
-        // Could filter by zone if User schema supports it
-        const users = await User.find(query).select('fcmToken');
-        tokens = users.map(u => u.fcmToken);
+        const query = {
+            $or: [
+                { fcmToken: { $exists: true, $ne: null, $ne: "" } },
+                { fcmTokenMobile: { $exists: true, $ne: null, $ne: "" } }
+            ]
+        };
+        const users = await User.find(query).select('fcmToken fcmTokenMobile');
+        tokens = users.flatMap(u => [u.fcmToken, u.fcmTokenMobile]);
     } else if (sendTo === "Delivery Man") {
-        const query = { fcmToken: { $exists: true, $ne: null } };
-        if (!isAllZones) {
-            query["zone"] = { $regex: new RegExp(`^${zone}$`, 'i') };
-        }
-        const deliveryMen = await Delivery.find(query).select('fcmToken');
-        tokens = deliveryMen.map(d => d.fcmToken);
-    } else if (sendTo === "Restaurant") {
-        const query = { fcmToken: { $exists: true, $ne: null } };
+        const query = {
+            $or: [
+                { fcmToken: { $exists: true, $ne: null, $ne: "" } },
+                { fcmTokenMobile: { $exists: true, $ne: null, $ne: "" } }
+            ]
+        };
         if (!isAllZones) {
             query.$or = [
                 { "location.area": { $regex: new RegExp(`^${zone}$`, 'i') } },
                 { "location.city": { $regex: new RegExp(`^${zone}$`, 'i') } }
             ];
         }
-        const restaurants = await Restaurant.find(query).select('fcmToken');
-        tokens = restaurants.map(r => r.fcmToken);
+        const deliveryMen = await Delivery.find(query).select('fcmToken fcmTokenMobile');
+        tokens = deliveryMen.flatMap(d => [d.fcmToken, d.fcmTokenMobile]);
+    } else if (sendTo === "Restaurant") {
+        const query = {
+            $or: [
+                { fcmToken: { $exists: true, $ne: null, $ne: "" } },
+                { fcmTokenMobile: { $exists: true, $ne: null, $ne: "" } }
+            ]
+        };
+        if (!isAllZones) {
+            query.$and = [
+                {
+                    $or: [
+                        { "location.area": { $regex: new RegExp(`^${zone}$`, 'i') } },
+                        { "location.city": { $regex: new RegExp(`^${zone}$`, 'i') } }
+                    ]
+                }
+            ];
+        }
+        const restaurants = await Restaurant.find(query).select('fcmToken fcmTokenMobile');
+        tokens = restaurants.flatMap(r => [r.fcmToken, r.fcmTokenMobile]);
     }
 
     // Clean tokens string
-    tokens = tokens.filter(t => typeof t === 'string' && t.trim().length > 0);
+    tokens = tokens.filter(t => typeof t === 'string' && t.trim().length > 0 && t !== "undefined");
 
     console.log(`[PUSH NOTIFICATION] Attempting to send to ${sendTo}. Zone: ${zone}`);
     console.log(`[PUSH NOTIFICATION] Found ${tokens.length} valid FCM tokens.`);

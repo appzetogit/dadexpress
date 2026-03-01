@@ -1,5 +1,5 @@
 
-import { messaging, getToken, onMessage, deleteToken } from '@/lib/firebase';
+import { messaging, getToken, onMessage } from '@/lib/firebase';
 import axios from 'axios';
 
 // VAPID key for dad-express
