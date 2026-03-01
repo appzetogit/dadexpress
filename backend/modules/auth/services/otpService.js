@@ -91,15 +91,19 @@ class OTPService {
           purpose,
           createdAt: { $gte: oneHourAgo }
         };
-        
+
         const recentOtpCount = await Otp.countDocuments(rateLimitQuery);
         if (recentOtpCount >= 3) {
           throw new Error('Too many OTP requests. Please try again after some time.');
         }
       }
 
-      // Generate OTP (use default for test phone numbers)
-      const otp = (phone && isTestPhoneNumber(phone)) ? DEFAULT_TEST_OTP : generateOTP();
+      // Check if SMS service is configured
+      const isSMSConfigured = phone ? await smsIndiaHubService.isConfigured() : true;
+
+      // Generate OTP (use default for test phone numbers OR if SMS is not configured)
+      const useDefaultOTP = (phone && (isTestPhoneNumber(phone) || !isSMSConfigured));
+      const otp = useDefaultOTP ? DEFAULT_TEST_OTP : generateOTP();
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
       // Build query for invalidating previous OTPs
@@ -126,16 +130,22 @@ class OTPService {
 
       // Send OTP via SMS or Email
       if (phone) {
-        // Skip actual SMS sending for test phone numbers
-        if (!isTestPhoneNumber(phone)) {
+        // Skip actual SMS sending for test phone numbers OR if SMS is not configured
+        if (!isTestPhoneNumber(phone) && isSMSConfigured) {
           // Use SMSIndia Hub for phone OTP
           await smsIndiaHubService.sendOTP(phone, otp, purpose);
         } else {
-          logger.info(`Skipping SMS for test phone number: ${phone}`, {
+          const reason = !isSMSConfigured ? "SMS gateway not configured" : "test phone number";
+          logger.info(`Skipping SMS because ${reason}: ${phone}`, {
             phone,
             purpose,
             otp
           });
+
+          // If in production and not configured, we should still notify the admin/logs
+          if (process.env.NODE_ENV === 'production' && !isSMSConfigured) {
+            console.warn(`⚠️ SMS Gateway not configured on PRODUCTION. Using default OTP ${otp} for ${phone}`);
+          }
         }
       } else if (email) {
         // Keep email service as is
@@ -183,9 +193,12 @@ class OTPService {
       const identifier = phone || email;
       const identifierType = phone ? 'phone' : 'email';
 
-      // Check if this is a test phone number and OTP matches default test OTP
-      if (phone && isTestPhoneNumber(phone) && otp === DEFAULT_TEST_OTP) {
-        logger.info(`Test OTP verified for ${phone}`, {
+      // Check if this is a test phone number OR SMS is not configured, and OTP matches default test OTP
+      const isSMSConfigured = phone ? await smsIndiaHubService.isConfigured() : true;
+      const isTestOrUnconfigured = phone && (isTestPhoneNumber(phone) || !isSMSConfigured);
+
+      if (isTestOrUnconfigured && otp === DEFAULT_TEST_OTP) {
+        logger.info(`Test/Unconfigured OTP verified for ${phone}`, {
           phone,
           purpose
         });
@@ -198,7 +211,7 @@ class OTPService {
       // Verify OTP from database
       // For reset-password purpose, allow already-verified OTPs within 10 minutes
       let otpRecord;
-      
+
       if (purpose === 'reset-password') {
         // First try to find unverified OTP
         const unverifiedQuery = {
@@ -209,9 +222,9 @@ class OTPService {
         };
         if (phone) unverifiedQuery.phone = phone;
         if (email) unverifiedQuery.email = email;
-        
+
         otpRecord = await Otp.findOne(unverifiedQuery);
-        
+
         // If not found, check for already-verified OTP within last 10 minutes
         if (!otpRecord) {
           const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
@@ -224,9 +237,9 @@ class OTPService {
           };
           if (phone) verifiedQuery.phone = phone;
           if (email) verifiedQuery.email = email;
-          
+
           otpRecord = await Otp.findOne(verifiedQuery);
-          
+
           if (otpRecord) {
             // OTP already verified and still valid (within 10 minutes)
             return {
@@ -245,7 +258,7 @@ class OTPService {
         };
         if (phone) query.phone = phone;
         if (email) query.email = email;
-        
+
         otpRecord = await Otp.findOne(query);
       }
 
