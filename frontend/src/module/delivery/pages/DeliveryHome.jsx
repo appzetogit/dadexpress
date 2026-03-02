@@ -299,6 +299,7 @@ function animateMarkerSmoothly(marker, newPosition, duration = 1500, animationRe
 }
 
 export default function DeliveryHome() {
+  const SWIPE_COMPLETE_THRESHOLD = 0.5
   const companyName = useCompanyName()
   const navigate = useNavigate()
   const location = useLocation()
@@ -2093,9 +2094,9 @@ export default function DeliveryHome() {
     const circleWidth = 56
     const padding = 16
     const maxSwipe = buttonWidth - circleWidth - (padding * 2)
-    const threshold = maxSwipe * 0.7 // 70% of max swipe
+    const threshold = maxSwipe * SWIPE_COMPLETE_THRESHOLD // Complete on 50% swipe
 
-    if (deltaX > threshold) {
+    if (deltaX >= threshold) {
       // Stop audio immediately when user accepts
       if (alertAudioRef.current) {
         alertAudioRef.current.pause()
@@ -2983,9 +2984,9 @@ export default function DeliveryHome() {
     const circleWidth = 56
     const padding = 16
     const maxSwipe = buttonWidth - circleWidth - (padding * 2)
-    const threshold = maxSwipe * 0.7 // 70% of max swipe
+    const threshold = maxSwipe * SWIPE_COMPLETE_THRESHOLD // Complete on 50% swipe
 
-    if (deltaX > threshold) {
+    if (deltaX >= threshold) {
       // Animate to completion
       setreachedPickupIsAnimatingToComplete(true)
       setreachedPickupButtonProgress(1)
@@ -3188,9 +3189,9 @@ export default function DeliveryHome() {
     const circleWidth = 56
     const padding = 16
     const maxSwipe = buttonWidth - circleWidth - (padding * 2)
-    const threshold = maxSwipe * 0.7 // 70% of max swipe
+    const threshold = maxSwipe * SWIPE_COMPLETE_THRESHOLD // Complete on 50% swipe
 
-    if (deltaX > threshold) {
+    if (deltaX >= threshold) {
       // Animate to completion
       setReachedDropIsAnimatingToComplete(true)
       setReachedDropButtonProgress(1)
@@ -3500,9 +3501,9 @@ export default function DeliveryHome() {
     const circleWidth = 56
     const padding = 16
     const maxSwipe = buttonWidth - circleWidth - (padding * 2)
-    const threshold = maxSwipe * 0.7 // 70% of max swipe
+    const threshold = maxSwipe * SWIPE_COMPLETE_THRESHOLD // Complete on 50% swipe
 
-    if (deltaX > threshold) {
+    if (deltaX >= threshold) {
       // Animate to completion
       setOrderIdConfirmIsAnimatingToComplete(true)
       setOrderIdConfirmButtonProgress(1)
@@ -3899,9 +3900,9 @@ export default function DeliveryHome() {
     const circleWidth = 56
     const padding = 16
     const maxSwipe = buttonWidth - circleWidth - (padding * 2)
-    const threshold = maxSwipe * 0.7 // 70% of max swipe
+    const threshold = maxSwipe * SWIPE_COMPLETE_THRESHOLD // Complete on 50% swipe
 
-    if (deltaX > threshold) {
+    if (deltaX >= threshold) {
       // Animate to completion
       setOrderDeliveredIsAnimatingToComplete(true)
       setOrderDeliveredButtonProgress(1)
@@ -3975,9 +3976,9 @@ export default function DeliveryHome() {
     const circleWidth = 56
     const padding = 16
     const maxSwipe = buttonWidth - circleWidth - (padding * 2)
-    const threshold = maxSwipe * 0.7 // 70% of max swipe
+    const threshold = maxSwipe * SWIPE_COMPLETE_THRESHOLD // Complete on 50% swipe
 
-    if (deltaX > threshold) {
+    if (deltaX >= threshold) {
       // Animate to completion
       setIsAnimatingToComplete(true)
       setAcceptButtonProgress(1)
