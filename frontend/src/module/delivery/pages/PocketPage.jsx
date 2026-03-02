@@ -133,21 +133,7 @@ export default function PocketPage() {
 
   // Debug: Log wallet state and balances
   useEffect(() => {
-    console.log('💰 Wallet State:', walletState)
-    console.log('💰 Calculated Balances:', balances)
-    // Pocket balance = total balance (includes bonus)
-    const calculatedPocketBalance = walletState?.totalBalance || balances.totalBalance || 0
-    console.log('💰 Pocket Balance (same as Total Balance):', calculatedPocketBalance)
-    console.log('💰 Total Balance (includes bonus):', walletState?.totalBalance || balances.totalBalance)
-    console.log('💰 Cash In Hand:', walletState?.cashInHand || balances.cashInHand)
-    // Check for bonus transactions
-    const bonusTransactions = walletState?.transactions?.filter(t => t.type === 'bonus' && t.status === 'Completed') || []
-    console.log('💰 Bonus Transactions:', bonusTransactions)
-    if (bonusTransactions.length > 0) {
-      const totalBonus = bonusTransactions.reduce((sum, t) => sum + (t.amount || 0), 0)
-      console.log('💰 Total Bonus Amount:', totalBonus)
-      console.log('💰 Pocket Balance should include this bonus:', totalBonus)
-    }
+    // Only conditionally log on true wallet updates if needed, removed noisy logs
   }, [walletState, balances])
 
   // Calculate weekly earnings from wallet transactions (payment + earning_addon bonus)
@@ -193,13 +179,10 @@ export default function PocketPage() {
     const fetchActiveEarningAddons = async () => {
       try {
         setEarningAddonLoading(true)
-        console.log('🔄 Fetching active earning addons...')
         const response = await deliveryAPI.getActiveEarningAddons()
-        console.log('✅ Active earning addons response:', response?.data)
 
         if (response?.data?.success && response?.data?.data?.activeOffers) {
           const offers = response.data.data.activeOffers
-          console.log('📦 Active offers found:', offers.length, offers)
 
           // Get the first valid active offer (prioritize isValid, then isUpcoming, then any active status)
           const activeOffer = offers.find(offer => offer.isValid) ||
@@ -208,10 +191,8 @@ export default function PocketPage() {
             offers[0] ||
             null
 
-          console.log('🎯 Selected active offer:', activeOffer)
           setActiveEarningAddon(activeOffer)
         } else {
-          console.log('ℹ️ No active offers found in response')
           setActiveEarningAddon(null)
         }
       } catch (error) {
@@ -358,22 +339,7 @@ export default function PocketPage() {
     }
   }
 
-  // Debug: Log pocket balance calculation
-  useEffect(() => {
-    const bonusTransactions = walletState?.transactions?.filter(t => t.type === 'bonus' && t.status === 'Completed') || []
-    const calculatedTotalBonus = bonusTransactions.reduce((sum, t) => sum + (t.amount || 0), 0) || 0
 
-    console.log('💰 FINAL Pocket Balance Display:', {
-      pocketBalance: pocketBalance,
-      walletStatePocketBalance: walletState?.pocketBalance,
-      walletStateTotalBalance: walletState?.totalBalance,
-      balancesTotalBalance: balances.totalBalance,
-      totalBonus: calculatedTotalBonus,
-      weeklyEarnings: weeklyEarnings,
-      bonusTransactions: bonusTransactions
-    })
-    // Only depend on walletState and balances - totalBonus and weeklyEarnings are derived from these
-  }, [pocketBalance, walletState, balances])
   // Available cash limit = remaining limit (global limit - cash in hand)
   const totalCashLimit = Number.isFinite(Number(walletState?.totalCashLimit))
     ? Number(walletState.totalCashLimit)
@@ -438,13 +404,6 @@ export default function PocketPage() {
         setWalletLoading(true)
         const walletData = await fetchDeliveryWallet()
         setWalletState(walletData)
-        console.log('💰 Wallet data fetched:', walletData)
-        console.log('💰 Total Balance from API:', walletData?.totalBalance)
-        console.log('💰 Pocket Balance from API:', walletData?.pocketBalance)
-        console.log('💰 Bonus Transactions:', walletData?.transactions?.filter(t => t.type === 'bonus'))
-        const totalBonus = walletData?.transactions?.filter(t => t.type === 'bonus' && t.status === 'Completed')
-          .reduce((sum, t) => sum + (t.amount || 0), 0) || 0
-        console.log('💰 Total Bonus Amount:', totalBonus)
       } catch (error) {
         console.error('Error fetching wallet data:', error)
         // Keep empty state on error
@@ -463,10 +422,10 @@ export default function PocketPage() {
 
     fetchWalletData()
 
-    // Refresh wallet data every 3 seconds to get latest balance (including bonus) - FAST REFRESH
+    // Refresh wallet data every 30 seconds to get latest balance
     const refreshInterval = setInterval(() => {
       fetchWalletData()
-    }, 3000)
+    }, 30000)
 
     // INSTANT refresh when page becomes visible (user switches back to tab) - BONUS SHOWS FAST
     const handleVisibilityChange = () => {

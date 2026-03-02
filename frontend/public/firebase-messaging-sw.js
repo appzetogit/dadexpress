@@ -16,34 +16,19 @@ firebase.initializeApp(firebaseConfig);
 
 const messaging = firebase.messaging();
 
-// Function to play notification sound using Web Audio API (from bakalacart reference)
+// Function to tell clients to play notification sound
 async function playNotificationSound() {
     try {
-        const audioUrl = '/audio/alert.mp3';
-        console.log('🔊 [SW] Attempting to play notification sound:', audioUrl);
-
-        const response = await fetch(audioUrl);
-        if (!response.ok) return;
-
-        const arrayBuffer = await response.arrayBuffer();
-        const audioContext = new (self.AudioContext || self.webkitAudioContext)();
-
-        if (audioContext.state === 'suspended') {
-            await audioContext.resume();
+        console.log('🔊 [SW] Attempting to ask clients to play notification sound');
+        const clientList = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+        for (const client of clientList) {
+            client.postMessage({
+                type: 'PLAY_NOTIFICATION_SOUND',
+                audioUrl: '/audio/alert.mp3'
+            });
         }
-
-        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-        const source = audioContext.createBufferSource();
-        source.buffer = audioBuffer;
-        source.connect(audioContext.destination);
-        source.start(0);
-
-        console.log('✅ [SW] Notification sound played successfully');
-        source.onended = () => {
-            try { audioContext.close(); } catch (e) { }
-        };
     } catch (error) {
-        console.warn('[SW] Could not play notification sound:', error);
+        console.warn('[SW] Could not send play sound message to clients:', error);
     }
 }
 

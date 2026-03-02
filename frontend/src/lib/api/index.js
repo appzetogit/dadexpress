@@ -810,6 +810,9 @@ export const restaurantAPI = {
 
 // Export delivery API helper functions
 export const deliveryAPI = {
+  // In-flight dedupe for order acceptance to prevent duplicate API bursts from rapid gestures/events.
+  _acceptOrderInFlight: new Map(),
+
   // Delivery Authentication
   sendOTP: (phone, purpose = "login") => {
     return apiClient.post(API_ENDPOINTS.DELIVERY.AUTH.SEND_OTP, {
@@ -922,6 +925,12 @@ export const deliveryAPI = {
     );
   },
   acceptOrder: (orderId, currentLocation = {}) => {
+    const key = String(orderId || "");
+    const existing = deliveryAPI._acceptOrderInFlight.get(key);
+    if (existing) {
+      return existing;
+    }
+
     const payload = {};
     if (currentLocation.lat !== undefined && currentLocation.lat !== null) {
       payload.currentLat = currentLocation.lat;
@@ -929,10 +938,19 @@ export const deliveryAPI = {
     if (currentLocation.lng !== undefined && currentLocation.lng !== null) {
       payload.currentLng = currentLocation.lng;
     }
-    return apiClient.patch(
+
+    const request = apiClient.patch(
       API_ENDPOINTS.DELIVERY.ORDER_ACCEPT.replace(":orderId", orderId),
       payload,
-    );
+    ).finally(() => {
+      // Keep a tiny cooldown window so immediate duplicate taps still collapse.
+      setTimeout(() => {
+        deliveryAPI._acceptOrderInFlight.delete(key);
+      }, 1500);
+    });
+
+    deliveryAPI._acceptOrderInFlight.set(key, request);
+    return request;
   },
   confirmReachedPickup: (orderId) => {
     return apiClient.patch(
@@ -986,9 +1004,6 @@ export const deliveryAPI = {
   // Get active earning addon offers
   getActiveEarningAddons: () => {
     const endpoint = API_ENDPOINTS.DELIVERY.EARNINGS_ACTIVE_OFFERS;
-    if (import.meta.env.DEV) {
-      console.log("📡 Fetching active earning addons from:", endpoint);
-    }
     return apiClient.get(endpoint);
   },
 
@@ -2050,4 +2065,5 @@ export const publicAPI = {
     return apiClient.get(API_ENDPOINTS.ADMIN.CANCELLATION_PUBLIC);
   }
 };
+
 

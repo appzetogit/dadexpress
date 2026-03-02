@@ -45,8 +45,8 @@ export const getOrders = asyncHandler(async (req, res) => {
       ? {
         $or: [
           { deliveryPartnerId: delivery._id },
-          { deliveryPartnerId: null, status: { $in: ['preparing', 'ready'] } },
-          { deliveryPartnerId: { $exists: false }, status: { $in: ['preparing', 'ready'] } },
+          { deliveryPartnerId: null, status: { $in: ['pending', 'confirmed', 'preparing', 'ready'] } },
+          { deliveryPartnerId: { $exists: false }, status: { $in: ['pending', 'confirmed', 'preparing', 'ready'] } },
         ],
       }
       : { deliveryPartnerId: delivery._id };
@@ -102,7 +102,12 @@ export const getOrders = asyncHandler(async (req, res) => {
 export const getOrderDetails = asyncHandler(async (req, res) => {
   try {
     const delivery = req.delivery;
-    const { orderId } = req.params;
+    let { orderId } = req.params;
+    
+    // Clean orderId string if it comes with spaces or URI encoded spaces
+    if (orderId && typeof orderId === 'string') {
+        orderId = decodeURIComponent(orderId).replace(/\s+/g, '');
+    }
 
     // Build query to find order by either _id or orderId field
     // Allow access if order is assigned to this delivery partner OR if they were notified about it
@@ -139,7 +144,7 @@ export const getOrderDetails = asyncHandler(async (req, res) => {
     };
 
     // Valid statuses for order acceptance (unassigned orders in these statuses can be viewed by any delivery boy)
-    const validAcceptanceStatuses = ['preparing', 'ready'];
+    const validAcceptanceStatuses = ['pending', 'confirmed', 'preparing', 'ready'];
 
     // If order is assigned to this delivery partner, allow access
     if (orderDeliveryPartnerId === currentDeliveryId) {
@@ -214,8 +219,13 @@ export const getOrderDetails = asyncHandler(async (req, res) => {
 export const acceptOrder = asyncHandler(async (req, res) => {
   try {
     const delivery = req.delivery;
-    const { orderId } = req.params;
+    let { orderId } = req.params;
     const { currentLat, currentLng } = req.body; // Delivery boy's current location
+
+    // Clean orderId string if it comes with spaces or URI encoded spaces
+    if (orderId && typeof orderId === 'string') {
+        orderId = decodeURIComponent(orderId).replace(/\s+/g, '');
+    }
 
     // Validate orderId
     if (!orderId || (typeof orderId !== 'string' && typeof orderId !== 'object')) {
@@ -282,7 +292,7 @@ export const acceptOrder = asyncHandler(async (req, res) => {
         normalizedExpandedIds.includes(normalizedCurrentId);
 
       // Also allow if order is in valid status (preparing/ready) - more permissive for unassigned orders
-      const isValidStatus = order.status === 'preparing' || order.status === 'ready';
+      const isValidStatus = ['pending', 'confirmed', 'preparing', 'ready'].includes(order.status);
 
       if (!wasNotified && !isValidStatus) {
         console.error(`❌ Order ${order.orderId} is not assigned, delivery partner ${currentDeliveryId} was not notified, and order status is ${order.status}`);
@@ -408,7 +418,7 @@ export const acceptOrder = asyncHandler(async (req, res) => {
     });
 
     // Check if order is in valid state to accept
-    const validStatuses = ['preparing', 'ready'];
+    const validStatuses = ['pending', 'confirmed', 'preparing', 'ready'];
     if (!validStatuses.includes(order.status)) {
       console.warn(`⚠️ Order ${order.orderId} cannot be accepted. Current status: ${order.status}, Valid statuses: ${validStatuses.join(', ')}`);
       return errorResponse(res, 400, `Order cannot be accepted. Current status: ${order.status}. Order must be in 'preparing' or 'ready' status.`);

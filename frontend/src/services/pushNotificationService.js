@@ -118,6 +118,23 @@ async function registerFCMToken(authType = 'user') {
     }
 }
 
+
+// Listen for messages from the service worker (like instructions to play audio)
+if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'PLAY_NOTIFICATION_SOUND') {
+            console.log('🔊 [Client] Playing notification sound as requested by SW');
+            try {
+                const audio = new Audio(event.data.audioUrl || '/audio/alert.mp3');
+                // The browser might block auto-play if there was no user interaction
+                audio.play().catch(e => console.warn('Could not play audio from SW message (might need user interaction):', e));
+            } catch (e) {
+                console.warn('Error playing audio from SW message:', e);
+            }
+        }
+    });
+}
+
 let isForegroundHandlerSetup = false;
 
 // Setup foreground notification handler

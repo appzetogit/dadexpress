@@ -62,6 +62,14 @@ import alertSound from "../../../assets/audio/alert.mp3"
 import originalSound from "../../../assets/audio/original.mp3"
 import bikeLogo from "../../../assets/bikelogo.png"
 
+// Silence delivery-page debug logs in browser console.
+const console = {
+  ...globalThis.console,
+  log: () => {},
+  warn: () => {},
+  error: () => {},
+}
+
 // Ola Maps API Key removed
 
 // Mock restaurants data
@@ -597,6 +605,9 @@ export default function DeliveryHome() {
   const newOrderAcceptButtonSwipeStartX = useRef(0)
   const newOrderAcceptButtonSwipeStartY = useRef(0)
   const newOrderAcceptButtonIsSwiping = useRef(false)
+  const newOrderAcceptButtonProgressRef = useRef(0)
+  const newOrderAcceptTriggeredRef = useRef(false)
+  const newOrderAcceptRequestInFlightRef = useRef(false)
   const [newOrderAcceptButtonProgress, setNewOrderAcceptButtonProgress] = useState(0)
   const [newOrderIsAnimatingToComplete, setNewOrderIsAnimatingToComplete] = useState(false)
   const newOrderPopupRef = useRef(null)
@@ -668,6 +679,65 @@ export default function DeliveryHome() {
   const acceptButtonSwipeStartY = useRef(0)
   const acceptButtonIsSwiping = useRef(false)
   const autoShowTimerRef = useRef(null)
+  const sliderProgressRafRef = useRef({
+    newOrderAccept: { rafId: null, pending: 0, last: 0 },
+    reachedPickup: { rafId: null, pending: 0, last: 0 },
+    reachedDrop: { rafId: null, pending: 0, last: 0 },
+    orderIdConfirm: { rafId: null, pending: 0, last: 0 },
+    orderDelivered: { rafId: null, pending: 0, last: 0 },
+    acceptOrders: { rafId: null, pending: 0, last: 0 },
+  })
+
+  const scheduleSliderProgressUpdate = useCallback((key, nextValue, setter) => {
+    const slider = sliderProgressRafRef.current[key]
+    if (!slider) return
+
+    const clamped = Math.max(0, Math.min(1, nextValue))
+    slider.pending = clamped
+
+    if (slider.rafId !== null) return
+
+    slider.rafId = requestAnimationFrame(() => {
+      slider.rafId = null
+      const value = slider.pending
+
+      // Skip tiny updates to reduce rerender pressure during drag.
+      if (Math.abs(value - slider.last) < 0.01 && value !== 0 && value !== 1) return
+
+      slider.last = value
+      setter(value)
+    })
+  }, [])
+
+  const setSliderProgressImmediate = useCallback((key, value, setter) => {
+    const slider = sliderProgressRafRef.current[key]
+    if (!slider) {
+      setter(value)
+      return
+    }
+
+    if (slider.rafId !== null) {
+      cancelAnimationFrame(slider.rafId)
+      slider.rafId = null
+    }
+
+    const clamped = Math.max(0, Math.min(1, value))
+    slider.pending = clamped
+    slider.last = clamped
+    setter(clamped)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      const sliders = Object.values(sliderProgressRafRef.current)
+      for (const slider of sliders) {
+        if (slider.rafId !== null) {
+          cancelAnimationFrame(slider.rafId)
+          slider.rafId = null
+        }
+      }
+    }
+  }, [])
 
   const {
     bookedGigs,
@@ -2058,8 +2128,10 @@ export default function DeliveryHome() {
     newOrderAcceptButtonSwipeStartX.current = e.touches[0].clientX
     newOrderAcceptButtonSwipeStartY.current = e.touches[0].clientY
     newOrderAcceptButtonIsSwiping.current = false
+    newOrderAcceptTriggeredRef.current = false
+    newOrderAcceptButtonProgressRef.current = 0
     setNewOrderIsAnimatingToComplete(false)
-    setNewOrderAcceptButtonProgress(0)
+    setSliderProgressImmediate('newOrderAccept', 0, setNewOrderAcceptButtonProgress)
   }
 
   const handleNewOrderAcceptTouchMove = (e) => {
@@ -2079,24 +2151,48 @@ export default function DeliveryHome() {
       const maxSwipe = buttonWidth - circleWidth - (padding * 2)
 
       const progress = Math.min(Math.max(deltaX / maxSwipe, 0), 1)
-      setNewOrderAcceptButtonProgress(progress)
+      newOrderAcceptButtonProgressRef.current = progress
+      scheduleSliderProgressUpdate('newOrderAccept', progress, setNewOrderAcceptButtonProgress)
+
+      // Auto-complete as soon as swipe crosses threshold (prevents stuck state on touchend miss)
+      if (progress >= SWIPE_COMPLETE_THRESHOLD && !newOrderAcceptTriggeredRef.current) {
+        handleNewOrderAcceptTouchEnd({
+          changedTouches: [{ clientX: newOrderAcceptButtonSwipeStartX.current + maxSwipe }]
+        })
+      }
     }
   }
 
   const handleNewOrderAcceptTouchEnd = (e) => {
-    if (!newOrderAcceptButtonIsSwiping.current) {
-      setNewOrderAcceptButtonProgress(0)
+    if (newOrderAcceptTriggeredRef.current) {
+      newOrderAcceptButtonSwipeStartX.current = 0
+      newOrderAcceptButtonSwipeStartY.current = 0
+      newOrderAcceptButtonIsSwiping.current = false
       return
     }
 
-    const deltaX = e.changedTouches[0].clientX - newOrderAcceptButtonSwipeStartX.current
+    const progressForGuard = Math.max(newOrderAcceptButtonProgressRef.current, newOrderAcceptButtonProgress)
+    if (!newOrderAcceptButtonIsSwiping.current && progressForGuard < SWIPE_COMPLETE_THRESHOLD) {
+      if (!newOrderIsAnimatingToComplete) {
+        newOrderAcceptButtonProgressRef.current = 0
+        setSliderProgressImmediate('newOrderAccept', 0, setNewOrderAcceptButtonProgress)
+      }
+      return
+    }
+
     const buttonWidth = newOrderAcceptButtonRef.current?.offsetWidth || 300
     const circleWidth = 56
     const padding = 16
     const maxSwipe = buttonWidth - circleWidth - (padding * 2)
+    const endTouch = e?.changedTouches?.[0] || e?.touches?.[0]
+    const fallbackEndX = newOrderAcceptButtonSwipeStartX.current + (newOrderAcceptButtonProgressRef.current * maxSwipe)
+    const endX = typeof endTouch?.clientX === 'number' ? endTouch.clientX : fallbackEndX
+    const deltaX = endX - newOrderAcceptButtonSwipeStartX.current
     const threshold = maxSwipe * SWIPE_COMPLETE_THRESHOLD // Complete on 50% swipe
 
     if (deltaX >= threshold) {
+      newOrderAcceptTriggeredRef.current = true
+
       // Stop audio immediately when user accepts
       if (alertAudioRef.current) {
         alertAudioRef.current.pause()
@@ -2107,38 +2203,48 @@ export default function DeliveryHome() {
 
       // Animate to completion
       setNewOrderIsAnimatingToComplete(true)
-      setNewOrderAcceptButtonProgress(1)
+      newOrderAcceptButtonProgressRef.current = 1
+      setSliderProgressImmediate('newOrderAccept', 1, setNewOrderAcceptButtonProgress)
 
       // Accept order via backend API and get route
       const acceptOrderAndShowRoute = async () => {
+        if (newOrderAcceptRequestInFlightRef.current) return
+        newOrderAcceptRequestInFlightRef.current = true
+
         // Get order ID from selectedRestaurant or newOrder (define outside try-catch for error handling)
         const orderId = selectedRestaurant?.id || newOrder?.orderMongoId || newOrder?.orderId
-        
+
         console.log('🔍 Order ID lookup:', {
           selectedRestaurantId: selectedRestaurant?.id,
           newOrderMongoId: newOrder?.orderMongoId,
           newOrderId: newOrder?.orderId,
           finalOrderId: orderId
         })
-        
+
         if (!orderId) {
           console.error('❌ No order ID found to accept')
           toast.error('Order ID not found. Please try again.')
+          newOrderAcceptRequestInFlightRef.current = false
+          // Reset slider — orderId null path bypasses try/finally, must reset manually
+          newOrderAcceptTriggeredRef.current = false
+          newOrderAcceptButtonProgressRef.current = 0
+          setSliderProgressImmediate('newOrderAccept', 0, setNewOrderAcceptButtonProgress)
+          setNewOrderIsAnimatingToComplete(false)
           return
         }
 
         // Declare currentLocation in outer scope so it's accessible in catch block
         let currentLocation = null
-        
+
         try {
           // Get current LIVE location (prioritize riderLocation which is updated in real-time)
           currentLocation = riderLocation
-          
+
           // If riderLocation is not available, try to get from lastLocationRef
           if (!currentLocation || currentLocation.length !== 2) {
             currentLocation = lastLocationRef.current
           }
-          
+
           // If still not available, try to get current position
           if (!currentLocation || currentLocation.length !== 2) {
             try {
@@ -2154,16 +2260,21 @@ export default function DeliveryHome() {
             } catch (geoError) {
               console.error('❌ Could not get current location:', geoError)
               toast.error('Location not available. Please enable location services.')
-              // Ensure currentLocation is set to null before returning
               currentLocation = null
+              setShowNewOrderPopup(false)
+              setIsNewOrderPopupMinimized(false)
+              setNewOrderDragY(0)
               return
             }
           }
-          
+
           // Validate currentLocation before proceeding
           if (!currentLocation || currentLocation.length !== 2) {
             console.error('❌ No valid location available')
             toast.error('Location not available. Please enable location services.')
+            setShowNewOrderPopup(false)
+            setIsNewOrderPopupMinimized(false)
+            setNewOrderDragY(0)
             return
           }
 
@@ -2181,7 +2292,7 @@ export default function DeliveryHome() {
             lat: currentLocation[0], // latitude
             lng: currentLocation[1]  // longitude
           })
-          
+
           console.log('📡 API Response:', response.data)
 
           if (response.data?.success && response.data.data) {
@@ -2438,6 +2549,9 @@ export default function DeliveryHome() {
             // Ensure we have restaurantInfo before proceeding
             if (!restaurantInfo) {
               console.error('❌ Restaurant info not available, cannot proceed');
+              setShowNewOrderPopup(false);
+              setIsNewOrderPopupMinimized(false);
+              setNewOrderDragY(0);
               return;
             }
 
@@ -2585,25 +2699,26 @@ export default function DeliveryHome() {
             // Ensure route path is visible
             setShowRoutePath(true);
             
-            // Show Reached Pickup popup immediately after order acceptance (no distance check)
-            // But only if order is not already past pickup phase
+            // Show Reached Pickup popup immediately after order acceptance
+            // ⚠️ CRITICAL: Use `restaurantInfo` (local variable, just built above),
+            // NOT `selectedRestaurant` (stale React state closure — React state updates
+            // are async, so setSelectedRestaurant() above hasn't reflected yet here).
             setTimeout(() => {
-              const currentOrderStatus = selectedRestaurant?.orderStatus || selectedRestaurant?.status || '';
-              const currentDeliveryPhase = selectedRestaurant?.deliveryPhase || selectedRestaurant?.deliveryState?.currentPhase || '';
-              const isAlreadyPastPickup = currentOrderStatus === 'out_for_delivery' || 
+              const currentOrderStatus = restaurantInfo?.orderStatus || restaurantInfo?.status || '';
+              const currentDeliveryPhase = restaurantInfo?.deliveryPhase || restaurantInfo?.deliveryState?.currentPhase || '';
+              const isAlreadyPastPickup = currentOrderStatus === 'out_for_delivery' ||
                                          currentDeliveryPhase === 'en_route_to_delivery' ||
                                          currentDeliveryPhase === 'en_route_to_drop' ||
                                          currentDeliveryPhase === 'picked_up';
-              
+
               if (!isAlreadyPastPickup) {
-                console.log('✅ Order accepted - showing Reached Pickup popup immediately');
+                console.log('✅ Order accepted — showing Reached Pickup popup');
                 setShowreachedPickupPopup(true);
-                // Close directions map if open
                 setShowDirectionsMap(false);
               } else {
                 console.log('🚫 Order already past pickup phase, skipping Reached Pickup popup');
               }
-            }, 500); // Wait 500ms for state to update
+            }, 500); // 500ms — wait for new-order popup close animation
             
             // Show route on main map instead of opening full-screen directions map
             setTimeout(() => {
@@ -2815,9 +2930,11 @@ export default function DeliveryHome() {
           setIsNewOrderPopupMinimized(false) // Reset minimized state
           setNewOrderDragY(0) // Reset drag position
         } finally {
+          newOrderAcceptRequestInFlightRef.current = false
           // Reset after animation
           setTimeout(() => {
-            setNewOrderAcceptButtonProgress(0)
+            newOrderAcceptButtonProgressRef.current = 0
+            setSliderProgressImmediate('newOrderAccept', 0, setNewOrderAcceptButtonProgress)
             setNewOrderIsAnimatingToComplete(false)
           }, 500)
         }
@@ -2827,7 +2944,8 @@ export default function DeliveryHome() {
       acceptOrderAndShowRoute()
     } else {
       // Reset smoothly
-      setNewOrderAcceptButtonProgress(0)
+      newOrderAcceptButtonProgressRef.current = 0
+      setSliderProgressImmediate('newOrderAccept', 0, setNewOrderAcceptButtonProgress)
     }
 
     newOrderAcceptButtonSwipeStartX.current = 0
@@ -2949,7 +3067,7 @@ export default function DeliveryHome() {
     reachedPickupSwipeStartY.current = e.touches[0].clientY
     reachedPickupIsSwiping.current = false
     setreachedPickupIsAnimatingToComplete(false)
-    setreachedPickupButtonProgress(0)
+    setSliderProgressImmediate('reachedPickup', 0, setreachedPickupButtonProgress)
   }
 
   const handlereachedPickupTouchMove = (e) => {
@@ -2969,27 +3087,39 @@ export default function DeliveryHome() {
       const maxSwipe = buttonWidth - circleWidth - (padding * 2)
 
       const progress = Math.min(Math.max(deltaX / maxSwipe, 0), 1)
-      setreachedPickupButtonProgress(progress)
+      scheduleSliderProgressUpdate('reachedPickup', progress, setreachedPickupButtonProgress)
+
+      // Auto-complete as soon as swipe crosses threshold (prevents stuck state on touchend miss)
+      if (progress >= SWIPE_COMPLETE_THRESHOLD) {
+        handlereachedPickupTouchEnd({
+          changedTouches: [{ clientX: reachedPickupSwipeStartX.current + maxSwipe }]
+        })
+      }
     }
   }
 
   const handlereachedPickupTouchEnd = (e) => {
-    if (!reachedPickupIsSwiping.current) {
-      setreachedPickupButtonProgress(0)
+    if (!reachedPickupIsSwiping.current && reachedPickupButtonProgress < SWIPE_COMPLETE_THRESHOLD) {
+      if (!reachedPickupIsAnimatingToComplete) {
+        setSliderProgressImmediate('reachedPickup', 0, setreachedPickupButtonProgress)
+      }
       return
     }
 
-    const deltaX = e.changedTouches[0].clientX - reachedPickupSwipeStartX.current
     const buttonWidth = reachedPickupButtonRef.current?.offsetWidth || 300
     const circleWidth = 56
     const padding = 16
     const maxSwipe = buttonWidth - circleWidth - (padding * 2)
+    const endTouch = e?.changedTouches?.[0] || e?.touches?.[0]
+    const fallbackEndX = reachedPickupSwipeStartX.current + (reachedPickupButtonProgress * maxSwipe)
+    const endX = typeof endTouch?.clientX === 'number' ? endTouch.clientX : fallbackEndX
+    const deltaX = endX - reachedPickupSwipeStartX.current
     const threshold = maxSwipe * SWIPE_COMPLETE_THRESHOLD // Complete on 50% swipe
 
     if (deltaX >= threshold) {
       // Animate to completion
       setreachedPickupIsAnimatingToComplete(true)
-      setreachedPickupButtonProgress(1)
+      setSliderProgressImmediate('reachedPickup', 1, setreachedPickupButtonProgress)
 
       // Close popup after animation, confirm reached pickup, then show order ID confirmation popup
       setTimeout(async () => {
@@ -3134,13 +3264,13 @@ export default function DeliveryHome() {
         
         // Reset after animation
         setTimeout(() => {
-          setreachedPickupButtonProgress(0)
+          setSliderProgressImmediate('reachedPickup', 0, setreachedPickupButtonProgress)
           setreachedPickupIsAnimatingToComplete(false)
         }, 500)
       }, 200)
     } else {
       // Reset smoothly
-      setreachedPickupButtonProgress(0)
+      setSliderProgressImmediate('reachedPickup', 0, setreachedPickupButtonProgress)
     }
 
     reachedPickupSwipeStartX.current = 0
@@ -3154,7 +3284,7 @@ export default function DeliveryHome() {
     reachedDropSwipeStartY.current = e.touches[0].clientY
     reachedDropIsSwiping.current = false
     setReachedDropIsAnimatingToComplete(false)
-    setReachedDropButtonProgress(0)
+    setSliderProgressImmediate('reachedDrop', 0, setReachedDropButtonProgress)
   }
 
   const handleReachedDropTouchMove = (e) => {
@@ -3174,27 +3304,39 @@ export default function DeliveryHome() {
       const maxSwipe = buttonWidth - circleWidth - (padding * 2)
 
       const progress = Math.min(Math.max(deltaX / maxSwipe, 0), 1)
-      setReachedDropButtonProgress(progress)
+      scheduleSliderProgressUpdate('reachedDrop', progress, setReachedDropButtonProgress)
+
+      // Auto-complete as soon as swipe crosses threshold (prevents stuck state on touchend miss)
+      if (progress >= SWIPE_COMPLETE_THRESHOLD) {
+        handleReachedDropTouchEnd({
+          changedTouches: [{ clientX: reachedDropSwipeStartX.current + maxSwipe }]
+        })
+      }
     }
   }
 
   const handleReachedDropTouchEnd = (e) => {
-    if (!reachedDropIsSwiping.current) {
-      setReachedDropButtonProgress(0)
+    if (!reachedDropIsSwiping.current && reachedDropButtonProgress < SWIPE_COMPLETE_THRESHOLD) {
+      if (!reachedDropIsAnimatingToComplete) {
+        setSliderProgressImmediate('reachedDrop', 0, setReachedDropButtonProgress)
+      }
       return
     }
 
-    const deltaX = e.changedTouches[0].clientX - reachedDropSwipeStartX.current
     const buttonWidth = reachedDropButtonRef.current?.offsetWidth || 300
     const circleWidth = 56
     const padding = 16
     const maxSwipe = buttonWidth - circleWidth - (padding * 2)
+    const endTouch = e?.changedTouches?.[0] || e?.touches?.[0]
+    const fallbackEndX = reachedDropSwipeStartX.current + (reachedDropButtonProgress * maxSwipe)
+    const endX = typeof endTouch?.clientX === 'number' ? endTouch.clientX : fallbackEndX
+    const deltaX = endX - reachedDropSwipeStartX.current
     const threshold = maxSwipe * SWIPE_COMPLETE_THRESHOLD // Complete on 50% swipe
 
     if (deltaX >= threshold) {
       // Animate to completion
       setReachedDropIsAnimatingToComplete(true)
-      setReachedDropButtonProgress(1)
+      setSliderProgressImmediate('reachedDrop', 1, setReachedDropButtonProgress)
 
       // Close popup, confirm reached drop, and show order delivered animation instantly (no delay)
       // Close reached drop popup first
@@ -3275,7 +3417,7 @@ export default function DeliveryHome() {
       })()
     } else {
       // Reset smoothly
-      setReachedDropButtonProgress(0)
+      setSliderProgressImmediate('reachedDrop', 0, setReachedDropButtonProgress)
     }
 
     reachedDropSwipeStartX.current = 0
@@ -3289,7 +3431,7 @@ export default function DeliveryHome() {
     orderIdConfirmSwipeStartY.current = e.touches[0].clientY
     orderIdConfirmIsSwiping.current = false
     setOrderIdConfirmIsAnimatingToComplete(false)
-    setOrderIdConfirmButtonProgress(0)
+    setSliderProgressImmediate('orderIdConfirm', 0, setOrderIdConfirmButtonProgress)
   }
 
   const handleOrderIdConfirmTouchMove = (e) => {
@@ -3309,7 +3451,14 @@ export default function DeliveryHome() {
       const maxSwipe = buttonWidth - circleWidth - (padding * 2)
 
       const progress = Math.min(Math.max(deltaX / maxSwipe, 0), 1)
-      setOrderIdConfirmButtonProgress(progress)
+      scheduleSliderProgressUpdate('orderIdConfirm', progress, setOrderIdConfirmButtonProgress)
+
+      // Auto-complete as soon as swipe crosses threshold (prevents stuck state on touchend miss)
+      if (progress >= SWIPE_COMPLETE_THRESHOLD) {
+        handleOrderIdConfirmTouchEnd({
+          changedTouches: [{ clientX: orderIdConfirmSwipeStartX.current + maxSwipe }]
+        })
+      }
     }
   }
 
@@ -3487,26 +3636,31 @@ export default function DeliveryHome() {
     // Disable swipe if bill image is not uploaded
     if (!billImageUploaded) {
       toast.error('Please upload bill image first')
-      setOrderIdConfirmButtonProgress(0)
+      setSliderProgressImmediate('orderIdConfirm', 0, setOrderIdConfirmButtonProgress)
       return
     }
 
-    if (!orderIdConfirmIsSwiping.current) {
-      setOrderIdConfirmButtonProgress(0)
+    if (!orderIdConfirmIsSwiping.current && orderIdConfirmButtonProgress < SWIPE_COMPLETE_THRESHOLD) {
+      if (!orderIdConfirmIsAnimatingToComplete) {
+        setSliderProgressImmediate('orderIdConfirm', 0, setOrderIdConfirmButtonProgress)
+      }
       return
     }
 
-    const deltaX = e.changedTouches[0].clientX - orderIdConfirmSwipeStartX.current
     const buttonWidth = orderIdConfirmButtonRef.current?.offsetWidth || 300
     const circleWidth = 56
     const padding = 16
     const maxSwipe = buttonWidth - circleWidth - (padding * 2)
+    const endTouch = e?.changedTouches?.[0] || e?.touches?.[0]
+    const fallbackEndX = orderIdConfirmSwipeStartX.current + (orderIdConfirmButtonProgress * maxSwipe)
+    const endX = typeof endTouch?.clientX === 'number' ? endTouch.clientX : fallbackEndX
+    const deltaX = endX - orderIdConfirmSwipeStartX.current
     const threshold = maxSwipe * SWIPE_COMPLETE_THRESHOLD // Complete on 50% swipe
 
     if (deltaX >= threshold) {
       // Animate to completion
       setOrderIdConfirmIsAnimatingToComplete(true)
-      setOrderIdConfirmButtonProgress(1)
+      setSliderProgressImmediate('orderIdConfirm', 1, setOrderIdConfirmButtonProgress)
 
       // Close popup after animation, then confirm order ID and show polyline to customer
       setTimeout(async () => {
@@ -3783,13 +3937,13 @@ export default function DeliveryHome() {
         
         // Reset after animation
         setTimeout(() => {
-          setOrderIdConfirmButtonProgress(0)
+          setSliderProgressImmediate('orderIdConfirm', 0, setOrderIdConfirmButtonProgress)
           setOrderIdConfirmIsAnimatingToComplete(false)
         }, 500)
       }, 200)
     } else {
       // Reset smoothly
-      setOrderIdConfirmButtonProgress(0)
+      setSliderProgressImmediate('orderIdConfirm', 0, setOrderIdConfirmButtonProgress)
     }
 
     orderIdConfirmSwipeStartX.current = 0
@@ -3865,7 +4019,7 @@ export default function DeliveryHome() {
     orderDeliveredSwipeStartY.current = e.touches[0].clientY
     orderDeliveredIsSwiping.current = false
     setOrderDeliveredIsAnimatingToComplete(false)
-    setOrderDeliveredButtonProgress(0)
+    setSliderProgressImmediate('orderDelivered', 0, setOrderDeliveredButtonProgress)
   }
 
   const handleOrderDeliveredTouchMove = (e) => {
@@ -3885,27 +4039,39 @@ export default function DeliveryHome() {
       const maxSwipe = buttonWidth - circleWidth - (padding * 2)
 
       const progress = Math.min(Math.max(deltaX / maxSwipe, 0), 1)
-      setOrderDeliveredButtonProgress(progress)
+      scheduleSliderProgressUpdate('orderDelivered', progress, setOrderDeliveredButtonProgress)
+
+      // Auto-complete as soon as swipe crosses threshold (prevents stuck state on touchend miss)
+      if (progress >= SWIPE_COMPLETE_THRESHOLD) {
+        handleOrderDeliveredTouchEnd({
+          changedTouches: [{ clientX: orderDeliveredSwipeStartX.current + maxSwipe }]
+        })
+      }
     }
   }
 
   const handleOrderDeliveredTouchEnd = (e) => {
-    if (!orderDeliveredIsSwiping.current) {
-      setOrderDeliveredButtonProgress(0)
+    if (!orderDeliveredIsSwiping.current && orderDeliveredButtonProgress < SWIPE_COMPLETE_THRESHOLD) {
+      if (!orderDeliveredIsAnimatingToComplete) {
+        setSliderProgressImmediate('orderDelivered', 0, setOrderDeliveredButtonProgress)
+      }
       return
     }
 
-    const deltaX = e.changedTouches[0].clientX - orderDeliveredSwipeStartX.current
     const buttonWidth = orderDeliveredButtonRef.current?.offsetWidth || 300
     const circleWidth = 56
     const padding = 16
     const maxSwipe = buttonWidth - circleWidth - (padding * 2)
+    const endTouch = e?.changedTouches?.[0] || e?.touches?.[0]
+    const fallbackEndX = orderDeliveredSwipeStartX.current + (orderDeliveredButtonProgress * maxSwipe)
+    const endX = typeof endTouch?.clientX === 'number' ? endTouch.clientX : fallbackEndX
+    const deltaX = endX - orderDeliveredSwipeStartX.current
     const threshold = maxSwipe * SWIPE_COMPLETE_THRESHOLD // Complete on 50% swipe
 
     if (deltaX >= threshold) {
       // Animate to completion
       setOrderDeliveredIsAnimatingToComplete(true)
-      setOrderDeliveredButtonProgress(1)
+      setSliderProgressImmediate('orderDelivered', 1, setOrderDeliveredButtonProgress)
 
       // Close popup after animation and show customer review (delivery will be completed when review is submitted)
       setTimeout(() => {
@@ -3921,13 +4087,13 @@ export default function DeliveryHome() {
         
         // Reset after animation
         setTimeout(() => {
-          setOrderDeliveredButtonProgress(0)
+          setSliderProgressImmediate('orderDelivered', 0, setOrderDeliveredButtonProgress)
           setOrderDeliveredIsAnimatingToComplete(false)
         }, 500)
       }, 200)
     } else {
       // Reset smoothly
-      setOrderDeliveredButtonProgress(0)
+      setSliderProgressImmediate('orderDelivered', 0, setOrderDeliveredButtonProgress)
     }
 
     orderDeliveredSwipeStartX.current = 0
@@ -3941,7 +4107,7 @@ export default function DeliveryHome() {
     acceptButtonSwipeStartY.current = e.touches[0].clientY
     acceptButtonIsSwiping.current = false
     setIsAnimatingToComplete(false)
-    setAcceptButtonProgress(0)
+    setSliderProgressImmediate('acceptOrders', 0, setAcceptButtonProgress)
   }
 
   const handleAcceptOrdersTouchMove = (e) => {
@@ -3961,27 +4127,39 @@ export default function DeliveryHome() {
       const maxSwipe = buttonWidth - circleWidth - (padding * 2)
 
       const progress = Math.min(Math.max(deltaX / maxSwipe, 0), 1)
-      setAcceptButtonProgress(progress)
+      scheduleSliderProgressUpdate('acceptOrders', progress, setAcceptButtonProgress)
+
+      // Auto-complete as soon as swipe crosses threshold (prevents stuck state on touchend miss)
+      if (progress >= SWIPE_COMPLETE_THRESHOLD) {
+        handleAcceptOrdersTouchEnd({
+          changedTouches: [{ clientX: acceptButtonSwipeStartX.current + maxSwipe }]
+        })
+      }
     }
   }
 
   const handleAcceptOrdersTouchEnd = (e) => {
-    if (!acceptButtonIsSwiping.current) {
-      setAcceptButtonProgress(0)
+    if (!acceptButtonIsSwiping.current && acceptButtonProgress < SWIPE_COMPLETE_THRESHOLD) {
+      if (!isAnimatingToComplete) {
+        setSliderProgressImmediate('acceptOrders', 0, setAcceptButtonProgress)
+      }
       return
     }
 
-    const deltaX = e.changedTouches[0].clientX - acceptButtonSwipeStartX.current
     const buttonWidth = acceptButtonRef.current?.offsetWidth || 300
     const circleWidth = 56
     const padding = 16
     const maxSwipe = buttonWidth - circleWidth - (padding * 2)
+    const endTouch = e?.changedTouches?.[0] || e?.touches?.[0]
+    const fallbackEndX = acceptButtonSwipeStartX.current + (acceptButtonProgress * maxSwipe)
+    const endX = typeof endTouch?.clientX === 'number' ? endTouch.clientX : fallbackEndX
+    const deltaX = endX - acceptButtonSwipeStartX.current
     const threshold = maxSwipe * SWIPE_COMPLETE_THRESHOLD // Complete on 50% swipe
 
     if (deltaX >= threshold) {
       // Animate to completion
       setIsAnimatingToComplete(true)
-      setAcceptButtonProgress(1)
+      setSliderProgressImmediate('acceptOrders', 1, setAcceptButtonProgress)
 
       // Navigate to pickup directions page after animation
       setTimeout(() => {
@@ -3992,13 +4170,13 @@ export default function DeliveryHome() {
 
         // Reset after navigation
         setTimeout(() => {
-          setAcceptButtonProgress(0)
+          setSliderProgressImmediate('acceptOrders', 0, setAcceptButtonProgress)
           setIsAnimatingToComplete(false)
         }, 500)
       }, 200)
     } else {
       // Reset smoothly
-      setAcceptButtonProgress(0)
+      setSliderProgressImmediate('acceptOrders', 0, setAcceptButtonProgress)
     }
 
     acceptButtonSwipeStartX.current = 0
@@ -9293,9 +9471,9 @@ export default function DeliveryHome() {
                         strokeLinejoin="round"
                         strokeDasharray="450"
                         initial={{ strokeDashoffset: 0 }}
-                        animate={{
-                          strokeDashoffset: `${450 * (1 - countdownSeconds / 300)}`
-                        }}
+                          animate={{
+                            strokeDashoffset: 450 * (1 - countdownSeconds / 300)
+                          }}
                         transition={{ duration: 1, ease: "linear" }}
                       />
                       
@@ -9447,6 +9625,7 @@ export default function DeliveryHome() {
                       onTouchStart={handleNewOrderAcceptTouchStart}
                       onTouchMove={handleNewOrderAcceptTouchMove}
                       onTouchEnd={handleNewOrderAcceptTouchEnd}
+                      onTouchCancel={handleNewOrderAcceptTouchEnd}
                       whileTap={{ scale: 0.98 }}
                     >
                       {/* Swipe progress background */}
@@ -9900,6 +10079,7 @@ export default function DeliveryHome() {
               onTouchStart={handlereachedPickupTouchStart}
               onTouchMove={handlereachedPickupTouchMove}
               onTouchEnd={handlereachedPickupTouchEnd}
+              onTouchCancel={handlereachedPickupTouchEnd}
               whileTap={{ scale: 0.98 }}
             >
               {/* Swipe progress background */}
@@ -10047,6 +10227,7 @@ export default function DeliveryHome() {
                 onTouchStart={billImageUploaded ? handleOrderIdConfirmTouchStart : undefined}
                 onTouchMove={billImageUploaded ? handleOrderIdConfirmTouchMove : undefined}
                 onTouchEnd={billImageUploaded ? handleOrderIdConfirmTouchEnd : undefined}
+                onTouchCancel={billImageUploaded ? handleOrderIdConfirmTouchEnd : undefined}
                 whileTap={billImageUploaded ? { scale: 0.98 } : {}}
               >
                 {/* Swipe progress background */}
@@ -10237,6 +10418,7 @@ export default function DeliveryHome() {
               onTouchStart={handleReachedDropTouchStart}
               onTouchMove={handleReachedDropTouchMove}
               onTouchEnd={handleReachedDropTouchEnd}
+              onTouchCancel={handleReachedDropTouchEnd}
               whileTap={{ scale: 0.98 }}
             >
               {/* Swipe progress background */}
@@ -10382,6 +10564,7 @@ export default function DeliveryHome() {
               onTouchStart={handleOrderDeliveredTouchStart}
               onTouchMove={handleOrderDeliveredTouchMove}
               onTouchEnd={handleOrderDeliveredTouchEnd}
+              onTouchCancel={handleOrderDeliveredTouchEnd}
               whileTap={{ scale: 0.98 }}
             >
               {/* Swipe progress background */}
@@ -10670,7 +10853,7 @@ export default function DeliveryHome() {
                   navigate("/delivery")
                   // Reset states
                   setTimeout(() => {
-                    setReachedDropButtonProgress(0)
+                    setSliderProgressImmediate('reachedDrop', 0, setReachedDropButtonProgress)
                     setReachedDropIsAnimatingToComplete(false)
                     setCustomerRating(0)
                     setCustomerReviewText("")

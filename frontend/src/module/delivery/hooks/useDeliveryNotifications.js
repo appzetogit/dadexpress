@@ -82,7 +82,7 @@ export const useDeliveryNotifications = () => {
     
     // Listen for user interaction
     document.addEventListener('click', handleUserInteraction, { once: true });
-    document.addEventListener('touchstart', handleUserInteraction, { once: true });
+    document.addEventListener('touchstart', handleUserInteraction, { once: true, passive: true });
     document.addEventListener('keydown', handleUserInteraction, { once: true });
     
     return () => {

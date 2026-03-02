@@ -38,7 +38,7 @@ export default function DeliverySignIn() {
   const companyName = useCompanyName()
   const navigate = useNavigate()
   const [formData, setFormData] = useState({
-    phone: "9993911855",
+    phone: "",
     countryCode: "+91",
   })
 
