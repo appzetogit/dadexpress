@@ -62,6 +62,19 @@ const adminSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  fcmToken: {
+    type: String,
+    trim: true
+  },
+  fcmTokenMobile: {
+    type: String,
+    trim: true
+  },
+  platform: {
+    type: String,
+    enum: ['web', 'android', 'ios', 'app'],
+    default: 'web'
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -80,21 +93,21 @@ adminSchema.index({ role: 1 });
 adminSchema.index({ isActive: 1 });
 
 // Hash password before saving
-adminSchema.pre('save', async function(next) {
+adminSchema.pre('save', async function (next) {
   if (!this.isModified('password')) {
     return next();
   }
-  
+
   if (this.password) {
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
   }
-  
+
   next();
 });
 
 // Method to compare password
-adminSchema.methods.comparePassword = async function(candidatePassword) {
+adminSchema.methods.comparePassword = async function (candidatePassword) {
   if (!this.password) {
     return false;
   }
@@ -102,7 +115,7 @@ adminSchema.methods.comparePassword = async function(candidatePassword) {
 };
 
 // Method to update last login
-adminSchema.methods.updateLastLogin = async function() {
+adminSchema.methods.updateLastLogin = async function () {
   this.lastLogin = new Date();
   this.loginCount = (this.loginCount || 0) + 1;
   await this.save();

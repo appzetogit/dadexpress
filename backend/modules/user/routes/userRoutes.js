@@ -26,8 +26,10 @@ router.use(authenticate);
 router.get('/profile', getUserProfile);
 router.put('/profile', updateUserProfile);
 router.post('/save-fcm-token', updateFcmToken);
+router.put('/save-fcm-token', updateFcmToken);
 router.post('/update-fcm-token', updateFcmToken);
 router.put('/update-fcm-token', updateFcmToken);
+router.patch('/update-fcm-token', updateFcmToken);
 
 // Profile image upload
 router.post(

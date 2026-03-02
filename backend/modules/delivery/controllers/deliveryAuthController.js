@@ -210,7 +210,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         res.cookie('refreshToken', tokens.refreshToken, {
           httpOnly: true,
           secure: process.env.NODE_ENV === 'production',
-          sameSite: 'strict',
+          sameSite: 'lax',
           maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
         });
 
@@ -251,7 +251,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
     res.cookie('refreshToken', tokens.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'lax',
       maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
     });
 
@@ -312,10 +312,12 @@ export const refreshToken = asyncHandler(async (req, res) => {
       return errorResponse(res, 401, 'Delivery boy not found or inactive');
     }
 
-    // Verify refresh token matches stored token
+    // Note: We've removed the strict DB comparison for multi-device support
+    /*
     if (delivery.refreshToken !== refreshToken) {
       return errorResponse(res, 401, 'Invalid refresh token');
     }
+    */
 
     // Generate new access token
     const accessToken = jwtService.generateAccessToken({
@@ -348,7 +350,7 @@ export const logout = asyncHandler(async (req, res) => {
   res.clearCookie('refreshToken', {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict'
+    sameSite: 'lax'
   });
 
   return successResponse(res, 200, 'Logged out successfully');

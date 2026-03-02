@@ -580,11 +580,13 @@ export default function OrdersMain() {
     isActive: null,
     rejectionReason: null,
     onboarding: null,
+    referral: null,
+    referralPolicy: null,
     isLoading: true
   })
   const [isReverifying, setIsReverifying] = useState(false)
-  const [showReferrerCard, setShowReferrerCard] = useState(true)
-  const [showReferredCard, setShowReferredCard] = useState(true)
+  const [showReferrerCard, setShowReferrerCard] = useState(false)
+  const [showReferredCard, setShowReferredCard] = useState(false)
 
   // Restaurant notifications hook for real-time orders
   const { newOrder, clearNewOrder, isConnected } = useRestaurantNotifications()
@@ -609,8 +611,23 @@ export default function OrdersMain() {
             isActive: restaurant.isActive,
             rejectionReason: restaurant.rejectionReason || null,
             onboarding: restaurant.onboarding || null,
+            referral: {
+              referredBy: restaurant.referredBy,
+              referredByName: restaurant.referredByName,
+              referralCommission: restaurant.referralCommission,
+              referralStatus: restaurant.referralStatus
+            },
+            referralPolicy: response.data?.data?.referralPolicy || response.data?.referralPolicy || null,
             isLoading: false
           })
+
+          // Show cards based on dynamic data
+          if (restaurant.referralStatus === 'completed' || restaurant.referralCommission) {
+            setShowReferrerCard(true)
+          }
+          if (restaurant.referredBy || restaurant.referredByName) {
+            setShowReferredCard(true)
+          }
 
           /* Skip forced onboarding redirect as per user request
           const completedSteps = restaurant.onboarding?.completedSteps || 0
@@ -662,6 +679,13 @@ export default function OrdersMain() {
           isActive: restaurant.isActive,
           rejectionReason: restaurant.rejectionReason || null,
           onboarding: restaurant.onboarding || null,
+          referral: {
+            referredBy: restaurant.referredBy,
+            referredByName: restaurant.referredByName,
+            referralCommission: restaurant.referralCommission,
+            referralStatus: restaurant.referralStatus
+          },
+          referralPolicy: response.data?.data?.referralPolicy || response.data?.referralPolicy || null,
           isLoading: false
         })
       }
@@ -1405,7 +1429,7 @@ export default function OrdersMain() {
                       Referral Perk <span className="text-orange-400">Unlocked</span>
                     </h3>
                     <p className="text-slate-400 text-xs mt-1.5 font-medium leading-relaxed">
-                      Your special commission is set to <span className="text-slate-200 font-bold underline decoration-orange-400/30 decoration-2 underline-offset-4">5% only</span> for your very next order!
+                      Your special commission is set to <span className="text-slate-200 font-bold underline decoration-orange-400/30 decoration-2 underline-offset-4">{restaurantStatus.referral?.referralCommission || restaurantStatus.referralPolicy?.commissionPercentage || 5}% only</span> for your very next order!
                     </p>
                   </div>
                   <button
@@ -1439,7 +1463,7 @@ export default function OrdersMain() {
                 </div>
                 <div className="flex-1">
                   <h3 className="text-slate-900 font-bold text-sm tracking-tight">Joined via referral</h3>
-                  <p className="text-slate-500 text-[11px] font-medium leading-tight mt-0.5">Source: <span className="text-orange-600 font-bold underline">Cafe Coffee Day</span></p>
+                  <p className="text-slate-500 text-[11px] font-medium leading-tight mt-0.5">Source: <span className="text-orange-600 font-bold underline">{restaurantStatus.referral?.referredByName || "Partner Restaurant"}</span></p>
                 </div>
                 <div className="flex flex-col items-end gap-1">
                   <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Pricing</span>

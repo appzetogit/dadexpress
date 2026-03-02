@@ -3,8 +3,10 @@ import {
   adminSignup,
   adminLogin,
   adminSignupWithOTP,
+  refreshToken,
   getCurrentAdmin,
-  adminLogout
+  adminLogout,
+  updateFcmToken
 } from '../controllers/adminAuthController.js';
 import { authenticateAdmin } from '../middleware/adminAuth.js';
 import { validate } from '../../../shared/middleware/validate.js';
@@ -39,8 +41,13 @@ router.post('/signup/otp', validate(signupOTPSchema), adminSignupWithOTP);
 router.post('/login', validate(loginSchema), adminLogin);
 
 // Protected routes
+router.post('/refresh-token', refreshToken);
 router.get('/me', authenticateAdmin, getCurrentAdmin);
 router.post('/logout', authenticateAdmin, adminLogout);
+router.post('/update-fcm-token', authenticateAdmin, updateFcmToken);
+router.put('/update-fcm-token', authenticateAdmin, updateFcmToken);
+router.patch('/update-fcm-token', authenticateAdmin, updateFcmToken);
+router.post('/save-fcm-token', authenticateAdmin, updateFcmToken);
 
 export default router;
 

@@ -400,7 +400,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
     res.cookie("refreshToken", tokens.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      sameSite: "lax",
       maxAge: 365 * 24 * 60 * 60 * 1000, // 365 days
     });
 
@@ -471,7 +471,7 @@ export const logout = asyncHandler(async (req, res) => {
   res.clearCookie("refreshToken", {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
+    sameSite: "lax",
   });
 
   return successResponse(res, 200, "Logged out successfully");
@@ -584,7 +584,7 @@ export const register = asyncHandler(async (req, res) => {
   res.cookie("refreshToken", tokens.refreshToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
+    sameSite: "lax",
     maxAge: 365 * 24 * 60 * 60 * 1000, // 365 days
   });
 
@@ -696,7 +696,7 @@ export const login = asyncHandler(async (req, res) => {
   res.cookie("refreshToken", tokens.refreshToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
+    sameSite: "lax",
     maxAge: 365 * 24 * 60 * 60 * 1000, // 365 days
   });
 
@@ -1038,7 +1038,7 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
     res.cookie("refreshToken", tokens.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      sameSite: "lax",
       maxAge: 365 * 24 * 60 * 60 * 1000,
     });
 
@@ -1221,7 +1221,7 @@ export const googleCallback = asyncHandler(async (req, res) => {
     res.cookie("refreshToken", jwtTokens.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      sameSite: "lax",
       maxAge: 365 * 24 * 60 * 60 * 1000, // 365 days
     });
 

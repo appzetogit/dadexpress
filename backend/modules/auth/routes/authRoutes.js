@@ -95,6 +95,8 @@ router.get('/google/:role/callback', googleCallback);
 router.get('/me', authenticate, getCurrentUser);
 router.put('/update-fcm-token', authenticate, updateFcmToken);
 router.post('/update-fcm-token', authenticate, updateFcmToken);
+router.patch('/update-fcm-token', authenticate, updateFcmToken);
 router.post('/save-fcm-token', authenticate, updateFcmToken);
+router.put('/save-fcm-token', authenticate, updateFcmToken);
 
 export default router;

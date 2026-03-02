@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect, useRef } from "react"
 import { Search, Download, ChevronDown, Eye, Trash2, User, Star, ArrowUpDown, Settings, FileText, FileSpreadsheet, Loader2, Check, Columns, ExternalLink, Calendar, MapPin, CreditCard, Mail, Phone, Bike, FileCheck } from "lucide-react"
 import { adminAPI } from "@/lib/api"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -7,6 +7,7 @@ import { exportDeliverymenToExcel, exportDeliverymenToPDF } from "../../componen
 
 export default function DeliverymanList() {
   const [searchQuery, setSearchQuery] = useState("")
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("")
   const [deliverymen, setDeliverymen] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -31,19 +32,19 @@ export default function DeliverymanList() {
     try {
       setLoading(true)
       setError(null)
-      
+
       const params = {
         page: 1,
         limit: 1000, // Get all for now
       }
 
       // Add search to params if provided
-      if (searchQuery.trim()) {
-        params.search = searchQuery.trim()
+      if (debouncedSearchQuery.trim()) {
+        params.search = debouncedSearchQuery.trim()
       }
 
       const response = await adminAPI.getDeliveryPartners(params)
-      
+
       if (response.data && response.data.success) {
         setDeliverymen(response.data.data.deliveryPartners || [])
       } else {
@@ -52,10 +53,10 @@ export default function DeliverymanList() {
       }
     } catch (err) {
       console.error("Error fetching delivery partners:", err)
-      
+
       // Better error handling
       let errorMessage = "Failed to fetch delivery partners. Please try again."
-      
+
       if (err.code === 'ERR_NETWORK') {
         errorMessage = "Network error. Please check if backend server is running."
       } else if (err.response?.status === 401) {
@@ -67,7 +68,7 @@ export default function DeliverymanList() {
       } else if (err.message) {
         errorMessage = err.message
       }
-      
+
       setError(errorMessage)
       setDeliverymen([])
     } finally {
@@ -75,20 +76,18 @@ export default function DeliverymanList() {
     }
   }
 
-  // Fetch on mount
-  useEffect(() => {
-    fetchDeliverymen()
-  }, [])
-
-  // Debounced search effect
+  // Debounce search effect
   useEffect(() => {
     const timer = setTimeout(() => {
-      fetchDeliverymen()
-    }, 500) // Wait 500ms after user stops typing
-
+      setDebouncedSearchQuery(searchQuery.trim())
+    }, 500)
     return () => clearTimeout(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery])
+
+  // Fetch delivery partners when debounced query changes
+  useEffect(() => {
+    fetchDeliverymen()
+  }, [debouncedSearchQuery])
 
   const filteredDeliverymen = useMemo(() => {
     // Backend already handles search, but we can do client-side filtering if needed
@@ -99,7 +98,7 @@ export default function DeliverymanList() {
     try {
       setLoading(true)
       const response = await adminAPI.getDeliveryPartnerById(deliveryman._id)
-      
+
       if (response.data && response.data.success) {
         setViewDetails(response.data.data.delivery)
         setIsViewOpen(true)
@@ -125,13 +124,13 @@ export default function DeliverymanList() {
     try {
       setProcessing(true)
       await adminAPI.deleteDeliveryPartner(selectedDeliveryman._id)
-      
+
       // Refresh the list
       await fetchDeliverymen()
-      
+
       setIsDeleteOpen(false)
       setSelectedDeliveryman(null)
-      
+
       // Show success message
       alert(`Successfully deleted ${selectedDeliveryman.name}`)
     } catch (err) {
@@ -222,7 +221,7 @@ export default function DeliverymanList() {
                 <FileSpreadsheet className="w-4 h-4" />
                 <span className="text-black font-bold">Excel</span>
               </button>
-              <button 
+              <button
                 onClick={() => setIsSettingsOpen(true)}
                 className="p-2.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 transition-all"
               >
@@ -336,8 +335,8 @@ export default function DeliverymanList() {
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
                               {dm.profileImage ? (
-                                <img 
-                                  src={dm.profileImage} 
+                                <img
+                                  src={dm.profileImage}
                                   alt={dm.name}
                                   className="w-10 h-10 rounded-full object-cover flex-shrink-0"
                                 />
@@ -388,9 +387,9 @@ export default function DeliverymanList() {
                         {visibleColumns.actions && (
                           <td className="px-6 py-4 whitespace-nowrap text-center">
                             <div className="flex items-center justify-center gap-2">
-                              <button 
+                              <button
                                 onClick={() => handleView(dm)}
-                                className="p-1.5 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors" 
+                                className="p-1.5 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
                                 title="View Details"
                               >
                                 <Eye className="w-4 h-4" />
@@ -460,8 +459,8 @@ export default function DeliverymanList() {
                 <div className="flex items-start gap-6 pb-6 border-b border-slate-200">
                   <div className="flex-shrink-0">
                     {viewDetails.profileImage?.url ? (
-                      <img 
-                        src={viewDetails.profileImage.url} 
+                      <img
+                        src={viewDetails.profileImage.url}
                         alt={viewDetails.name}
                         className="w-24 h-24 rounded-full object-cover border-2 border-slate-200"
                       />
@@ -496,12 +495,11 @@ export default function DeliverymanList() {
                     </div>
                     <div>
                       <label className="text-xs font-semibold text-slate-500 uppercase">Status</label>
-                      <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium mt-1 ${
-                        viewDetails.status === 'pending' ? 'bg-blue-100 text-blue-700' :
+                      <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium mt-1 ${viewDetails.status === 'pending' ? 'bg-blue-100 text-blue-700' :
                         viewDetails.status === 'approved' || viewDetails.status === 'active' ? 'bg-green-100 text-green-700' :
-                        viewDetails.status === 'blocked' ? 'bg-red-100 text-red-700' :
-                        'bg-slate-100 text-slate-700'
-                      }`}>
+                          viewDetails.status === 'blocked' ? 'bg-red-100 text-red-700' :
+                            'bg-slate-100 text-slate-700'
+                        }`}>
                         {viewDetails.status === 'blocked' ? 'Rejected' : (viewDetails.status?.charAt(0).toUpperCase() + viewDetails.status?.slice(1) || "N/A")}
                       </span>
                     </div>
@@ -630,9 +628,9 @@ export default function DeliverymanList() {
                               <p className="text-sm text-slate-700 mb-1">Number: {viewDetails.documents.aadhar.number}</p>
                             )}
                             {viewDetails.documents.aadhar.document && (
-                              <a 
-                                href={viewDetails.documents.aadhar.document} 
-                                target="_blank" 
+                              <a
+                                href={viewDetails.documents.aadhar.document}
+                                target="_blank"
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
                               >
@@ -652,9 +650,9 @@ export default function DeliverymanList() {
                               <p className="text-sm text-slate-700 mb-1">Number: {viewDetails.documents.pan.number}</p>
                             )}
                             {viewDetails.documents.pan.document && (
-                              <a 
-                                href={viewDetails.documents.pan.document} 
-                                target="_blank" 
+                              <a
+                                href={viewDetails.documents.pan.document}
+                                target="_blank"
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
                               >
@@ -679,9 +677,9 @@ export default function DeliverymanList() {
                               </p>
                             )}
                             {viewDetails.documents.drivingLicense.document && (
-                              <a 
-                                href={viewDetails.documents.drivingLicense.document} 
-                                target="_blank" 
+                              <a
+                                href={viewDetails.documents.drivingLicense.document}
+                                target="_blank"
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
                               >
@@ -701,9 +699,9 @@ export default function DeliverymanList() {
                               <p className="text-sm text-slate-700 mb-1">Number: {viewDetails.documents.vehicleRC.number}</p>
                             )}
                             {viewDetails.documents.vehicleRC.document && (
-                              <a 
-                                href={viewDetails.documents.vehicleRC.document} 
-                                target="_blank" 
+                              <a
+                                href={viewDetails.documents.vehicleRC.document}
+                                target="_blank"
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
                               >
@@ -763,9 +761,8 @@ export default function DeliverymanList() {
                   {viewDetails.phoneVerified !== undefined && (
                     <div>
                       <label className="text-xs font-semibold text-slate-500 uppercase">Phone Verified</label>
-                      <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium mt-1 ${
-                        viewDetails.phoneVerified ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                      }`}>
+                      <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium mt-1 ${viewDetails.phoneVerified ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                        }`}>
                         {viewDetails.phoneVerified ? 'Verified' : 'Not Verified'}
                       </span>
                     </div>

@@ -70,7 +70,7 @@ export const adminSignup = asyncHandler(async (req, res) => {
     res.cookie('refreshToken', tokens.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'lax',
       maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
     });
 
@@ -139,7 +139,7 @@ export const adminLogin = asyncHandler(async (req, res) => {
   res.cookie('refreshToken', tokens.refreshToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    sameSite: 'lax',
     maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
   });
 
@@ -220,7 +220,7 @@ export const adminSignupWithOTP = asyncHandler(async (req, res) => {
     res.cookie('refreshToken', tokens.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'lax',
       maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
     });
 
@@ -270,6 +270,44 @@ export const getCurrentAdmin = asyncHandler(async (req, res) => {
 });
 
 /**
+ * Refresh Token Admin
+ * POST /api/admin/auth/refresh-token
+ */
+export const refreshToken = asyncHandler(async (req, res) => {
+  const refreshToken = req.cookies?.refreshToken;
+
+  if (!refreshToken) {
+    return errorResponse(res, 401, 'Refresh token not found');
+  }
+
+  try {
+    const decoded = jwtService.verifyRefreshToken(refreshToken);
+
+    if (decoded.role !== 'admin') {
+      return errorResponse(res, 401, 'Invalid token for admin');
+    }
+
+    const admin = await Admin.findById(decoded.userId).select('-password');
+    if (!admin || !admin.isActive) {
+      return errorResponse(res, 401, 'Admin not found or inactive');
+    }
+
+    const accessToken = jwtService.generateAccessToken({
+      userId: admin._id.toString(),
+      role: 'admin',
+      email: admin.email,
+      adminRole: admin.role
+    });
+
+    return successResponse(res, 200, 'Token refreshed successfully', {
+      accessToken
+    });
+  } catch (error) {
+    return errorResponse(res, 401, error.message || 'Invalid refresh token');
+  }
+});
+
+/**
  * Logout Admin
  * POST /api/admin/auth/logout
  */
@@ -278,12 +316,41 @@ export const adminLogout = asyncHandler(async (req, res) => {
   res.cookie('refreshToken', '', {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    sameSite: 'lax',
     maxAge: 0
   });
 
   logger.info(`Admin logged out: ${req.user?._id || req.user?.userId}`);
 
   return successResponse(res, 200, 'Logout successful');
+});
+
+/**
+ * Update FCM Token for already-logged-in admin
+ * POST /api/admin/auth/update-fcm-token
+ */
+export const updateFcmToken = asyncHandler(async (req, res) => {
+  const { fcmToken, platform = 'web' } = req.body;
+
+  if (!fcmToken) {
+    return errorResponse(res, 400, 'FCM token is required');
+  }
+
+  const admin = await Admin.findById(req.admin?._id || req.admin?.userId || req.user?._id || req.user?.userId);
+  if (!admin) {
+    return errorResponse(res, 404, 'Admin not found');
+  }
+
+  admin.platform = platform || admin.platform || 'web';
+  if (['android', 'ios', 'app'].includes(platform?.toLowerCase())) {
+    admin.fcmTokenMobile = fcmToken;
+  } else {
+    admin.fcmToken = fcmToken;
+  }
+
+  await admin.save();
+  console.log(`[PUSH-NOTIFICATION] FCM Token refreshed for admin ${admin._id}: ${fcmToken} (${platform})`);
+
+  return successResponse(res, 200, 'FCM token updated successfully');
 });
 

@@ -10,7 +10,8 @@ import {
   getCurrentRestaurant,
   reverifyRestaurant,
   firebaseGoogleLogin,
-  updateFcmToken
+  updateFcmToken,
+  getReferralHistory
 } from '../controllers/restaurantAuthController.js';
 import { authenticate } from '../middleware/restaurantAuth.js';
 import { validate } from '../../../shared/middleware/validate.js';
@@ -92,6 +93,9 @@ router.get('/me', authenticate, getCurrentRestaurant);
 router.post('/reverify', authenticate, reverifyRestaurant);
 router.put('/update-fcm-token', authenticate, updateFcmToken);
 router.post('/update-fcm-token', authenticate, updateFcmToken);
+router.patch('/update-fcm-token', authenticate, updateFcmToken);
 router.post('/save-fcm-token', authenticate, updateFcmToken);
+router.put('/save-fcm-token', authenticate, updateFcmToken);
+router.get('/referrals', authenticate, getReferralHistory);
 
 export default router;
