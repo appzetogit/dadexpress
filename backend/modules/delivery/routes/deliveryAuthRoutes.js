@@ -4,7 +4,8 @@ import {
   verifyOTP,
   refreshToken,
   logout,
-  getCurrentDelivery
+  getCurrentDelivery,
+  updateFcmToken
 } from '../controllers/deliveryAuthController.js';
 import { authenticate } from '../middleware/deliveryAuth.js';
 import { validate } from '../../../shared/middleware/validate.js';
@@ -43,5 +44,6 @@ router.post('/refresh-token', refreshToken);
 // Protected routes (require authentication)
 router.post('/logout', authenticate, logout);
 router.get('/me', authenticate, getCurrentDelivery);
+router.put('/update-fcm-token', authenticate, updateFcmToken);
 
 export default router;

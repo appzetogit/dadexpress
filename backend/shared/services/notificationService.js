@@ -106,6 +106,7 @@ class NotificationService {
                     sound: 'default',
                 },
             },
+            
             apns: {
                 payload: {
                     aps: {

@@ -1130,3 +1130,31 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
   }
 });
 
+/**
+ * Update FCM Token for already-logged-in restaurant
+ * PUT /api/restaurant/auth/update-fcm-token
+ */
+export const updateFcmToken = asyncHandler(async (req, res) => {
+  const { fcmToken, platform = 'web' } = req.body;
+
+  if (!fcmToken) {
+    return errorResponse(res, 400, 'FCM token is required');
+  }
+
+  const restaurant = await Restaurant.findById(req.restaurant._id || req.restaurant.restaurantId);
+  if (!restaurant) {
+    return errorResponse(res, 404, 'Restaurant not found');
+  }
+
+  restaurant.platform = platform;
+  if (['android', 'ios', 'app'].includes(platform?.toLowerCase())) {
+    restaurant.fcmTokenMobile = fcmToken;
+  } else {
+    restaurant.fcmToken = fcmToken;
+  }
+
+  await restaurant.save();
+  console.log(`[PUSH-NOTIFICATION] FCM Token refreshed for restaurant ${restaurant._id}: ${fcmToken} (${platform})`);
+
+  return successResponse(res, 200, 'FCM token updated successfully');
+});

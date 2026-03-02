@@ -9,7 +9,8 @@ import {
   logout,
   getCurrentRestaurant,
   reverifyRestaurant,
-  firebaseGoogleLogin
+  firebaseGoogleLogin,
+  updateFcmToken
 } from '../controllers/restaurantAuthController.js';
 import { authenticate } from '../middleware/restaurantAuth.js';
 import { validate } from '../../../shared/middleware/validate.js';
@@ -89,5 +90,6 @@ router.post('/refresh-token', refreshToken);
 router.post('/logout', logout);
 router.get('/me', authenticate, getCurrentRestaurant);
 router.post('/reverify', authenticate, reverifyRestaurant);
+router.put('/update-fcm-token', authenticate, updateFcmToken);
 
 export default router;
