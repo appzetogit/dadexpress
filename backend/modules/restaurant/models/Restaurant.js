@@ -294,6 +294,30 @@ const restaurantSchema = new mongoose.Schema(
       enum: ["web", "ios", "android", "app"],
       default: "web",
     },
+    // Referral information
+    referralCode: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
+    referredBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Restaurant",
+      default: null,
+    },
+    referredByName: {
+      type: String,
+      default: null,
+    },
+    referralCommission: {
+      type: Number,
+      default: null,
+    },
+    referralStatus: {
+      type: String,
+      enum: ["pending", "completed"],
+      default: "pending",
+    },
   },
   {
     timestamps: true,

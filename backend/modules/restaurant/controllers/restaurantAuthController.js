@@ -588,7 +588,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
     res.cookie('refreshToken', tokens.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'lax',
       maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
     });
 
@@ -685,7 +685,7 @@ export const register = asyncHandler(async (req, res) => {
   res.cookie('refreshToken', tokens.refreshToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    sameSite: 'lax',
     maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
   });
 
@@ -760,7 +760,7 @@ export const login = asyncHandler(async (req, res) => {
   res.cookie('refreshToken', tokens.refreshToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    sameSite: 'lax',
     maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
   });
 
@@ -876,7 +876,7 @@ export const logout = asyncHandler(async (req, res) => {
   res.clearCookie('refreshToken', {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict'
+    sameSite: 'lax'
   });
 
   return successResponse(res, 200, 'Logged out successfully');
@@ -887,6 +887,15 @@ export const logout = asyncHandler(async (req, res) => {
  * GET /api/restaurant/auth/me
  */
 export const getCurrentRestaurant = asyncHandler(async (req, res) => {
+  // Get BusinessSettings for global referral settings
+  let businessSettings = null;
+  try {
+    const BusinessSettings = (await import('../../admin/models/BusinessSettings.js')).default;
+    businessSettings = await BusinessSettings.getSettings();
+  } catch (err) {
+    console.error('Error fetching business settings in getCurrentRestaurant:', err);
+  }
+
   // Restaurant is attached by authenticate middleware
   return successResponse(res, 200, 'Restaurant retrieved successfully', {
     restaurant: {
@@ -915,7 +924,18 @@ export const getCurrentRestaurant = asyncHandler(async (req, res) => {
       // Include verification status
       rejectionReason: req.restaurant.rejectionReason || null,
       approvedAt: req.restaurant.approvedAt || null,
-      rejectedAt: req.restaurant.rejectedAt || null
+      rejectedAt: req.restaurant.rejectedAt || null,
+      // Include referral information
+      referralCode: req.restaurant.referralCode || null,
+      referredBy: req.restaurant.referredBy || null,
+      referredByName: req.restaurant.referredByName || null,
+      referralCommission: req.restaurant.referralCommission || null,
+      referralStatus: req.restaurant.referralStatus || 'pending'
+    },
+    // Global referral policy
+    referralPolicy: businessSettings ? businessSettings.restaurantReferral : {
+      commissionPercentage: 5,
+      applyOn: 'First Order Only'
     }
   });
 });
@@ -1105,8 +1125,8 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
     res.cookie('refreshToken', tokens.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+      sameSite: 'lax',
+      maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
     });
 
     return successResponse(res, 200, 'Firebase Google authentication successful', {
@@ -1130,3 +1150,51 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
   }
 });
 
+/**
+ * Update FCM Token for already-logged-in restaurant
+ * PUT /api/restaurant/auth/update-fcm-token
+ */
+export const updateFcmToken = asyncHandler(async (req, res) => {
+  const { fcmToken, platform = 'web' } = req.body;
+
+  if (!fcmToken) {
+    return errorResponse(res, 400, 'FCM token is required');
+  }
+
+  const restaurant = await Restaurant.findById(req.restaurant._id || req.restaurant.restaurantId);
+  if (!restaurant) {
+    return errorResponse(res, 404, 'Restaurant not found');
+  }
+
+  restaurant.platform = platform;
+  if (['android', 'ios', 'app'].includes(platform?.toLowerCase())) {
+    restaurant.fcmTokenMobile = fcmToken;
+  } else {
+    restaurant.fcmToken = fcmToken;
+  }
+
+  await restaurant.save();
+  console.log(`[PUSH-NOTIFICATION] FCM Token refreshed for restaurant ${restaurant._id}: ${fcmToken} (${platform})`);
+
+  return successResponse(res, 200, 'FCM token updated successfully');
+});
+
+/**
+ * Get referral history for restaurant
+ * GET /api/restaurant/auth/referrals
+ */
+export const getReferralHistory = asyncHandler(async (req, res) => {
+  const referrals = await Restaurant.find({ referredBy: req.restaurant._id })
+    .select('name isActive createdAt approvedAt')
+    .sort({ createdAt: -1 });
+
+  return successResponse(res, 200, 'Referral history retrieved successfully', {
+    referrals: referrals.map(ref => ({
+      id: ref._id,
+      name: ref.name,
+      status: ref.isActive ? 'Completed' : 'Pending',
+      joinedAt: ref.createdAt,
+      approvedAt: ref.approvedAt
+    }))
+  });
+});

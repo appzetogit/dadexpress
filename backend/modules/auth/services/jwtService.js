@@ -12,8 +12,8 @@ class JWTService {
 
     this.secret = secret;
     this.accessTokenExpiry = process.env.JWT_ACCESS_EXPIRY || '24h';
-    this.refreshTokenExpiry = process.env.JWT_REFRESH_EXPIRY || '7d';
-    
+    this.refreshTokenExpiry = process.env.JWT_REFRESH_EXPIRY || '365d';
+
   }
 
   /**
@@ -76,7 +76,7 @@ class JWTService {
   verifyToken(token, type = 'access') {
     try {
       const decoded = jwt.verify(token, this.secret);
-      
+
       if (decoded.type !== type) {
         throw new Error(`Invalid token type. Expected ${type}, got ${decoded.type}`);
       }

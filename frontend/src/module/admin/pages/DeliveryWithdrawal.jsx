@@ -19,6 +19,7 @@ const TABS = [
 export default function DeliveryWithdrawal() {
   const [activeTab, setActiveTab] = useState("Pending")
   const [searchQuery, setSearchQuery] = useState("")
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("")
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(true)
   const [isViewOpen, setIsViewOpen] = useState(false)
@@ -27,10 +28,6 @@ export default function DeliveryWithdrawal() {
   const [rejectionReason, setRejectionReason] = useState("")
   const [showRejectModal, setShowRejectModal] = useState(false)
 
-  useEffect(() => {
-    fetchRequests()
-  }, [activeTab])
-
   const fetchRequests = async () => {
     try {
       setLoading(true)
@@ -38,7 +35,7 @@ export default function DeliveryWithdrawal() {
         status: activeTab,
         page: 1,
         limit: 200,
-        search: searchQuery.trim() || undefined,
+        search: debouncedSearchQuery.trim() || undefined,
       })
       if (response?.data?.success) {
         setRequests(response.data.data?.requests || [])
@@ -55,24 +52,26 @@ export default function DeliveryWithdrawal() {
     }
   }
 
+  // Handle debounced search query and reset initial call
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (searchQuery !== undefined) fetchRequests()
-    }, 500)
-    return () => clearTimeout(timer)
-  }, [searchQuery])
+      const trimmedSearch = searchQuery.trim();
+      if (trimmedSearch !== debouncedSearchQuery) {
+        setDebouncedSearchQuery(trimmedSearch);
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Combined fetch effect
+  useEffect(() => {
+    fetchRequests();
+  }, [activeTab, debouncedSearchQuery]);
 
   const filteredRequests = useMemo(() => {
-    if (!searchQuery.trim()) return requests
-    const q = searchQuery.toLowerCase().trim()
-    return requests.filter(
-      (r) =>
-        r.deliveryName?.toLowerCase().includes(q) ||
-        r.deliveryIdString?.toLowerCase().includes(q) ||
-        r.deliveryPhone?.toLowerCase().includes(q) ||
-        r.amount?.toString().includes(q)
-    )
-  }, [requests, searchQuery])
+    // Backend already handles search, but we use this to keep UI reactive if needed
+    return requests
+  }, [requests])
 
   const getStatusBadge = (status) => {
     if (status === "Approved" || status === "Processed") return "bg-green-100 text-green-700"
@@ -167,11 +166,10 @@ export default function DeliveryWithdrawal() {
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
-                  activeTab === tab.key
-                    ? "border-emerald-600 text-emerald-600"
-                    : "border-transparent text-slate-600 hover:text-slate-900"
-                }`}
+                className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${activeTab === tab.key
+                  ? "border-emerald-600 text-emerald-600"
+                  : "border-transparent text-slate-600 hover:text-slate-900"
+                  }`}
               >
                 {tab.label}
               </button>
@@ -233,7 +231,7 @@ export default function DeliveryWithdrawal() {
                     </tr>
                   ) : (
                     filteredRequests.map((req, index) => (
-                      <tr key={req.id} className="hover:bg-slate-50 transition-colors">
+                      <tr key={req.id || req._id} className="hover:bg-slate-50 transition-colors">
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-700">{index + 1}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-700">{formatCurrency(req.amount)}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-700">{req.deliveryName || "N/A"}</td>
@@ -256,12 +254,12 @@ export default function DeliveryWithdrawal() {
                             {req.status === "Pending" && (
                               <>
                                 <button
-                                  onClick={() => handleApprove(req.id)}
-                                  disabled={processingAction === req.id}
+                                  onClick={() => handleApprove(req.id || req._id)}
+                                  disabled={processingAction === (req.id || req._id)}
                                   className="p-2 rounded-lg bg-green-50 hover:bg-green-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                   title="Approve"
                                 >
-                                  {processingAction === req.id ? (
+                                  {processingAction === (req.id || req._id) ? (
                                     <Loader2 className="w-4 h-4 text-green-600 animate-spin" />
                                   ) : (
                                     <CheckCircle className="w-4 h-4 text-green-600" />
@@ -272,7 +270,7 @@ export default function DeliveryWithdrawal() {
                                     setSelectedRequest(req)
                                     setShowRejectModal(true)
                                   }}
-                                  disabled={processingAction === req.id}
+                                  disabled={processingAction === (req.id || req._id)}
                                   className="p-2 rounded-lg bg-red-50 hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                   title="Reject"
                                 >
@@ -396,11 +394,11 @@ export default function DeliveryWithdrawal() {
                 Cancel
               </button>
               <button
-                onClick={() => selectedRequest && handleReject(selectedRequest.id)}
-                disabled={processingAction === selectedRequest?.id}
+                onClick={() => selectedRequest && handleReject(selectedRequest.id || selectedRequest._id)}
+                disabled={processingAction === (selectedRequest?.id || selectedRequest?._id)}
                 className="px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {processingAction === selectedRequest?.id ? "Rejecting…" : "Reject"}
+                {processingAction === (selectedRequest?.id || selectedRequest?._id) ? "Rejecting…" : "Reject"}
               </button>
             </DialogFooter>
           </DialogContent>

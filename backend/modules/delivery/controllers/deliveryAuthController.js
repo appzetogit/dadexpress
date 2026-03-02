@@ -210,7 +210,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         res.cookie('refreshToken', tokens.refreshToken, {
           httpOnly: true,
           secure: process.env.NODE_ENV === 'production',
-          sameSite: 'strict',
+          sameSite: 'lax',
           maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
         });
 
@@ -251,7 +251,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
     res.cookie('refreshToken', tokens.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'lax',
       maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
     });
 
@@ -312,10 +312,12 @@ export const refreshToken = asyncHandler(async (req, res) => {
       return errorResponse(res, 401, 'Delivery boy not found or inactive');
     }
 
-    // Verify refresh token matches stored token
+    // Note: We've removed the strict DB comparison for multi-device support
+    /*
     if (delivery.refreshToken !== refreshToken) {
       return errorResponse(res, 401, 'Invalid refresh token');
     }
+    */
 
     // Generate new access token
     const accessToken = jwtService.generateAccessToken({
@@ -348,7 +350,7 @@ export const logout = asyncHandler(async (req, res) => {
   res.clearCookie('refreshToken', {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict'
+    sameSite: 'lax'
   });
 
   return successResponse(res, 200, 'Logged out successfully');
@@ -385,3 +387,31 @@ export const getCurrentDelivery = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * Update FCM Token for already-logged-in delivery partner
+ * PUT /api/delivery/auth/update-fcm-token
+ */
+export const updateFcmToken = asyncHandler(async (req, res) => {
+  const { fcmToken, platform = 'web' } = req.body;
+
+  if (!fcmToken) {
+    return errorResponse(res, 400, 'FCM token is required');
+  }
+
+  const delivery = await Delivery.findById(req.delivery._id || req.delivery.deliveryId);
+  if (!delivery) {
+    return errorResponse(res, 404, 'Delivery partner not found');
+  }
+
+  delivery.platform = platform;
+  if (['android', 'ios', 'app'].includes(platform?.toLowerCase())) {
+    delivery.fcmTokenMobile = fcmToken;
+  } else {
+    delivery.fcmToken = fcmToken;
+  }
+
+  await delivery.save();
+  console.log(`[PUSH-NOTIFICATION] FCM Token refreshed for delivery partner ${delivery._id}: ${fcmToken} (${platform})`);
+
+  return successResponse(res, 200, 'FCM token updated successfully');
+});

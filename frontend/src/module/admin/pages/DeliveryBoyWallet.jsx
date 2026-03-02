@@ -12,18 +12,18 @@ export default function DeliveryBoyWallet() {
   const [wallets, setWallets] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("")
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const [pages, setPages] = useState(1)
   const limit = 20
 
-  const fetchWallets = async (overrides = {}) => {
-    const p = overrides.page ?? page
+  const fetchWallets = async () => {
     try {
       setLoading(true)
       const res = await adminAPI.getDeliveryBoyWallets({
-        search: searchQuery.trim() || undefined,
-        page: p,
+        search: debouncedSearchQuery.trim() || undefined,
+        page: page,
         limit,
       })
       if (res?.data?.success) {
@@ -44,17 +44,19 @@ export default function DeliveryBoyWallet() {
     }
   }
 
-  useEffect(() => {
-    fetchWallets()
-  }, [page])
-
+  // Handle debounced search query and reset page
   useEffect(() => {
     const t = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery.trim())
       setPage(1)
-      fetchWallets({ page: 1 })
     }, 500)
     return () => clearTimeout(t)
   }, [searchQuery])
+
+  // Fetch wallets when page or debounced query changes
+  useEffect(() => {
+    fetchWallets()
+  }, [page, debouncedSearchQuery])
 
   return (
     <div className="p-4 lg:p-6 bg-slate-50 min-h-screen">
@@ -124,7 +126,7 @@ export default function DeliveryBoyWallet() {
                     </tr>
                   ) : (
                     wallets.map((w, i) => (
-                      <tr key={w.walletId || w.deliveryId} className="hover:bg-slate-50 transition-colors">
+                      <tr key={w.walletId || w.deliveryId || i} className="hover:bg-slate-50 transition-colors">
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-700">{(page - 1) * limit + i + 1}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-700">{w.name || "—"}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-700">{w.deliveryIdString || "—"}</td>
@@ -150,6 +152,7 @@ export default function DeliveryBoyWallet() {
               </p>
               <div className="flex gap-2">
                 <button
+                  type="button"
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page <= 1}
                   className="px-4 py-2 text-sm font-medium rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -157,6 +160,7 @@ export default function DeliveryBoyWallet() {
                   Previous
                 </button>
                 <button
+                  type="button"
                   onClick={() => setPage((p) => Math.min(pages, p + 1))}
                   disabled={page >= pages}
                   className="px-4 py-2 text-sm font-medium rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"

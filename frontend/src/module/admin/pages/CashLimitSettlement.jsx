@@ -28,18 +28,18 @@ export default function CashLimitSettlement() {
   const [transactions, setTransactions] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("")
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const [pages, setPages] = useState(1)
   const limit = 20
 
-  const fetchData = async (overrides = {}) => {
-    const p = overrides.page ?? page
+  const fetchData = async () => {
     try {
       setLoading(true)
       const res = await adminAPI.getCashLimitSettlements({
-        search: searchQuery.trim() || undefined,
-        page: p,
+        search: debouncedSearchQuery.trim() || undefined,
+        page: page,
         limit
       })
       if (res?.data?.success) {
@@ -60,17 +60,27 @@ export default function CashLimitSettlement() {
     }
   }
 
+  // Handle debounced search query, reset page, and fetch data
   useEffect(() => {
-    fetchData()
-  }, [page])
+    // Skip the very first render if we want to be super careful, but usually we want to fetch on mount
+    // The issue is the separate effects for debounce and fetch
+    const timer = setTimeout(() => {
+      const trimmedSearch = searchQuery.trim();
 
+      // Only update and fetch if things actually changed or if it's initial load
+      if (trimmedSearch !== debouncedSearchQuery) {
+        setDebouncedSearchQuery(trimmedSearch);
+        setPage(1); // Reset to page 1 on new search
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Data fetching effect
   useEffect(() => {
-    const t = setTimeout(() => {
-      setPage(1)
-      fetchData({ page: 1 })
-    }, 500)
-    return () => clearTimeout(t)
-  }, [searchQuery])
+    fetchData();
+  }, [page, debouncedSearchQuery]);
 
   return (
     <div className="p-4 lg:p-6 bg-slate-50 min-h-screen">
@@ -137,7 +147,7 @@ export default function CashLimitSettlement() {
                     </tr>
                   ) : (
                     transactions.map((tx, i) => (
-                      <tr key={tx.id || i} className="hover:bg-slate-50 transition-colors">
+                      <tr key={tx.id || tx._id || i} className="hover:bg-slate-50 transition-colors">
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-700">
                           {(page - 1) * limit + i + 1}
                         </td>
@@ -155,11 +165,10 @@ export default function CashLimitSettlement() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span
-                            className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                              tx.status === "Completed"
-                                ? "bg-green-100 text-green-700"
-                                : "bg-slate-100 text-slate-700"
-                            }`}
+                            className={`px-2 py-0.5 rounded text-xs font-semibold ${tx.status === "Completed"
+                              ? "bg-green-100 text-green-700"
+                              : "bg-slate-100 text-slate-700"
+                              }`}
                           >
                             {tx.status || "—"}
                           </span>

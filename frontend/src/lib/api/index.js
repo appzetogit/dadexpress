@@ -375,6 +375,11 @@ export const restaurantAPI = {
     return apiClient.post(API_ENDPOINTS.RESTAURANT.AUTH.REVERIFY);
   },
 
+  // Get referral history
+  getReferrals: () => {
+    return apiClient.get('/restaurant/auth/referrals');
+  },
+
   resetPassword: (email, otp, newPassword) => {
     return apiClient.post(API_ENDPOINTS.RESTAURANT.AUTH.RESET_PASSWORD, {
       email,
