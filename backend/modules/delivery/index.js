@@ -1,6 +1,8 @@
 // Delivery module
 import express from 'express';
 import deliveryAuthRoutes from './routes/deliveryAuthRoutes.js';
+import { updateFcmToken } from './controllers/deliveryAuthController.js';
+import { authenticate } from './middleware/deliveryAuth.js';
 import deliveryDashboardRoutes from './routes/deliveryDashboardRoutes.js';
 import deliveryProfileRoutes from './routes/deliveryProfileRoutes.js';
 import deliveryOrdersRoutes from './routes/deliveryOrdersRoutes.js';
@@ -13,6 +15,9 @@ const router = express.Router();
 
 // Delivery authentication routes (public)
 router.use('/auth', deliveryAuthRoutes);
+router.post('/save-fcm-token', authenticate, updateFcmToken);
+router.post('/update-fcm-token', authenticate, updateFcmToken);
+router.put('/update-fcm-token', authenticate, updateFcmToken);
 
 // Delivery signup routes (protected - requires authentication)
 router.use('/', deliverySignupRoutes);

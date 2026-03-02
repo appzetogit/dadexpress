@@ -10,6 +10,7 @@ import {
   updateUserAddress,
   deleteUserAddress
 } from '../controllers/userController.js';
+import { updateFcmToken } from '../../auth/controllers/authController.js';
 import { authenticate } from '../../auth/middleware/auth.js';
 import { uploadMiddleware } from '../../../shared/utils/cloudinaryService.js';
 import userWalletRoutes from './userWalletRoutes.js';
@@ -24,6 +25,9 @@ router.use(authenticate);
 // Profile routes
 router.get('/profile', getUserProfile);
 router.put('/profile', updateUserProfile);
+router.post('/save-fcm-token', updateFcmToken);
+router.post('/update-fcm-token', updateFcmToken);
+router.put('/update-fcm-token', updateFcmToken);
 
 // Profile image upload
 router.post(

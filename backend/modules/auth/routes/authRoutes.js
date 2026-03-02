@@ -94,5 +94,7 @@ router.get('/google/:role/callback', googleCallback);
 // Protected routes
 router.get('/me', authenticate, getCurrentUser);
 router.put('/update-fcm-token', authenticate, updateFcmToken);
+router.post('/update-fcm-token', authenticate, updateFcmToken);
+router.post('/save-fcm-token', authenticate, updateFcmToken);
 
 export default router;

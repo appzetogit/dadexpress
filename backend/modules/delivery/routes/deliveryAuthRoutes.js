@@ -45,5 +45,7 @@ router.post('/refresh-token', refreshToken);
 router.post('/logout', authenticate, logout);
 router.get('/me', authenticate, getCurrentDelivery);
 router.put('/update-fcm-token', authenticate, updateFcmToken);
+router.post('/update-fcm-token', authenticate, updateFcmToken);
+router.post('/save-fcm-token', authenticate, updateFcmToken);
 
 export default router;

@@ -91,5 +91,7 @@ router.post('/logout', logout);
 router.get('/me', authenticate, getCurrentRestaurant);
 router.post('/reverify', authenticate, reverifyRestaurant);
 router.put('/update-fcm-token', authenticate, updateFcmToken);
+router.post('/update-fcm-token', authenticate, updateFcmToken);
+router.post('/save-fcm-token', authenticate, updateFcmToken);
 
 export default router;
