@@ -44,7 +44,7 @@ messaging.onBackgroundMessage((payload) => {
 
     const title = payload.notification?.title || payload.data?.title || 'DadExpress';
     const body = payload.notification?.body || payload.data?.body || payload.data?.message || '';
-    const icon = '/dadexpress.jpeg';
+    const icon = self.location.origin + '/dadexpress.jpeg';
     const tag = payload.data?.tag || payload.data?.orderId || 'general';
 
     // Show OS-level Chrome notification

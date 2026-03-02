@@ -17,9 +17,11 @@ export async function notifyUserOrderUpdate(orderId, status) {
 
         // Fetch User for FCM token
         const customer = await User.findById(order.userId).select('fcmToken fcmTokenMobile platform').lean();
-        const fcmTokens = [];
-        if (customer?.fcmToken) fcmTokens.push({ token: customer.fcmToken, plat: 'web' });
-        if (customer?.fcmTokenMobile) fcmTokens.push({ token: customer.fcmTokenMobile, plat: 'app' });
+        const fcmTokensSet = new Set();
+        if (customer?.fcmToken) fcmTokensSet.add(JSON.stringify({ token: customer.fcmToken, plat: 'web' }));
+        if (customer?.fcmTokenMobile) fcmTokensSet.add(JSON.stringify({ token: customer.fcmTokenMobile, plat: 'app' }));
+
+        const fcmTokens = Array.from(fcmTokensSet).map(s => JSON.parse(s));
 
         for (const { token, plat } of fcmTokens) {
             const statusMessages = {

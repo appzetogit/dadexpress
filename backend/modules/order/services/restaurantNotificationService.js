@@ -159,9 +159,11 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
       console.log(`✅ Notified restaurant ${normalizedRestaurantId} about new order ${order.orderId} (${socketsInRoom.length} socket(s) connected)`);
 
       // Also send Push Notification if FCM token exists
-      const fcmTokens = [];
-      if (restaurant?.fcmToken) fcmTokens.push({ token: restaurant.fcmToken, plat: 'web' });
-      if (restaurant?.fcmTokenMobile) fcmTokens.push({ token: restaurant.fcmTokenMobile, plat: 'app' });
+      const fcmTokensSet = new Set();
+      if (restaurant?.fcmToken) fcmTokensSet.add(JSON.stringify({ token: restaurant.fcmToken, plat: 'web' }));
+      if (restaurant?.fcmTokenMobile) fcmTokensSet.add(JSON.stringify({ token: restaurant.fcmTokenMobile, plat: 'app' }));
+
+      const fcmTokens = Array.from(fcmTokensSet).map(s => JSON.parse(s));
 
       for (const { token, plat } of fcmTokens) {
         notificationService.sendPushNotification(
@@ -271,11 +273,13 @@ export async function notifyRestaurantOrderUpdate(orderId, status) {
 
     // Fetch restaurant for FCM token
     const restaurant = await Restaurant.findById(order.restaurantId).select('fcmToken fcmTokenMobile platform').lean();
-    const fcmTokens = [];
-    if (restaurant?.fcmToken) fcmTokens.push({ token: restaurant.fcmToken, plat: 'web' });
-    if (restaurant?.fcmTokenMobile) fcmTokens.push({ token: restaurant.fcmTokenMobile, plat: 'app' });
+    const restaurantFcmTokensSet = new Set();
+    if (restaurant?.fcmToken) restaurantFcmTokensSet.add(JSON.stringify({ token: restaurant.fcmToken, plat: 'web' }));
+    if (restaurant?.fcmTokenMobile) restaurantFcmTokensSet.add(JSON.stringify({ token: restaurant.fcmTokenMobile, plat: 'app' }));
 
-    for (const { token, plat } of fcmTokens) {
+    const restaurantFcmTokens = Array.from(restaurantFcmTokensSet).map(s => JSON.parse(s));
+
+    for (const { token, plat } of restaurantFcmTokens) {
       notificationService.sendPushNotification(
         token,
         {

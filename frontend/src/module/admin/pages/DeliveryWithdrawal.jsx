@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { Search, Wallet, Eye, CheckCircle, XCircle, Loader2, Package } from "lucide-react"
 import { adminAPI } from "@/lib/api"
 import { toast } from "sonner"
@@ -52,19 +52,26 @@ export default function DeliveryWithdrawal() {
     }
   }
 
-  // Handle debounced search query and reset initial call
+  const isInitialMount = useRef(true);
+
+  // Handle debounced search query
   useEffect(() => {
     const timer = setTimeout(() => {
       const trimmedSearch = searchQuery.trim();
       if (trimmedSearch !== debouncedSearchQuery) {
         setDebouncedSearchQuery(trimmedSearch);
       }
-    }, 500);
+    }, isInitialMount.current ? 0 : 500);
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
   // Combined fetch effect
   useEffect(() => {
+    if (isInitialMount.current) {
+      fetchRequests();
+      isInitialMount.current = false;
+      return;
+    }
     fetchRequests();
   }, [activeTab, debouncedSearchQuery]);
 

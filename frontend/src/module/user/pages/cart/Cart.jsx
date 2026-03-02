@@ -1185,15 +1185,23 @@ export default function Cart() {
         },
         onError: (error) => {
           console.error("❌ Razorpay payment error:", error)
-          // Don't show alert for user cancellation
-          if (error?.code !== 'PAYMENT_CANCELLED' && error?.message !== 'PAYMENT_CANCELLED') {
+          const isUserCancelled = error?.code === 'PAYMENT_CANCELLED' || error?.message === 'PAYMENT_CANCELLED'
+          if (!isUserCancelled) {
             const errorMessage = error?.description || error?.message || "Payment failed. Please try again."
             alert(errorMessage)
+          }
+          // Cancel the order in backend so it doesn't show as active on home screen
+          if (order?.id) {
+            orderAPI.cancelOrder(order.id, isUserCancelled ? 'Payment cancelled by user' : 'Payment failed').catch(() => { })
           }
           setIsPlacingOrder(false)
         },
         onClose: () => {
           console.log("⚠️ Payment modal closed by user")
+          // Cancel the order in backend so it doesn't appear as active on home screen
+          if (order?.id) {
+            orderAPI.cancelOrder(order.id, 'Payment cancelled by user').catch(() => { })
+          }
           setIsPlacingOrder(false)
         }
       })

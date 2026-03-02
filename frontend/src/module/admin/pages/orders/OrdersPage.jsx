@@ -295,6 +295,30 @@ export default function OrdersPage({ statusKey = "all" }) {
     }
   }
 
+  const handleDeleteOrder = async (order) => {
+    const orderIdToUse = order.id || order._id || order.orderId
+    if (!orderIdToUse) {
+      toast.error("Order ID not found")
+      return
+    }
+
+    try {
+      setProcessingActionOrderId(order.id || order.orderId)
+      const response = await adminAPI.deleteOrder(orderIdToUse)
+      if (response.data?.success) {
+        toast.success(`Order ${order.orderId} deleted successfully`)
+        setOrders(prev => prev.filter(o => o.id !== order.id && o.orderId !== order.orderId))
+      } else {
+        toast.error(response.data?.message || "Failed to delete order")
+      }
+    } catch (error) {
+      console.error("Error deleting order:", error)
+      toast.error(error.response?.data?.message || "Failed to delete order")
+    } finally {
+      setProcessingActionOrderId(null)
+    }
+  }
+
   // Handle refund button click - show modal for wallet payments, confirm dialog for others
   const handleRefund = (order) => {
     const isWalletPayment = order.paymentType === "Wallet" || order.payment?.method === "wallet";
@@ -509,6 +533,7 @@ export default function OrdersPage({ statusKey = "all" }) {
         onViewOrder={handleViewOrder}
         onPrintOrder={handlePrintOrder}
         onRefund={handleRefund}
+        onDeleteOrder={handleDeleteOrder}
         onAcceptOrder={statusKey === "all" || statusKey === "pending" ? handleAcceptOrder : undefined}
         onRejectOrder={statusKey === "all" || statusKey === "pending" ? handleRejectOrder : undefined}
         actionLoadingOrderId={processingActionOrderId}

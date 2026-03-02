@@ -70,6 +70,18 @@ export default function OrderTrackingCard() {
     // Find active order - any order that is NOT delivered, cancelled, or completed
     const active = uniqueOrders.find(order => {
       const status = (order.status || order.deliveryState?.status || '').toLowerCase();
+      const paymentMethod = (order.payment?.method || order.paymentMethod || '').toLowerCase();
+      const paymentStatus = (order.payment?.status || '').toLowerCase();
+
+      // Orders with payment_pending status are awaiting payment — never show on home
+      if (status === 'payment_pending') return false;
+
+      // Online (razorpay) orders that are still 'pending' haven't been paid yet — don't show
+      if (status === 'pending' && (paymentMethod === 'razorpay' || paymentMethod === 'online')) return false;
+
+      // Orders where payment is still pending for online payments — don't show
+      if (paymentStatus === 'pending' && (paymentMethod === 'razorpay' || paymentMethod === 'online')) return false;
+
       const isInactive = status === 'delivered' ||
         status === 'cancelled' ||
         status === 'completed' ||

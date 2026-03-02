@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Search, Receipt, Loader2, Package } from "lucide-react"
 import { adminAPI } from "@/lib/api"
 import { toast } from "sonner"
@@ -60,25 +60,28 @@ export default function CashLimitSettlement() {
     }
   }
 
-  // Handle debounced search query, reset page, and fetch data
+  const isInitialMount = useRef(true);
+
+  // Handle debounced search query
   useEffect(() => {
-    // Skip the very first render if we want to be super careful, but usually we want to fetch on mount
-    // The issue is the separate effects for debounce and fetch
     const timer = setTimeout(() => {
       const trimmedSearch = searchQuery.trim();
-
-      // Only update and fetch if things actually changed or if it's initial load
       if (trimmedSearch !== debouncedSearchQuery) {
         setDebouncedSearchQuery(trimmedSearch);
-        setPage(1); // Reset to page 1 on new search
+        setPage(1);
       }
-    }, 500);
+    }, isInitialMount.current ? 0 : 500);
 
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
   // Data fetching effect
   useEffect(() => {
+    if (isInitialMount.current) {
+      fetchData();
+      isInitialMount.current = false;
+      return;
+    }
     fetchData();
   }, [page, debouncedSearchQuery]);
 

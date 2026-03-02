@@ -72,11 +72,12 @@ export const sendPushNotification = asyncHandler(async (req, res) => {
         tokens = restaurants.flatMap(r => [r.fcmToken, r.fcmTokenMobile]);
     }
 
-    // Clean tokens string
-    tokens = tokens.filter(t => typeof t === 'string' && t.trim().length > 0 && t !== "undefined");
+    // Clean tokens and ensure uniqueness
+    tokens = [...new Set(tokens)]
+        .filter(t => typeof t === 'string' && t.trim().length > 0 && t !== "undefined" && t !== "null");
 
     console.log(`[PUSH NOTIFICATION] Attempting to send to ${sendTo}. Zone: ${zone}`);
-    console.log(`[PUSH NOTIFICATION] Found ${tokens.length} valid FCM tokens.`);
+    console.log(`[PUSH NOTIFICATION] Found ${tokens.length} unique valid FCM tokens.`);
 
     if (tokens.length === 0) {
         console.log(`[PUSH NOTIFICATION] Skipped: No tokens found for ${sendTo}`);

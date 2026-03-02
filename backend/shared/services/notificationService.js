@@ -25,42 +25,57 @@ class NotificationService {
             return null;
         }
 
+        const logoUrl = process.env.CORS_ORIGIN ? `${process.env.CORS_ORIGIN}/dadexpress.jpeg` : '/dadexpress.jpeg';
+
         const message = {
             token: token,
-            notification: {
-                title: notification.title,
-                body: notification.body,
-            },
             data: {
                 ...data,
+                title: notification.title,
+                body: notification.body,
+                image: notification.image || logoUrl,
                 click_action: data.click_action || '/',
             },
         };
+
+        // Root 'notification' property is REMOVED to prevent browser double notification.
+        // We use platform-specific blocks for Mobile.
+
 
         // Platform specific optimizations
         if (platform === 'ios') {
             message.apns = {
                 payload: {
                     aps: {
+                        alert: {
+                            title: notification.title,
+                            body: notification.body,
+                        },
                         sound: 'default',
                         badge: 1,
+                        'mutable-content': 1
                     },
                 },
             };
+            if (notification.image) {
+                message.apns.fcm_options = { image: notification.image };
+            }
         } else if (platform === 'android') {
             message.android = {
                 priority: 'high',
                 notification: {
                     sound: 'default',
+                    icon: 'ic_launcher',
+                    color: '#FF5E00',
                     clickAction: data.click_action || '/',
+                    image: notification.image || logoUrl
                 },
             };
         } else if (platform === 'web') {
             message.webpush = {
-                notification: {
-                    icon: '/dadexpress.jpeg',
-                    link: data.link || '/',
-                },
+                fcmOptions: {
+                    link: data.link || data.click_action || '/'
+                }
             };
         }
 
@@ -71,7 +86,6 @@ class NotificationService {
         } catch (error) {
             if (error.code === 'messaging/registration-token-not-registered') {
                 logger.warn('FCM token is no longer valid, should be removed from database');
-                // Ideally we should return a flag to remove it
             }
             logger.error('Error sending push notification:', error);
             return null;
@@ -92,46 +106,49 @@ class NotificationService {
             stringData[key] = String(val ?? '');
         }
 
+        const logoUrl = process.env.CORS_ORIGIN ? `${process.env.CORS_ORIGIN}/dadexpress.jpeg` : '/dadexpress.jpeg';
+
         const message = {
             tokens: cleanTokens,
-            notification: {
+            data: {
+                ...stringData,
                 title: notification.title,
                 body: notification.body,
+                image: notification.image || logoUrl,
+                click_action: data.click_action || '/'
             },
-            data: stringData,
             android: {
                 priority: 'high',
                 notification: {
                     icon: 'ic_launcher',
                     sound: 'default',
+                    image: notification.image || logoUrl
                 },
             },
-            
             apns: {
                 payload: {
                     aps: {
                         sound: 'default',
                         badge: 1,
+                        'mutable-content': 1
                     },
                 },
             },
             webpush: {
-                notification: {
-                    icon: '/dadexpress.jpeg',
-                    badge: '/dadexpress.jpeg',
-                    vibrate: [200, 100, 200],
-                    requireInteraction: true,
-                    tag: notification.tag || 'general'
-                },
                 fcmOptions: {
                     link: notification.click_action || '/'
                 }
             }
         };
 
-        // FCM imageUrl requires an absolute URL - skip if it's a relative path
-        if (notification.image && notification.image.startsWith('http')) {
-            message.notification.imageUrl = notification.image;
+        // For non-web platforms, we can add the root notification block
+        // However, for multicast we don't know the mix of tokens easily.
+        // It's safer to rely on platform-specific blocks (Android/APNS) for the notification content.
+        // The root 'notification' is what triggers the browser's automatic notification.
+        // So we REMOVE it from the root message in multicast as well.
+
+        if (notification.image) {
+            message.apns.fcm_options = { image: notification.image };
         }
 
         try {

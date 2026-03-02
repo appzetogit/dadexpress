@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react"
-import { Eye, Printer, ArrowUpDown, Loader2, Check, X } from "lucide-react"
+import { Eye, Printer, ArrowUpDown, Loader2, Check, X, Trash2 } from "lucide-react"
 
 const getStatusColor = (orderStatus) => {
   const colors = {
@@ -32,6 +32,7 @@ export default function OrdersTable({
   onViewOrder,
   onPrintOrder,
   onRefund,
+  onDeleteOrder,
   onAcceptOrder,
   onRejectOrder,
   actionLoadingOrderId,
@@ -39,12 +40,12 @@ export default function OrdersTable({
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
   const totalPages = Math.ceil(orders.length / itemsPerPage)
-  
+
   // Reset to page 1 when orders change
   useEffect(() => {
     setCurrentPage(1)
   }, [orders.length])
-  
+
   const paginatedOrders = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage
     const end = start + itemsPerPage
@@ -167,8 +168,8 @@ export default function OrdersTable({
           </thead>
           <tbody className="bg-white divide-y divide-slate-100">
             {paginatedOrders.map((order, index) => (
-              <tr 
-                key={order.orderId} 
+              <tr
+                key={order.orderId}
                 className="hover:bg-slate-50 transition-colors"
               >
                 {visibleColumns.si && (
@@ -239,7 +240,7 @@ export default function OrdersTable({
                     {(() => {
                       // Determine payment type display
                       let paymentTypeDisplay = order.paymentType;
-                      
+
                       if (!paymentTypeDisplay) {
                         const paymentMethod = order.payment?.method || order.paymentMethod;
                         if (paymentMethod === 'cash' || paymentMethod === 'cod') {
@@ -250,22 +251,21 @@ export default function OrdersTable({
                           paymentTypeDisplay = 'Online';
                         }
                       }
-                      
+
                       // Override if payment method is wallet but paymentType is not set correctly
                       const paymentMethod = order.payment?.method || order.paymentMethod;
                       if (paymentMethod === 'wallet' && paymentTypeDisplay !== 'Wallet') {
                         paymentTypeDisplay = 'Wallet';
                       }
-                      
+
                       const isCod = paymentTypeDisplay === 'Cash on Delivery';
                       const isWallet = paymentTypeDisplay === 'Wallet';
-                      
+
                       return (
-                        <span className={`text-sm font-medium ${
-                          isCod ? 'text-amber-600' : 
-                          isWallet ? 'text-purple-600' : 
-                          'text-emerald-600'
-                        }`}>
+                        <span className={`text-sm font-medium ${isCod ? 'text-amber-600' :
+                            isWallet ? 'text-purple-600' :
+                              'text-emerald-600'
+                          }`}>
                           {paymentTypeDisplay}
                         </span>
                       );
@@ -298,9 +298,9 @@ export default function OrdersTable({
                       {order.cancellationReason && (
                         <div className="text-xs text-red-600 mt-1">
                           <span className="font-medium">
-                            {order.cancelledBy === 'user' ? 'Cancelled by User - ' : 
-                             order.cancelledBy === 'restaurant' ? 'Cancelled by Restaurant - ' : 
-                             'Reason: '}
+                            {order.cancelledBy === 'user' ? 'Cancelled by User - ' :
+                              order.cancelledBy === 'restaurant' ? 'Cancelled by Restaurant - ' :
+                                'Reason: '}
                           </span>
                           {order.cancellationReason}
                         </div>
@@ -341,73 +341,85 @@ export default function OrdersTable({
                           <span>Reject</span>
                         </button>
                       )}
-                      <button 
+                      <button
                         onClick={() => onViewOrder(order)}
                         className="p-1.5 rounded text-orange-600 hover:bg-orange-50 transition-colors"
                         title="View Details"
                       >
                         <Eye className="w-4 h-4" />
                       </button>
-                      <button 
+                      <button
                         onClick={() => onPrintOrder(order)}
                         className="p-1.5 rounded text-blue-600 hover:bg-blue-50 transition-colors"
                         title="Print Order"
                       >
                         <Printer className="w-4 h-4" />
                       </button>
+                      {onDeleteOrder && (
+                        <button
+                          onClick={() => onDeleteOrder(order)}
+                          disabled={actionLoadingOrderId === (order.id || order.orderId)}
+                          className="p-1.5 rounded text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Delete Order"
+                        >
+                          {actionLoadingOrderId === (order.id || order.orderId) ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
+                        </button>
+                      )}
                       {/* Show Refund button or Refunded status for cancelled orders with Online/Wallet payment (restaurant or user cancelled) */}
                       {(() => {
                         // Check if order is cancelled by restaurant or user
-                        const isCancelled = order.orderStatus === "Cancelled by Restaurant" || 
-                                          order.orderStatus === "Cancelled" || 
-                                          order.orderStatus === "Cancelled by User" ||
-                                          (order.status === "cancelled" && (order.cancelledBy === "user" || order.cancelledBy === "restaurant"));
-                        
+                        const isCancelled = order.orderStatus === "Cancelled by Restaurant" ||
+                          order.orderStatus === "Cancelled" ||
+                          order.orderStatus === "Cancelled by User" ||
+                          (order.status === "cancelled" && (order.cancelledBy === "user" || order.cancelledBy === "restaurant"));
+
                         // Check if payment type is Online or Wallet (not Cash on Delivery)
                         const paymentMethod = order.payment?.method || order.paymentMethod;
                         const isOnlinePayment = order.paymentType === "Online" ||
-                                              (order.paymentType !== "Cash on Delivery" && 
-                                               order.payment?.method !== "cash" && 
-                                               order.payment?.method !== "cod" &&
-                                               (order.paymentMethod === "razorpay" || 
-                                                order.paymentMethod === "online" || 
-                                                order.payment?.paymentMethod === "razorpay" || 
-                                                order.payment?.method === "razorpay" ||
-                                                order.payment?.method === "online"));
-                        
+                          (order.paymentType !== "Cash on Delivery" &&
+                            order.payment?.method !== "cash" &&
+                            order.payment?.method !== "cod" &&
+                            (order.paymentMethod === "razorpay" ||
+                              order.paymentMethod === "online" ||
+                              order.payment?.paymentMethod === "razorpay" ||
+                              order.payment?.method === "razorpay" ||
+                              order.payment?.method === "online"));
+
                         const isWalletPayment = order.paymentType === "Wallet" || paymentMethod === "wallet";
-                        
+
                         return isCancelled && (isOnlinePayment || isWalletPayment);
                       })() && (
-                        <>
-                          {order.refundStatus === 'processed' || order.refundStatus === 'initiated' ? (
-                            <span className={`px-3 py-1.5 rounded-md text-xs font-medium ${
-                              order.paymentType === "Wallet" || order.payment?.method === "wallet"
-                                ? "bg-purple-100 text-purple-700"
-                                : "bg-emerald-100 text-emerald-700"
-                            }`}>
-                              {order.paymentType === "Wallet" || order.payment?.method === "wallet" 
-                                ? "Wallet Refunded" 
-                                : "Refunded"}
-                            </span>
-                          ) : onRefund ? (
-                            <button 
-                              onClick={() => onRefund(order)}
-                              className={`px-3 py-1.5 rounded-md text-white text-xs font-medium hover:opacity-90 transition-colors shadow-sm flex items-center gap-1.5 ${
-                                order.paymentType === "Wallet" || order.payment?.method === "wallet"
-                                  ? "bg-purple-600 hover:bg-purple-700"
-                                  : "bg-blue-600 hover:bg-blue-700"
-                              }`}
-                              title={order.paymentType === "Wallet" || order.payment?.method === "wallet"
-                                ? "Process Wallet Refund (Add to user wallet)"
-                                : "Process Refund via Razorpay"}
-                            >
-                              <span className="text-sm">₹</span>
-                              <span>Refund</span>
-                            </button>
-                          ) : null}
-                        </>
-                      )}
+                          <>
+                            {order.refundStatus === 'processed' || order.refundStatus === 'initiated' ? (
+                              <span className={`px-3 py-1.5 rounded-md text-xs font-medium ${order.paymentType === "Wallet" || order.payment?.method === "wallet"
+                                  ? "bg-purple-100 text-purple-700"
+                                  : "bg-emerald-100 text-emerald-700"
+                                }`}>
+                                {order.paymentType === "Wallet" || order.payment?.method === "wallet"
+                                  ? "Wallet Refunded"
+                                  : "Refunded"}
+                              </span>
+                            ) : onRefund ? (
+                              <button
+                                onClick={() => onRefund(order)}
+                                className={`px-3 py-1.5 rounded-md text-white text-xs font-medium hover:opacity-90 transition-colors shadow-sm flex items-center gap-1.5 ${order.paymentType === "Wallet" || order.payment?.method === "wallet"
+                                    ? "bg-purple-600 hover:bg-purple-700"
+                                    : "bg-blue-600 hover:bg-blue-700"
+                                  }`}
+                                title={order.paymentType === "Wallet" || order.payment?.method === "wallet"
+                                  ? "Process Wallet Refund (Add to user wallet)"
+                                  : "Process Refund via Razorpay"}
+                              >
+                                <span className="text-sm">₹</span>
+                                <span>Refund</span>
+                              </button>
+                            ) : null}
+                          </>
+                        )}
                     </div>
                   </td>
                 )}
@@ -416,7 +428,7 @@ export default function OrdersTable({
           </tbody>
         </table>
       </div>
-      
+
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
@@ -449,11 +461,10 @@ export default function OrdersTable({
                   <button
                     key={pageNum}
                     onClick={() => setCurrentPage(pageNum)}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all ${
-                      currentPage === pageNum
+                    className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all ${currentPage === pageNum
                         ? "bg-emerald-500 text-white shadow-md"
                         : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-                    }`}
+                      }`}
                   >
                     {pageNum}
                   </button>
