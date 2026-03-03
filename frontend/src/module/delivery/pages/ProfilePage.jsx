@@ -42,6 +42,7 @@ export default function ProfilePage() {
     // Load from localStorage, default to "zomato_tone"
     return localStorage.getItem('delivery_alert_sound') || 'zomato_tone'
   })
+  const currentAudioRef = useRef(null)
 
   useEffect(() => {
     // Initialize Lenis for smooth scrolling
@@ -158,6 +159,12 @@ export default function ProfilePage() {
 
     return () => {
       window.removeEventListener('deliveryProfileRefresh', handleProfileRefresh)
+      // Stop any playing audio on unmount
+      if (currentAudioRef.current) {
+        currentAudioRef.current.pause()
+        currentAudioRef.current.currentTime = 0
+        currentAudioRef.current = null
+      }
     }
   }, [])
 
@@ -206,6 +213,44 @@ export default function ProfilePage() {
       // Redirect to sign-in
       navigate("/delivery/sign-in", { replace: true })
     }, 100)
+  }
+
+  const playPreviewSound = (soundFile) => {
+    try {
+      // Stop any currently playing audio
+      if (currentAudioRef.current) {
+        currentAudioRef.current.pause()
+        currentAudioRef.current.currentTime = 0
+      }
+
+      console.log('🔊 Playing preview sound:', soundFile)
+      const audio = new Audio(soundFile)
+      audio.volume = 0.7
+      currentAudioRef.current = audio
+
+      const playPromise = audio.play()
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            console.log('✅ Preview sound playing successful')
+          })
+          .catch(err => {
+            console.error('❌ Preview audio error:', err)
+          })
+      }
+    } catch (err) {
+      console.error('❌ Could not create or play preview audio:', err)
+    }
+  }
+
+  const handleClosePopup = () => {
+    // Stop any playing audio when closing the popup
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause()
+      currentAudioRef.current.currentTime = 0
+      currentAudioRef.current = null
+    }
+    setShowAlertSoundPopup(false)
   }
 
   return (
@@ -370,7 +415,7 @@ export default function ProfilePage() {
             <div className="flex items-center justify-between p-4 border-b border-gray-200">
               <h3 className="text-lg font-semibold">Order alert sound</h3>
               <button
-                onClick={() => setShowAlertSoundPopup(false)}
+                onClick={handleClosePopup}
                 className="p-1 hover:bg-gray-100 rounded-full transition-colors"
               >
                 <X className="w-5 h-5 text-gray-500" />
@@ -391,24 +436,7 @@ export default function ProfilePage() {
                     onChange={(e) => {
                       setSelectedAlertSound(e.target.value)
                       localStorage.setItem('delivery_alert_sound', e.target.value)
-                      // Play preview sound
-                      try {
-                        console.log('🔊 Playing preview sound: Original', { originalSoundPath: originalSound })
-                        const audio = new Audio(originalSound)
-                        audio.volume = 0.7
-                        const playPromise = audio.play()
-                        if (playPromise !== undefined) {
-                          playPromise
-                            .then(() => {
-                              console.log('✅ Preview sound playing: Original')
-                            })
-                            .catch(err => {
-                              console.error('❌ Preview audio error:', err)
-                            })
-                        }
-                      } catch (err) {
-                        console.error('❌ Could not create preview audio:', err)
-                      }
+                      playPreviewSound(originalSound)
                     }}
                     className="w-5 h-5 text-black focus:ring-2 focus:ring-black"
                   />
@@ -425,24 +453,7 @@ export default function ProfilePage() {
                     onChange={(e) => {
                       setSelectedAlertSound(e.target.value)
                       localStorage.setItem('delivery_alert_sound', e.target.value)
-                      // Play preview sound
-                      try {
-                        console.log('🔊 Playing preview sound: Zomato Tone', { alertSoundPath: alertSound })
-                        const audio = new Audio(alertSound)
-                        audio.volume = 0.7
-                        const playPromise = audio.play()
-                        if (playPromise !== undefined) {
-                          playPromise
-                            .then(() => {
-                              console.log('✅ Preview sound playing: Zomato Tone')
-                            })
-                            .catch(err => {
-                              console.error('❌ Preview audio error:', err)
-                            })
-                        }
-                      } catch (err) {
-                        console.error('❌ Could not create preview audio:', err)
-                      }
+                      playPreviewSound(alertSound)
                     }}
                     className="w-5 h-5 text-black focus:ring-2 focus:ring-black"
                   />
@@ -453,7 +464,7 @@ export default function ProfilePage() {
             {/* Ok Button */}
             <div className="p-4 border-t border-gray-200">
               <button
-                onClick={() => setShowAlertSoundPopup(false)}
+                onClick={handleClosePopup}
                 className="w-full bg-black text-white py-3 rounded-lg font-semibold hover:bg-gray-800 transition-colors"
               >
                 Ok
