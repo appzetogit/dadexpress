@@ -394,22 +394,22 @@ export default function TransactionReport() {
           </div>
 
           {/* Table */}
-          <div className="overflow-x-auto scrollbar-hide">
-            <table className="w-full" style={{ tableLayout: 'fixed', width: '100%' }}>
+          <div className="overflow-x-auto scrollbar-hide pb-2">
+            <table className="w-full" style={{ minWidth: '1100px' }}>
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
-                  <th className="px-1.5 py-1 text-left text-[8px] font-bold text-slate-700 uppercase tracking-wider" style={{ width: '3%' }}>SI</th>
-                  <th className="px-1.5 py-1 text-left text-[8px] font-bold text-slate-700 uppercase tracking-wider" style={{ width: '7%' }}>Order Id</th>
-                  <th className="px-1.5 py-1 text-left text-[8px] font-bold text-slate-700 uppercase tracking-wider" style={{ width: '10%' }}>Restaurant</th>
-                  <th className="px-1.5 py-1 text-left text-[8px] font-bold text-slate-700 uppercase tracking-wider" style={{ width: '10%' }}>Customer Name</th>
-                  <th className="px-1.5 py-1 text-left text-[8px] font-bold text-slate-700 uppercase tracking-wider" style={{ width: '9%' }}>Total Item Amount</th>
-                  <th className="px-1.5 py-1 text-left text-[8px] font-bold text-slate-700 uppercase tracking-wider" style={{ width: '8%' }}>Item Discount</th>
-                  <th className="px-1.5 py-1 text-left text-[8px] font-bold text-slate-700 uppercase tracking-wider" style={{ width: '8%' }}>Coupon Discount</th>
-                  <th className="px-1.5 py-1 text-left text-[8px] font-bold text-slate-700 uppercase tracking-wider" style={{ width: '8%' }}>Referral Discount</th>
-                  <th className="px-1.5 py-1 text-left text-[8px] font-bold text-slate-700 uppercase tracking-wider" style={{ width: '8%' }}>Discounted Amount</th>
-                  <th className="px-1.5 py-1 text-left text-[8px] font-bold text-slate-700 uppercase tracking-wider" style={{ width: '7%' }}>Vat/Tax</th>
-                  <th className="px-1.5 py-1 text-left text-[8px] font-bold text-slate-700 uppercase tracking-wider" style={{ width: '8%' }}>Delivery Charge</th>
-                  <th className="px-1.5 py-1 text-left text-[8px] font-bold text-slate-700 uppercase tracking-wider" style={{ width: '8%' }}>Order Amount</th>
+                  <th className="px-3 py-2 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider whitespace-nowrap">SI</th>
+                  <th className="px-3 py-2 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider whitespace-nowrap">Order Id</th>
+                  <th className="px-3 py-2 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider whitespace-nowrap">Restaurant</th>
+                  <th className="px-3 py-2 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider whitespace-nowrap">Customer Name</th>
+                  <th className="px-3 py-2 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider whitespace-nowrap">Total Item Amount</th>
+                  <th className="px-3 py-2 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider whitespace-nowrap">Item Discount</th>
+                  <th className="px-3 py-2 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider whitespace-nowrap">Coupon Discount</th>
+                  <th className="px-3 py-2 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider whitespace-nowrap">Referral Discount</th>
+                  <th className="px-3 py-2 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider whitespace-nowrap">Discounted Amount</th>
+                  <th className="px-3 py-2 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider whitespace-nowrap">Vat/Tax</th>
+                  <th className="px-3 py-2 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider whitespace-nowrap">Delivery Charge</th>
+                  <th className="px-3 py-2 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider whitespace-nowrap">Order Amount</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-slate-100">
@@ -428,51 +428,51 @@ export default function TransactionReport() {
                       key={transaction.id}
                       className="hover:bg-slate-50 transition-colors"
                     >
-                      <td className="px-1.5 py-1">
-                        <span className="text-[10px] font-medium text-slate-700">{index + 1}</span>
+                      <td className="px-3 py-2">
+                        <span className="text-xs font-medium text-slate-700">{index + 1}</span>
                       </td>
-                      <td className="px-1.5 py-1">
-                        <span className="text-[10px] text-slate-700">{transaction.orderId}</span>
+                      <td className="px-3 py-2">
+                        <span className="text-xs text-slate-700 whitespace-nowrap">{transaction.orderId}</span>
                       </td>
-                      <td className="px-1.5 py-1">
-                        <span className="text-[10px] text-slate-700 truncate block">{transaction.restaurant}</span>
+                      <td className="px-3 py-2">
+                        <span className="text-xs text-slate-700 truncate block max-w-[150px]">{transaction.restaurant}</span>
                       </td>
-                      <td className="px-1.5 py-1">
-                        <span className={`text-[10px] truncate block ${transaction.customerName === "Invalid Customer Data"
+                      <td className="px-3 py-2">
+                        <span className={`text-xs truncate block max-w-[150px] ${transaction.customerName === "Invalid Customer Data"
                             ? "text-red-600 font-semibold"
                             : "text-slate-700"
                           }`}>
                           {transaction.customerName}
                         </span>
                       </td>
-                      <td className="px-1.5 py-1">
-                        <span className="text-[10px] text-slate-700">{formatFullCurrency(transaction.totalItemAmount)}</span>
+                      <td className="px-3 py-2">
+                        <span className="text-xs text-slate-700 whitespace-nowrap">{formatFullCurrency(transaction.totalItemAmount)}</span>
                       </td>
-                      <td className="px-1.5 py-1">
-                        <span className="text-[10px] text-slate-700">{formatFullCurrency(transaction.itemDiscount)}</span>
+                      <td className="px-3 py-2">
+                        <span className="text-xs text-slate-700 whitespace-nowrap">{formatFullCurrency(transaction.itemDiscount)}</span>
                       </td>
-                      <td className="px-1.5 py-1">
-                        <span className="text-[10px] text-slate-700">{formatFullCurrency(transaction.couponDiscount)}</span>
+                      <td className="px-3 py-2">
+                        <span className="text-xs text-slate-700 whitespace-nowrap">{formatFullCurrency(transaction.couponDiscount)}</span>
                       </td>
-                      <td className="px-1.5 py-1">
-                        <span className="text-[10px] text-slate-700">{formatFullCurrency(transaction.referralDiscount)}</span>
+                      <td className="px-3 py-2">
+                        <span className="text-xs text-slate-700 whitespace-nowrap">{formatFullCurrency(transaction.referralDiscount)}</span>
                       </td>
-                      <td className="px-1.5 py-1">
-                        <span className="text-[10px] text-slate-700">
+                      <td className="px-3 py-2">
+                        <span className="text-xs text-slate-700 whitespace-nowrap">
                           {transaction.discountedAmount >= 1000
                             ? formatCurrency(transaction.discountedAmount)
                             : formatFullCurrency(transaction.discountedAmount)
                           }
                         </span>
                       </td>
-                      <td className="px-1.5 py-1">
-                        <span className="text-[10px] text-slate-700">{formatFullCurrency(transaction.vatTax)}</span>
+                      <td className="px-3 py-2">
+                        <span className="text-xs text-slate-700 whitespace-nowrap">{formatFullCurrency(transaction.vatTax)}</span>
                       </td>
-                      <td className="px-1.5 py-1">
-                        <span className="text-[10px] text-slate-700">{formatFullCurrency(transaction.deliveryCharge)}</span>
+                      <td className="px-3 py-2">
+                        <span className="text-xs text-slate-700 whitespace-nowrap">{formatFullCurrency(transaction.deliveryCharge)}</span>
                       </td>
-                      <td className="px-1.5 py-1">
-                        <span className="text-[10px] font-medium text-slate-900">{formatFullCurrency(transaction.orderAmount)}</span>
+                      <td className="px-3 py-2">
+                        <span className="text-xs font-medium text-slate-900 whitespace-nowrap">{formatFullCurrency(transaction.orderAmount)}</span>
                       </td>
                     </tr>
                   ))

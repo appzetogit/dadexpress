@@ -116,7 +116,7 @@ export default function DesktopNavbar() {
                                     <img
                                         src={logoUrl}
                                         alt="Company Logo"
-                                        className="h-8 w-auto md:h-10 lg:h-11 object-contain"
+                                        className="h-7 w-auto md:h-9 lg:h-10 object-contain"
                                         onError={(e) => {
                                             // Fallback to static logo if backend logo fails
                                             e.target.src = quickSpicyLogo
@@ -127,7 +127,7 @@ export default function DesktopNavbar() {
                                         {companyName}
                                     </span>
                                 ) : (
-                                    <img src={quickSpicyLogo} alt="Quick Spicy" className="h-8 w-auto md:h-10 lg:h-11 object-contain" />
+                                    <img src={quickSpicyLogo} alt="Quick Spicy" className="h-7 w-auto md:h-9 lg:h-10 object-contain" />
                                 )}
                             </Link>
 

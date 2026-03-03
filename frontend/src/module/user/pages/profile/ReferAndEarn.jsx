@@ -23,7 +23,7 @@ export default function ReferAndEarn() {
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
 
-  const referralLink = `https://dadexpress.com/auth?ref=${referralCode}`
+  const referralLink = `https://dadexpress.in/auth/sign-in?mode=signup&ref=${referralCode}`
 
   useEffect(() => {
     const fetchData = async () => {

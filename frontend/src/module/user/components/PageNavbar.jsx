@@ -929,7 +929,7 @@ export default function PageNavbar({
             <img
               src={logoUrl}
               alt="Company Logo"
-              className="h-9 w-auto sm:h-10 md:h-14 object-contain origin-left"
+              className="h-8 w-auto sm:h-9 md:h-12 object-contain origin-left"
               crossOrigin="anonymous"
               onError={(e) => {
                 e.target.src = quickSpicyLogo
@@ -939,7 +939,7 @@ export default function PageNavbar({
             <img
               src={quickSpicyLogo}
               alt={`${companyName} Logo`}
-              className="h-9 w-auto sm:h-10 md:h-14 object-contain origin-left"
+              className="h-8 w-auto sm:h-9 md:h-12 object-contain origin-left"
             />
           )}
         </Link>

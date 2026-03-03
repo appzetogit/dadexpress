@@ -121,7 +121,7 @@ export default function Navbar() {
               <img
                 src={logoUrl}
                 alt="Company Logo"
-                className="h-8 w-8 sm:h-10 sm:w-10 md:h-12 md:w-12 object-contain"
+                className="h-7 w-7 sm:h-9 sm:w-9 md:h-11 md:w-11 object-contain"
                 onError={(e) => {
                   // Hide image if it fails to load
                   e.target.style.display = 'none'

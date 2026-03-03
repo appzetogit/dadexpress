@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { foodImages } from "@/constants/images"
 import api from "@/lib/api"
 import { restaurantAPI, adminAPI } from "@/lib/api"
+import allCategoriesV3 from "@/assets/all-categories-v3.png"
 import { useProfile } from "../context/ProfileContext"
 import { useLocation } from "../hooks/useLocation"
 import { useZone } from "../hooks/useZone"
@@ -67,7 +68,7 @@ export default function CategoryPage() {
 
           // Transform API categories to match expected format
           const transformedCategories = [
-            { id: 'all', name: "All", image: foodImages[7] || foodImages[0], slug: 'all' },
+            { id: 'all', name: "All", image: allCategoriesV3, slug: 'all' },
             ...categoriesArray.map((cat) => ({
               id: cat.slug || cat.id,
               name: cat.name,
