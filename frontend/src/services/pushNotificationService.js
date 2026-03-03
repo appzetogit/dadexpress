@@ -1,6 +1,6 @@
 
 import { messaging, getToken, onMessage } from '@/lib/firebase';
-import axios from 'axios';
+import api from '../lib/api/axios';
 
 // VAPID key for dad-express
 const VAPID_KEY = "BLd26y4PbOmBzFABPEfLNhQAsGDKYVpbyUdk_zKRO0Q5jy7tKOMr7IRuri1tLy6jdtVtevqmdZTs1I-psrM96HM";
@@ -99,15 +99,10 @@ async function registerFCMToken(authType = 'user') {
         const API_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
         const platform = getPlatform();
 
-        // Standard dad-express endpoint for updating FCM token
-        // We'll use the new endpoint we just created
-        const response = await axios.put(`${API_URL}/auth/update-fcm-token`, {
+        // Standard dad-express endpoint for updating FCM token - using our universal API client
+        const response = await api.put('/auth/update-fcm-token', {
             fcmToken: token,
             platform: platform
-        }, {
-            headers: {
-                Authorization: `Bearer ${localStorage.getItem('accessToken') || localStorage.getItem('userAccessToken')}`
-            }
         });
 
         console.log(`✅ [FCM Service] Backend response:`, response.data);
