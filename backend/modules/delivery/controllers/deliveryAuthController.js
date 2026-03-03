@@ -398,20 +398,24 @@ export const updateFcmToken = asyncHandler(async (req, res) => {
     return errorResponse(res, 400, 'FCM token is required');
   }
 
-  const delivery = await Delivery.findById(req.delivery._id || req.delivery.deliveryId);
-  if (!delivery) {
-    return errorResponse(res, 404, 'Delivery partner not found');
+  // Use the delivery partner instance or user instance already attached by middleware
+  // Universal authenticate middleware attaches to req.user, deliveryAuth attaches to req.delivery
+  const target = req.delivery || req.user;
+
+  if (!target) {
+    return errorResponse(res, 404, 'User/Delivery partner not found');
   }
 
-  delivery.platform = platform;
+  // Update FCM token and platform
+  target.platform = platform;
   if (['android', 'ios', 'app'].includes(platform?.toLowerCase())) {
-    delivery.fcmTokenMobile = fcmToken;
+    target.fcmTokenMobile = fcmToken;
   } else {
-    delivery.fcmToken = fcmToken;
+    target.fcmToken = fcmToken;
   }
 
-  await delivery.save();
-  console.log(`[PUSH-NOTIFICATION] FCM Token refreshed for delivery partner ${delivery._id}: ${fcmToken} (${platform})`);
+  await target.save();
+  console.log(`[PUSH-NOTIFICATION] FCM Token refreshed for ${target.role || 'delivery'} ${target._id}: ${fcmToken} (${platform})`);
 
   return successResponse(res, 200, 'FCM token updated successfully');
 });

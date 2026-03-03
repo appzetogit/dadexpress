@@ -1161,20 +1161,24 @@ export const updateFcmToken = asyncHandler(async (req, res) => {
     return errorResponse(res, 400, 'FCM token is required');
   }
 
-  const restaurant = await Restaurant.findById(req.restaurant._id || req.restaurant.restaurantId);
-  if (!restaurant) {
-    return errorResponse(res, 404, 'Restaurant not found');
+  // Use the restaurant instance or user instance already attached by middleware
+  // Universal authenticate middleware attaches to req.user, restaurantAuth attaches to req.restaurant
+  const target = req.restaurant || req.user;
+
+  if (!target) {
+    return errorResponse(res, 404, 'User/Restaurant not found');
   }
 
-  restaurant.platform = platform;
+  // Update FCM token and platform
+  target.platform = platform;
   if (['android', 'ios', 'app'].includes(platform?.toLowerCase())) {
-    restaurant.fcmTokenMobile = fcmToken;
+    target.fcmTokenMobile = fcmToken;
   } else {
-    restaurant.fcmToken = fcmToken;
+    target.fcmToken = fcmToken;
   }
 
-  await restaurant.save();
-  console.log(`[PUSH-NOTIFICATION] FCM Token refreshed for restaurant ${restaurant._id}: ${fcmToken} (${platform})`);
+  await target.save();
+  console.log(`[PUSH-NOTIFICATION] FCM Token refreshed for ${target.role || 'restaurant'} ${target._id}: ${fcmToken} (${platform})`);
 
   return successResponse(res, 200, 'FCM token updated successfully');
 });

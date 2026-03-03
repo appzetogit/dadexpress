@@ -20,8 +20,23 @@ export const authenticate = async (req, res, next) => {
     // Verify token
     const decoded = jwtService.verifyAccessToken(token);
 
-    // Get user from database
-    const user = await User.findById(decoded.userId).select("-password");
+    // Get correct model based on role
+    let user = null;
+    const { userId, role } = decoded;
+
+    if (role === 'delivery') {
+      const { default: Delivery } = await import("../../delivery/models/Delivery.js");
+      user = await Delivery.findById(userId).select("-password -refreshToken");
+    } else if (role === 'restaurant') {
+      const { default: Restaurant } = await import("../../restaurant/models/Restaurant.js");
+      user = await Restaurant.findById(userId).select("-password");
+    } else if (role === 'admin') {
+      const { default: Admin } = await import("../../admin/models/Admin.js");
+      user = await Admin.findById(userId).select("-password");
+    } else {
+      // Default to User model for 'user' role or if role is missing (backward compatibility)
+      user = await User.findById(userId).select("-password");
+    }
 
     if (!user) {
       return errorResponse(res, 401, "User not found");

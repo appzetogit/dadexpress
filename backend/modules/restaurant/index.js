@@ -31,6 +31,7 @@ router.put('/onboarding', authenticate, upsertOnboarding);
 router.post('/onboarding/create-restaurant', authenticate, createRestaurantFromOnboardingManual);
 router.post('/save-fcm-token', authenticate, updateFcmToken);
 router.put('/save-fcm-token', authenticate, updateFcmToken);
+router.patch('/save-fcm-token', authenticate, updateFcmToken);
 router.post('/update-fcm-token', authenticate, updateFcmToken);
 router.put('/update-fcm-token', authenticate, updateFcmToken);
 router.patch('/update-fcm-token', authenticate, updateFcmToken);
