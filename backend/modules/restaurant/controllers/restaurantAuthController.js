@@ -14,29 +14,27 @@ import winston from 'winston';
 const buildPhoneQuery = (normalizedPhone) => {
   if (!normalizedPhone) return null;
 
+  let variants = [];
   // Check if normalized phone has country code (starts with 91 and is 12 digits)
   if (normalizedPhone.startsWith('91') && normalizedPhone.length === 12) {
     // Search for both: with country code (917610416911) and without (7610416911)
     const phoneWithoutCountryCode = normalizedPhone.substring(2);
-    return {
-      $or: [
-        { phone: normalizedPhone },
-        { phone: phoneWithoutCountryCode },
-        { phone: `+${normalizedPhone}` },
-        { phone: `+91${phoneWithoutCountryCode}` }
-      ]
-    };
+    variants = [
+      normalizedPhone,
+      phoneWithoutCountryCode,
+      `+${normalizedPhone}`,
+      `+91${phoneWithoutCountryCode}`
+    ];
   } else {
     // If it's already without country code, also check with country code
-    return {
-      $or: [
-        { phone: normalizedPhone },
-        { phone: `91${normalizedPhone}` },
-        { phone: `+91${normalizedPhone}` },
-        { phone: `+${normalizedPhone}` }
-      ]
-    };
+    variants = [
+      normalizedPhone,
+      `91${normalizedPhone}`,
+      `+91${normalizedPhone}`,
+      `+${normalizedPhone}`
+    ];
   }
+  return { phone: { $in: variants } };
 };
 
 const logger = winston.createLogger({
@@ -78,7 +76,10 @@ export const sendOTP = asyncHandler(async (req, res) => {
   }
 
   try {
-    const result = await otpService.generateAndSendOTP(phone || null, purpose, email || null);
+    // Normalize phone number
+    const normalizedPhone = phone ? normalizePhoneNumber(phone) : null;
+
+    const result = await otpService.generateAndSendOTP(normalizedPhone, purpose, email || null);
     return successResponse(res, 200, result.message, {
       expiresIn: result.expiresIn,
       identifierType: result.identifierType
@@ -131,7 +132,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       }
 
       // Verify OTP (phone or email) before creating restaurant
-      await otpService.verifyOTP(phone || null, otp, purpose, email || null);
+      await otpService.verifyOTP(normalizedPhone || null, otp, purpose, email || null);
 
       const { fcmToken, platform = 'web' } = req.body;
       const restaurantData = {
@@ -355,7 +356,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
           return errorResponse(res, 404, 'No restaurant account found with this email.');
         }
         // Verify OTP for password reset
-        await otpService.verifyOTP(phone || null, otp, purpose, email || null);
+        await otpService.verifyOTP(normalizedPhone || null, otp, purpose, email || null);
         return successResponse(res, 200, 'OTP verified. You can now reset your password.', {
           verified: true,
           email: restaurant.email
@@ -363,7 +364,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       }
 
       // Verify OTP first
-      await otpService.verifyOTP(phone || null, otp, purpose, email || null);
+      await otpService.verifyOTP(normalizedPhone || null, otp, purpose, email || null);
 
       const { fcmToken, platform = 'web' } = req.body;
 
@@ -585,7 +586,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
     });
 
     // Set refresh token in httpOnly cookie
-    res.cookie('refreshToken', tokens.refreshToken, {
+    res.cookie('restaurant_refreshToken', tokens.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
@@ -595,6 +596,18 @@ export const verifyOTP = asyncHandler(async (req, res) => {
     // Return access token and restaurant info
     return successResponse(res, 200, 'Authentication successful', {
       accessToken: tokens.accessToken,
+      user: {
+        id: restaurant._id,
+        restaurantId: restaurant.restaurantId,
+        name: restaurant.name,
+        email: restaurant.email,
+        phone: restaurant.phone,
+        phoneVerified: restaurant.phoneVerified,
+        signupMethod: restaurant.signupMethod,
+        profileImage: restaurant.profileImage,
+        isActive: restaurant.isActive,
+        onboarding: restaurant.onboarding
+      },
       restaurant: {
         id: restaurant._id,
         restaurantId: restaurant.restaurantId,
@@ -682,7 +695,7 @@ export const register = asyncHandler(async (req, res) => {
   });
 
   // Set refresh token in httpOnly cookie
-  res.cookie('refreshToken', tokens.refreshToken, {
+  res.cookie('restaurant_refreshToken', tokens.refreshToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
@@ -757,7 +770,7 @@ export const login = asyncHandler(async (req, res) => {
   });
 
   // Set refresh token in httpOnly cookie
-  res.cookie('refreshToken', tokens.refreshToken, {
+  res.cookie('restaurant_refreshToken', tokens.refreshToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
@@ -827,7 +840,7 @@ export const resetPassword = asyncHandler(async (req, res) => {
  */
 export const refreshToken = asyncHandler(async (req, res) => {
   // Get refresh token from cookie
-  const refreshToken = req.cookies?.refreshToken;
+  const refreshToken = req.cookies?.restaurant_refreshToken || req.cookies?.refreshToken;
 
   if (!refreshToken) {
     return errorResponse(res, 401, 'Refresh token not found');
@@ -872,12 +885,15 @@ export const refreshToken = asyncHandler(async (req, res) => {
  * POST /api/restaurant/auth/logout
  */
 export const logout = asyncHandler(async (req, res) => {
-  // Clear refresh token cookie
-  res.clearCookie('refreshToken', {
+  // Clear refresh token cookies
+  const cookieOptions = {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax'
-  });
+  };
+
+  res.clearCookie('restaurant_refreshToken', cookieOptions);
+  res.clearCookie('refreshToken', cookieOptions);
 
   return successResponse(res, 200, 'Logged out successfully');
 });
@@ -1122,7 +1138,7 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
     });
 
     // Set refresh token in httpOnly cookie
-    res.cookie('refreshToken', tokens.refreshToken, {
+    res.cookie('restaurant_refreshToken', tokens.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',

@@ -36,6 +36,7 @@ export default function OrdersTable({
   onAcceptOrder,
   onRejectOrder,
   actionLoadingOrderId,
+  isLoading = false,
 }) {
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
@@ -55,6 +56,18 @@ export default function OrdersTable({
   const formatRestaurantName = (name) => {
     if (name === "Cafe Monarch") return "Café Monarch"
     return name
+  }
+
+  // Show loading spinner while fetching
+  if (isLoading) {
+    return (
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200">
+        <div className="flex flex-col items-center justify-center py-20">
+          <Loader2 className="w-10 h-10 animate-spin text-emerald-500 mb-4" />
+          <p className="text-sm text-slate-500">Loading orders...</p>
+        </div>
+      </div>
+    )
   }
 
   if (orders.length === 0) {
@@ -263,8 +276,8 @@ export default function OrdersTable({
 
                       return (
                         <span className={`text-sm font-medium ${isCod ? 'text-amber-600' :
-                            isWallet ? 'text-purple-600' :
-                              'text-emerald-600'
+                          isWallet ? 'text-purple-600' :
+                            'text-emerald-600'
                           }`}>
                           {paymentTypeDisplay}
                         </span>
@@ -396,8 +409,8 @@ export default function OrdersTable({
                           <>
                             {order.refundStatus === 'processed' || order.refundStatus === 'initiated' ? (
                               <span className={`px-3 py-1.5 rounded-md text-xs font-medium ${order.paymentType === "Wallet" || order.payment?.method === "wallet"
-                                  ? "bg-purple-100 text-purple-700"
-                                  : "bg-emerald-100 text-emerald-700"
+                                ? "bg-purple-100 text-purple-700"
+                                : "bg-emerald-100 text-emerald-700"
                                 }`}>
                                 {order.paymentType === "Wallet" || order.payment?.method === "wallet"
                                   ? "Wallet Refunded"
@@ -407,8 +420,8 @@ export default function OrdersTable({
                               <button
                                 onClick={() => onRefund(order)}
                                 className={`px-3 py-1.5 rounded-md text-white text-xs font-medium hover:opacity-90 transition-colors shadow-sm flex items-center gap-1.5 ${order.paymentType === "Wallet" || order.payment?.method === "wallet"
-                                    ? "bg-purple-600 hover:bg-purple-700"
-                                    : "bg-blue-600 hover:bg-blue-700"
+                                  ? "bg-purple-600 hover:bg-purple-700"
+                                  : "bg-blue-600 hover:bg-blue-700"
                                   }`}
                                 title={order.paymentType === "Wallet" || order.payment?.method === "wallet"
                                   ? "Process Wallet Refund (Add to user wallet)"
@@ -462,8 +475,8 @@ export default function OrdersTable({
                     key={pageNum}
                     onClick={() => setCurrentPage(pageNum)}
                     className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all ${currentPage === pageNum
-                        ? "bg-emerald-500 text-white shadow-md"
-                        : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                      ? "bg-emerald-500 text-white shadow-md"
+                      : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
                       }`}
                   >
                     {pageNum}

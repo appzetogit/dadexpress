@@ -1110,8 +1110,8 @@ export const adminAPI = {
   },
 
   // Get dashboard stats
-  getDashboardStats: () => {
-    return apiClient.get(API_ENDPOINTS.ADMIN.DASHBOARD_STATS);
+  getDashboardStats: (params = {}) => {
+    return apiClient.get(API_ENDPOINTS.ADMIN.DASHBOARD_STATS, { params });
   },
 
   // Get users

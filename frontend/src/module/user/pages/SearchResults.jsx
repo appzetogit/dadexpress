@@ -193,65 +193,25 @@ export default function SearchResults() {
             })
           }
 
-          // Helper function to check if value is a default/mock value
-          const isDefaultValue = (value, fieldName) => {
-            if (!value) return false
-
-            // Common default values from backend model
-            const defaultOffers = [
-              "Flat ₹50 OFF above ₹199",
-              "Flat 50% OFF",
-              "Flat ₹40 OFF above ₹149"
-            ]
-            const defaultDeliveryTimes = ["25-30 mins", "20-25 mins", "30-35 mins"]
-            const defaultDistances = ["1.2 km", "1 km", "0.8 km"]
-            const defaultFeaturedPrice = 249
-
-            if (fieldName === 'offer' && defaultOffers.includes(value)) {
-              return true
-            }
-            if (fieldName === 'deliveryTime' && defaultDeliveryTimes.includes(value)) {
-              return true
-            }
-            if (fieldName === 'distance' && defaultDistances.includes(value)) {
-              return true
-            }
-            if (fieldName === 'featuredPrice' && value === defaultFeaturedPrice) {
-              return true
-            }
-
-            return false
+          // Old default values stored in existing DB docs — strip these so they don't show up
+          const OLD_DEFAULT_DELIVERY_TIMES = ["25-30 mins", "20-25 mins", "30-35 mins"]
+          const OLD_DEFAULT_DISTANCES = ["1.2 km", "1 km", "0.8 km"]
+          const OLD_DEFAULT_OFFERS = ["Flat ₹50 OFF above ₹199", "Flat 50% OFF", "Flat ₹40 OFF above ₹149"]
+          const stripOldDefault = (value, oldList) => {
+            if (!value) return null
+            return oldList.includes(value.trim()) ? null : value
           }
 
-          // First transform restaurants without menu data - USE ONLY BACKEND DATA
-          // Filter out restaurants with only default/mock data
-          const restaurantsWithIds = restaurantsArray
+          // Transform restaurants - purely dynamic data from backend
+          const transformedRestaurants = restaurantsArray
             .filter((restaurant) => {
-              // Only include restaurants with real data (not just defaults)
-              // At minimum, restaurant should have a name and either images or menu
               const hasName = restaurant.name && restaurant.name.trim().length > 0
-              const hasRealImage = restaurant.profileImage?.url ||
-                (restaurant.coverImages && restaurant.coverImages.length > 0) ||
-                (restaurant.menuImages && restaurant.menuImages.length > 0)
-
-              return hasName && hasRealImage
+              return hasName
             })
             .map((restaurant) => {
-              // Use backend data directly - filter out default values
-              let deliveryTime = restaurant.estimatedDeliveryTime || null
-              let distance = restaurant.distance || null
-              let offer = restaurant.offer || null
-
-              // Filter out default values
-              if (isDefaultValue(deliveryTime, 'deliveryTime')) {
-                deliveryTime = null
-              }
-              if (isDefaultValue(distance, 'distance')) {
-                distance = null
-              }
-              if (isDefaultValue(offer, 'offer')) {
-                offer = null
-              }
+              const deliveryTime = stripOldDefault(restaurant.estimatedDeliveryTime, OLD_DEFAULT_DELIVERY_TIMES)
+              const distance = stripOldDefault(restaurant.distance, OLD_DEFAULT_DISTANCES)
+              const offer = stripOldDefault(restaurant.offer, OLD_DEFAULT_OFFERS)
 
               const cuisine = restaurant.cuisines && restaurant.cuisines.length > 0
                 ? restaurant.cuisines.join(", ")
@@ -279,11 +239,6 @@ export default function SearchResults() {
               let featuredDish = restaurant.featuredDish || null
               let featuredPrice = restaurant.featuredPrice || null
 
-              // Filter out default featured price
-              if (featuredPrice && isDefaultValue(featuredPrice, 'featuredPrice')) {
-                featuredPrice = null
-              }
-
               return {
                 id: restaurantId,
                 name: restaurant.name,
@@ -304,71 +259,70 @@ export default function SearchResults() {
               }
             })
 
-          // Fetch menus for all restaurants in parallel
-          const menuPromises = restaurantsWithIds.map(async (restaurant) => {
-            try {
-              const menuResponse = await restaurantAPI.getMenuByRestaurantId(restaurant.restaurantId)
-              if (menuResponse.data && menuResponse.data.success && menuResponse.data.data && menuResponse.data.data.menu) {
-                const menu = menuResponse.data.data.menu
+          // Wait for all menu fetches to complete
+          const restaurantsWithMenus = await Promise.all(
+            transformedRestaurants.map(async (restaurant) => {
+              try {
+                const menuResponse = await restaurantAPI.getMenuByRestaurantId(restaurant.restaurantId)
+                if (menuResponse.data && menuResponse.data.success && menuResponse.data.data && menuResponse.data.data.menu) {
+                  const menu = menuResponse.data.data.menu
 
-                // Store menu data for dynamic filtering
-                const hasPaneer = checkCategoryInMenu(menu, 'paneer-tikka')
+                  // Store menu data for dynamic filtering
+                  const hasPaneer = checkCategoryInMenu(menu, 'paneer-tikka')
 
-                // Get featured dish and price from menu if not set in restaurant
-                let featuredDish = restaurant.featuredDish
-                let featuredPrice = restaurant.featuredPrice
+                  // Get featured dish and price from menu if not set in restaurant
+                  let featuredDish = restaurant.featuredDish
+                  let featuredPrice = restaurant.featuredPrice
 
-                // If featured dish/price not set, get from first available menu item
-                if (!featuredDish || !featuredPrice) {
-                  for (const section of (menu.sections || [])) {
-                    if (section.items && section.items.length > 0) {
-                      const firstItem = section.items[0]
-                      if (!featuredDish) featuredDish = firstItem.name
-                      if (!featuredPrice) {
-                        // Calculate final price considering discounts
-                        const originalPrice = firstItem.originalPrice || firstItem.price || 0
-                        const discountPercent = firstItem.discountPercent || 0
-                        featuredPrice = discountPercent > 0
-                          ? Math.round(originalPrice * (1 - discountPercent / 100))
-                          : originalPrice
+                  // If featured dish/price not set, get from first available menu item
+                  if (!featuredDish || !featuredPrice) {
+                    for (const section of (menu.sections || [])) {
+                      if (section.items && section.items.length > 0) {
+                        const firstItem = section.items[0]
+                        if (!featuredDish) featuredDish = firstItem.name
+                        if (!featuredPrice) {
+                          // Calculate final price considering discounts
+                          const originalPrice = firstItem.originalPrice || firstItem.price || 0
+                          const discountPercent = firstItem.discountPercent || 0
+                          featuredPrice = discountPercent > 0
+                            ? Math.round(originalPrice * (1 - discountPercent / 100))
+                            : originalPrice
+                        }
+                        break
                       }
-                      break
                     }
                   }
-                }
 
+                  return {
+                    ...restaurant,
+                    menu: menu,
+                    hasPaneer: hasPaneer,
+                    featuredDish: featuredDish || null,
+                    featuredPrice: featuredPrice || null,
+                    categoryMatches: {},
+                  }
+                }
                 return {
                   ...restaurant,
-                  menu: menu,
-                  hasPaneer: hasPaneer,
-                  featuredDish: featuredDish || null,
-                  featuredPrice: featuredPrice || null,
+                  menu: null,
+                  hasPaneer: false,
+                  categoryMatches: {},
+                }
+              } catch (error) {
+                // If menu fetch fails, keep restaurant without menu data
+                console.warn(`Failed to fetch menu for restaurant ${restaurant.restaurantId}:`, error)
+                return {
+                  ...restaurant,
+                  menu: null,
+                  hasPaneer: false,
                   categoryMatches: {},
                 }
               }
-              return {
-                ...restaurant,
-                menu: null,
-                hasPaneer: false,
-                categoryMatches: {},
-              }
-            } catch (error) {
-              // If menu fetch fails, keep restaurant without menu data
-              console.warn(`Failed to fetch menu for restaurant ${restaurant.restaurantId}:`, error)
-              return {
-                ...restaurant,
-                menu: null,
-                hasPaneer: false,
-                categoryMatches: {},
-              }
-            }
-          })
+            })
+          )
 
-          // Wait for all menu fetches to complete
-          const transformedRestaurants = await Promise.all(menuPromises)
-
-          console.log(`✅ Final transformed restaurants: ${transformedRestaurants.length}`)
-          setRestaurantsData(transformedRestaurants)
+          console.log(`✅ Final transformed restaurants: ${restaurantsWithMenus.length}`)
+          setRestaurantsData(restaurantsWithMenus)
         } else {
           console.warn('⚠️ No restaurants in API response. Response structure:', {
             hasData: !!response.data,

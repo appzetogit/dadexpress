@@ -13,49 +13,7 @@ const logger = winston.createLogger({
   ]
 });
 
-// Test phone numbers that should use default OTP
-const TEST_PHONE_NUMBERS = [
-  '7610416911',
-  '7691810506',
-  '9009925021',
-  '6375095971',
-  '9993911855',
-];
-
-// Default OTP for test phone numbers
-const DEFAULT_TEST_OTP = '123456';
-
-/**
- * Extract phone number digits (without country code)
- * @param {string} phone - Phone number in format like "+91 9098569620" or "+91-9098569620"
- * @returns {string} - Phone number digits only (e.g., "9098569620")
- */
-const extractPhoneDigits = (phone) => {
-  if (!phone) return '';
-  // Remove all non-digit characters
-  const digits = phone.replace(/\D/g, '');
-  // If starts with country code (like 91), remove it to get last 10 digits
-  // For Indian numbers, country code is 91, so we take last 10 digits
-  if (digits.length > 10 && digits.startsWith('91')) {
-    return digits.slice(-10);
-  }
-  // If exactly 10 digits or less, return as is
-  return digits.length <= 10 ? digits : digits.slice(-10);
-};
-
-/**
- * Check if a phone number is a test number
- * @param {string} phone - Phone number in any format
- * @returns {boolean} - True if phone number is a test number
- */
-const isTestPhoneNumber = (phone) => {
-  const phoneDigits = extractPhoneDigits(phone);
-  return TEST_PHONE_NUMBERS.includes(phoneDigits);
-};
-
-/**
- * Generate a random 6-digit OTP
- */
+// Generate a random 6-digit OTP
 const generateOTP = () => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
@@ -98,12 +56,8 @@ class OTPService {
         }
       }
 
-      // Check if SMS service is configured
-      const isSMSConfigured = phone ? await smsIndiaHubService.isConfigured() : true;
-
-      // Generate OTP (use default for test phone numbers OR if SMS is not configured)
-      const useDefaultOTP = (phone && (isTestPhoneNumber(phone) || !isSMSConfigured));
-      const otp = useDefaultOTP ? DEFAULT_TEST_OTP : generateOTP();
+      // Generate random OTP
+      const otp = generateOTP();
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
       // Build query for invalidating previous OTPs
@@ -130,23 +84,8 @@ class OTPService {
 
       // Send OTP via SMS or Email
       if (phone) {
-        // Skip actual SMS sending for test phone numbers OR if SMS is not configured
-        if (!isTestPhoneNumber(phone) && isSMSConfigured) {
-          // Use SMSIndia Hub for phone OTP
-          await smsIndiaHubService.sendOTP(phone, otp, purpose);
-        } else {
-          const reason = !isSMSConfigured ? "SMS gateway not configured" : "test phone number";
-          logger.info(`Skipping SMS because ${reason}: ${phone}`, {
-            phone,
-            purpose,
-            otp
-          });
-
-          // If in production and not configured, we should still notify the admin/logs
-          if (process.env.NODE_ENV === 'production' && !isSMSConfigured) {
-            console.warn(`⚠️ SMS Gateway not configured on PRODUCTION. Using default OTP ${otp} for ${phone}`);
-          }
-        }
+        // Use SMSIndia Hub for phone OTP
+        await smsIndiaHubService.sendOTP(phone, otp, purpose);
       } else if (email) {
         // Keep email service as is
         await emailService.sendOTP(email, otp, purpose);
@@ -192,21 +131,6 @@ class OTPService {
 
       const identifier = phone || email;
       const identifierType = phone ? 'phone' : 'email';
-
-      // Check if this is a test phone number OR SMS is not configured, and OTP matches default test OTP
-      const isSMSConfigured = phone ? await smsIndiaHubService.isConfigured() : true;
-      const isTestOrUnconfigured = phone && (isTestPhoneNumber(phone) || !isSMSConfigured);
-
-      if (isTestOrUnconfigured && otp === DEFAULT_TEST_OTP) {
-        logger.info(`Test/Unconfigured OTP verified for ${phone}`, {
-          phone,
-          purpose
-        });
-        return {
-          success: true,
-          message: 'OTP verified successfully'
-        };
-      }
 
       // Verify OTP from database
       // For reset-password purpose, allow already-verified OTPs within 10 minutes

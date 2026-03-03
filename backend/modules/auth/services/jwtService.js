@@ -11,7 +11,7 @@ class JWTService {
     let secret = process.env.JWT_SECRET;
 
     this.secret = secret;
-    this.accessTokenExpiry = process.env.JWT_ACCESS_EXPIRY || '24h';
+    this.accessTokenExpiry = process.env.JWT_ACCESS_EXPIRY || '365d';
     this.refreshTokenExpiry = process.env.JWT_REFRESH_EXPIRY || '365d';
 
   }

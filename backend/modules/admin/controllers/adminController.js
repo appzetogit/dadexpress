@@ -32,17 +32,31 @@ const logger = winston.createLogger({
  */
 export const getDashboardStats = asyncHandler(async (req, res) => {
   try {
-    // Calculate date ranges
+    const { period } = req.query;
     const now = new Date();
+
+    // Calculate date range based on period filter
+    let periodStart = null;
+    if (period === "today") {
+      periodStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    } else if (period === "week") {
+      periodStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    } else if (period === "month") {
+      periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    } else if (period === "year") {
+      periodStart = new Date(now.getFullYear(), 0, 1);
+    }
+
+    // Base order match - filter by period if specified
+    const baseOrderMatch = { status: "delivered", "pricing.total": { $exists: true } };
+    if (periodStart) baseOrderMatch.deliveredAt = { $gte: periodStart, $lte: now };
+
     const last30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-    // Get total revenue (sum of all completed orders)
+    // Get total revenue (sum of all completed orders filtered by period)
     const revenueStats = await Order.aggregate([
       {
-        $match: {
-          status: "delivered",
-          "pricing.total": { $exists: true },
-        },
+        $match: baseOrderMatch,
       },
       {
         $group: {
@@ -67,9 +81,10 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       last30DaysRevenue: 0,
     };
 
-    // Get all settlements for delivered orders only (to match with revenue calculation)
-    // First get delivered order IDs
-    const deliveredOrderIds = await Order.find({ status: "delivered" })
+    // Get all settlements for delivered orders filtered by period
+    const deliveredOrderQuery = { status: "delivered" };
+    if (periodStart) deliveredOrderQuery.deliveredAt = { $gte: periodStart, $lte: now };
+    const deliveredOrderIds = await Order.find(deliveredOrderQuery)
       .select("_id")
       .lean();
     const deliveredOrderIdArray = deliveredOrderIds.map((o) => o._id);
@@ -164,8 +179,8 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       orderStatusMap[stat._id] = stat.count;
     });
 
-    // Get total orders processed
-    const totalOrders = await Order.countDocuments({ status: "delivered" });
+    // Get total orders processed (delivered) filtered by period
+    const totalOrders = await Order.countDocuments(deliveredOrderQuery);
 
     // Get active partners count
     const activeRestaurants = await Restaurant.countDocuments({

@@ -10,6 +10,7 @@ import {
 import { asyncHandler } from "../../../shared/middleware/asyncHandler.js";
 import BusinessSettings from "../../admin/models/BusinessSettings.js";
 import ReferralLog from "../../admin/models/ReferralLog.js";
+import { normalizePhoneNumber } from "../../../shared/utils/phoneUtils.js";
 import winston from "winston";
 
 const logger = winston.createLogger({
@@ -23,11 +24,45 @@ const logger = winston.createLogger({
 });
 
 /**
+ * Build phone query that searches in multiple formats (with/without country code)
+ * This handles both old data (without country code) and new data (with country code)
+ */
+const buildPhoneQuery = (normalizedPhone, role) => {
+  if (!normalizedPhone) return null;
+
+  let variants = [];
+  // Check if normalized phone has country code (starts with 91 and is 12 digits)
+  if (normalizedPhone.startsWith("91") && normalizedPhone.length === 12) {
+    const phoneWithoutCountryCode = normalizedPhone.substring(2);
+    variants = [
+      normalizedPhone,
+      phoneWithoutCountryCode,
+      `+${normalizedPhone}`,
+      `+91${phoneWithoutCountryCode}`,
+    ];
+  } else {
+    // If it's already without country code, also check with country code
+    variants = [
+      normalizedPhone,
+      `91${normalizedPhone}`,
+      `+91${normalizedPhone}`,
+      `+${normalizedPhone}`,
+    ];
+  }
+
+  return {
+    role,
+    phone: { $in: variants },
+  };
+};
+
+/**
  * Send OTP for phone number or email
  * POST /api/auth/send-otp
  */
 export const sendOTP = asyncHandler(async (req, res) => {
   const { phone, email, purpose = "login" } = req.body;
+  console.log(`[AUTH-CONTROLLER] Received sendOTP request:`, { phone, email, purpose });
 
   // Validate that either phone or email is provided
   if (!phone && !email) {
@@ -52,8 +87,11 @@ export const sendOTP = asyncHandler(async (req, res) => {
   }
 
   try {
+    // Normalize phone number if provided
+    const normalizedPhone = phone ? normalizePhoneNumber(phone) : null;
+
     const result = await otpService.generateAndSendOTP(
-      phone || null,
+      normalizedPhone,
       purpose,
       email || null,
     );
@@ -72,17 +110,17 @@ export const sendOTP = asyncHandler(async (req, res) => {
  * POST /api/auth/verify-otp
  */
 export const verifyOTP = asyncHandler(async (req, res) => {
-  const {
+  let {
     phone,
     email,
     otp,
     purpose = "login",
     name,
-    role = "user",
+    role: userRole = "user",
     password,
   } = req.body;
 
-  // Validate that either phone or email is provided
+  // Validate inputs
   if ((!phone && !email) || !otp) {
     return errorResponse(
       res,
@@ -91,9 +129,16 @@ export const verifyOTP = asyncHandler(async (req, res) => {
     );
   }
 
+  // Normalize phone number if provided
+  if (phone) {
+    phone = normalizePhoneNumber(phone);
+  }
+
+  const identifier = phone || email;
+  const identifierType = phone ? "phone" : "email";
+
   // Validate role - admin can be used for admin signup/reset
   const allowedRoles = ["user", "restaurant", "delivery", "admin"];
-  const userRole = role || "user";
   if (!allowedRoles.includes(userRole)) {
     return errorResponse(
       res,
@@ -120,7 +165,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       // Registration flow
       // Check if user already exists with same email/phone AND role
       const findQuery = phone
-        ? { phone, role: userRole }
+        ? buildPhoneQuery(phone, userRole)
         : { email, role: userRole };
       user = await User.findOne(findQuery);
 
@@ -231,8 +276,9 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       // Login (with optional auto-registration)
       // Find user by email/phone AND role to ensure correct module access
       const findQuery = phone
-        ? { phone, role: userRole }
+        ? buildPhoneQuery(phone, userRole)
         : { email, role: userRole };
+
       user = await User.findOne(findQuery);
 
       if (!user && !name) {
@@ -397,7 +443,9 @@ export const verifyOTP = asyncHandler(async (req, res) => {
     });
 
     // Set refresh token in httpOnly cookie
-    res.cookie("refreshToken", tokens.refreshToken, {
+    // Set refresh token in httpOnly cookie - using role-specific name to avoid collisions
+    const cookieName = userRole === 'admin' ? 'admin_refreshToken' : 'user_refreshToken';
+    res.cookie(cookieName, tokens.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
@@ -429,8 +477,13 @@ export const verifyOTP = asyncHandler(async (req, res) => {
  * POST /api/auth/refresh-token
  */
 export const refreshToken = asyncHandler(async (req, res) => {
-  // Get refresh token from cookie
-  const refreshToken = req.cookies?.refreshToken;
+  // Check for role-specific cookies or the legacy generic one
+  const refreshToken =
+    req.cookies?.user_refreshToken ||
+    req.cookies?.admin_refreshToken ||
+    req.cookies?.delivery_refreshToken ||
+    req.cookies?.restaurant_refreshToken ||
+    req.cookies?.refreshToken;
 
   if (!refreshToken) {
     return errorResponse(res, 401, "Refresh token not found");
@@ -467,12 +520,18 @@ export const refreshToken = asyncHandler(async (req, res) => {
  * POST /api/auth/logout
  */
 export const logout = asyncHandler(async (req, res) => {
-  // Clear refresh token cookie
-  res.clearCookie("refreshToken", {
+  // Clear all potential refresh token cookies
+  const cookieOptions = {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-  });
+  };
+
+  res.clearCookie("user_refreshToken", cookieOptions);
+  res.clearCookie("admin_refreshToken", cookieOptions);
+  res.clearCookie("delivery_refreshToken", cookieOptions);
+  res.clearCookie("restaurant_refreshToken", cookieOptions);
+  res.clearCookie("refreshToken", cookieOptions);
 
   return successResponse(res, 200, "Logged out successfully");
 });
@@ -581,7 +640,8 @@ export const register = asyncHandler(async (req, res) => {
   });
 
   // Set refresh token in httpOnly cookie
-  res.cookie("refreshToken", tokens.refreshToken, {
+  const cookieName = userRole === 'admin' ? 'admin_refreshToken' : 'user_refreshToken';
+  res.cookie(cookieName, tokens.refreshToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -1217,8 +1277,11 @@ export const googleCallback = asyncHandler(async (req, res) => {
       email: user.email,
     });
 
-    // Set refresh token in httpOnly cookie
-    res.cookie("refreshToken", jwtTokens.refreshToken, {
+    // Set refresh token in httpOnly cookie - using role-specific name to avoid collisions
+    const cookieName = userRole === 'admin' ? 'admin_refreshToken' :
+      userRole === 'restaurant' ? 'restaurant_refreshToken' :
+        userRole === 'delivery' ? 'delivery_refreshToken' : 'user_refreshToken';
+    res.cookie(cookieName, jwtTokens.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",

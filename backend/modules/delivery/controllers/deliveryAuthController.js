@@ -3,6 +3,7 @@ import otpService from '../../auth/services/otpService.js';
 import jwtService from '../../auth/services/jwtService.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
+import { normalizePhoneNumber } from '../../../shared/utils/phoneUtils.js';
 import winston from 'winston';
 
 const logger = winston.createLogger({
@@ -14,6 +15,33 @@ const logger = winston.createLogger({
     })
   ]
 });
+
+/**
+ * Build phone query that searches in multiple formats (with/without country code)
+ */
+const buildPhoneQuery = (normalizedPhone) => {
+  if (!normalizedPhone) return null;
+
+  let variants = [];
+  if (normalizedPhone.startsWith('91') && normalizedPhone.length === 12) {
+    const phoneWithoutCountryCode = normalizedPhone.substring(2);
+    variants = [
+      normalizedPhone,
+      phoneWithoutCountryCode,
+      `+${normalizedPhone}`,
+      `+91${phoneWithoutCountryCode}`
+    ];
+  } else {
+    variants = [
+      normalizedPhone,
+      `91${normalizedPhone}`,
+      `+91${normalizedPhone}`,
+      `+${normalizedPhone}`
+    ];
+  }
+
+  return { phone: { $in: variants } };
+};
 
 /**
  * Send OTP for delivery boy phone number
@@ -34,7 +62,10 @@ export const sendOTP = asyncHandler(async (req, res) => {
   }
 
   try {
-    const result = await otpService.generateAndSendOTP(phone, purpose, null);
+    // Normalize phone number
+    const normalizedPhone = normalizePhoneNumber(phone);
+
+    const result = await otpService.generateAndSendOTP(normalizedPhone, purpose, null);
     return successResponse(res, 200, result.message, {
       expiresIn: result.expiresIn,
       identifierType: result.identifierType
@@ -50,12 +81,15 @@ export const sendOTP = asyncHandler(async (req, res) => {
  * POST /api/delivery/auth/verify-otp
  */
 export const verifyOTP = asyncHandler(async (req, res) => {
-  const { phone, otp, purpose = 'login', name } = req.body;
+  let { phone, otp, purpose = 'login', name } = req.body;
 
   // Validate inputs
   if (!phone || !otp) {
     return errorResponse(res, 400, 'Phone number and OTP are required');
   }
+
+  // Normalize phone number
+  phone = normalizePhoneNumber(phone);
 
   // Normalize name - convert null/undefined to empty string for optional field
   const normalizedName = name && typeof name === 'string' ? name.trim() : null;
@@ -67,7 +101,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
     if (purpose === 'register') {
       // Registration flow
       // Check if delivery boy already exists
-      delivery = await Delivery.findOne({ phone });
+      delivery = await Delivery.findOne(buildPhoneQuery(phone));
 
       if (delivery) {
         return errorResponse(res, 400, 'Delivery boy already exists with this phone number. Please login.');
@@ -117,7 +151,19 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       }
     } else {
       // Login (with optional auto-registration)
-      delivery = await Delivery.findOne({ phone });
+      // Find delivery boy by phone
+      // Search in both formats (with and without country code) to handle varied data
+      delivery = await Delivery.findOne(buildPhoneQuery(phone));
+
+      if (!delivery && !name) {
+        // New user - create minimal record for signup flow
+        // But we need name first if not provided
+        return successResponse(res, 200, 'New delivery partner. Please provide name.', {
+          needsName: true,
+          identifierType: 'phone',
+          identifier: phone
+        });
+      }
 
       // Verify OTP first (before creating user)
       await otpService.verifyOTP(phone, otp, purpose, null);
@@ -207,7 +253,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         await delivery.save();
 
         // Set refresh token in httpOnly cookie
-        res.cookie('refreshToken', tokens.refreshToken, {
+        res.cookie('delivery_refreshToken', tokens.refreshToken, {
           httpOnly: true,
           secure: process.env.NODE_ENV === 'production',
           sameSite: 'lax',
@@ -248,7 +294,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
     await delivery.save();
 
     // Set refresh token in httpOnly cookie
-    res.cookie('refreshToken', tokens.refreshToken, {
+    res.cookie('delivery_refreshToken', tokens.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
@@ -290,7 +336,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
  */
 export const refreshToken = asyncHandler(async (req, res) => {
   // Get refresh token from cookie or header
-  const refreshToken = req.cookies?.refreshToken || req.headers['x-refresh-token'];
+  const refreshToken = req.cookies?.delivery_refreshToken || req.cookies?.refreshToken;
 
   if (!refreshToken) {
     return errorResponse(res, 401, 'Refresh token not found');
@@ -347,12 +393,17 @@ export const logout = asyncHandler(async (req, res) => {
   }
 
   // Clear refresh token cookie
+  res.cookie('delivery_refreshToken', '', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 0
+  });
   res.clearCookie('refreshToken', {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax'
+    sameSite: 'lax',
   });
-
   return successResponse(res, 200, 'Logged out successfully');
 });
 

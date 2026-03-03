@@ -23,31 +23,26 @@ import {
   XAxis,
   YAxis,
 } from "recharts"
-import { Activity, ArrowUpRight, ShoppingBag, CreditCard, Truck, Receipt, DollarSign, Store, UserCheck, Package, UserCircle, Clock, CheckCircle, Plus } from "lucide-react"
+import { Activity, ArrowUpRight, ShoppingBag, CreditCard, Truck, Receipt, DollarSign, Store, UserCheck, Package, UserCircle, Clock, CheckCircle, Plus, Loader2 } from "lucide-react"
 import quickSpicyLogo from "@/assets/quicky-spicy-logo.png"
 import { adminAPI } from "@/lib/api"
 
 export default function AdminHome() {
   const navigate = useNavigate()
-  const [selectedZone, setSelectedZone] = useState("all")
   const [selectedPeriod, setSelectedPeriod] = useState("overall")
   const [isLoading, setIsLoading] = useState(true)
   const [dashboardData, setDashboardData] = useState(null)
 
-  // Fetch dashboard stats on mount
+  // Fetch dashboard stats whenever period or zone changes
   useEffect(() => {
     const fetchDashboardStats = async () => {
       try {
         setIsLoading(true)
-        const response = await adminAPI.getDashboardStats()
+        const params = {}
+        if (selectedPeriod && selectedPeriod !== "overall") params.period = selectedPeriod
+        const response = await adminAPI.getDashboardStats(params)
         if (response.data?.success && response.data?.data) {
           setDashboardData(response.data.data)
-          console.log('✅ Dashboard stats fetched:', response.data.data)
-          console.log('💰 Commission:', response.data.data.commission)
-          console.log('💳 Platform Fee:', response.data.data.platformFee)
-          console.log('🚚 Delivery Fee:', response.data.data.deliveryFee)
-          console.log('🧾 GST:', response.data.data.gst)
-          console.log('💵 Total Admin Earnings:', response.data.data.totalAdminEarnings)
         } else {
           console.error('❌ Invalid response format:', response.data)
         }
@@ -59,17 +54,10 @@ export default function AdminHome() {
     }
 
     fetchDashboardStats()
-  }, [])
-
-  /* Removed artificial loader for faster experience
-  useEffect(() => {
-    if (dashboardData) {
-      setIsLoading(true)
-      const timer = setTimeout(() => setIsLoading(false), 350)
-      return () => clearTimeout(timer)
-    }
-  }, [selectedZone, selectedPeriod])
-  */
+    // Auto-refresh every 60 seconds
+    const intervalId = setInterval(fetchDashboardStats, 60000)
+    return () => clearInterval(intervalId)
+  }, [selectedPeriod])
 
   // Get order stats from real data
   const getOrderStats = () => {
@@ -153,18 +141,6 @@ export default function AdminHome() {
 
           </div>
           <div className="flex flex-wrap gap-3">
-            <Select value={selectedZone} onValueChange={setSelectedZone}>
-              <SelectTrigger className="min-w-[160px] border-neutral-300 bg-white text-neutral-900">
-                <SelectValue placeholder="All zones" />
-              </SelectTrigger>
-              <SelectContent className="border-neutral-200 bg-white text-neutral-900">
-                <SelectItem value="all">All zones</SelectItem>
-                <SelectItem value="zone1">Zone 1</SelectItem>
-                <SelectItem value="zone2">Zone 2</SelectItem>
-                <SelectItem value="zone3">Zone 3</SelectItem>
-                <SelectItem value="zone4">Zone 4</SelectItem>
-              </SelectContent>
-            </Select>
             <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
               <SelectTrigger className="min-w-[140px] border-neutral-300 bg-white text-neutral-900">
                 <SelectValue placeholder="Overall" />
@@ -189,6 +165,7 @@ export default function AdminHome() {
               icon={<ShoppingBag className="h-5 w-5 text-emerald-600" />}
               accent="bg-emerald-200/40"
               path="/admin/transaction-report"
+              isLoading={isLoading}
             />
             <MetricCard
               title="Commission earned"
@@ -197,6 +174,7 @@ export default function AdminHome() {
               icon={<ArrowUpRight className="h-5 w-5 text-indigo-600" />}
               accent="bg-indigo-200/40"
               path="/admin/restaurants/commission"
+              isLoading={isLoading}
             />
             <MetricCard
               title="Orders processed"
@@ -205,6 +183,7 @@ export default function AdminHome() {
               icon={<Activity className="h-5 w-5 text-amber-600" />}
               accent="bg-amber-200/40"
               path="/admin/orders/all"
+              isLoading={isLoading}
             />
             <MetricCard
               title="Platform fee"
@@ -213,6 +192,7 @@ export default function AdminHome() {
               icon={<CreditCard className="h-5 w-5 text-purple-600" />}
               accent="bg-purple-200/40"
               path="/admin/fee-settings"
+              isLoading={isLoading}
             />
             <MetricCard
               title="Delivery fee"
@@ -221,6 +201,7 @@ export default function AdminHome() {
               icon={<Truck className="h-5 w-5 text-blue-600" />}
               accent="bg-blue-200/40"
               path="/admin/transaction-report"
+              isLoading={isLoading}
             />
             <MetricCard
               title="GST"
@@ -229,6 +210,7 @@ export default function AdminHome() {
               icon={<Receipt className="h-5 w-5 text-orange-600" />}
               accent="bg-orange-200/40"
               path="/admin/tax-report"
+              isLoading={isLoading}
             />
             <MetricCard
               title="Total revenue"
@@ -237,6 +219,7 @@ export default function AdminHome() {
               icon={<DollarSign className="h-5 w-5 text-green-600" />}
               accent="bg-green-200/40"
               path="/admin/transaction-report"
+              isLoading={isLoading}
             />
             <MetricCard
               title="Total restaurants"
@@ -245,6 +228,7 @@ export default function AdminHome() {
               icon={<Store className="h-5 w-5 text-blue-600" />}
               accent="bg-blue-200/40"
               path="/admin/restaurants"
+              isLoading={isLoading}
             />
             <MetricCard
               title="Restaurant request pending"
@@ -253,6 +237,7 @@ export default function AdminHome() {
               icon={<UserCheck className="h-5 w-5 text-orange-600" />}
               accent="bg-orange-200/40"
               path="/admin/restaurants/joining-request"
+              isLoading={isLoading}
             />
             <MetricCard
               title="Total delivery boy"
@@ -261,6 +246,7 @@ export default function AdminHome() {
               icon={<Truck className="h-5 w-5 text-indigo-600" />}
               accent="bg-indigo-200/40"
               path="/admin/delivery-partners"
+              isLoading={isLoading}
             />
             <MetricCard
               title="Delivery boy request pending"
@@ -269,6 +255,7 @@ export default function AdminHome() {
               icon={<Clock className="h-5 w-5 text-yellow-600" />}
               accent="bg-yellow-200/40"
               path="/admin/delivery-partners/join-request"
+              isLoading={isLoading}
             />
             <MetricCard
               title="Total foods"
@@ -277,6 +264,7 @@ export default function AdminHome() {
               icon={<Package className="h-5 w-5 text-purple-600" />}
               accent="bg-purple-200/40"
               path="/admin/foods"
+              isLoading={isLoading}
             />
             <MetricCard
               title="Total addons"
@@ -285,6 +273,7 @@ export default function AdminHome() {
               icon={<Plus className="h-5 w-5 text-pink-600" />}
               accent="bg-pink-200/40"
               path="/admin/addons"
+              isLoading={isLoading}
             />
             <MetricCard
               title="Total customers"
@@ -293,6 +282,7 @@ export default function AdminHome() {
               icon={<UserCircle className="h-5 w-5 text-cyan-600" />}
               accent="bg-cyan-200/40"
               path="/admin/customers"
+              isLoading={isLoading}
             />
             <MetricCard
               title="Pending orders"
@@ -301,6 +291,7 @@ export default function AdminHome() {
               icon={<Clock className="h-5 w-5 text-red-600" />}
               accent="bg-red-200/40"
               path="/admin/orders/pending"
+              isLoading={isLoading}
             />
             <MetricCard
               title="Completed orders"
@@ -309,6 +300,7 @@ export default function AdminHome() {
               icon={<CheckCircle className="h-5 w-5 text-emerald-600" />}
               accent="bg-emerald-200/40"
               path="/admin/orders/delivered"
+              isLoading={isLoading}
             />
           </div>
 
@@ -528,8 +520,27 @@ export default function AdminHome() {
   )
 }
 
-function MetricCard({ title, value, helper, icon, accent, path }) {
+function MetricCard({ title, value, helper, icon, accent, path, isLoading }) {
   const navigate = useNavigate()
+
+  if (isLoading) {
+    return (
+      <Card className="overflow-hidden border-neutral-200 bg-white p-0">
+        <CardContent className="relative flex flex-col gap-2 px-4 pb-4 pt-4">
+          <div className={`absolute inset-0 ${accent}`} />
+          <div className="relative flex items-center justify-between">
+            <div className="space-y-2 flex-1">
+              <div className="h-3 w-24 bg-neutral-200 animate-pulse rounded" />
+              <div className="h-7 w-20 bg-neutral-200 animate-pulse rounded" />
+              <div className="h-3 w-32 bg-neutral-200 animate-pulse rounded" />
+            </div>
+            <div className="h-11 w-11 rounded-xl bg-neutral-200 animate-pulse" />
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
   return (
     <Card
       className="overflow-hidden border-neutral-200 bg-white p-0 cursor-pointer transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]"

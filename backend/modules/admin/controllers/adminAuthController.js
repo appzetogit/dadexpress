@@ -3,6 +3,7 @@ import jwtService from '../../auth/services/jwtService.js';
 import otpService from '../../auth/services/otpService.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
+import { normalizePhoneNumber } from '../../../shared/utils/phoneUtils.js';
 import winston from 'winston';
 
 const logger = winston.createLogger({
@@ -53,7 +54,7 @@ export const adminSignup = asyncHandler(async (req, res) => {
     };
 
     if (phone) {
-      adminData.phone = phone.trim();
+      adminData.phone = normalizePhoneNumber(phone);
     }
 
     const admin = await Admin.create(adminData);
@@ -67,7 +68,7 @@ export const adminSignup = asyncHandler(async (req, res) => {
     });
 
     // Set refresh token in httpOnly cookie
-    res.cookie('refreshToken', tokens.refreshToken, {
+    res.cookie('admin_refreshToken', tokens.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
@@ -136,7 +137,7 @@ export const adminLogin = asyncHandler(async (req, res) => {
   });
 
   // Set refresh token in httpOnly cookie
-  res.cookie('refreshToken', tokens.refreshToken, {
+  res.cookie('admin_refreshToken', tokens.refreshToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
@@ -172,10 +173,13 @@ export const adminSignupWithOTP = asyncHandler(async (req, res) => {
   }
 
   try {
+    // Normalize phone number if provided
+    const normalizedPhone = phone ? normalizePhoneNumber(phone) : null;
+
     // Verify OTP - pass phone and email separately as per otpService signature
     let otpResult;
     try {
-      otpResult = await otpService.verifyOTP(phone || null, otp, 'register', email || null);
+      otpResult = await otpService.verifyOTP(normalizedPhone, otp, 'register', email || null);
     } catch (otpError) {
       logger.error(`OTP verification error: ${otpError.message}`);
       return errorResponse(res, 400, otpError.message || 'Invalid or expired OTP');
@@ -202,7 +206,7 @@ export const adminSignupWithOTP = asyncHandler(async (req, res) => {
     };
 
     if (phone) {
-      adminData.phone = phone.trim();
+      adminData.phone = normalizePhoneNumber(phone);
       adminData.phoneVerified = true;
     }
 
@@ -217,7 +221,7 @@ export const adminSignupWithOTP = asyncHandler(async (req, res) => {
     });
 
     // Set refresh token in httpOnly cookie
-    res.cookie('refreshToken', tokens.refreshToken, {
+    res.cookie('admin_refreshToken', tokens.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
@@ -274,7 +278,7 @@ export const getCurrentAdmin = asyncHandler(async (req, res) => {
  * POST /api/admin/auth/refresh-token
  */
 export const refreshToken = asyncHandler(async (req, res) => {
-  const refreshToken = req.cookies?.refreshToken;
+  const refreshToken = req.cookies?.admin_refreshToken || req.cookies?.refreshToken;
 
   if (!refreshToken) {
     return errorResponse(res, 401, 'Refresh token not found');
@@ -312,13 +316,16 @@ export const refreshToken = asyncHandler(async (req, res) => {
  * POST /api/admin/auth/logout
  */
 export const adminLogout = asyncHandler(async (req, res) => {
-  // Clear refresh token cookie
-  res.cookie('refreshToken', '', {
+  // Clear refresh token cookies
+  const cookieOptions = {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     maxAge: 0
-  });
+  };
+
+  res.cookie('admin_refreshToken', '', cookieOptions);
+  res.cookie('refreshToken', '', cookieOptions);
 
   logger.info(`Admin logged out: ${req.user?._id || req.user?.userId}`);
 

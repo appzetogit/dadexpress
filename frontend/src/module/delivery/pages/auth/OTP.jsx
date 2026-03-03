@@ -196,6 +196,14 @@ export default function DeliveryOTP() {
       const response = await deliveryAPI.verifyOTP(phone, code, "login", null, fcmToken, "web")
       const data = response?.data?.data || {}
 
+      // If backend tells us this is a new user, ask for name
+      if (data.needsName) {
+        setShowNameInput(true)
+        setVerifiedOtp(code)
+        setIsLoading(false)
+        return
+      }
+
       // Check if user needs to complete signup
       if (data.needsSignup) {
         // Store tokens for authenticated signup flow
@@ -203,7 +211,11 @@ export default function DeliveryOTP() {
         const user = data.user
 
         if (!accessToken || !user) {
-          throw new Error("Invalid response from server")
+          // Fallback to name input if tokens are missing for some reason
+          setShowNameInput(true)
+          setVerifiedOtp(code)
+          setIsLoading(false)
+          return
         }
 
         // Store auth data using utility function
@@ -370,9 +382,10 @@ export default function DeliveryOTP() {
         console.log("Verifying token storage (with name):", { hasToken: !!storedToken, authenticated: storedAuth, retryCount })
 
         if (storedToken && storedAuth === "true") {
-          // Token is stored, navigate to delivery home
-          console.log("Token verified, navigating to /delivery")
-          navigate("/delivery", { replace: true })
+          // Token is stored, navigate to correct page
+          const targetUrl = data.needsSignup ? "/delivery/signup/details" : "/delivery"
+          console.log(`Token verified, navigating to ${targetUrl}`)
+          navigate(targetUrl, { replace: true })
         } else if (retryCount < maxRetries) {
           // Token not stored yet, retry after short delay
           retryCount++

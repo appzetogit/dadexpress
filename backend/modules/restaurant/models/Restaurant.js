@@ -138,11 +138,11 @@ const restaurantSchema = new mongoose.Schema(
     // Additional display data for user module
     estimatedDeliveryTime: {
       type: String,
-      default: "25-30 mins",
+      default: "",
     },
     distance: {
       type: String,
-      default: "1.2 km",
+      default: "",
     },
     priceRange: {
       type: String,
@@ -159,7 +159,7 @@ const restaurantSchema = new mongoose.Schema(
     },
     offer: {
       type: String,
-      default: "Flat ₹50 OFF above ₹199",
+      default: "",
     },
     // Onboarding fields (merged from RestaurantOnboarding)
     onboarding: {

@@ -735,13 +735,22 @@ export default function Home() {
         const userLat = location?.latitude
         const userLng = location?.longitude
 
+        // Old default values stored in DB — filter these out so they don't display as dynamic
+        const OLD_DEFAULT_DELIVERY_TIMES = ["25-30 mins", "20-25 mins", "30-35 mins"]
+        const OLD_DEFAULT_DISTANCES = ["1.2 km", "1 km", "0.8 km"]
+        const OLD_DEFAULT_OFFERS = ["Flat ₹50 OFF above ₹199", "Flat 50% OFF", "Flat ₹40 OFF above ₹149"]
+        const stripOldDefault = (value, oldList) => {
+          if (!value) return ""
+          return oldList.includes(value.trim()) ? "" : value
+        }
+
         // Transform API data to match expected format
         const transformedRestaurants = restaurantsArray.map((restaurant, index) => {
-          // Use restaurant data if available, otherwise use defaults
-          const deliveryTime = restaurant.estimatedDeliveryTime || "25-30 mins"
+          // Use restaurant data if available — strip old DB defaults
+          const deliveryTime = stripOldDefault(restaurant.estimatedDeliveryTime, OLD_DEFAULT_DELIVERY_TIMES)
 
           // Calculate distance from user to restaurant
-          let distance = restaurant.distance || "1.2 km"
+          let distance = restaurant.distance || ""
 
           // Get restaurant coordinates
           const restaurantLocation = restaurant.location
@@ -804,7 +813,7 @@ export default function Home() {
               ? `${restaurant.cuisines[0]} Special`
               : "Special Dish"),
             featuredPrice: restaurant.featuredPrice || 249, // Use from API or default
-            offer: restaurant.offer || "Flat ₹50 OFF above ₹199", // Use from API or default
+            offer: stripOldDefault(restaurant.offer, OLD_DEFAULT_OFFERS), // Strip old DB defaults
             slug: restaurant.slug,
             restaurantId: restaurant.restaurantId,
             location: restaurant.location, // Store location for distance recalculation
@@ -1803,14 +1812,6 @@ export default function Home() {
                               </Button>
                             </div>
 
-                            {/* FREE delivery Badge - Bottom Left (only for first 3 restaurants) */}
-                            {index < 3 && (
-                              <div className="absolute bottom-2 left-0 sm:bottom-2 sm:left-0 z-10 transform transition-all duration-300 group-hover:translate-x-1">
-                                <div className="bg-gradient-to-r from-[#EB590E] via-[#D94F0C]/80 to-transparent text-white px-2.5 py-1 rounded-r-sm text-[10px] sm:text-xs font-bold shadow-lg backdrop-blur-sm">
-                                  FREE delivery
-                                </div>
-                              </div>
-                            )}
                           </div>
 
                           {/* Content Section */}
@@ -1830,12 +1831,20 @@ export default function Home() {
                               </div>
 
                               {/* Delivery Time & Distance */}
-                              <div className="flex items-center gap-1 text-sm lg:text-base text-gray-500 mb-2 lg:mb-3 transition-opacity duration-300 opacity-70 group-hover:opacity-100">
-                                <Clock className="h-4 w-4 lg:h-5 lg:w-5 text-gray-500 dark:text-gray-400" strokeWidth={1.5} />
-                                <span className="font-medium dark:text-gray-300 text-gray-700">{restaurant.deliveryTime}</span>
-                                <span className="mx-1">|</span>
-                                <span className="font-medium dark:text-gray-300 text-gray-700">{restaurant.distance}</span>
-                              </div>
+                              {(restaurant.deliveryTime || restaurant.distance) && (
+                                <div className="flex items-center gap-1 text-sm lg:text-base text-gray-500 mb-2 lg:mb-3 transition-opacity duration-300 opacity-70 group-hover:opacity-100">
+                                  <Clock className="h-4 w-4 lg:h-5 lg:w-5 text-gray-500 dark:text-gray-400" strokeWidth={1.5} />
+                                  {restaurant.deliveryTime && (
+                                    <span className="font-medium dark:text-gray-300 text-gray-700">{restaurant.deliveryTime}</span>
+                                  )}
+                                  {restaurant.deliveryTime && restaurant.distance && (
+                                    <span className="mx-1">|</span>
+                                  )}
+                                  {restaurant.distance && (
+                                    <span className="font-medium dark:text-gray-300 text-gray-700">{restaurant.distance}</span>
+                                  )}
+                                </div>
+                              )}
 
                               {/* Offer Badge */}
                               {restaurant.offer && (

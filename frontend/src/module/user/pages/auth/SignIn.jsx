@@ -45,7 +45,7 @@ export default function SignIn() {
   const [searchParams] = useSearchParams()
   const isSignUp = searchParams.get("mode") === "signup"
 
-  const [authMethod] = useState("phone") // Always use phone method
+  const [authMethod, setAuthMethod] = useState("phone") // Always use phone method
   const [formData, setFormData] = useState({
     phone: "",
     countryCode: "+91",
