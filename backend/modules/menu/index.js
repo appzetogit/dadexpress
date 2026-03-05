@@ -1,11 +1,13 @@
-// Menu module - to be implemented
 import express from 'express';
+import menuItemRoutes from './routes/menuItemRoutes.js';
 
 const router = express.Router();
 
-router.get('/', (req, res) => {
-  res.status(501).json({ message: 'Menu module not implemented yet' });
-});
+/**
+ * Menu module routes
+ * Used for public access to items across all restaurants
+ */
+
+router.use('/', menuItemRoutes);
 
 export default router;
-

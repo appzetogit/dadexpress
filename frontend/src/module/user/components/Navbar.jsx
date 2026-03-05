@@ -13,11 +13,13 @@ import { useLocation } from "../hooks/useLocation"
 import { useCart } from "../context/CartContext"
 import { useLocationSelector } from "./UserLayout"
 import { getCachedSettings, loadBusinessSettings } from "@/lib/utils/businessSettings"
+import useUserPoints from "../hooks/useUserPoints"
 
 export default function Navbar() {
   const { location, loading } = useLocation()
   const { getCartCount } = useCart()
   const { openLocationSelector } = useLocationSelector()
+  const { points: userPoints } = useUserPoints()
   const cartCount = getCartCount()
   const [logoUrl, setLogoUrl] = useState(null)
   const [companyName, setCompanyName] = useState(null)
@@ -79,9 +81,6 @@ export default function Navbar() {
     // Open location selector overlay
     openLocationSelector()
   }
-
-  // Mock points value - replace with actual points from context/store
-  const userPoints = 99
 
   return (
     <nav className="z-50 w-full backdrop-blur-md bg-gradient-to-b from-page-bg/80 via-page-bg/50 to-page-bg/20 border-b border-gray-200/50">

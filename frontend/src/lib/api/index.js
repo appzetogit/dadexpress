@@ -2074,6 +2074,21 @@ export const publicAPI = {
   },
   getCancellation: () => {
     return apiClient.get(API_ENDPOINTS.ADMIN.CANCELLATION_PUBLIC);
+  },
+  // Menu Item functions
+  getMenuItemById: (id) => {
+    return apiClient.get(`${API_ENDPOINTS.MENU.ITEMS}/${id}`);
+  },
+  getCategoryItems: (categoryName, params = {}) => {
+    return apiClient.get(
+      API_ENDPOINTS.MENU.ITEMS_BY_CATEGORY.replace(":categoryName", categoryName),
+      { params }
+    );
+  },
+  searchMenuItems: (query, limit = 50) => {
+    return apiClient.get(API_ENDPOINTS.MENU.ITEMS, {
+      params: { search: query, limit }
+    });
   }
 };
 

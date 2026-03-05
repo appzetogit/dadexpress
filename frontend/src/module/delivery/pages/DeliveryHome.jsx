@@ -72,79 +72,7 @@ const console = {
 
 // Ola Maps API Key removed
 
-// Mock restaurants data
-const mockRestaurants = [
-  {
-    id: 1,
-    name: "Hotel Pankaj",
-    address: "Opposite Midway, Behror Locality, Behror",
-    lat: 28.2849,
-    lng: 76.1209,
-    distance: "3.56 km",
-    timeAway: "4 mins",
-    orders: 2,
-    estimatedEarnings: 76.62, // Consistent payment amount
-    pickupDistance: "3.56 km",
-    dropDistance: "12.2 km",
-    payment: "COD",
-    amount: 76.62, // Payment amount (consistent with estimatedEarnings)
-    items: 2,
-    phone: "+911234567890",
-    orderId: "ORD1234567890",
-    customerName: "Rajesh Kumar",
-    customerAddress: "401, 4th Floor, Pushparatna Solitare Building, Janjeerwala Square, New Palasia, Indore",
-    customerPhone: "+919876543210",
-    tripTime: "38 mins",
-    tripDistance: "8.8 kms"
-  },
-  {
-    id: 2,
-    name: "Haldi",
-    address: "B 2, Narnor-Alwar Rd, Indus Valley, Behror",
-    lat: 28.2780,
-    lng: 76.1150,
-    distance: "4.2 km",
-    timeAway: "4 mins",
-    orders: 1,
-    estimatedEarnings: 76.62,
-    pickupDistance: "4.2 km",
-    dropDistance: "8.5 km",
-    payment: "COD",
-    amount: 76.62,
-    items: 3,
-    phone: "+911234567891",
-    orderId: "ORD1234567891",
-    customerName: "Priya Sharma",
-    customerAddress: "Flat 302, Green Valley Apartments, MG Road, Indore",
-    customerPhone: "+919876543211",
-    tripTime: "35 mins",
-    tripDistance: "7.5 kms"
-  },
-  {
-    id: 3,
-    name: "Pandit Ji Samose Wale",
-    address: "Near Govt. Senior Secondary School, Behror Locality, Behror",
-    lat: 28.2870,
-    lng: 76.1250,
-    distance: "5.04 km",
-    timeAway: "6 mins",
-    orders: 1,
-    estimatedEarnings: 76.62,
-    pickupDistance: "5.04 km",
-    dropDistance: "7.8 km",
-    payment: "COD",
-    amount: 76.62,
-    items: 1,
-    phone: "+911234567892",
-    orderId: "ORD1234567892",
-    customerName: "Amit Patel",
-    customerAddress: "House No. 45, Sector 5, Vijay Nagar, Indore",
-    customerPhone: "+919876543212",
-    tripTime: "32 mins",
-    tripDistance: "6.9 kms"
-  }
-]
-
+// Mock restaurants data removed, using dynamic data.
 // ============================================
 // STABLE TRACKING SYSTEM - RAPIDO/UBER STYLE
 // ============================================
@@ -4208,7 +4136,7 @@ export default function DeliveryHome() {
       // Navigate to pickup directions page after animation
       setTimeout(() => {
         navigate("/delivery/pickup-directions", {
-          state: { restaurants: mockRestaurants },
+          state: { restaurants: selectedRestaurant ? [selectedRestaurant] : [] },
           replace: false
         })
 
@@ -4713,6 +4641,15 @@ export default function DeliveryHome() {
       // If status is not yet loaded, wait for it
       fetchWalletData()
     }
+
+    // Refresh wallet data periodically (every 30 seconds) to keep stats dynamic
+    const walletInterval = setInterval(() => {
+      if (deliveryStatus !== null && deliveryStatus !== 'pending') {
+        fetchWalletData()
+      }
+    }, 30000)
+
+    return () => clearInterval(walletInterval)
   }, [deliveryStatus])
 
   // Fetch assigned orders from API when delivery person goes online
@@ -4838,7 +4775,9 @@ export default function DeliveryHome() {
               ? 'Calculating...'
               : '0 km',
             pickupDistance: pickupDistance,
-            estimatedEarnings: firstOrder.pricing?.deliveryFee || 0,
+            estimatedEarnings: firstOrder.deliveryState?.estimatedEarnings?.totalEarning ||
+              firstOrder.deliveryState?.estimatedEarnings ||
+              firstOrder.pricing?.deliveryFee || 0,
             customerName: firstOrder.userId?.name || 'Customer',
             customerAddress: firstOrder.address?.formattedAddress ||
               (firstOrder.address?.street
@@ -9555,44 +9494,56 @@ export default function DeliveryHome() {
                   {/* Estimated Earnings */}
 
                   <div className="mb-5">
-                    <p className="text-gray-500 text-sm mb-1">Estimated earnings</p>
-                    <p className="text-4xl font-bold text-gray-900 mb-2">
-                      ₹{(() => {
-                        const earnings = newOrder?.estimatedEarnings || selectedRestaurant?.estimatedEarnings || 0;
-                        const fallback = newOrder?.deliveryFee ?? selectedRestaurant?.deliveryFee ?? selectedRestaurant?.amount ?? 0;
-                        let value = 0;
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="text-gray-500 text-sm mb-1">Estimated earnings</p>
+                        <p className="text-4xl font-bold text-gray-900 mb-2">
+                          ₹{(() => {
+                            const earnings = newOrder?.estimatedEarnings || selectedRestaurant?.estimatedEarnings || 0;
+                            const fallback = newOrder?.deliveryFee ?? selectedRestaurant?.deliveryFee ?? 0;
+                            let value = 0;
 
-                        console.log('💰 Display earnings calculation:', {
-                          earnings,
-                          earningsType: typeof earnings,
-                          newOrderEarnings: newOrder?.estimatedEarnings,
-                          selectedRestaurantEarnings: selectedRestaurant?.estimatedEarnings,
-                          fallback
-                        });
+                            console.log('💰 Display earnings calculation:', {
+                              earnings,
+                              earningsType: typeof earnings,
+                              newOrderEarnings: newOrder?.estimatedEarnings,
+                              selectedRestaurantEarnings: selectedRestaurant?.estimatedEarnings,
+                              fallback
+                            });
 
-                        if (earnings) {
-                          if (typeof earnings === 'object') {
-                            // Handle earnings object
-                            if (earnings.totalEarning != null) {
-                              value = Number(earnings.totalEarning) || 0;
-                            } else if (earnings.basePayout != null) {
-                              // If only basePayout is available, use it
-                              value = Number(earnings.basePayout) || 0;
+                            if (earnings) {
+                              if (typeof earnings === 'object') {
+                                // Handle earnings object
+                                if (earnings.totalEarning != null) {
+                                  value = Number(earnings.totalEarning) || 0;
+                                } else if (earnings.basePayout != null) {
+                                  // If only basePayout is available, use it
+                                  value = Number(earnings.basePayout) || 0;
+                                }
+                              } else if (typeof earnings === 'number') {
+                                value = earnings > 0 ? earnings : 0;
+                              }
                             }
-                          } else if (typeof earnings === 'number') {
-                            value = earnings > 0 ? earnings : 0;
-                          }
-                        }
 
-                        // If value is still 0, try fallback
-                        if (value <= 0 && fallback > 0) {
-                          value = Number(fallback);
-                        }
+                            // If value is still 0, try fallback
+                            if (value <= 0 && fallback > 0) {
+                              value = Number(fallback);
+                            }
 
-                        console.log('💰 Final earnings value to display:', value);
-                        return value > 0 ? value.toFixed(2) : '0.00';
-                      })()}
-                    </p>
+                            console.log('💰 Final earnings value to display:', value);
+                            return value > 0 ? value.toFixed(2) : '0.00';
+                          })()}
+                        </p>
+                      </div>
+                      <div className={`mt-1 px-3 py-1.5 rounded-full text-xs font-bold uppercase ${((newOrder?.paymentMethod || selectedRestaurant?.paymentMethod || '').toLowerCase() === 'cash' || (newOrder?.paymentMethod || selectedRestaurant?.paymentMethod || '').toLowerCase() === 'cod')
+                        ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                        : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                        }`}>
+                        {((newOrder?.paymentMethod || selectedRestaurant?.paymentMethod || '').toLowerCase() === 'cash' || (newOrder?.paymentMethod || selectedRestaurant?.paymentMethod || '').toLowerCase() === 'cod')
+                          ? 'Cash (COD)'
+                          : 'Online Paid'}
+                      </div>
+                    </div>
                     {/* Earnings Breakdown */}
                     {(() => {
                       const earnings = newOrder?.estimatedEarnings || selectedRestaurant?.estimatedEarnings || 0;
@@ -9915,9 +9866,17 @@ export default function DeliveryHome() {
                   : 'Address will be updated...';
               })()}
             </p>
-            <p className="text-gray-500 text-sm font-medium">
-              Order ID: {selectedRestaurant?.orderId || 'ORD1234567890'}
-            </p>
+            <div className="flex items-center justify-between">
+              <p className="text-gray-500 text-sm font-medium">
+                Order ID: {selectedRestaurant?.orderId || 'ORD1234567890'}
+              </p>
+              <div className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${((selectedRestaurant?.paymentMethod || '').toLowerCase() === 'cash' || (selectedRestaurant?.paymentMethod || '').toLowerCase() === 'cod')
+                ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                }`}>
+                {(selectedRestaurant?.paymentMethod || '').toLowerCase() === 'cash' || (selectedRestaurant?.paymentMethod || '').toLowerCase() === 'cod' ? 'COD' : 'Paid'}
+              </div>
+            </div>
           </div>
 
           {/* Action Buttons */}
@@ -10372,9 +10331,17 @@ export default function DeliveryHome() {
                     </svg>
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-base font-semibold text-gray-900">
-                      Head to Customer Location
-                    </h3>
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-base font-semibold text-gray-900">
+                        Head to Customer Location
+                      </h3>
+                      <div className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${((selectedRestaurant?.paymentMethod || '').toLowerCase() === 'cash' || (selectedRestaurant?.paymentMethod || '').toLowerCase() === 'cod')
+                        ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                        : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                        }`}>
+                        {(selectedRestaurant?.paymentMethod || '').toLowerCase() === 'cash' || (selectedRestaurant?.paymentMethod || '').toLowerCase() === 'cod' ? 'COD' : 'Paid'}
+                      </div>
+                    </div>
                     <p className="text-sm text-gray-600 mt-0.5">
                       {selectedRestaurant?.customerName || 'Customer'}
                     </p>
@@ -10442,6 +10409,28 @@ export default function DeliveryHome() {
             <p className="text-gray-500 text-sm font-medium">
               Order ID: {selectedRestaurant?.orderId || 'ORD1234567890'}
             </p>
+            {/* Added Clear Payment Visibility */}
+            {((selectedRestaurant?.paymentMethod || '').toLowerCase() === 'cash' || (selectedRestaurant?.paymentMethod || '').toLowerCase() === 'cod') ? (
+              <div className="mt-4 bg-amber-50 border-2 border-amber-400 rounded-xl p-4 flex items-center gap-3 animate-pulse shadow-sm">
+                <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center">
+                  <IndianRupee className="w-7 h-7 text-amber-600" />
+                </div>
+                <div>
+                  <p className="text-amber-800 font-black text-lg">COLLECT CASH</p>
+                  <p className="text-amber-700 text-xl font-bold">₹{Number(selectedRestaurant?.total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-4 bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center gap-3">
+                <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
+                  <CheckCircle className="w-6 h-6 text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-emerald-800 font-bold">ONLINE PAID</p>
+                  <p className="text-emerald-700 text-sm">No need to collect cash</p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Action Buttons */}
@@ -10818,7 +10807,7 @@ export default function DeliveryHome() {
                     return orderEarnings.toFixed(2);
                   }
                   // Handle estimatedEarnings - can be number or object
-                  const earnings = selectedRestaurant?.amount || selectedRestaurant?.estimatedEarnings || 0;
+                  const earnings = selectedRestaurant?.estimatedEarnings || selectedRestaurant?.amount || 0;
                   if (typeof earnings === 'object' && earnings.totalEarning) {
                     return earnings.totalEarning.toFixed(2);
                   }
@@ -10841,7 +10830,7 @@ export default function DeliveryHome() {
                       if (orderEarnings > 0) {
                         earnings = orderEarnings;
                       } else {
-                        const estEarnings = selectedRestaurant?.amount || selectedRestaurant?.estimatedEarnings || 0;
+                        const estEarnings = selectedRestaurant?.estimatedEarnings || selectedRestaurant?.amount || 0;
                         if (typeof estEarnings === 'object' && estEarnings.totalEarning) {
                           earnings = estEarnings.totalEarning;
                         } else if (typeof estEarnings === 'number') {
@@ -10864,7 +10853,7 @@ export default function DeliveryHome() {
                         return orderEarnings.toFixed(2);
                       }
                       // Handle estimatedEarnings - can be number or object
-                      const earnings = selectedRestaurant?.amount || selectedRestaurant?.estimatedEarnings || 0;
+                      const earnings = selectedRestaurant?.estimatedEarnings || selectedRestaurant?.amount || 0;
                       if (typeof earnings === 'object' && earnings.totalEarning) {
                         return earnings.totalEarning.toFixed(2);
                       }

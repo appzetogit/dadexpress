@@ -409,6 +409,7 @@ export const API_ENDPOINTS = {
   MENU: {
     CATEGORIES: "/menu/categories",
     ITEMS: "/menu/items",
+    ITEMS_BY_CATEGORY: "/menu/categories/:categoryName/items",
     SEARCH: "/menu/search",
   },
   // Upload / media endpoints

@@ -1,21 +1,22 @@
 // Utility for managing restaurant data across pages
-import { restaurantsDummy } from "../data/restaurantsDummy"
+// Note: This helper no longer seeds any dummy data.
+// It only reads/writes from localStorage so that all data
+// ultimately comes from real user/admin actions or backend‑driven flows.
 
 const STORAGE_KEY = "appzeto_restaurants"
 
-// Get restaurants from localStorage or use dummy data
+// Get restaurants from localStorage (no dummy fallback)
 export const getRestaurants = () => {
   try {
     const stored = localStorage.getItem(STORAGE_KEY)
     if (stored) {
       return JSON.parse(stored)
     }
-    // Initialize with dummy data
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(restaurantsDummy))
-    return restaurantsDummy
+    // No stored data – return empty list instead of dummy
+    return []
   } catch (error) {
     console.error("Error loading restaurants:", error)
-    return restaurantsDummy
+    return []
   }
 }
 

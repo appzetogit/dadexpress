@@ -102,7 +102,25 @@ const businessSettingsSchema = new mongoose.Schema(
       refereeReward: { type: Number, default: 50 },
       minOrderValue: { type: Number, default: 199 },
       expiryDays: { type: Number, default: 30 },
-      maxRedemptionPercentage: { type: Number, default: 20 }
+      maxRedemptionPercentage: { type: Number, default: 20 },
+      steps: [
+        {
+          title: { type: String, default: "Invite your friends" },
+          description: { type: String, default: "Share your referral link or code with friends." }
+        },
+        {
+          title: { type: String, default: "Friend registers" },
+          description: { type: String, default: "Your friend signs up using your referral code." }
+        },
+        {
+          title: { type: String, default: "They place first order" },
+          description: { type: String, default: "Friend completes their first order of min ₹{minOrderValue}." }
+        },
+        {
+          title: { type: String, default: "You get rewards!" },
+          description: { type: String, default: "{referrerReward} reward coins will be credited to your account." }
+        }
+      ]
     },
     restaurantReferral: {
       commissionPercentage: { type: Number, default: 5 },

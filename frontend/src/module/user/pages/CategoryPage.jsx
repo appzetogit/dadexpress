@@ -957,14 +957,6 @@ export default function CategoryPage() {
                           </div>
                         )}
 
-                        {/* Category Dish Badge - Top Left (shows category dish if available, otherwise featured dish) */}
-                        {(restaurant.categoryDishName || restaurant.featuredDish) && (
-                          <div className="absolute top-3 left-3">
-                            <div className="bg-gray-800/80 backdrop-blur-sm text-white px-3 py-1.5 rounded-lg text-xs sm:text-sm md:text-base font-medium">
-                              {restaurant.categoryDishName || restaurant.featuredDish} · ₹{restaurant.categoryDishPrice || restaurant.featuredPrice}
-                            </div>
-                          </div>
-                        )}
 
                         {/* Ad Badge */}
                         {restaurant.isAd && (

@@ -607,6 +607,15 @@ export const createOrder = async (req, res) => {
       };
       await order.save();
 
+      // Calculate order settlement and hold escrow for COD orders too
+      try {
+        await calculateOrderSettlement(order._id);
+        await holdEscrow(order._id, userId, order.pricing.total);
+        logger.info(`✅ Order settlement calculated and escrow held for COD order ${order.orderId}`);
+      } catch (settlementError) {
+        logger.error(`❌ Error calculating settlement for COD order ${order.orderId}: `, settlementError);
+      }
+
       // Notify restaurant about new COD order via Socket.IO (non-blocking)
       try {
         const notifyRestaurantResult = await notifyRestaurantNewOrder(order, assignedRestaurantId, 'cash');

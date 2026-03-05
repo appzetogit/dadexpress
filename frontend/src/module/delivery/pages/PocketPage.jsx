@@ -63,6 +63,9 @@ export default function PocketPage() {
   const [dashboardLoading, setDashboardLoading] = useState(true)
   const [activeEarningAddon, setActiveEarningAddon] = useState(null)
   const [earningAddonLoading, setEarningAddonLoading] = useState(true)
+  // Stats fetched directly from earnings API
+  const [weeklyEarningsFromAPI, setWeeklyEarningsFromAPI] = useState(null)
+  const [todayEarningsFromAPI, setTodayEarningsFromAPI] = useState(null)
 
   const {
     isOnline,
@@ -136,11 +139,41 @@ export default function PocketPage() {
     // Only conditionally log on true wallet updates if needed, removed noisy logs
   }, [walletState, balances])
 
-  // Calculate weekly earnings from wallet transactions (payment + earning_addon bonus)
-  // Include both payment and earning_addon transactions in weekly earnings
-  const weeklyEarnings = walletState?.transactions
+  // Fetch weekly & today earnings directly from the earnings API (most accurate)
+  useEffect(() => {
+    const fetchEarningsStats = async () => {
+      try {
+        // Fetch this week's earnings
+        const weekRes = await deliveryAPI.getEarnings({ period: 'week', limit: 1000 })
+        if (weekRes?.data?.success && weekRes?.data?.data?.summary) {
+          const summary = weekRes.data.data.summary
+          setWeeklyEarningsFromAPI({
+            totalEarnings: summary.totalEarnings || 0,
+            totalOrders: summary.totalOrders || 0
+          })
+        }
+        // Fetch today's earnings
+        const todayRes = await deliveryAPI.getEarnings({ period: 'today', limit: 1000 })
+        if (todayRes?.data?.success && todayRes?.data?.data?.summary) {
+          const summary = todayRes.data.data.summary
+          setTodayEarningsFromAPI({
+            totalEarnings: summary.totalEarnings || 0,
+            totalOrders: summary.totalOrders || 0
+          })
+        }
+      } catch (err) {
+        // Silently fall back to wallet-transaction calculation
+      }
+    }
+    fetchEarningsStats()
+    // Refresh every 60s
+    const interval = setInterval(fetchEarningsStats, 60000)
+    return () => clearInterval(interval)
+  }, [])
+
+  // Weekly earnings: prefer API data, fall back to wallet transaction calculation
+  const weeklyEarningsFromTransactions = walletState?.transactions
     ?.filter(t => {
-      // Include both payment and earning_addon transactions
       if ((t.type !== 'payment' && t.type !== 'earning_addon') || t.status !== 'Completed') return false
       const now = new Date()
       const startOfWeek = new Date(now)
@@ -152,27 +185,28 @@ export default function PocketPage() {
     })
     .reduce((sum, t) => sum + (t.amount || 0), 0) || 0
 
-  // Calculate weekly orders count from transactions
-  const calculateWeeklyOrders = () => {
-    if (!walletState || !walletState.transactions || !Array.isArray(walletState.transactions)) {
-      return 0
-    }
+  const weeklyEarnings = weeklyEarningsFromAPI !== null
+    ? weeklyEarningsFromAPI.totalEarnings
+    : weeklyEarningsFromTransactions
 
+  // Weekly orders count: prefer API data
+  const weeklyOrdersFromTransactions = (() => {
+    if (!walletState?.transactions || !Array.isArray(walletState.transactions)) return 0
     const now = new Date()
     const startOfWeek = new Date(now)
-    startOfWeek.setDate(now.getDate() - now.getDay()) // Start of week (Sunday)
+    startOfWeek.setDate(now.getDate() - now.getDay())
     startOfWeek.setHours(0, 0, 0, 0)
-
     return walletState.transactions.filter(t => {
-      // Count payment transactions (completed orders)
       if (t.type !== 'payment' || t.status !== 'Completed') return false
       const transactionDate = t.date ? new Date(t.date) : (t.createdAt ? new Date(t.createdAt) : null)
       if (!transactionDate) return false
       return transactionDate >= startOfWeek && transactionDate <= now
     }).length
-  }
+  })()
 
-  const weeklyOrders = calculateWeeklyOrders()
+  const weeklyOrders = weeklyEarningsFromAPI !== null
+    ? weeklyEarningsFromAPI.totalOrders
+    : weeklyOrdersFromTransactions
 
   // Fetch active earning addon offers
   useEffect(() => {

@@ -31,7 +31,7 @@ export default function TripHistory() {
     const fetchTrips = async () => {
       setLoading(true)
       setError("")
-      
+
       try {
         const params = {
           period: activeTab,
@@ -39,19 +39,19 @@ export default function TripHistory() {
           status: selectedTripType !== "ALL TRIPS" ? selectedTripType : undefined,
           limit: 1000
         }
-        
+
         const response = await deliveryAPI.getTripHistory(params)
-        
+
         if (response.data?.success && response.data?.data?.trips) {
           const tripsData = response.data.data.trips
           setTrips(tripsData)
-          
+
           // Update store if viewing today's data and showing all trips
           const today = new Date()
           today.setHours(0, 0, 0, 0)
           const selectedDateNormalized = new Date(selectedDate)
           selectedDateNormalized.setHours(0, 0, 0, 0)
-          
+
           if (activeTab === "daily" && selectedDateNormalized.getTime() === today.getTime() && selectedTripType === "ALL TRIPS") {
             updateTodayTrips(tripsData.length)
           }
@@ -87,7 +87,7 @@ export default function TripHistory() {
     const today = new Date()
     const yesterday = new Date(today)
     yesterday.setDate(yesterday.getDate() - 1)
-    
+
     if (date.toDateString() === today.toDateString()) {
       return "Today"
     } else if (date.toDateString() === yesterday.toDateString()) {
@@ -190,9 +190,8 @@ export default function TripHistory() {
             }}
             className="relative"
           >
-            <span className={`text-base font-medium transition-colors ${
-              activeTab === "daily" ? "text-green-600" : "text-gray-500"
-            }`}>
+            <span className={`text-base font-medium transition-colors ${activeTab === "daily" ? "text-green-600" : "text-gray-500"
+              }`}>
               Daily
             </span>
             {activeTab === "daily" && (
@@ -206,9 +205,8 @@ export default function TripHistory() {
             }}
             className="relative"
           >
-            <span className={`text-base font-medium transition-colors ${
-              activeTab === "weekly" ? "text-green-600" : "text-gray-500"
-            }`}>
+            <span className={`text-base font-medium transition-colors ${activeTab === "weekly" ? "text-green-600" : "text-gray-500"
+              }`}>
               Weekly
             </span>
             {activeTab === "weekly" && (
@@ -222,9 +220,8 @@ export default function TripHistory() {
             }}
             className="relative"
           >
-            <span className={`text-base font-medium transition-colors ${
-              activeTab === "monthly" ? "text-green-600" : "text-gray-500"
-            }`}>
+            <span className={`text-base font-medium transition-colors ${activeTab === "monthly" ? "text-green-600" : "text-gray-500"
+              }`}>
               Monthly
             </span>
             {activeTab === "monthly" && (
@@ -275,9 +272,8 @@ export default function TripHistory() {
                 setSelectedDate(date)
                 setShowDatePicker(false)
               }}
-              className={`w-full text-left px-4 py-3 border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition-colors ${
-                date.toDateString() === selectedDate.toDateString() ? 'bg-gray-50 font-medium' : ''
-              }`}
+              className={`w-full text-left px-4 py-3 border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition-colors ${date.toDateString() === selectedDate.toDateString() ? 'bg-gray-50 font-medium' : ''
+                }`}
             >
               <span className="text-sm text-black">
                 {formatDateDisplay(date)}: {date.toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}
@@ -297,9 +293,8 @@ export default function TripHistory() {
                 setSelectedTripType(type)
                 setShowTripTypePicker(false)
               }}
-              className={`w-full text-left px-4 py-3 border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition-colors ${
-                type === selectedTripType ? 'bg-gray-50 font-medium' : ''
-              }`}
+              className={`w-full text-left px-4 py-3 border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition-colors ${type === selectedTripType ? 'bg-gray-50 font-medium' : ''
+                }`}
             >
               <span className="text-sm text-black">{type}</span>
             </button>
@@ -333,7 +328,8 @@ export default function TripHistory() {
             {trips.map((trip) => (
               <div
                 key={trip.id || trip.orderId}
-                className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+                onClick={() => navigate(`/delivery/order/${trip.id || trip.orderId}`)}
+                className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow active:bg-gray-50 cursor-pointer"
               >
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex-1">
@@ -344,19 +340,17 @@ export default function TripHistory() {
                       const paymentMethod = trip.paymentMethod || trip.payment?.method || 'razorpay';
                       const isCOD = paymentMethod === 'cash' || paymentMethod === 'cod';
                       return (
-                        <span className={`inline-block mt-2 text-xs font-medium px-2 py-1 rounded-full ${
-                          isCOD ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'
-                        }`}>
+                        <span className={`inline-block mt-2 text-xs font-medium px-2 py-1 rounded-full ${isCOD ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'
+                          }`}>
                           {isCOD ? 'COD' : 'Online'}
                         </span>
                       );
                     })()}
                   </div>
-                  <span className={`text-sm font-medium ${
-                    trip.status === 'Completed' ? 'text-green-600' :
+                  <span className={`text-sm font-medium ${trip.status === 'Completed' ? 'text-green-600' :
                     trip.status === 'Cancelled' ? 'text-red-600' :
-                    'text-yellow-600'
-                  }`}>
+                      'text-yellow-600'
+                    }`}>
                     {trip.status}
                   </span>
                 </div>
@@ -451,13 +445,12 @@ export default function TripHistory() {
                               </p>
                             )}
                           </div>
-                          <span className={`text-xs font-medium px-3 py-1 rounded-full ${
-                            transaction.status === 'Completed' 
-                              ? 'bg-green-100 text-green-700' 
-                              : transaction.status === 'Pending'
+                          <span className={`text-xs font-medium px-3 py-1 rounded-full ${transaction.status === 'Completed'
+                            ? 'bg-green-100 text-green-700'
+                            : transaction.status === 'Pending'
                               ? 'bg-yellow-100 text-yellow-700'
                               : 'bg-red-100 text-red-700'
-                          }`}>
+                            }`}>
                             {transaction.status || 'Pending'}
                           </span>
                         </div>
@@ -465,12 +458,12 @@ export default function TripHistory() {
                           <p className="text-xs text-gray-500">
                             {transaction.createdAt || transaction.date
                               ? new Date(transaction.createdAt || transaction.date).toLocaleDateString('en-IN', {
-                                  day: '2-digit',
-                                  month: 'short',
-                                  year: 'numeric',
-                                  hour: '2-digit',
-                                  minute: '2-digit'
-                                })
+                                day: '2-digit',
+                                month: 'short',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })
                               : 'N/A'}
                           </p>
                         </div>
