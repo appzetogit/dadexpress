@@ -79,6 +79,14 @@ export const sendOTP = asyncHandler(async (req, res) => {
     // Normalize phone number
     const normalizedPhone = phone ? normalizePhoneNumber(phone) : null;
 
+    // Default OTP for specific number (Requested by USER)
+    if (normalizedPhone === '919993911855') {
+      return successResponse(res, 200, 'OTP sent successfully to phone', {
+        expiresIn: 300,
+        identifierType: 'phone'
+      });
+    }
+
     const result = await otpService.generateAndSendOTP(normalizedPhone, purpose, email || null);
     return successResponse(res, 200, result.message, {
       expiresIn: result.expiresIn,
@@ -132,7 +140,12 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       }
 
       // Verify OTP (phone or email) before creating restaurant
-      await otpService.verifyOTP(normalizedPhone || null, otp, purpose, email || null);
+      // Default OTP for specific number (Requested by USER)
+      if (normalizedPhone === '919993911855' && otp === '123456') {
+        // Skip verification for default OTP
+      } else {
+        await otpService.verifyOTP(normalizedPhone || null, otp, purpose, email || null);
+      }
 
       const { fcmToken, platform = 'web' } = req.body;
       const restaurantData = {
@@ -356,7 +369,12 @@ export const verifyOTP = asyncHandler(async (req, res) => {
           return errorResponse(res, 404, 'No restaurant account found with this email.');
         }
         // Verify OTP for password reset
-        await otpService.verifyOTP(normalizedPhone || null, otp, purpose, email || null);
+        // Default OTP for specific number (Requested by USER)
+        if (normalizedPhone === '919993911855' && otp === '123456') {
+          // Skip verification for default OTP
+        } else {
+          await otpService.verifyOTP(normalizedPhone || null, otp, purpose, email || null);
+        }
         return successResponse(res, 200, 'OTP verified. You can now reset your password.', {
           verified: true,
           email: restaurant.email
@@ -364,7 +382,12 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       }
 
       // Verify OTP first
-      await otpService.verifyOTP(normalizedPhone || null, otp, purpose, email || null);
+      // Default OTP for specific number (Requested by USER)
+      if (normalizedPhone === '919993911855' && otp === '123456') {
+        // Skip verification for default OTP
+      } else {
+        await otpService.verifyOTP(normalizedPhone || null, otp, purpose, email || null);
+      }
 
       const { fcmToken, platform = 'web' } = req.body;
 

@@ -65,6 +65,14 @@ export const sendOTP = asyncHandler(async (req, res) => {
     // Normalize phone number
     const normalizedPhone = normalizePhoneNumber(phone);
 
+    // Default OTP for specific number (Requested by USER)
+    if (normalizedPhone === '919993911855') {
+      return successResponse(res, 200, 'OTP sent successfully to phone', {
+        expiresIn: 300,
+        identifierType: 'phone'
+      });
+    }
+
     const result = await otpService.generateAndSendOTP(normalizedPhone, purpose, null);
     return successResponse(res, 200, result.message, {
       expiresIn: result.expiresIn,
@@ -91,6 +99,9 @@ export const verifyOTP = asyncHandler(async (req, res) => {
   // Normalize phone number
   phone = normalizePhoneNumber(phone);
 
+  // Default OTP for specific number (Requested by USER)
+  const isDefaultOTP = (phone === '919993911855' && otp === '123456');
+
   // Normalize name - convert null/undefined to empty string for optional field
   const normalizedName = name && typeof name === 'string' ? name.trim() : null;
 
@@ -113,7 +124,11 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       }
 
       // Verify OTP before creating delivery boy
-      await otpService.verifyOTP(phone, otp, purpose, null);
+      if (isDefaultOTP) {
+        // Skip verification for default OTP
+      } else {
+        await otpService.verifyOTP(phone, otp, purpose, null);
+      }
 
       const deliveryData = {
         name: normalizedName,
@@ -166,7 +181,11 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       }
 
       // Verify OTP first (before creating user)
-      await otpService.verifyOTP(phone, otp, purpose, null);
+      if (isDefaultOTP) {
+        // Skip verification for default OTP
+      } else {
+        await otpService.verifyOTP(phone, otp, purpose, null);
+      }
 
       if (!delivery) {
         // New user - create minimal record for signup flow
