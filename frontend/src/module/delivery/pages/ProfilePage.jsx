@@ -119,7 +119,7 @@ export default function ProfilePage() {
           const profileData = response.data.data.profile
           setProfile(profileData)
           // Debug: Log profile image data
-          console.log("Profile image data:", {
+          false && console.log("Profile image data:", {
             profileImage: profileData.profileImage,
             documentsPhoto: profileData.documents?.photo,
             hasProfileImage: !!profileData.profileImage?.url,
@@ -223,7 +223,7 @@ export default function ProfilePage() {
         currentAudioRef.current.currentTime = 0
       }
 
-      console.log('🔊 Playing preview sound:', soundFile)
+      false && console.log('🔊 Playing preview sound:', soundFile)
       const audio = new Audio(soundFile)
       audio.volume = 0.7
       currentAudioRef.current = audio
@@ -232,7 +232,7 @@ export default function ProfilePage() {
       if (playPromise !== undefined) {
         playPromise
           .then(() => {
-            console.log('✅ Preview sound playing successful')
+            false && console.log('✅ Preview sound playing successful')
           })
           .catch(err => {
             console.error('❌ Preview audio error:', err)

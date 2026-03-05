@@ -38,7 +38,7 @@ export const useDeliveryNotifications = () => {
           audioRef.current.pause();
           audioRef.current.src = newSrc;
           audioRef.current.load();
-          console.log('🔊 Audio source updated to:', selectedSound === 'original' ? 'Original' : 'Zomato Tone');
+          false && console.log('🔊 Audio source updated to:', selectedSound === 'original' ? 'Original' : 'Zomato Tone');
         }
       } else {
         // Initialize audio if not exists
@@ -49,7 +49,7 @@ export const useDeliveryNotifications = () => {
       if (audioRef.current) {
         // Only play if user has interacted with the page (browser autoplay policy)
         if (!userInteractedRef.current) {
-          console.log('🔇 Audio playback skipped - user has not interacted with page yet');
+          false && console.log('🔇 Audio playback skipped - user has not interacted with page yet');
           return;
         }
         
@@ -57,14 +57,14 @@ export const useDeliveryNotifications = () => {
         audioRef.current.play().catch(error => {
           // Don't log autoplay policy errors as they're expected
           if (!error.message?.includes('user didn\'t interact') && !error.name?.includes('NotAllowedError')) {
-            console.warn('Error playing notification sound:', error);
+            false && console.warn('Error playing notification sound:', error);
           }
         });
       }
     } catch (error) {
       // Don't log autoplay policy errors
       if (!error.message?.includes('user didn\'t interact') && !error.name?.includes('NotAllowedError')) {
-        console.warn('Error playing sound:', error);
+        false && console.warn('Error playing sound:', error);
       }
     }
   }, []);
@@ -101,7 +101,7 @@ export const useDeliveryNotifications = () => {
     if (!audioRef.current) {
       audioRef.current = new Audio(soundFile);
       audioRef.current.volume = 0.7;
-      console.log('🔊 Audio initialized with:', selectedSound === 'original' ? 'Original' : 'Zomato Tone');
+      false && console.log('🔊 Audio initialized with:', selectedSound === 'original' ? 'Original' : 'Zomato Tone');
     } else {
       // Update audio source if preference changed
       const currentSrc = audioRef.current.src;
@@ -110,7 +110,7 @@ export const useDeliveryNotifications = () => {
         audioRef.current.pause();
         audioRef.current.src = newSrc;
         audioRef.current.load();
-        console.log('🔊 Audio updated to:', selectedSound === 'original' ? 'Original' : 'Zomato Tone');
+        false && console.log('🔊 Audio updated to:', selectedSound === 'original' ? 'Original' : 'Zomato Tone');
       }
     }
     
@@ -135,15 +135,15 @@ export const useDeliveryNotifications = () => {
                       deliveryPartner.deliveryId;
             if (id) {
               setDeliveryPartnerId(id);
-              console.log('✅ Delivery Partner ID fetched:', id);
+              false && console.log('✅ Delivery Partner ID fetched:', id);
             } else {
-              console.warn('⚠️ Could not extract delivery partner ID from response');
+              false && console.warn('⚠️ Could not extract delivery partner ID from response');
             }
           } else {
-            console.warn('⚠️ No delivery partner data in API response');
+            false && console.warn('⚠️ No delivery partner data in API response');
           }
         } else {
-          console.warn('⚠️ Could not fetch delivery partner ID from API');
+          false && console.warn('⚠️ Could not fetch delivery partner ID from API');
         }
       } catch (error) {
         console.error('Error fetching delivery partner:', error);
@@ -155,7 +155,7 @@ export const useDeliveryNotifications = () => {
   // Socket connection effect
   useEffect(() => {
     if (!deliveryPartnerId) {
-      console.log('⏳ Waiting for deliveryPartnerId...');
+      false && console.log('⏳ Waiting for deliveryPartnerId...');
       return;
     }
 
@@ -198,11 +198,11 @@ export const useDeliveryNotifications = () => {
     
     const socketUrl = `${backendUrl}/delivery`;
     
-    console.log('🔌 Attempting to connect to Delivery Socket.IO:', socketUrl);
-    console.log('🔌 Backend URL:', backendUrl);
-    console.log('🔌 API_BASE_URL:', API_BASE_URL);
-    console.log('🔌 Delivery Partner ID:', deliveryPartnerId);
-    console.log('🔌 Environment:', import.meta.env.MODE);
+    false && console.log('🔌 Attempting to connect to Delivery Socket.IO:', socketUrl);
+    false && console.log('🔌 Backend URL:', backendUrl);
+    false && console.log('🔌 API_BASE_URL:', API_BASE_URL);
+    false && console.log('🔌 Delivery Partner ID:', deliveryPartnerId);
+    false && console.log('🔌 Environment:', import.meta.env.MODE);
     
     // Warn if trying to connect to localhost in production
     if (import.meta.env.MODE === 'production' && backendUrl.includes('localhost')) {
@@ -255,17 +255,17 @@ export const useDeliveryNotifications = () => {
     });
 
     socketRef.current.on('connect', () => {
-      console.log('✅ Delivery Socket connected, deliveryPartnerId:', deliveryPartnerId);
+      false && console.log('✅ Delivery Socket connected, deliveryPartnerId:', deliveryPartnerId);
       setIsConnected(true);
       
       if (deliveryPartnerId) {
-        console.log('📢 Joining delivery room with ID:', deliveryPartnerId);
+        false && console.log('📢 Joining delivery room with ID:', deliveryPartnerId);
         socketRef.current.emit('join-delivery', deliveryPartnerId);
       }
     });
 
     socketRef.current.on('delivery-room-joined', (data) => {
-      console.log('✅ Delivery room joined successfully:', data);
+      false && console.log('✅ Delivery room joined successfully:', data);
     });
 
     socketRef.current.on('connect_error', (error) => {
@@ -284,14 +284,14 @@ export const useDeliveryNotifications = () => {
         // Socket.IO will automatically retry with exponential backoff and fall back to polling
         // Only log in development for debugging
         if (process.env.NODE_ENV === 'development') {
-          console.log('⏳ Delivery Socket: WebSocket upgrade failed, using polling fallback');
+          false && console.log('⏳ Delivery Socket: WebSocket upgrade failed, using polling fallback');
         }
       }
       setIsConnected(false);
     });
 
     socketRef.current.on('disconnect', (reason) => {
-      console.log('❌ Delivery Socket disconnected:', reason);
+      false && console.log('❌ Delivery Socket disconnected:', reason);
       setIsConnected(false);
       
       if (reason === 'io server disconnect') {
@@ -300,11 +300,11 @@ export const useDeliveryNotifications = () => {
     });
 
     socketRef.current.on('reconnect_attempt', (attemptNumber) => {
-      console.log(`🔄 Reconnection attempt ${attemptNumber}...`);
+      false && console.log(`🔄 Reconnection attempt ${attemptNumber}...`);
     });
 
     socketRef.current.on('reconnect', (attemptNumber) => {
-      console.log(`✅ Reconnected after ${attemptNumber} attempts`);
+      false && console.log(`✅ Reconnected after ${attemptNumber} attempts`);
       setIsConnected(true);
       
       if (deliveryPartnerId) {
@@ -313,27 +313,27 @@ export const useDeliveryNotifications = () => {
     });
 
     socketRef.current.on('new_order', (orderData) => {
-      console.log('📦 New order received via socket:', orderData);
+      false && console.log('📦 New order received via socket:', orderData);
       setNewOrder(orderData);
       playNotificationSound();
     });
 
     // Listen for priority-based order notifications (new_order_available)
     socketRef.current.on('new_order_available', (orderData) => {
-      console.log('📦 New order available (priority notification):', orderData);
-      console.log('📦 Notification phase:', orderData.phase || 'unknown');
+      false && console.log('📦 New order available (priority notification):', orderData);
+      false && console.log('📦 Notification phase:', orderData.phase || 'unknown');
       // Treat it the same as new_order for now - delivery boy can accept it
       setNewOrder(orderData);
       playNotificationSound();
     });
 
     socketRef.current.on('play_notification_sound', (data) => {
-      console.log('🔔 Sound notification:', data);
+      false && console.log('🔔 Sound notification:', data);
       playNotificationSound();
     });
 
     socketRef.current.on('order_ready', (orderData) => {
-      console.log('✅ Order ready notification received via socket:', orderData);
+      false && console.log('✅ Order ready notification received via socket:', orderData);
       setOrderReady(orderData);
       playNotificationSound();
     });

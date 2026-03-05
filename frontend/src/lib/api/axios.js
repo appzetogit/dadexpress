@@ -29,9 +29,9 @@ if (import.meta.env.DEV) {
       "💡 Fix: Check .env file - VITE_API_BASE_URL should be http://localhost:5000/api",
     );
   } else {
-    console.log("✅ API_BASE_URL correctly points to backend:", API_BASE_URL);
-    console.log("✅ Backend URL:", backendUrl);
-    console.log("✅ Frontend URL:", frontendUrl);
+    false && console.log("✅ API_BASE_URL correctly points to backend:", API_BASE_URL);
+    false && console.log("✅ Backend URL:", backendUrl);
+    false && console.log("✅ Frontend URL:", frontendUrl);
   }
 }
 
@@ -104,7 +104,7 @@ apiClient.interceptors.request.use(
 
     // Debug logging for FormData requests
     if (import.meta.env.DEV && config.data instanceof FormData) {
-      console.log("[API Interceptor] FormData request detected:", {
+      false && console.log("[API Interceptor] FormData request detected:", {
         url: config.url,
         method: config.method,
         hasAuthHeader: !!config.headers.Authorization,
@@ -168,17 +168,17 @@ apiClient.interceptors.request.use(
         ) {
           config.headers.Authorization = `Bearer ${accessToken.trim()}`;
           if (import.meta.env.DEV && config.data instanceof FormData) {
-            console.log(
+            false && console.log(
               "[API Interceptor] Added Authorization header for authenticated FormData request",
             );
           }
         } else {
           // Log warning in development if token is missing for authenticated routes
           if (import.meta.env.DEV) {
-            console.warn(
+            false && console.warn(
               `[API Interceptor] No access token found for authenticated route: ${path}. Request may fail with 401.`,
             );
-            console.warn(`[API Interceptor] Available tokens:`, {
+            false && console.warn(`[API Interceptor] Available tokens:`, {
               admin: localStorage.getItem("admin_accessToken")
                 ? "exists"
                 : "missing",
@@ -200,7 +200,7 @@ apiClient.interceptors.request.use(
       } else {
         // Authorization header already set (from getAuthConfig), log in dev mode for FormData
         if (import.meta.env.DEV && config.data instanceof FormData) {
-          console.log(
+          false && console.log(
             "[API Interceptor] Authorization header already set, preserving it for FormData request",
           );
         }
@@ -234,7 +234,7 @@ apiClient.interceptors.request.use(
       if (authHeader) {
         config.headers.Authorization = authHeader;
         if (import.meta.env.DEV) {
-          console.log(
+          false && console.log(
             "[API Interceptor] Preserved Authorization header for FormData request",
           );
         }
@@ -247,7 +247,7 @@ apiClient.interceptors.request.use(
         // If no auth header but we have a token, add it
         config.headers.Authorization = `Bearer ${accessToken.trim()}`;
         if (import.meta.env.DEV) {
-          console.log(
+          false && console.log(
             "[API Interceptor] Added Authorization header for FormData request",
           );
         }
@@ -273,7 +273,7 @@ apiClient.interceptors.response.use(
       networkErrorState.lastErrorTime = 0;
       networkErrorState.toastShown = false;
       if (import.meta.env.DEV) {
-        console.log("✅ Backend connection restored");
+        false && console.log("✅ Backend connection restored");
       }
     }
 
@@ -488,7 +488,7 @@ apiClient.interceptors.response.use(
             // Network error logging removed - errors handled via toast notifications
           } else {
             // For subsequent errors, show a brief message
-            console.warn(
+            false && console.warn(
               `⚠️ Network Error (${networkErrorState.errorCount}x) - Backend still not connected`,
             );
           }
@@ -540,7 +540,7 @@ apiClient.interceptors.response.use(
 
       if (isDeliveryOrderAction) {
         // Silently ignore - these are background calls, popup already closed
-        console.warn("⚠️ Delivery order API timeout (background):", requestUrl)
+        false && console.warn("⚠️ Delivery order API timeout (background):", requestUrl)
         return Promise.reject(error)
       }
 

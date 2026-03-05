@@ -22,7 +22,7 @@ window.__googleMapsLoaded = window.__googleMapsLoaded || false;
 (async () => {
   // Check if Google Maps is already loaded
   if (window.google && window.google.maps) {
-    console.log('✅ Google Maps already loaded');
+    // console.log('✅ Google Maps already loaded');
     window.__googleMapsLoaded = true;
     return;
   }
@@ -30,7 +30,7 @@ window.__googleMapsLoaded = window.__googleMapsLoaded || false;
   // Check if script is already being loaded
   const existingScript = document.querySelector('script[src*="maps.googleapis.com"]');
   if (existingScript) {
-    console.log('✅ Google Maps script already exists, waiting for it to load...');
+    // console.log('✅ Google Maps script already exists, waiting for it to load...');
     window.__googleMapsLoading = true;
     
     // Wait for script to load
@@ -43,7 +43,7 @@ window.__googleMapsLoaded = window.__googleMapsLoaded || false;
   
   // Check if Loader is already loading
   if (window.__googleMapsLoading) {
-    console.log('✅ Google Maps is already being loaded, waiting...');
+    // console.log('✅ Google Maps is already being loaded, waiting...');
     return;
   }
   
@@ -53,11 +53,11 @@ window.__googleMapsLoaded = window.__googleMapsLoaded || false;
     const googleMapsApiKey = await getGoogleMapsApiKey()
     if (googleMapsApiKey) {
       const script = document.createElement('script')
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&libraries=places,geometry,drawing`
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&libraries=places,geometry,drawing&loading=async`
       script.async = true
       script.defer = true
       script.onload = () => {
-        console.log('✅ Google Maps API loaded via script tag');
+        // console.log('✅ Google Maps API loaded via script tag');
         window.__googleMapsLoaded = true;
         window.__googleMapsLoading = false;
       }
@@ -70,10 +70,10 @@ window.__googleMapsLoaded = window.__googleMapsLoaded || false;
       window.__googleMapsLoading = false;
     }
   } catch (error) {
-    console.warn('Failed to load Google Maps API key:', error.message)
+    // console.warn('Failed to load Google Maps API key:', error.message)
     window.__googleMapsLoading = false;
     // No fallback - Google Maps will not load if key is not in database
-    console.warn('⚠️ Google Maps API key not available. Please set it in Admin → System → Environment Variables');
+    // console.warn('⚠️ Google Maps API key not available. Please set it in Admin → System → Environment Variables');
   }
 })()
 
@@ -190,6 +190,19 @@ console.error = (...args) => {
   }
 
   originalError.apply(console, args)
+}
+
+// Suppress known noisy browser warnings in development console
+const originalWarn = console.warn
+console.warn = (...args) => {
+  const warnStr = args.join(' ')
+
+  // Google Maps deprecation warning from SDK internals
+  if (warnStr.includes('google.maps.Marker is deprecated')) {
+    return
+  }
+
+  originalWarn.apply(console, args)
 }
 
 // Handle unhandled promise rejections

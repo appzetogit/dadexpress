@@ -153,7 +153,7 @@ export default function Profile() {
     const percentage = Math.round((completedRequiredFields / totalRequiredFields) * 100)
 
     // Always log for debugging (remove in production if needed)
-    console.log('🔍 Profile completion check:', {
+    false && console.log('Profile completion check:', {
       requiredFields,
       completedRequiredFields,
       totalRequiredFields,

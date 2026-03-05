@@ -78,13 +78,13 @@ try {
   if (fixedUrl.includes("://https://") || fixedUrl.includes("://http://")) {
     const parts = fixedUrl.split("://");
     fixedUrl = parts[0] + "://" + parts[parts.length - 1]; // Take first protocol and last part
-    console.warn("⚠️ Auto-fixing malformed URL pattern, new URL:", fixedUrl);
+    false && console.warn("⚠️ Auto-fixing malformed URL pattern, new URL:", fixedUrl);
   }
 
   // If still invalid, warn but don't change it
   try {
     new URL(fixedUrl);
-    console.warn("⚠️ Consider using fixed URL:", fixedUrl);
+    false && console.warn("⚠️ Consider using fixed URL:", fixedUrl);
   } catch (e) {
     // Still invalid, keep original
   }
@@ -104,11 +104,11 @@ if (API_BASE_URL.includes("5173")) {
 }
 
 // Log API base URL in both development and production for debugging
-console.log("🌐 API Base URL:", API_BASE_URL);
-console.log("🌐 Backend URL:", API_BASE_URL.replace("/api", ""));
-console.log("🌐 Frontend URL:", window.location.origin);
-console.log("🌐 Environment:", import.meta.env.MODE);
-console.log(
+false && console.log("🌐 API Base URL:", API_BASE_URL);
+false && console.log("🌐 Backend URL:", API_BASE_URL.replace("/api", ""));
+false && console.log("🌐 Frontend URL:", window.location.origin);
+false && console.log("🌐 Environment:", import.meta.env.MODE);
+false && console.log(
   "🌐 VITE_API_BASE_URL:",
   import.meta.env.VITE_API_BASE_URL || "Not set (using default)",
 );

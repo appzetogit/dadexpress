@@ -36,7 +36,7 @@ export default function OrderTrackingCard() {
         // Silently fail - don't show error if API fails, just use context orders
         // Only log if it's not a 404 (endpoint doesn't exist)
         if (error?.response?.status !== 404) {
-          console.warn('Could not fetch orders from API for tracking card, using context orders only:', error?.response?.status || error?.message);
+          false && console.warn('Could not fetch orders from API for tracking card, using context orders only:', error?.response?.status || error?.message);
         }
         setApiOrders([]);
       }
@@ -56,7 +56,7 @@ export default function OrderTrackingCard() {
       index === self.findIndex((o) => (o.id || o._id) === (order.id || order._id))
     );
 
-    console.log('🔍 OrderTrackingCard - Checking for active orders:', {
+    false && console.log('🔍 OrderTrackingCard - Checking for active orders:', {
       contextOrdersCount: contextOrders.length,
       apiOrdersCount: apiOrders.length,
       uniqueOrdersCount: uniqueOrders.length,
@@ -95,7 +95,7 @@ export default function OrderTrackingCard() {
       return true;
     });
 
-    console.log('✅ OrderTrackingCard - Active order found:', active ? {
+    false && console.log('✅ OrderTrackingCard - Active order found:', active ? {
       id: active.id || active._id,
       status: active.status || active.deliveryState?.status,
       restaurant: active.restaurant || active.restaurantName
@@ -109,7 +109,7 @@ export default function OrderTrackingCard() {
       const deliveryTime = new Date(orderTime.getTime() + estimatedMinutes * 60000);
       const remaining = Math.max(0, Math.floor((deliveryTime - new Date()) / 60000));
       setTimeRemaining(remaining);
-      console.log('⏰ OrderTrackingCard - Time remaining:', remaining, 'minutes');
+      false && console.log('⏰ OrderTrackingCard - Time remaining:', remaining, 'minutes');
     } else {
       setActiveOrder(null);
       setTimeRemaining(null);
@@ -179,7 +179,7 @@ export default function OrderTrackingCard() {
 
   // Debug: Log when component renders
   useEffect(() => {
-    console.log('🎯 OrderTrackingCard render:', {
+    false && console.log('🎯 OrderTrackingCard render:', {
       hasActiveOrder: !!activeOrder,
       timeRemaining,
       contextOrdersCount: contextOrders.length,
@@ -188,14 +188,14 @@ export default function OrderTrackingCard() {
   }, [activeOrder, timeRemaining, contextOrders.length, apiOrders.length]);
 
   if (!activeOrder) {
-    console.log('❌ OrderTrackingCard - No active order, not rendering');
+    false && console.log('❌ OrderTrackingCard - No active order, not rendering');
     return null;
   }
 
   // Check if order is delivered or time remaining is 0 - hide card
   const orderStatus = (activeOrder.status || activeOrder.deliveryState?.status || 'preparing').toLowerCase();
   if (orderStatus === 'delivered' || orderStatus === 'completed' || timeRemaining === 0) {
-    console.log('❌ OrderTrackingCard - Order delivered or time is 0, hiding card');
+    false && console.log('❌ OrderTrackingCard - Order delivered or time is 0, hiding card');
     return null;
   }
 
@@ -206,7 +206,7 @@ export default function OrderTrackingCard() {
       ? 'On the way'
       : 'Preparing your order';
 
-  console.log('✅ OrderTrackingCard - Rendering card:', {
+  false && console.log('✅ OrderTrackingCard - Rendering card:', {
     restaurantName,
     orderStatus,
     statusText,

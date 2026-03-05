@@ -37,7 +37,7 @@ export const useRestaurantNotifications = () => {
 
   useEffect(() => {
     if (!restaurantId) {
-      console.log('⏳ Waiting for restaurantId...');
+      false && console.log('⏳ Waiting for restaurantId...');
       return;
     }
 
@@ -133,7 +133,7 @@ export const useRestaurantNotifications = () => {
       
       // Clean up any existing socket connection
       if (socketRef.current) {
-        console.log('🧹 Cleaning up existing socket connection...');
+        false && console.log('🧹 Cleaning up existing socket connection...');
         socketRef.current.disconnect();
         socketRef.current = null;
       }
@@ -175,13 +175,13 @@ export const useRestaurantNotifications = () => {
       return; // Don't try to connect with invalid URL
     }
     
-    console.log('🔌 Attempting to connect to Socket.IO:', socketUrl);
-    console.log('🔌 Backend URL:', backendUrl);
-    console.log('🔌 API_BASE_URL:', API_BASE_URL);
-    console.log('🔌 Restaurant ID:', restaurantId);
-    console.log('🔌 Environment:', import.meta.env.MODE);
-    console.log('🔌 Is Production Build:', isProductionBuild);
-    console.log('🔌 Is Production Deployment:', isProductionDeployment);
+    false && console.log('🔌 Attempting to connect to Socket.IO:', socketUrl);
+    false && console.log('🔌 Backend URL:', backendUrl);
+    false && console.log('🔌 API_BASE_URL:', API_BASE_URL);
+    false && console.log('🔌 Restaurant ID:', restaurantId);
+    false && console.log('🔌 Environment:', import.meta.env.MODE);
+    false && console.log('🔌 Is Production Build:', isProductionBuild);
+    false && console.log('🔌 Is Production Deployment:', isProductionDeployment);
 
     // Initialize socket connection to restaurant namespace
     // Use polling only to avoid repeated "WebSocket connection failed" when backend is down
@@ -201,21 +201,21 @@ export const useRestaurantNotifications = () => {
     });
 
     socketRef.current.on('connect', () => {
-      console.log('✅ Restaurant Socket connected, restaurantId:', restaurantId);
-      console.log('✅ Socket ID:', socketRef.current.id);
-      console.log('✅ Socket URL:', socketUrl);
+      false && console.log('✅ Restaurant Socket connected, restaurantId:', restaurantId);
+      false && console.log('✅ Socket ID:', socketRef.current.id);
+      false && console.log('✅ Socket URL:', socketUrl);
       setIsConnected(true);
       
       // Join restaurant room immediately after connection with retry
       if (restaurantId) {
         const joinRoom = () => {
-          console.log('📢 Joining restaurant room with ID:', restaurantId);
+          false && console.log('📢 Joining restaurant room with ID:', restaurantId);
           socketRef.current.emit('join-restaurant', restaurantId);
           
           // Retry join after 2 seconds if no confirmation received
           setTimeout(() => {
             if (socketRef.current?.connected) {
-              console.log('🔄 Retrying restaurant room join...');
+              false && console.log('🔄 Retrying restaurant room join...');
               socketRef.current.emit('join-restaurant', restaurantId);
             }
           }, 2000);
@@ -223,15 +223,15 @@ export const useRestaurantNotifications = () => {
         
         joinRoom();
       } else {
-        console.warn('⚠️ Cannot join restaurant room: restaurantId is missing');
+        false && console.warn('⚠️ Cannot join restaurant room: restaurantId is missing');
       }
     });
 
     // Listen for room join confirmation
     socketRef.current.on('restaurant-room-joined', (data) => {
-      console.log('✅ Restaurant room joined successfully:', data);
-      console.log('✅ Room:', data?.room);
-      console.log('✅ Restaurant ID in room:', data?.restaurantId);
+      false && console.log('✅ Restaurant room joined successfully:', data);
+      false && console.log('✅ Room:', data?.room);
+      false && console.log('✅ Restaurant ID in room:', data?.restaurantId);
     });
 
     // Listen for connection errors (throttle logs to avoid console spam on reconnect loops)
@@ -241,25 +241,25 @@ export const useRestaurantNotifications = () => {
       if (shouldLog) {
         lastConnectErrorLogRef.current = now;
         const isTransportError = error.type === 'TransportError' || error.message?.includes('xhr poll error');
-        console.warn(
+        false && console.warn(
           'Restaurant Socket:',
           isTransportError
             ? `Cannot reach backend at ${backendUrl}. Ensure the backend is running (e.g. npm run dev in backend).`
             : error.message
         );
         if (!isTransportError) {
-          console.warn('Details:', { type: error.type, socketUrl, backendUrl });
+          false && console.warn('Details:', { type: error.type, socketUrl, backendUrl });
         }
       }
       if (error.message?.includes('CORS') || error.message?.includes('Not allowed')) {
-        console.warn('💡 Add frontend URL to CORS_ORIGIN in backend .env');
+        false && console.warn('💡 Add frontend URL to CORS_ORIGIN in backend .env');
       }
       setIsConnected(false);
     });
 
     // Listen for disconnection
     socketRef.current.on('disconnect', (reason) => {
-      console.log('❌ Restaurant Socket disconnected:', reason);
+      false && console.log('❌ Restaurant Socket disconnected:', reason);
       setIsConnected(false);
       
       if (reason === 'io server disconnect') {
@@ -270,12 +270,12 @@ export const useRestaurantNotifications = () => {
 
     // Listen for reconnection attempts
     socketRef.current.on('reconnect_attempt', (attemptNumber) => {
-      console.log(`🔄 Reconnection attempt ${attemptNumber}...`);
+      false && console.log(`🔄 Reconnection attempt ${attemptNumber}...`);
     });
 
     // Listen for successful reconnection
     socketRef.current.on('reconnect', (attemptNumber) => {
-      console.log(`✅ Reconnected after ${attemptNumber} attempts`);
+      false && console.log(`✅ Reconnected after ${attemptNumber} attempts`);
       setIsConnected(true);
       
       // Rejoin restaurant room after reconnection
@@ -286,7 +286,7 @@ export const useRestaurantNotifications = () => {
 
     // Listen for new order notifications
     socketRef.current.on('new_order', (orderData) => {
-      console.log('📦 New order received:', orderData);
+      false && console.log('📦 New order received:', orderData);
       setNewOrder(orderData);
       
       // Play notification sound
@@ -295,13 +295,13 @@ export const useRestaurantNotifications = () => {
 
     // Listen for sound notification event
     socketRef.current.on('play_notification_sound', (data) => {
-      console.log('🔔 Sound notification:', data);
+      false && console.log('🔔 Sound notification:', data);
       playNotificationSound();
     });
 
     // Listen for order status updates
     socketRef.current.on('order_status_update', (data) => {
-      console.log('📊 Order status update:', data);
+      false && console.log('📊 Order status update:', data);
       // You can handle status updates here if needed
     });
 
@@ -348,7 +348,7 @@ export const useRestaurantNotifications = () => {
       if (audioRef.current) {
         // Only play if user has interacted with the page (browser autoplay policy)
         if (!userInteractedRef.current) {
-          console.log('🔇 Audio playback skipped - user has not interacted with page yet');
+          false && console.log('🔇 Audio playback skipped - user has not interacted with page yet');
           return;
         }
         
@@ -356,14 +356,14 @@ export const useRestaurantNotifications = () => {
         audioRef.current.play().catch(error => {
           // Don't log autoplay policy errors as they're expected
           if (!error.message?.includes('user didn\'t interact') && !error.name?.includes('NotAllowedError')) {
-            console.warn('Error playing notification sound:', error);
+            false && console.warn('Error playing notification sound:', error);
           }
         });
       }
     } catch (error) {
       // Don't log autoplay policy errors
       if (!error.message?.includes('user didn\'t interact') && !error.name?.includes('NotAllowedError')) {
-        console.warn('Error playing sound:', error);
+        false && console.warn('Error playing sound:', error);
       }
     }
   };

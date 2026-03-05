@@ -36,7 +36,7 @@ function ensureFirebaseInitialized() {
     const existingApps = getApps();
     if (existingApps.length === 0) {
       app = initializeApp(firebaseConfig);
-      console.log('Firebase initialized successfully');
+      false && console.log('Firebase initialized successfully');
     } else {
       app = existingApps[0];
     }
@@ -58,7 +58,7 @@ function ensureFirebaseInitialized() {
       try {
         messaging = getMessaging(app);
       } catch (err) {
-        console.warn('Firebase Messaging not supported in this browser', err);
+        false && console.warn('Firebase Messaging not supported in this browser', err);
       }
     }
   } catch (error) {
@@ -81,7 +81,7 @@ export const requestFcmToken = async () => {
 
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') {
-      console.warn('[PUSH-NOTIFICATION] Permission not granted for notifications');
+      false && console.warn('[PUSH-NOTIFICATION] Permission not granted for notifications');
       return null;
     }
 
@@ -91,16 +91,16 @@ export const requestFcmToken = async () => {
     let token = null;
     try {
       token = await getToken(messaging, { vapidKey });
-      console.log('[PUSH-NOTIFICATION] FCM Token generated with VAPID key');
+      false && console.log('[PUSH-NOTIFICATION] FCM Token generated with VAPID key');
     } catch (fallbackErr) {
       console.error('[PUSH-NOTIFICATION] Token generation failed:', fallbackErr);
     }
 
     if (token) {
-      console.log('[PUSH-NOTIFICATION] FCM Token:', token);
+      false && console.log('[PUSH-NOTIFICATION] FCM Token:', token);
       return token;
     } else {
-      console.warn('[PUSH-NOTIFICATION] No registration token available. Request permission to generate one.');
+      false && console.warn('[PUSH-NOTIFICATION] No registration token available. Request permission to generate one.');
       return null;
     }
   } catch (error) {
@@ -115,7 +115,7 @@ export const requestFcmToken = async () => {
 export const onForegroundMessage = (callback) => {
   if (messaging) {
     return onMessage(messaging, (payload) => {
-      console.log('[PUSH-NOTIFICATION] Foreground message received:', payload);
+      false && console.log('[PUSH-NOTIFICATION] Foreground message received:', payload);
       if (callback) callback(payload);
     });
   }
