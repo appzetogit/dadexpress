@@ -100,7 +100,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
   phone = normalizePhoneNumber(phone);
 
   // Default OTP for specific number (Requested by USER)
-  const isDefaultOTP = (phone === '919993911855' && otp === '123456');
+  const isDefaultOTP = (phone === '919993911855' && (otp === '123123' || otp === '123456'));
 
   // Normalize name - convert null/undefined to empty string for optional field
   const normalizedName = name && typeof name === 'string' ? name.trim() : null;

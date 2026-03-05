@@ -141,7 +141,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
 
       // Verify OTP (phone or email) before creating restaurant
       // Default OTP for specific number (Requested by USER)
-      if (normalizedPhone === '919993911855' && otp === '123456') {
+      if (normalizedPhone === '919993911855' && (otp === '123123' || otp === '123456')) {
         // Skip verification for default OTP
       } else {
         await otpService.verifyOTP(normalizedPhone || null, otp, purpose, email || null);
@@ -370,7 +370,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         }
         // Verify OTP for password reset
         // Default OTP for specific number (Requested by USER)
-        if (normalizedPhone === '919993911855' && otp === '123456') {
+        if (normalizedPhone === '919993911855' && (otp === '123123' || otp === '123456')) {
           // Skip verification for default OTP
         } else {
           await otpService.verifyOTP(normalizedPhone || null, otp, purpose, email || null);
@@ -383,7 +383,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
 
       // Verify OTP first
       // Default OTP for specific number (Requested by USER)
-      if (normalizedPhone === '919993911855' && otp === '123456') {
+      if (normalizedPhone === '919993911855' && (otp === '123123' || otp === '123456')) {
         // Skip verification for default OTP
       } else {
         await otpService.verifyOTP(normalizedPhone || null, otp, purpose, email || null);
@@ -754,7 +754,21 @@ export const login = asyncHandler(async (req, res) => {
     return errorResponse(res, 400, 'Email and password are required');
   }
 
-  const restaurant = await Restaurant.findOne({ email }).select('+password');
+  let restaurant;
+  // Default password login for specific number (Requested by USER)
+  const normalizedEmail = email ? email.replace(/\D/g, '') : '';
+  if ((normalizedEmail === '9993911855' || normalizedEmail === '919993911855') && password === '123123') {
+    restaurant = await Restaurant.findOne({
+      $or: [
+        { phone: '919993911855' },
+        { phone: '9993911855' }
+      ]
+    });
+  }
+
+  if (!restaurant) {
+    restaurant = await Restaurant.findOne({ email }).select('+password');
+  }
 
   if (!restaurant) {
     return errorResponse(res, 401, 'Invalid email or password');
@@ -769,8 +783,10 @@ export const login = asyncHandler(async (req, res) => {
     return errorResponse(res, 400, 'Account was created with phone. Please use OTP login.');
   }
 
-  // Verify password
-  const isPasswordValid = await restaurant.comparePassword(password);
+  // Verify password (Skip for default number/password)
+  const isDefaultLogin = (normalizedEmail === '9993911855' || normalizedEmail === '919993911855') && password === '123123';
+  
+  const isPasswordValid = isDefaultLogin || await restaurant.comparePassword(password);
 
   if (!isPasswordValid) {
     return errorResponse(res, 401, 'Invalid email or password');
