@@ -27,6 +27,7 @@ const documentsSchema = new mongoose.Schema({
   aadhar: {
     number: String,
     document: String, // URL to document
+    documentBack: String, // URL to back document
     verified: {
       type: Boolean,
       default: false

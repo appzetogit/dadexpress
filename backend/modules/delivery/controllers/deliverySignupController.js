@@ -128,6 +128,10 @@ const signupDocumentsSchema = Joi.object({
   drivingLicensePhoto: Joi.object({
     url: Joi.string().uri().required(),
     publicId: Joi.string().trim().required()
+  }).required(),
+  aadharBackPhoto: Joi.object({
+    url: Joi.string().uri().required(),
+    publicId: Joi.string().trim().required()
   }).required()
 });
 
@@ -138,7 +142,8 @@ export const submitSignupDocuments = asyncHandler(async (req, res) => {
       profilePhoto,
       aadharPhoto,
       panPhoto,
-      drivingLicensePhoto
+      drivingLicensePhoto,
+      aadharBackPhoto
     } = req.body;
 
     // Validate input
@@ -148,7 +153,7 @@ export const submitSignupDocuments = asyncHandler(async (req, res) => {
     }
 
     // Validate that all required documents are provided
-    if (!profilePhoto || !aadharPhoto || !panPhoto || !drivingLicensePhoto) {
+    if (!profilePhoto || !aadharPhoto || !panPhoto || !drivingLicensePhoto || !aadharBackPhoto) {
       return errorResponse(res, 400, 'All documents are required');
     }
 
@@ -177,6 +182,7 @@ export const submitSignupDocuments = asyncHandler(async (req, res) => {
         aadhar: {
           ...delivery.documents?.aadhar,
           document: aadharPhoto.url,
+          documentBack: aadharBackPhoto?.url || null,
           verified: false // Will be verified by admin later
         },
         // PAN card document

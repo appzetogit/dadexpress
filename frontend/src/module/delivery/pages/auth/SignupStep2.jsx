@@ -10,6 +10,7 @@ export default function SignupStep2() {
   const [documents, setDocuments] = useState({
     profilePhoto: null,
     aadharPhoto: null,
+    aadharBackPhoto: null,
     panPhoto: null,
     drivingLicensePhoto: null
   })
@@ -25,6 +26,7 @@ export default function SignupStep2() {
     return {
       profilePhoto: null,
       aadharPhoto: null,
+      aadharBackPhoto: null,
       panPhoto: null,
       drivingLicensePhoto: null
     }
@@ -32,6 +34,7 @@ export default function SignupStep2() {
   const [uploading, setUploading] = useState({
     profilePhoto: false,
     aadharPhoto: false,
+    aadharBackPhoto: false,
     panPhoto: false,
     drivingLicensePhoto: false
   })
@@ -110,7 +113,7 @@ export default function SignupStep2() {
     e.preventDefault()
 
     // Check if all required documents are uploaded
-    if (!uploadedDocs.profilePhoto || !uploadedDocs.aadharPhoto || !uploadedDocs.panPhoto || !uploadedDocs.drivingLicensePhoto) {
+    if (!uploadedDocs.profilePhoto || !uploadedDocs.aadharPhoto || !uploadedDocs.aadharBackPhoto || !uploadedDocs.panPhoto || !uploadedDocs.drivingLicensePhoto) {
       toast.error("Please upload all required documents")
       return
     }
@@ -121,6 +124,7 @@ export default function SignupStep2() {
       const response = await deliveryAPI.submitSignupDocuments({
         profilePhoto: uploadedDocs.profilePhoto,
         aadharPhoto: uploadedDocs.aadharPhoto,
+        aadharBackPhoto: uploadedDocs.aadharBackPhoto,
         panPhoto: uploadedDocs.panPhoto,
         drivingLicensePhoto: uploadedDocs.drivingLicensePhoto
       })
@@ -227,15 +231,16 @@ export default function SignupStep2() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <DocumentUpload docType="profilePhoto" label="Profile Photo" required={true} />
-          <DocumentUpload docType="aadharPhoto" label="Aadhar Card Photo" required={true} />
+          <DocumentUpload docType="aadharPhoto" label="Aadhar Card Photo (Front)" required={true} />
+          <DocumentUpload docType="aadharBackPhoto" label="Aadhar Card Photo (Back)" required={true} />
           <DocumentUpload docType="panPhoto" label="PAN Card Photo" required={true} />
           <DocumentUpload docType="drivingLicensePhoto" label="Driving License Photo" required={true} />
 
           {/* Submit Button */}
           <button
             type="submit"
-            disabled={isSubmitting || !uploadedDocs.profilePhoto || !uploadedDocs.aadharPhoto || !uploadedDocs.panPhoto || !uploadedDocs.drivingLicensePhoto}
-            className={`w-full py-4 rounded-lg font-bold text-white text-base transition-colors mt-6 ${isSubmitting || !uploadedDocs.profilePhoto || !uploadedDocs.aadharPhoto || !uploadedDocs.panPhoto || !uploadedDocs.drivingLicensePhoto
+            disabled={isSubmitting || !uploadedDocs.profilePhoto || !uploadedDocs.aadharPhoto || !uploadedDocs.aadharBackPhoto || !uploadedDocs.panPhoto || !uploadedDocs.drivingLicensePhoto}
+            className={`w-full py-4 rounded-lg font-bold text-white text-base transition-colors mt-6 ${isSubmitting || !uploadedDocs.profilePhoto || !uploadedDocs.aadharPhoto || !uploadedDocs.aadharBackPhoto || !uploadedDocs.panPhoto || !uploadedDocs.drivingLicensePhoto
               ? "bg-gray-400 cursor-not-allowed"
               : "bg-[#00B761] hover:bg-[#00A055]"
               }`}

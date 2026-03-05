@@ -753,8 +753,21 @@ export default function JoinRequest() {
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
                               >
-                                <ExternalLink className="w-3 h-3" /> View Document
+                                <ExternalLink className="w-3 h-3" /> View Front
                               </a>
+                            )}
+                            {viewDetails.documents.aadhar.documentBack && (
+                              <>
+                                <span className="mx-2 text-slate-300">|</span>
+                                <a
+                                  href={viewDetails.documents.aadhar.documentBack}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
+                                >
+                                  <ExternalLink className="w-3 h-3" /> View Back
+                                </a>
+                              </>
                             )}
                           </div>
                         </div>
