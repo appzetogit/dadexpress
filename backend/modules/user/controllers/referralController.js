@@ -46,7 +46,19 @@ export const getUserReferralStats = asyncHandler(async (req, res) => {
                 referrerReward: referralSettings.referrerReward,
                 refereeReward: referralSettings.refereeReward,
                 minOrderValue: referralSettings.minOrderValue,
-                maxRedemptionPercentage: referralSettings.maxRedemptionPercentage || 20
+                maxRedemptionPercentage: referralSettings.maxRedemptionPercentage || 20,
+                steps: ((referralSettings.steps && referralSettings.steps.length > 0) ? referralSettings.steps : [
+                    { title: "Invite your friends", description: "Share your referral link or code with friends." },
+                    { title: "Friend registers", description: "Your friend signs up using your referral code." },
+                    { title: "They place first order", description: "Friend completes their first order of min ₹{minOrderValue}." },
+                    { title: "You get rewards!", description: "{referrerReward} reward coins will be credited to your account." }
+                ]).map(step => ({
+                    title: step.title,
+                    description: (step.description || "")
+                        .replace('{minOrderValue}', referralSettings.minOrderValue || 199)
+                        .replace('{referrerReward}', referralSettings.referrerReward || 100)
+                        .replace('{refereeReward}', referralSettings.refereeReward || 50)
+                }))
             }
         });
     } catch (error) {

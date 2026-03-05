@@ -1,11 +1,14 @@
-import { useEffect } from "react"
+import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { motion } from "framer-motion"
 import Lenis from "lenis"
 import { ArrowLeft, Home, Heart, ShoppingBag, Menu, ChefHat } from "lucide-react"
+import { adminAPI } from "@/lib/api"
 
 export default function CategoriesPage() {
   const navigate = useNavigate()
+  const [categories, setCategories] = useState([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     // Initialize Lenis for smooth scrolling
@@ -22,29 +25,27 @@ export default function CategoriesPage() {
 
     requestAnimationFrame(raf)
 
+    // Fetch categories
+    const fetchCategories = async () => {
+      try {
+        setLoading(true)
+        const response = await adminAPI.getPublicCategories()
+        if (response.data.success && response.data.data.categories) {
+          setCategories(response.data.data.categories)
+        }
+      } catch (error) {
+        console.error("Error fetching categories:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchCategories()
+
     return () => {
       lenis.destroy()
     }
   }, [])
-
-  const categories = [
-    { id: 1, name: "American", image: "https://images.unsplash.com/photo-1551183053-bf91a1d81141?w=200&h=200&fit=crop" },
-    { id: 2, name: "Bengali", image: "https://images.unsplash.com/photo-1551024506-0bccd828d307?w=200&h=200&fit=crop" },
-    { id: 3, name: "Caribbean", image: "https://images.unsplash.com/photo-1559339352-11d035aa65de?w=200&h=200&fit=crop" },
-    { id: 4, name: "Chinese", image: "https://images.unsplash.com/photo-1525755662778-989d0524087e?w=200&h=200&fit=crop" },
-    { id: 5, name: "Italian", image: "https://images.unsplash.com/photo-1551183053-bf91a1d81141?w=200&h=200&fit=crop" },
-    { id: 6, name: "Mexican", image: "https://images.unsplash.com/photo-1626700051175-6818013e1d4f?w=200&h=200&fit=crop" },
-    { id: 7, name: "Indian", image: "https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=200&h=200&fit=crop" },
-    { id: 8, name: "Thai", image: "https://images.unsplash.com/photo-1559314809-0d155b1c5b8e?w=200&h=200&fit=crop" },
-    { id: 9, name: "Japanese", image: "https://images.unsplash.com/photo-1579584425555-c3ce17fd4351?w=200&h=200&fit=crop" },
-    { id: 10, name: "French", image: "https://images.unsplash.com/photo-1544025162-d76694265947?w=200&h=200&fit=crop" },
-    { id: 11, name: "Mediterranean", image: "https://images.unsplash.com/photo-1525351484163-7529414344d8?w=200&h=200&fit=crop" },
-    { id: 12, name: "Korean", image: "https://images.unsplash.com/photo-1544145945-f90425340c7e?w=200&h=200&fit=crop" },
-    { id: 13, name: "Vietnamese", image: "https://images.unsplash.com/photo-1558961363-fa8fdf82db35?w=200&h=200&fit=crop" },
-    { id: 14, name: "Turkish", image: "https://images.unsplash.com/photo-1547592166-23ac45744acd?w=200&h=200&fit=crop" },
-    { id: 15, name: "Greek", image: "https://images.unsplash.com/photo-1539252554453-80ab65ce3586?w=200&h=200&fit=crop" },
-    { id: 16, name: "Spanish", image: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=200&h=200&fit=crop" },
-  ]
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -126,14 +127,14 @@ export default function CategoriesPage() {
       {/* Bottom Navigation Bar - Mobile Only */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50">
         <div className="flex items-center justify-around py-2 px-4">
-          <button 
+          <button
             onClick={() => navigate('/usermain')}
             className="flex flex-col items-center gap-1 p-2 text-gray-600 hover:text-[#ff8100] transition-colors"
           >
             <Home className="w-6 h-6" />
             <span className="text-xs text-gray-600 font-medium">Home</span>
           </button>
-          <button 
+          <button
             onClick={() => navigate('/usermain/wishlist')}
             className="flex flex-col items-center gap-1 p-2 text-gray-600 hover:text-[#ff8100] transition-colors"
           >

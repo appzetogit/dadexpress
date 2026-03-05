@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { ArrowLeft, Copy, Share2, Users, Gift, CheckCircle, Clock, Smartphone, MessageCircle, Loader2 } from "lucide-react"
+import { motion, AnimatePresence } from "framer-motion"
 import AnimatedPage from "../../components/AnimatedPage"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
@@ -48,14 +49,53 @@ export default function ReferAndEarn() {
     fetchData()
   }, [])
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(referralCode)
-    setCopied(true)
-    toast.success("Referral code copied!")
-    setTimeout(() => setCopied(false), 2000)
+  const copyToClipboard = (text) => {
+    // Attempt using the textarea fallback first as it's most reliable across different browser security contexts
+    const textArea = document.createElement("textarea")
+    textArea.value = text
+
+    // Ensure textarea is not visible but part of DOM
+    textArea.style.position = "fixed"
+    textArea.style.left = "-9999px"
+    textArea.style.top = "0"
+    textArea.style.opacity = "0"
+    document.body.appendChild(textArea)
+
+    try {
+      textArea.focus()
+      textArea.select()
+      const successful = document.execCommand('copy')
+      document.body.removeChild(textArea)
+      if (successful) return true
+    } catch (err) {
+      console.error('Fallback copy failed:', err)
+      document.body.removeChild(textArea)
+    }
+
+    // Modern API as secondary attempt
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text)
+        .then(() => true)
+        .catch(() => false)
+    }
+
+    return false
+  }
+
+  const handleCopy = async () => {
+    const success = await copyToClipboard(referralCode)
+    if (success) {
+      setCopied(true)
+      toast.success("Referral code copied!")
+      setTimeout(() => setCopied(false), 2000)
+    } else {
+      toast.error("Failed to copy code. Please copy manually.")
+    }
   }
 
   const handleShare = async () => {
+    const toastId = toast.loading("Opening share options...")
+
     if (navigator.share) {
       try {
         await navigator.share({
@@ -63,12 +103,23 @@ export default function ReferAndEarn() {
           text: `Use my code ${referralCode} to get rewards on Dad Express!`,
           url: referralLink,
         })
+        toast.dismiss(toastId)
       } catch (err) {
-        console.log("Error sharing:", err)
+        toast.dismiss(toastId)
+        if (err.name !== 'AbortError') {
+          console.error("Error sharing:", err)
+          const success = copyToClipboard(referralLink)
+          if (success) toast.success("Link copied to clipboard!")
+        }
       }
     } else {
-      navigator.clipboard.writeText(referralLink)
-      toast.success("Link copied to clipboard!")
+      toast.dismiss(toastId)
+      const success = copyToClipboard(referralLink)
+      if (success) {
+        toast.success("Link copied to clipboard!")
+      } else {
+        toast.error("Failed to copy link.")
+      }
     }
   }
 
@@ -151,24 +202,51 @@ export default function ReferAndEarn() {
         </div>
 
         {/* How it works */}
-        <div className="space-y-6 pt-2">
+        <div className="space-y-6 pt-2 pb-24 relative z-[50]">
           <h3 className="text-lg font-black text-black dark:text-white px-2">How it works</h3>
           <div className="space-y-4">
-            {[
-              { title: "Invite your friends", desc: "Share your referral link or code with friends." },
-              { title: "Friend registers", desc: "Your friend signs up using your referral code." },
-              { title: "They place first order", desc: `Friend completes their first order of min ₹${settings.minOrderValue}.` },
-              { title: "You get rewards!", desc: `${settings.referrerReward} reward coins will be credited to your account.` }
-            ].map((step, i) => (
-              <div key={i} className="flex gap-4 bg-white dark:bg-[#1a1a1a] p-5 rounded-2xl shadow-sm border border-gray-50 dark:border-gray-800 transition-all hover:border-gray-200">
-                <div className="w-9 h-9 rounded-full bg-gray-50 dark:bg-gray-800 flex items-center justify-center shrink-0 font-black text-sm text-gray-400">
+            {(settings.steps && settings.steps.length > 0 ? settings.steps : [
+              { title: "Invite your friends", description: "Share your referral link or code with friends." },
+              { title: "Friend registers", description: "Your friend signs up using your referral code." },
+              { title: "They place first order", description: `Friend completes their first order of min ₹${settings.minOrderValue}.` },
+              { title: "You get rewards!", description: `${settings.referrerReward} reward coins will be credited to your account.` }
+            ]).map((step, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  // Step 1: Open Share
+                  if (i === 0) {
+                    handleShare();
+                  }
+                  // Step 4: Go to Rewards
+                  else if (i === 3) {
+                    toast.success("Opening your rewards wallet...");
+                    setTimeout(() => navigate("/user/profile/rewards"), 500);
+                  }
+                  // Others: Show Info
+                  else {
+                    toast.success(step.title, {
+                      description: step.description,
+                      duration: 4000,
+                    });
+                  }
+                }}
+                className="w-full flex text-left gap-4 bg-white dark:bg-[#1a1a1a] p-5 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800 transition-all hover:border-[#E07832] hover:shadow-lg cursor-pointer relative z-[60] active:scale-[0.97] group outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-[#E07832]"
+              >
+                <div className="w-12 h-12 rounded-2xl bg-[#FFF8F4] dark:bg-[#2a1a10] flex items-center justify-center shrink-0 font-black text-lg text-[#E07832] border border-orange-100 dark:border-orange-900/30 group-hover:bg-[#E07832] group-hover:text-white transition-all duration-300">
                   {i + 1}
                 </div>
-                <div className="space-y-0.5">
-                  <h4 className="font-black text-black dark:text-white text-[14px] leading-none">{step.title}</h4>
-                  <p className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 leading-normal">{step.desc}</p>
+                <div className="flex-1 py-1">
+                  <h4 className="font-extrabold text-black dark:text-white text-[16px] leading-tight group-hover:text-[#E07832] transition-colors">
+                    {step.title}
+                  </h4>
+                  <p className="text-[12px] font-medium text-gray-500 dark:text-gray-400 leading-relaxed mt-1">
+                    {step.description}
+                  </p>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         </div>

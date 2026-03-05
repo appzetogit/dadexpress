@@ -103,10 +103,10 @@ export const getOrderDetails = asyncHandler(async (req, res) => {
   try {
     const delivery = req.delivery;
     let { orderId } = req.params;
-    
+
     // Clean orderId string if it comes with spaces or URI encoded spaces
     if (orderId && typeof orderId === 'string') {
-        orderId = decodeURIComponent(orderId).replace(/\s+/g, '');
+      orderId = decodeURIComponent(orderId).replace(/\s+/g, '');
     }
 
     // Build query to find order by either _id or orderId field
@@ -224,7 +224,7 @@ export const acceptOrder = asyncHandler(async (req, res) => {
 
     // Clean orderId string if it comes with spaces or URI encoded spaces
     if (orderId && typeof orderId === 'string') {
-        orderId = decodeURIComponent(orderId).replace(/\s+/g, '');
+      orderId = decodeURIComponent(orderId).replace(/\s+/g, '');
     }
 
     // Validate orderId
@@ -1626,6 +1626,11 @@ export const completeDelivery = asyncHandler(async (req, res) => {
       if (order.userId && !updateData['review.reviewedBy']) {
         updateData['review.reviewedBy'] = order.userId;
       }
+    }
+
+    // If it's a COD order, also mark the embedded payment status as completed
+    if (order.payment?.method === 'cash' || order.payment?.method === 'cod') {
+      updateData['payment.status'] = 'completed';
     }
 
     // Update order to delivered

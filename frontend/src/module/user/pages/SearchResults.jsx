@@ -830,31 +830,6 @@ export default function SearchResults() {
                         </div>
                       )}
 
-                      {/* Featured Dish Badge - Top Left - Only show if data exists */}
-                      {(() => {
-                        let displayText = null
-
-                        // If category is selected and restaurant has menu, show category-specific dish
-                        if (selectedCategory && selectedCategory !== 'all' && restaurant.menu) {
-                          const categoryDish = getCategoryDishFromMenu(restaurant.menu, selectedCategory)
-                          if (categoryDish && restaurant.featuredPrice) {
-                            displayText = `${categoryDish} · ₹${restaurant.featuredPrice}`
-                          }
-                        }
-
-                        // Fallback to featured dish
-                        if (!displayText && restaurant.featuredDish && restaurant.featuredPrice) {
-                          displayText = `${restaurant.featuredDish} · ₹${restaurant.featuredPrice}`
-                        }
-
-                        return displayText ? (
-                          <div className="absolute top-3 left-3">
-                            <div className="bg-gray-800/80 backdrop-blur-sm text-white px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium">
-                              {displayText}
-                            </div>
-                          </div>
-                        ) : null
-                      })()}
 
                       {/* Ad Badge */}
                       {restaurant.isAd && (

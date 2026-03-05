@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useLocation } from "../hooks/useLocation"
 import { useZone } from "../hooks/useZone"
+import useUserPoints from "../hooks/useUserPoints"
 import quickSpicyLogo from "@/assets/quicky-spicy-logo.png"
 import offerImage from "@/assets/offerimage.png"
 import api, { restaurantAPI } from "@/lib/api"
@@ -555,6 +556,7 @@ export default function Home() {
   const { addToCart, cart } = useCart()
   const { location, loading, requestLocation } = useLocation()
   const { zoneId, zoneStatus, isInService, isOutOfService, loading: zoneLoading } = useZone(location)
+  const { points: userPoints } = useUserPoints()
   const [showToast, setShowToast] = useState(false)
   const [showManageCollections, setShowManageCollections] = useState(false)
   const [selectedRestaurantSlug, setSelectedRestaurantSlug] = useState(null)
@@ -567,9 +569,6 @@ export default function Home() {
 
   const cityName = location?.city || "Select"
   const stateName = location?.state || "Location"
-
-  // Mock points value - replace with actual points from context/store
-  const userPoints = 99
 
   const [placeholderIndex, setPlaceholderIndex] = useState(0)
 
@@ -809,10 +808,6 @@ export default function Home() {
             image: image,
             images: allImages, // Array of cover images for carousel (separate from menu images)
             priceRange: restaurant.priceRange || "$$", // Use from API or default
-            featuredDish: restaurant.featuredDish || (restaurant.cuisines && restaurant.cuisines.length > 0
-              ? `${restaurant.cuisines[0]} Special`
-              : "Special Dish"),
-            featuredPrice: restaurant.featuredPrice || 249, // Use from API or default
             offer: stripOldDefault(restaurant.offer, OLD_DEFAULT_OFFERS), // Strip old DB defaults
             slug: restaurant.slug,
             restaurantId: restaurant.restaurantId,
@@ -1787,12 +1782,6 @@ export default function Home() {
                               priority={index < 3}
                             />
 
-                            {/* Featured Dish Badge - Top Left */}
-                            <div className="absolute top-3 left-3 md:top-4 md:left-4 flex items-center z-10 transform transition-transform duration-300 group-hover:scale-105 group-hover:-translate-y-0.5">
-                              <div className="bg-gray-800/90 backdrop-blur-sm text-white px-2 py-1 md:px-4 md:py-1.5 rounded-md text-xs font-medium flex items-center shadow-lg">
-                                {restaurant.featuredDish} · ₹{restaurant.featuredPrice}
-                              </div>
-                            </div>
 
                             {/* Bookmark Icon - Top Right */}
                             <div className="absolute top-3 right-3 md:top-4 md:right-4 z-10 transform transition-transform duration-300 group-hover:scale-110 group-hover:rotate-6">
@@ -2715,6 +2704,7 @@ export default function Home() {
                   damping: 15,
                   delay: 0.1,
                 }}
+                
                 className="absolute z-10 w-28 h-28 rounded-full border-2 border-green-600 dark:border-green-500 bg-white dark:bg-[#1a1a1a] flex flex-col items-center justify-center shadow-sm"
                 style={{
                   // left: "50%",
@@ -2917,6 +2907,7 @@ export default function Home() {
                               <Check className="h-3 w-3 text-white" />
                             </div>
                           )}
+                          
                         </div>
                         <p className="text-sm text-gray-500 mt-1">
                           {getFavorites().length} restaurant{getFavorites().length !== 1 ? 's' : ''}

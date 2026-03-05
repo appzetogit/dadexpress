@@ -80,15 +80,14 @@ export default function PointOfSale() {
       const response = await adminAPI.getRestaurants({ limit: 1000, isActive: true })
       if (response?.data?.success) {
         setRestaurants(response.data.data?.restaurants || response.data.data || [])
+      } else {
+        // If API does not return success, keep restaurants empty
+        setRestaurants([])
       }
     } catch (error) {
       console.error('Error fetching restaurants:', error)
-      // Fallback to dummy data for development
-      setRestaurants([
-        { _id: '1', name: 'Spice Garden', restaurantId: 'RST001' },
-        { _id: '2', name: 'Tandoor Express', restaurantId: 'RST002' },
-        { _id: '3', name: 'Coastal Delights', restaurantId: 'RST003' }
-      ])
+      // On error, do not use any dummy restaurants – keep list empty
+      setRestaurants([])
     } finally {
       setLoading(false)
     }

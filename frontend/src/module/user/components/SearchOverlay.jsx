@@ -1,39 +1,87 @@
 import { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
-import { X, Search, Clock } from "lucide-react"
+import { publicAPI, adminAPI } from "@/lib/api"
+import { Loader2, X, Search, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-
-// Import shared food images - prevents duplication
 import { foodImages } from "@/constants/images"
-
-// Recent search suggestions
-const recentSuggestions = [
-  "Biryani", "Cake", "Chhole Bhature", "Chicken Tanduri", "Donuts", "Dosa", "French Fries", "Idli"
-]
-
-// Categories matching the home page browse section - only unique categories
-const categories = [
-  { id: 1, name: "Biryani", image: foodImages[0] },
-  { id: 2, name: "Cake", image: foodImages[1] },
-  { id: 3, name: "Chhole Bhature", image: foodImages[2] },
-  { id: 4, name: "Chicken Tanduri", image: foodImages[3] },
-  { id: 5, name: "Donuts", image: foodImages[4] },
-  { id: 6, name: "Dosa", image: foodImages[5] },
-  { id: 7, name: "French Fries", image: foodImages[6] },
-  { id: 8, name: "Idli", image: foodImages[7] },
-  { id: 9, name: "Momos", image: foodImages[8] },
-  { id: 10, name: "Samosa", image: foodImages[9] },
-  { id: 11, name: "Starters", image: foodImages[10] },
-]
-
-// Use only unique categories (no duplicates)
-const allFoodsWithWhiteBg = categories
 
 export default function SearchOverlay({ isOpen, onClose, searchValue, onSearchChange }) {
   const navigate = useNavigate()
   const inputRef = useRef(null)
-  const [filteredFoods, setFilteredFoods] = useState(allFoodsWithWhiteBg)
+  const [loading, setLoading] = useState(false)
+  const [foods, setFoods] = useState([])
+  const [recentSuggestions, setRecentSuggestions] = useState([
+    "Biryani", "Cake", "Chhole Bhature", "Chicken Tanduri", "Donuts", "Dosa", "French Fries", "Idli"
+  ])
+
+  // Initial fetch of popular items / categories
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      try {
+        setLoading(true)
+        // Fetch real categories to show as initial "Dishes"
+        const response = await adminAPI.getPublicCategories()
+        if (response.data.success && response.data.data.categories) {
+          const transformed = response.data.data.categories.map(cat => ({
+            id: cat._id || cat.id,
+            name: cat.name,
+            image: cat.image,
+            isCategory: true
+          }))
+          setFoods(transformed)
+        }
+      } catch (err) {
+        console.error("Error fetching initial search data:", err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    if (isOpen) {
+      fetchInitialData()
+    }
+  }, [isOpen])
+
+  // Dynamic search fetch
+  useEffect(() => {
+    if (!isOpen) return
+
+    const delayDebounceFn = setTimeout(async () => {
+      if (searchValue.trim() === "") {
+        // Reload initial data if search is empty
+        const response = await adminAPI.getPublicCategories()
+        if (response.data.success && response.data.data.categories) {
+          setFoods(response.data.data.categories.map(cat => ({
+            id: cat._id || cat.id,
+            name: cat.name,
+            image: cat.image,
+            isCategory: true
+          })))
+        }
+        return
+      }
+
+      try {
+        setLoading(true)
+        const response = await publicAPI.searchMenuItems(searchValue)
+        if (response.data.success && response.data.data.items) {
+          setFoods(response.data.data.items.map(item => ({
+            id: item.id || item._id,
+            name: item.name,
+            image: item.image,
+            isCategory: false
+          })))
+        }
+      } catch (err) {
+        console.error("Search API error:", err)
+      } finally {
+        setLoading(false)
+      }
+    }, 500) // 500ms debounce
+
+    return () => clearTimeout(delayDebounceFn)
+  }, [searchValue, isOpen])
 
   useEffect(() => {
     if (isOpen && inputRef.current) {
@@ -59,17 +107,6 @@ export default function SearchOverlay({ isOpen, onClose, searchValue, onSearchCh
     }
   }, [isOpen, onClose])
 
-  useEffect(() => {
-    if (searchValue.trim() === "") {
-      setFilteredFoods(allFoodsWithWhiteBg)
-    } else {
-      const filtered = allFoodsWithWhiteBg.filter((food) =>
-        food.name.toLowerCase().includes(searchValue.toLowerCase())
-      )
-      setFilteredFoods(filtered)
-    }
-  }, [searchValue])
-
   const handleSuggestionClick = (suggestion) => {
     onSearchChange(suggestion)
     inputRef.current?.focus()
@@ -84,8 +121,12 @@ export default function SearchOverlay({ isOpen, onClose, searchValue, onSearchCh
     }
   }
 
-  const handleFoodClick = (food) => {
-    navigate(`/user/search?q=${encodeURIComponent(food.name)}`)
+  const handleFoodClick = (item) => {
+    if (item.isCategory) {
+      navigate(`/usermain/category/${item.name.toLowerCase()}`)
+    } else {
+      navigate(`/usermain/food/${item.id}`)
+    }
     onClose()
     onSearchChange("")
   }
@@ -161,14 +202,16 @@ export default function SearchOverlay({ isOpen, onClose, searchValue, onSearchCh
             animation: 'fadeIn 0.3s ease-out 0.2s both'
           }}
         >
-          <h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white mb-4 sm:mb-6">
-            {searchValue.trim() === "" ? "All Dishes" : `Search Results (${filteredFoods.length})`}
+          <h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white mb-4 sm:mb-6 flex items-center gap-3">
+            {searchValue.trim() === "" ? "All Dishes" : `Search Results (${foods.length})`}
+            {loading && <Loader2 className="h-5 w-5 animate-spin text-primary-orange" />}
           </h3>
-          {filteredFoods.length > 0 ? (
+
+          {foods.length > 0 ? (
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-4 md:gap-5 lg:gap-6">
-              {filteredFoods.map((food, index) => (
+              {foods.map((food, index) => (
                 <div
-                  key={food.id}
+                  key={`${food.id}-${index}`}
                   className="flex flex-col items-center gap-2 sm:gap-3 cursor-pointer group"
                   style={{
                     animation: `slideUp 0.3s ease-out ${0.25 + 0.05 * (index % 12)}s both`
@@ -195,11 +238,13 @@ export default function SearchOverlay({ isOpen, onClose, searchValue, onSearchCh
               ))}
             </div>
           ) : (
-            <div className="text-center py-12 sm:py-16">
-              <Search className="h-12 w-12 sm:h-16 sm:w-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-              <p className="text-gray-600 dark:text-gray-400 text-base sm:text-lg font-semibold">No results found for "{searchValue}"</p>
-              <p className="text-sm sm:text-base text-gray-500 dark:text-gray-500 mt-2">Try a different search term</p>
-            </div>
+            !loading && (
+              <div className="text-center py-12 sm:py-16">
+                <Search className="h-12 w-12 sm:h-16 sm:w-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+                <p className="text-gray-600 dark:text-gray-400 text-base sm:text-lg font-semibold">No results found for "{searchValue}"</p>
+                <p className="text-sm sm:text-base text-gray-500 dark:text-gray-500 mt-2">Try a different search term</p>
+              </div>
+            )
           )}
         </div>
       </div>

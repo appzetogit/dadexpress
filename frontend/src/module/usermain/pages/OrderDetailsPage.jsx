@@ -28,19 +28,49 @@ export default function OrderDetailsPage() {
   const [remainingTime, setRemainingTime] = useState(0)
   const [canCancelOrEdit, setCanCancelOrEdit] = useState(false)
 
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
   useEffect(() => {
-    // Load order from localStorage
-    const savedOrders = localStorage.getItem('usermain_orders')
-    if (savedOrders) {
+    const fetchOrderDetails = async () => {
       try {
-        const orders = JSON.parse(savedOrders)
-        const foundOrder = orders.find(o => o.id === orderId)
-        if (foundOrder) {
-          setOrder(foundOrder)
+        setLoading(true)
+        const response = await import('@/lib/api').then(m => m.orderAPI.getOrderDetails(orderId))
+        if (response.data.success) {
+          const apiOrder = response.data.data.order
+          // Map backend order to frontend structure
+          setOrder({
+            id: apiOrder.orderId || apiOrder._id,
+            mongoId: apiOrder._id,
+            restaurant: apiOrder.restaurantName || apiOrder.restaurantId?.name || "Restaurant",
+            status: apiOrder.status.charAt(0).toUpperCase() + apiOrder.status.slice(1).replace('_', ' '),
+            date: apiOrder.createdAt,
+            time: new Date(apiOrder.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+            total: apiOrder.pricing?.total || 0,
+            orderDetails: {
+              items: apiOrder.items || [],
+              subtotal: apiOrder.pricing?.subtotal || 0,
+              deliveryFee: apiOrder.pricing?.deliveryFee || 0,
+              discount: apiOrder.pricing?.discount || 0,
+              deliveryAddress: apiOrder.address?.formattedAddress || "Delivery Address",
+              estimatedTime: apiOrder.restaurantId?.estimatedDeliveryTime || "30-40 min"
+            },
+            paymentMethod: apiOrder.payment?.method || "cash",
+            timestamp: apiOrder.createdAt
+          })
+        } else {
+          setError("Order not found")
         }
-      } catch (error) {
-        console.error('Error loading order:', error)
+      } catch (err) {
+        console.error("Error fetching order details:", err)
+        setError("Failed to load order details. Please check your internet connection and try again.")
+      } finally {
+        setLoading(false)
       }
+    }
+
+    if (orderId) {
+      fetchOrderDetails()
     }
   }, [orderId])
 
@@ -97,14 +127,27 @@ export default function OrderDetailsPage() {
     navigate(`/usermain/orders/${orderId}/edit`)
   }
 
-  if (!order) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-[#f6e9dc] flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-gray-600">Order not found</p>
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 border-4 border-[#ff8100] border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-gray-600 font-medium">Fetching order details...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !order) {
+    return (
+      <div className="min-h-screen bg-[#f6e9dc] flex items-center justify-center p-4">
+        <div className="bg-white p-8 rounded-2xl shadow-lg text-center max-w-sm w-full">
+          <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Oops!</h2>
+          <p className="text-gray-600 mb-6">{error || "Order not found"}</p>
           <Button
+            className="w-full bg-[#ff8100] hover:bg-[#e67300] text-white"
             onClick={() => navigate('/usermain/orders')}
-            className="mt-4 bg-[#ff8100] hover:bg-[#e67300] text-white"
           >
             Back to Orders
           </Button>
@@ -141,7 +184,7 @@ export default function OrderDetailsPage() {
             </div>
             <div className={`px-2 md:px-3 py-1 md:py-1.5 rounded-full text-xs font-semibold ${order.status === "Delivered"
               ? "bg-green-100 text-green-700"
-              : order.status === "Preparing"
+              : order.status === "Preparing" || order.status === "Confirmed"
                 ? "bg-orange-100 text-orange-700"
                 : "bg-blue-100 text-blue-700"
               }`}>
@@ -161,7 +204,7 @@ export default function OrderDetailsPage() {
       </div>
 
       {/* Countdown Timer for Cancel/Edit Window */}
-      {canCancelOrEdit && (
+      {canCancelOrEdit && order.status !== 'Cancelled' && (
         <div className="px-4 py-3 md:py-4">
           <div className="bg-gradient-to-r from-orange-50 to-red-50 border-2 border-orange-200 rounded-xl p-4 md:p-5 shadow-sm">
             <div className="flex items-center gap-3 mb-3">
@@ -260,7 +303,7 @@ export default function OrderDetailsPage() {
                     <p className="text-[10px] md:text-xs text-gray-500">Quantity: {item.quantity}</p>
                   </div>
                   <p className="text-xs md:text-sm font-bold text-gray-900">
-                    ${(item.price * item.quantity).toFixed(2)}
+                    ₹{(item.price * item.quantity).toFixed(2)}
                   </p>
                 </div>
               ))
@@ -278,22 +321,22 @@ export default function OrderDetailsPage() {
           <div className="space-y-2">
             <div className="flex items-center justify-between text-xs md:text-sm">
               <span className="text-gray-600">Subtotal</span>
-              <span className="text-gray-900 font-medium">${(orderDetails.subtotal || 0).toFixed(2)}</span>
+              <span className="text-gray-900 font-medium">₹{(orderDetails.subtotal || 0).toFixed(2)}</span>
             </div>
             <div className="flex items-center justify-between text-xs md:text-sm">
               <span className="text-gray-600">Delivery Fee</span>
-              <span className="text-gray-900 font-medium">${(orderDetails.deliveryFee || 0).toFixed(2)}</span>
+              <span className="text-gray-900 font-medium">₹{(orderDetails.deliveryFee || 0).toFixed(2)}</span>
             </div>
             {orderDetails.discount > 0 && (
               <div className="flex items-center justify-between text-xs md:text-sm">
                 <span className="text-gray-600">Discount</span>
-                <span className="text-[#ff8100] font-medium">-${orderDetails.discount.toFixed(2)}</span>
+                <span className="text-[#ff8100] font-medium">-₹{orderDetails.discount.toFixed(2)}</span>
               </div>
             )}
             <div className="border-t border-gray-200 pt-2 mt-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm md:text-base font-bold text-gray-900">Total</span>
-                <span className="text-lg md:text-xl font-bold text-[#ff8100]">${order.total.toFixed(2)}</span>
+                <span className="text-lg md:text-xl font-bold text-[#ff8100]">₹{order.total.toFixed(2)}</span>
               </div>
             </div>
           </div>
