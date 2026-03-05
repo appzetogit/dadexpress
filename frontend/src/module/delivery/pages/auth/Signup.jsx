@@ -165,6 +165,10 @@ export default function DeliverySignup() {
     // Simulate API call
     await new Promise((resolve) => setTimeout(resolve, 1000))
 
+    // Clear any previous signup details and documents to prevent data leakage between different users
+    sessionStorage.removeItem("deliverySignupDetails")
+    sessionStorage.removeItem("deliverySignupDocs")
+
     // Store auth data in sessionStorage for OTP page
     const authData = {
       method: "phone",

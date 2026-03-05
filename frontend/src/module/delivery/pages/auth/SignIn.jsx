@@ -104,6 +104,10 @@ export default function DeliverySignIn() {
       // Call backend to send OTP for delivery login
       await deliveryAPI.sendOTP(fullPhone, "login")
 
+      // Clear any previous signup details and documents to prevent data leakage between different users
+      sessionStorage.removeItem("deliverySignupDetails")
+      sessionStorage.removeItem("deliverySignupDocs")
+
       // Store auth data in sessionStorage for OTP page
       const authData = {
         method: "phone",

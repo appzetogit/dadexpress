@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { ArrowLeft, Upload, X, Check } from "lucide-react"
+import { ArrowLeft, Upload, X, Check, Camera } from "lucide-react"
 import { deliveryAPI } from "@/lib/api"
 import apiClient from "@/lib/api/axios"
 import { toast } from "sonner"
@@ -39,6 +39,36 @@ export default function SignupStep2() {
     drivingLicensePhoto: false
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
+  
+  const handleCameraCapture = async (docType) => {
+    try {
+      if (window.flutter_inappwebview) {
+        const result = await window.flutter_inappwebview.callHandler('openCamera')
+        
+        if (result && result.success && result.base64) {
+          // Convert base64 to File object
+          const byteString = atob(result.base64)
+          const ab = new ArrayBuffer(byteString.length)
+          const ia = new Uint8Array(ab)
+          for (let i = 0; i < byteString.length; i++) {
+            ia[i] = byteString.charCodeAt(i)
+          }
+          const mimeType = result.mimeType || 'image/jpeg'
+          const blob = new Blob([ab], { type: mimeType })
+          const file = new File([blob], result.fileName || `${docType}.jpg`, { type: mimeType })
+          
+          // Use existing handleFileSelect to upload
+          await handleFileSelect(docType, file)
+        }
+      } else {
+        toast.error("Camera is only available in the app")
+      }
+    } catch (error) {
+      console.error("Camera error:", error)
+      toast.error("Failed to access camera")
+    }
+  }
+
 
   // Save uploaded docs to session storage whenever they change
   useEffect(() => {
@@ -175,7 +205,50 @@ export default function SignupStep2() {
               <span>Uploaded</span>
             </div>
           </div>
+        ) : docType === 'profilePhoto' ? (
+          <div className="flex border-2 border-dashed border-gray-300 rounded-lg overflow-hidden h-48">
+            {/* Click to Upload - opens gallery */}
+            <label className="flex-1 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors border-r border-dashed border-gray-300 relative">
+              {isUploading ? (
+                <div className="flex flex-col items-center justify-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500 mb-2"></div>
+                  <p className="text-xs text-gray-500">Uploading...</p>
+                </div>
+              ) : (
+                <>
+                  <Upload className="w-6 h-6 text-gray-400 mb-2" />
+                  <p className="text-sm font-medium text-gray-600">Click to upload</p>
+                  <p className="text-[10px] text-gray-400">Gallery</p>
+                </>
+              )}
+              <input
+                type="file"
+                className="hidden"
+                accept="image/*"
+                onChange={(e) => {
+                  const selectedFile = e.target.files[0]
+                  if (selectedFile) {
+                    handleFileSelect(docType, selectedFile)
+                  }
+                }}
+                disabled={isUploading}
+              />
+            </label>
+
+            {/* Live Camera - opens camera via bridge */}
+            <button
+              type="button"
+              onClick={() => handleCameraCapture(docType)}
+              disabled={isUploading}
+              className="flex-1 flex flex-col items-center justify-center hover:bg-gray-50 transition-colors"
+            >
+              <Camera className="w-6 h-6 text-gray-400 mb-2" />
+              <p className="text-sm font-medium text-gray-600">Live Camera</p>
+              <p className="text-[10px] text-gray-400">Capture Photo</p>
+            </button>
+          </div>
         ) : (
+          /* Original single-button upload for other documents */
           <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-green-500 transition-colors">
             <div className="flex flex-col items-center justify-center pt-5 pb-6">
               {isUploading ? (
