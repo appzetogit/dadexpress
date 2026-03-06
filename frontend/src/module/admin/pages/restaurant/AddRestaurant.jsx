@@ -19,6 +19,13 @@ const cuisinesOptions = [
 ]
 
 const daysOfWeek = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+const TEN_DIGIT_PHONE_REGEX = /^\d{10}$/
+const PAN_NUMBER_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]$/
+const FSSAI_NUMBER_REGEX = /^\d{14}$/
+const GST_NUMBER_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/
+const IFSC_REGEX = /^[A-Z]{4}0[A-Z0-9]{6}$/
+const ACCOUNT_NUMBER_REGEX = /^\d{9,18}$/
+const NAME_WITH_CHARS_REGEX = /^(?=.*[A-Za-z])[A-Za-z\s.'-]+$/
 
 export default function AddRestaurant() {
   const navigate = useNavigate()
@@ -124,7 +131,13 @@ export default function AddRestaurant() {
     if (!step1.ownerEmail?.trim()) errors.push("Owner email is required")
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(step1.ownerEmail)) errors.push("Please enter a valid email address")
     if (!step1.ownerPhone?.trim()) errors.push("Owner phone number is required")
+    if (step1.ownerPhone?.trim() && !TEN_DIGIT_PHONE_REGEX.test(step1.ownerPhone.trim())) {
+      errors.push("Owner phone number must be exactly 10 digits")
+    }
     if (!step1.primaryContactNumber?.trim()) errors.push("Primary contact number is required")
+    if (step1.primaryContactNumber?.trim() && !TEN_DIGIT_PHONE_REGEX.test(step1.primaryContactNumber.trim())) {
+      errors.push("Primary contact number must be exactly 10 digits")
+    }
     if (!step1.location?.area?.trim()) errors.push("Area/Sector/Locality is required")
     if (!step1.location?.city?.trim()) errors.push("City is required")
     return errors
@@ -144,22 +157,52 @@ export default function AddRestaurant() {
   const validateStep3 = () => {
     const errors = []
     if (!step3.panNumber?.trim()) errors.push("PAN number is required")
+    if (step3.panNumber?.trim() && !PAN_NUMBER_REGEX.test(step3.panNumber.trim().toUpperCase())) {
+      errors.push("PAN number format is invalid (e.g., ABCDE1234F)")
+    }
     if (!step3.nameOnPan?.trim()) errors.push("Name on PAN is required")
+    if (step3.nameOnPan?.trim() && !NAME_WITH_CHARS_REGEX.test(step3.nameOnPan.trim())) {
+      errors.push("Name on PAN must contain alphabetic characters only")
+    }
     if (!step3.panImage) errors.push("PAN image is required")
     if (!step3.fssaiNumber?.trim()) errors.push("FSSAI number is required")
+    if (step3.fssaiNumber?.trim() && !FSSAI_NUMBER_REGEX.test(step3.fssaiNumber.trim())) {
+      errors.push("FSSAI number must be exactly 14 digits")
+    }
     if (!step3.fssaiExpiry?.trim()) errors.push("FSSAI expiry date is required")
     if (!step3.fssaiImage) errors.push("FSSAI image is required")
     if (step3.gstRegistered) {
       if (!step3.gstNumber?.trim()) errors.push("GST number is required when GST registered")
+      if (step3.gstNumber?.trim() && !GST_NUMBER_REGEX.test(step3.gstNumber.trim().toUpperCase())) {
+        errors.push("GST number format is invalid (e.g., 22AAAAA0000A1Z5)")
+      }
       if (!step3.gstLegalName?.trim()) errors.push("GST legal name is required when GST registered")
+      if (step3.gstLegalName?.trim() && !NAME_WITH_CHARS_REGEX.test(step3.gstLegalName.trim())) {
+        errors.push("GST legal name must contain alphabetic characters only")
+      }
       if (!step3.gstAddress?.trim()) errors.push("GST registered address is required when GST registered")
+      if (step3.gstAddress?.trim() && !/[A-Za-z]/.test(step3.gstAddress.trim())) {
+        errors.push("GST registered address cannot be only numeric")
+      }
       if (!step3.gstImage) errors.push("GST image is required when GST registered")
     }
     if (!step3.accountNumber?.trim()) errors.push("Account number is required")
+    if (step3.accountNumber?.trim() && !ACCOUNT_NUMBER_REGEX.test(step3.accountNumber.trim())) {
+      errors.push("Account number must be 9 to 18 digits")
+    }
     if (step3.accountNumber !== step3.confirmAccountNumber) errors.push("Account number and confirmation do not match")
     if (!step3.ifscCode?.trim()) errors.push("IFSC code is required")
+    if (step3.ifscCode?.trim() && !IFSC_REGEX.test(step3.ifscCode.trim().toUpperCase())) {
+      errors.push("IFSC code format is invalid (e.g., SBIN0018764)")
+    }
     if (!step3.accountHolderName?.trim()) errors.push("Account holder name is required")
+    if (step3.accountHolderName?.trim() && !NAME_WITH_CHARS_REGEX.test(step3.accountHolderName.trim())) {
+      errors.push("Account holder name must contain alphabetic characters only")
+    }
     if (!step3.accountType?.trim()) errors.push("Account type is required")
+    if (step3.accountType?.trim() && !/^\d+$/.test(step3.accountType.trim())) {
+      errors.push("Account type must be numeric")
+    }
     return errors
   }
 
@@ -178,6 +221,9 @@ export default function AddRestaurant() {
     const errors = []
     if (!auth.email && !auth.phone) errors.push("Either email or phone is required")
     if (auth.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(auth.email)) errors.push("Please enter a valid email address")
+    if (auth.phone && !TEN_DIGIT_PHONE_REGEX.test(auth.phone.trim())) {
+      errors.push("Authentication phone number must be exactly 10 digits")
+    }
     return errors
   }
 
@@ -368,9 +414,11 @@ export default function AddRestaurant() {
             <Label className="text-xs text-gray-700">Phone number*</Label>
             <Input
               value={step1.ownerPhone || ""}
-              onChange={(e) => setStep1({ ...step1, ownerPhone: e.target.value })}
+              onChange={(e) => setStep1({ ...step1, ownerPhone: e.target.value.replace(/\D/g, "").slice(0, 10) })}
               className="mt-1 bg-white text-sm text-black placeholder-black"
-              placeholder="+91 98XXXXXX"
+              placeholder="10 digit phone number"
+              inputMode="numeric"
+              maxLength={10}
             />
           </div>
         </div>
@@ -382,9 +430,11 @@ export default function AddRestaurant() {
           <Label className="text-xs text-gray-700">Primary contact number*</Label>
           <Input
             value={step1.primaryContactNumber || ""}
-            onChange={(e) => setStep1({ ...step1, primaryContactNumber: e.target.value })}
+            onChange={(e) => setStep1({ ...step1, primaryContactNumber: e.target.value.replace(/\D/g, "").slice(0, 10) })}
             className="mt-1 bg-white text-sm text-black placeholder-black"
-            placeholder="Restaurant's primary contact number"
+            placeholder="10 digit contact number"
+            inputMode="numeric"
+            maxLength={10}
           />
         </div>
         <div className="space-y-3">
@@ -605,8 +655,10 @@ export default function AddRestaurant() {
             <Label className="text-xs text-gray-700">PAN number*</Label>
             <Input
               value={step3.panNumber || ""}
-              onChange={(e) => setStep3({ ...step3, panNumber: e.target.value })}
+              onChange={(e) => setStep3({ ...step3, panNumber: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10) })}
               className="mt-1 bg-white text-sm text-black placeholder-black"
+              placeholder="ABCDE1234F"
+              maxLength={10}
             />
           </div>
           <div>
@@ -615,6 +667,7 @@ export default function AddRestaurant() {
               value={step3.nameOnPan || ""}
               onChange={(e) => setStep3({ ...step3, nameOnPan: e.target.value })}
               className="mt-1 bg-white text-sm text-black placeholder-black"
+              placeholder="Name as per PAN"
             />
           </div>
         </div>
@@ -626,6 +679,11 @@ export default function AddRestaurant() {
             onChange={(e) => setStep3({ ...step3, panImage: e.target.files?.[0] || null })}
             className="mt-1 bg-white text-sm text-black placeholder-black"
           />
+          {step3.panImage && (
+            <p className="text-xs text-green-700 mt-1">
+              Selected: {step3.panImage?.name || "PAN image selected"}
+            </p>
+          )}
         </div>
       </section>
 
@@ -650,10 +708,15 @@ export default function AddRestaurant() {
         </div>
         {step3.gstRegistered && (
           <div className="space-y-3">
-            <Input value={step3.gstNumber || ""} onChange={(e) => setStep3({ ...step3, gstNumber: e.target.value })} className="bg-white text-sm" placeholder="GST number*" />
+            <Input value={step3.gstNumber || ""} onChange={(e) => setStep3({ ...step3, gstNumber: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 15) })} className="bg-white text-sm" placeholder="22AAAAA0000A1Z5" maxLength={15} />
             <Input value={step3.gstLegalName || ""} onChange={(e) => setStep3({ ...step3, gstLegalName: e.target.value })} className="bg-white text-sm" placeholder="Legal name*" />
             <Input value={step3.gstAddress || ""} onChange={(e) => setStep3({ ...step3, gstAddress: e.target.value })} className="bg-white text-sm" placeholder="Registered address*" />
             <Input type="file" accept="image/*" onChange={(e) => setStep3({ ...step3, gstImage: e.target.files?.[0] || null })} className="bg-white text-sm" />
+            {step3.gstImage && (
+              <p className="text-xs text-green-700 mt-1">
+                Selected: {step3.gstImage?.name || "GST image selected"}
+              </p>
+            )}
           </div>
         )}
       </section>
@@ -661,7 +724,7 @@ export default function AddRestaurant() {
       <section className="bg-white p-4 sm:p-6 rounded-md space-y-4">
         <h2 className="text-lg font-semibold text-black">FSSAI details</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input value={step3.fssaiNumber || ""} onChange={(e) => setStep3({ ...step3, fssaiNumber: e.target.value })} className="bg-white text-sm" placeholder="FSSAI number*" />
+          <Input value={step3.fssaiNumber || ""} onChange={(e) => setStep3({ ...step3, fssaiNumber: e.target.value.replace(/\D/g, "").slice(0, 14) })} className="bg-white text-sm" placeholder="14 digit FSSAI number*" inputMode="numeric" maxLength={14} />
           <div>
             <Label className="text-xs text-gray-700 mb-1 block">FSSAI expiry date*</Label>
             <Input
@@ -673,17 +736,22 @@ export default function AddRestaurant() {
           </div>
         </div>
         <Input type="file" accept="image/*" onChange={(e) => setStep3({ ...step3, fssaiImage: e.target.files?.[0] || null })} className="bg-white text-sm" />
+        {step3.fssaiImage && (
+          <p className="text-xs text-green-700 mt-1">
+            Selected: {step3.fssaiImage?.name || "FSSAI image selected"}
+          </p>
+        )}
       </section>
 
       <section className="bg-white p-4 sm:p-6 rounded-md space-y-4">
         <h2 className="text-lg font-semibold text-black">Bank account details</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input value={step3.accountNumber || ""} onChange={(e) => setStep3({ ...step3, accountNumber: e.target.value.trim() })} className="bg-white text-sm" placeholder="Account number*" />
-          <Input value={step3.confirmAccountNumber || ""} onChange={(e) => setStep3({ ...step3, confirmAccountNumber: e.target.value.trim() })} className="bg-white text-sm" placeholder="Re-enter account number*" />
+          <Input value={step3.accountNumber || ""} onChange={(e) => setStep3({ ...step3, accountNumber: e.target.value.replace(/\D/g, "").slice(0, 18) })} className="bg-white text-sm" placeholder="Account number*" inputMode="numeric" maxLength={18} />
+          <Input value={step3.confirmAccountNumber || ""} onChange={(e) => setStep3({ ...step3, confirmAccountNumber: e.target.value.replace(/\D/g, "").slice(0, 18) })} className="bg-white text-sm" placeholder="Re-enter account number*" inputMode="numeric" maxLength={18} />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input value={step3.ifscCode || ""} onChange={(e) => setStep3({ ...step3, ifscCode: e.target.value })} className="bg-white text-sm" placeholder="IFSC code*" />
-          <Input value={step3.accountType || ""} onChange={(e) => setStep3({ ...step3, accountType: e.target.value })} className="bg-white text-sm" placeholder="Account type (savings / current)*" />
+          <Input value={step3.ifscCode || ""} onChange={(e) => setStep3({ ...step3, ifscCode: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 11) })} className="bg-white text-sm" placeholder="SBIN0018764" maxLength={11} />
+          <Input type="number" value={step3.accountType || ""} onChange={(e) => setStep3({ ...step3, accountType: e.target.value.replace(/\D/g, "") })} className="bg-white text-sm" placeholder="Account type code*" min="1" />
         </div>
         <Input value={step3.accountHolderName || ""} onChange={(e) => setStep3({ ...step3, accountHolderName: e.target.value })} className="bg-white text-sm" placeholder="Account holder name*" />
       </section>
@@ -786,9 +854,11 @@ export default function AddRestaurant() {
           <Input
             type="tel"
             value={String(auth.phone || "")}
-            onChange={(e) => setAuth({ ...auth, phone: e.target.value || "", signupMethod: !auth.email ? 'phone' : 'email' })}
+            onChange={(e) => setAuth({ ...auth, phone: (e.target.value || "").replace(/\D/g, "").slice(0, 10), signupMethod: !auth.email ? 'phone' : 'email' })}
             className="mt-1 bg-white text-sm"
-            placeholder="+91 9876543210"
+            placeholder="10 digit phone number"
+            inputMode="numeric"
+            maxLength={10}
           />
         </div>
       </section>
