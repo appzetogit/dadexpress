@@ -238,6 +238,10 @@ const restaurantSchema = new mongoose.Schema(
         type: Number,
         default: 0,
       },
+      currentStep: {
+        type: Number,
+        default: 1,
+      },
     },
     // Approval/Rejection fields
     rejectionReason: {

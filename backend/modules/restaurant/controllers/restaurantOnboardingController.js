@@ -35,7 +35,7 @@ export const getOnboarding = async (req, res) => {
 export const upsertOnboarding = async (req, res) => {
   try {
     const restaurantId = req.restaurant._id;
-    const { step1, step2, step3, step4, completedSteps } = req.body;
+    const { step1, step2, step3, step4, completedSteps, currentStep } = req.body;
 
     // Get existing restaurant data to merge if needed
     const existingRestaurant = await Restaurant.findById(restaurantId).lean();
@@ -70,6 +70,15 @@ export const upsertOnboarding = async (req, res) => {
       completedSteps !== undefined
     ) {
       update["onboarding.completedSteps"] = completedSteps;
+    }
+
+    // Persist the active onboarding step for reliable resume
+    if (
+      typeof currentStep === "number" &&
+      currentStep !== null &&
+      currentStep !== undefined
+    ) {
+      update["onboarding.currentStep"] = Math.min(4, Math.max(1, currentStep));
     }
 
     console.log("📝 Onboarding update payload:", {
@@ -361,7 +370,19 @@ export const upsertOnboarding = async (req, res) => {
       // This section is kept for backward compatibility and final validation
 
       // Fetch the complete restaurant to verify all data is saved
-      const completeRestaurant = await Restaurant.findById(restaurantId).lean();
+      let completeRestaurant = await Restaurant.findById(restaurantId).lean();
+
+      // Keep newly onboarded restaurants in pending state until admin approval
+      if (completeRestaurant && !completeRestaurant.approvedAt) {
+        const pendingRestaurant = await Restaurant.findByIdAndUpdate(
+          restaurantId,
+          { $set: { isActive: false, isAcceptingOrders: false } },
+          { new: true },
+        ).lean();
+        if (pendingRestaurant) {
+          completeRestaurant = pendingRestaurant;
+        }
+      }
 
       console.log("📋 Final restaurant data verification:", {
         name: completeRestaurant?.name,

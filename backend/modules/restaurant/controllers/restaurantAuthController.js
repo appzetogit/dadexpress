@@ -134,10 +134,9 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         return errorResponse(res, 400, `Restaurant already exists with this ${identifierType}. Please login.`);
       }
 
-      // Name is mandatory for explicit registration
-      if (!name) {
-        return errorResponse(res, 400, 'Restaurant name is required for registration');
-      }
+      // Name is optional now, will be collected in onboarding
+      const restaurantName = name || (normalizedPhone || email || 'New Restaurant');
+
 
       // Verify OTP (phone or email) before creating restaurant
       // Default OTP for specific number (Requested by USER)
@@ -149,7 +148,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
 
       const { fcmToken, platform = 'web' } = req.body;
       const restaurantData = {
-        name,
+        name: restaurantName,
         signupMethod: normalizedPhone ? 'phone' : 'email',
         fcmToken: fcmToken || null,
         platform: platform || 'web'
@@ -179,8 +178,8 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         restaurantData.password = password;
       }
 
-      // Set owner name from restaurant name if not provided separately
-      restaurantData.ownerName = name;
+      // Set owner name from restaurant name
+      restaurantData.ownerName = restaurantName;
 
       // Set isActive to false - restaurant needs admin approval before becoming active
       restaurantData.isActive = false;
@@ -354,14 +353,9 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       }
       restaurant = await Restaurant.findOne(findQuery);
 
-      if (!restaurant && !name) {
-        // Tell the client that we need restaurant name to proceed with auto-registration
-        return successResponse(res, 200, 'Restaurant not found. Please provide restaurant name for registration.', {
-          needsName: true,
-          identifierType,
-          identifier
-        });
-      }
+      // If restaurant not found, we will auto-register with a placeholder name
+      const restaurantName = name || (normalizedPhone || email || 'New Restaurant');
+
 
       // Handle reset-password purpose
       if (purpose === 'reset-password') {
@@ -395,7 +389,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         // Auto-register new restaurant after OTP verification
         const { fcmToken, platform = 'web' } = req.body;
         const restaurantData = {
-          name,
+          name: restaurantName,
           signupMethod: normalizedPhone ? 'phone' : 'email',
           platform: platform || 'web'
         };
@@ -430,7 +424,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
           restaurantData.password = password;
         }
 
-        restaurantData.ownerName = name;
+        restaurantData.ownerName = restaurantName;
 
         // Set isActive to false - restaurant needs admin approval before becoming active
         restaurantData.isActive = false;
@@ -1115,8 +1109,8 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
         profileImage: picture ? { url: picture } : null,
         ownerName: name.trim(),
         ownerEmail: email.toLowerCase().trim(),
-        // Set isActive to true for Google signups (similar to user app)
-        isActive: true,
+        // Restaurants must remain inactive until admin approval
+        isActive: false,
         fcmToken: req.body.fcmToken || null,
         platform: req.body.platform || 'web'
       };
@@ -1162,8 +1156,9 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
       }
     }
 
-    // Ensure restaurant is active - Automatically activate on Google login to avoid 403 errors
-    if (!restaurant.isActive) {
+    // Do not auto-activate unapproved restaurants.
+    // They must complete onboarding and then wait for admin approval.
+    if (!restaurant.isActive && restaurant.approvedAt) {
       restaurant.isActive = true;
       await restaurant.save();
       logger.info('Auto-activated restaurant account upon Google login', { restaurantId: restaurant._id });

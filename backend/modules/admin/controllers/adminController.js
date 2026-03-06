@@ -203,28 +203,16 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
 
     // Restaurant requests pending (inactive restaurants with completed onboarding, no rejection)
     const pendingRestaurantRequestsQuery = {
-      isActive: false,
       $and: [
+        { "onboarding.completedSteps": { $gte: 4 } },
         {
-          $or: [
-            { "onboarding.completedSteps": 4 },
-            {
-              $and: [
-                { name: { $exists: true, $ne: null, $ne: "" } },
-                { cuisines: { $exists: true, $ne: null, $not: { $size: 0 } } },
-                { openDays: { $exists: true, $ne: null, $not: { $size: 0 } } },
-                {
-                  estimatedDeliveryTime: { $exists: true, $ne: null, $ne: "" },
-                },
-                { featuredDish: { $exists: true, $ne: null, $ne: "" } },
-              ],
-            },
-          ],
+          $or: [{ approvedAt: { $exists: false } }, { approvedAt: null }],
         },
         {
           $or: [
             { rejectionReason: { $exists: false } },
             { rejectionReason: null },
+            { rejectionReason: "" },
           ],
         },
       ],
@@ -518,7 +506,7 @@ export const getAdmins = asyncHandler(async (req, res) => {
   try {
     const { limit = 50, offset = 0, search } = req.query;
 
-    const query = {};
+    let query = {};
 
     if (search) {
       query.$or = [
@@ -1156,7 +1144,7 @@ export const getRestaurants = asyncHandler(async (req, res) => {
     const { page = 1, limit = 50, search, status, cuisine, zone } = req.query;
 
     // Build query
-    const query = {};
+    let query = {};
 
     // Status filter - Default to active only (approved restaurants)
     // Only show inactive if explicitly requested via status filter
@@ -1283,26 +1271,26 @@ export const getRestaurantJoinRequests = asyncHandler(async (req, res) => {
     const { status = "pending", page = 1, limit = 50, search } = req.query;
 
     // Build query
-    const query = {};
+    let query = {};
 
     // Status filter
     // Pending = restaurants with ALL onboarding steps completed (step 4) but not yet active
     // Rejected = restaurants that have rejectionReason
     if (status === "pending") {
-      // Build conditions array for $and - ensures all conditions are met
-      // Check for rejectionReason: either doesn't exist OR is null
-      const conditions = [
-        { isActive: false },
+      // Pending = onboarding completed, not yet approved, and not rejected
+      query.$and = [
+        { "onboarding.completedSteps": { $gte: 4 } },
+        {
+          $or: [{ approvedAt: { $exists: false } }, { approvedAt: null }],
+        },
         {
           $or: [
             { rejectionReason: { $exists: false } },
             { rejectionReason: null },
-            { rejectionReason: "" }
+            { rejectionReason: "" },
           ],
         },
       ];
-
-      query.$and = conditions;
     } else if (status === "rejected") {
       query["rejectionReason"] = { $exists: true, $ne: null, $ne: "" };
     }
@@ -1374,10 +1362,18 @@ export const getRestaurantJoinRequests = asyncHandler(async (req, res) => {
     // Also log a sample of ALL inactive restaurants (for debugging)
     if (status === "pending" && restaurants.length === 0) {
       const allInactive = await Restaurant.find({
-        isActive: false,
-        $or: [
-          { rejectionReason: { $exists: false } },
-          { rejectionReason: null },
+        "onboarding.completedSteps": { $gte: 4 },
+        $and: [
+          {
+            $or: [{ approvedAt: { $exists: false } }, { approvedAt: null }],
+          },
+          {
+            $or: [
+              { rejectionReason: { $exists: false } },
+              { rejectionReason: null },
+              { rejectionReason: "" },
+            ],
+          },
         ],
       })
         .select(
@@ -1387,10 +1383,18 @@ export const getRestaurantJoinRequests = asyncHandler(async (req, res) => {
         .lean();
 
       const totalInactive = await Restaurant.countDocuments({
-        isActive: false,
-        $or: [
-          { rejectionReason: { $exists: false } },
-          { rejectionReason: null },
+        "onboarding.completedSteps": { $gte: 4 },
+        $and: [
+          {
+            $or: [{ approvedAt: { $exists: false } }, { approvedAt: null }],
+          },
+          {
+            $or: [
+              { rejectionReason: { $exists: false } },
+              { rejectionReason: null },
+              { rejectionReason: "" },
+            ],
+          },
         ],
       });
 

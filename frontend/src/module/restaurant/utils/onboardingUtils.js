@@ -58,6 +58,17 @@ const isStepComplete = (stepData, stepNumber) => {
     )
   }
 
+  if (stepNumber === 4) {
+    return (
+      stepData.estimatedDeliveryTime &&
+      stepData.featuredDish &&
+      (stepData.featuredPrice !== undefined &&
+        stepData.featuredPrice !== null &&
+        `${stepData.featuredPrice}`.trim() !== "") &&
+      stepData.offer
+    )
+  }
+
   return false
 }
 
@@ -65,8 +76,8 @@ const isStepComplete = (stepData, stepNumber) => {
 export const determineStepToShow = (data) => {
   if (!data) return 1
 
-  // If completedSteps is 4, onboarding is complete (admin-created restaurants)
-  if (data.completedSteps === 4) {
+  // If completedSteps is 4, onboarding is complete
+  if ((data.completedSteps || 0) >= 4) {
     return null
   }
 
@@ -83,6 +94,11 @@ export const determineStepToShow = (data) => {
   // Check step 3
   if (!isStepComplete(data.step3, 3)) {
     return 3
+  }
+
+  // Check step 4
+  if (!isStepComplete(data.step4, 4)) {
+    return 4
   }
 
   // All steps complete

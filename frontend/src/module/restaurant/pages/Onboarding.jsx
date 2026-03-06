@@ -208,6 +208,7 @@ function TimeSelector({ label, value, onChange }) {
   )
 }
 
+
 export default function RestaurantOnboarding() {
   const companyName = useCompanyName()
   const navigate = useNavigate()
@@ -268,6 +269,7 @@ export default function RestaurantOnboarding() {
     featuredDish: "",
     featuredPrice: "",
     offer: "",
+    referralCode: "",
   })
 
 
@@ -279,7 +281,7 @@ export default function RestaurantOnboarding() {
     const stepParam = searchParams.get("step")
     if (stepParam) {
       const stepNum = parseInt(stepParam, 10)
-      if (stepNum >= 1 && stepNum <= 3) {
+      if (stepNum >= 1 && stepNum <= 4) {
         setStep(stepNum)
       }
     }
@@ -338,6 +340,7 @@ export default function RestaurantOnboarding() {
           featuredDish: localData.step4.featuredDish || "",
           featuredPrice: localData.step4.featuredPrice || "",
           offer: localData.step4.offer || "",
+          referralCode: localData.step4.referralCode || "",
         })
       }
       // Only set step from localStorage if URL doesn't have a step parameter
@@ -443,12 +446,17 @@ export default function RestaurantOnboarding() {
               featuredDish: data.step4.featuredDish || "",
               featuredPrice: data.step4.featuredPrice || "",
               offer: data.step4.offer || "",
+              referralCode: data.step4.referralCode || "",
             })
           }
 
           // Determine which step to show based on completeness
           const stepToShow = determineStepToShow(data)
-          setStep(stepToShow)
+          if (stepToShow) {
+            setStep(stepToShow)
+          } else {
+            navigate("/restaurant", { replace: true })
+          }
         }
       } catch (err) {
         // Handle error gracefully - if it's a 401 (unauthorized), the user might need to login again
@@ -465,7 +473,21 @@ export default function RestaurantOnboarding() {
       }
     }
     fetchData()
-  }, [])
+  }, [navigate])
+
+  // Persist active step to DB so onboarding can resume reliably after exit/reload
+  useEffect(() => {
+    if (!step || step < 1 || step > 4) return
+    if (loading) return
+
+    const timer = setTimeout(() => {
+      api.put("/restaurant/onboarding", { currentStep: step }).catch(() => {
+        // Non-blocking best effort sync
+      })
+    }, 250)
+
+    return () => clearTimeout(timer)
+  }, [step, loading])
 
   const handleUpload = async (file, folder) => {
     try {
@@ -727,6 +749,7 @@ export default function RestaurantOnboarding() {
         featuredDish: "Butter Chicken Special",
         featuredPrice: "249",
         offer: "Flat ₹50 OFF above ₹199",
+        referralCode: "DUMMY123",
       })
       toast.success("Step 4 filled with dummy data", { duration: 2000 })
     }
@@ -774,6 +797,7 @@ export default function RestaurantOnboarding() {
         const payload = {
           step1,
           completedSteps: 1,
+          currentStep: 2,
         }
         await api.put("/restaurant/onboarding", payload)
         setStep(2)
@@ -840,6 +864,7 @@ export default function RestaurantOnboarding() {
             openDays: step2.openDays || [],
           },
           completedSteps: 2,
+          currentStep: 3,
         }
         console.log('📤 Step2 payload:', {
           menuImageUrlsCount: payload.step2.menuImageUrls.length,
@@ -978,6 +1003,7 @@ export default function RestaurantOnboarding() {
             },
           },
           completedSteps: 3,
+          currentStep: 4,
         }
         console.log('📤 Step3 payload:', {
           hasPan: !!payload.step3.pan.panNumber,
@@ -1001,8 +1027,10 @@ export default function RestaurantOnboarding() {
             featuredDish: step4.featuredDish,
             featuredPrice: parseFloat(step4.featuredPrice) || 249,
             offer: step4.offer,
+            referralCode: step4.referralCode,
           },
           completedSteps: 4,
+          currentStep: 4,
         }
         console.log('📤 Step 4 payload:', payload)
         const response = await api.put("/restaurant/onboarding", payload)
@@ -1057,6 +1085,16 @@ export default function RestaurantOnboarding() {
       }
       return { ...prev, openDays: [...prev.openDays, day] }
     })
+  }
+
+  const handleCloseOnboarding = async () => {
+    try {
+      await api.put("/restaurant/onboarding", { currentStep: step })
+    } catch {
+      // best effort only
+    } finally {
+      navigate("/restaurant", { replace: true })
+    }
   }
 
   const renderStep1 = () => (
@@ -1375,9 +1413,7 @@ export default function RestaurantOnboarding() {
                   This will be shown on your listing card and restaurant page.
                 </span>
               </div>
-
             </div>
-
           </div>
           <label
             htmlFor="profileImageInput"
@@ -1733,6 +1769,16 @@ export default function RestaurantOnboarding() {
             placeholder="e.g., Flat ₹50 OFF above ₹199"
           />
         </div>
+
+        <div>
+          <Label className="text-xs text-gray-700">Referral Code (Optional)</Label>
+          <Input
+            value={step4.referralCode || ""}
+            onChange={(e) => setStep4({ ...step4, referralCode: e.target.value.toUpperCase() })}
+            className="mt-1 bg-white text-sm"
+            placeholder="Enter referral code"
+          />
+        </div>
       </section>
     </div>
   )
@@ -1750,7 +1796,7 @@ export default function RestaurantOnboarding() {
         <header className="px-4 py-4 sm:px-6 sm:py-5 bg-white flex items-center justify-between border-b">
           <div className="flex items-center gap-3">
             <button
-              onClick={() => navigate("/restaurant/login")}
+              onClick={handleCloseOnboarding}
               className="p-1 hover:bg-gray-100 rounded-full transition-colors"
               aria-label="Close onboarding"
             >

@@ -629,7 +629,6 @@ export default function OrdersMain() {
             setShowReferredCard(true)
           }
 
-          /* Skip forced onboarding redirect as per user request
           const completedSteps = restaurant.onboarding?.completedSteps || 0
           if (completedSteps < 4) {
             // Onboarding is incomplete, redirect to onboarding page
@@ -639,7 +638,6 @@ export default function OrdersMain() {
               return
             }
           }
-          */
         }
       } catch (error) {
         // Only log error if it's not a network/timeout error (backend might be down/slow)

@@ -542,11 +542,10 @@ export default function Home() {
   try {
     profileContext = useProfile()
   } catch (error) {
-    console.warn("ProfileProvider not available, using fallback:", error.message)
     // Fallback values when ProfileProvider is not available
     profileContext = {
-      addFavorite: () => console.warn("ProfileProvider not available"),
-      removeFavorite: () => console.warn("ProfileProvider not available"),
+      addFavorite: () => {},
+      removeFavorite: () => {},
       isFavorite: () => false,
       getFavorites: () => []
     }
@@ -633,7 +632,6 @@ export default function Home() {
         if (!healthCheck.ok) {
           throw new Error(`Backend health check failed: ${healthCheck.status}`)
         }
-        console.log('✅ Backend connection successful')
       } catch (healthError) {
         // Backend connection error - handled silently, toast notifications shown via axios interceptor
         setRestaurantsData([])
@@ -701,17 +699,12 @@ export default function Home() {
         params.zoneId = zoneId
       }
       // Note: We show all restaurants regardless of zone, but apply grayscale styling if user is out of service
-
-      console.log('Fetching restaurants with params:', params)
       const response = await restaurantAPI.getRestaurants(params)
-      console.log('Restaurants API response:', response.data)
 
       if (response.data && response.data.success && response.data.data && response.data.data.restaurants) {
         const restaurantsArray = response.data.data.restaurants
-        console.log(`Fetched ${restaurantsArray.length} restaurants from API`)
 
         if (restaurantsArray.length === 0) {
-          console.warn('No restaurants found in API response')
           setRestaurantsData([])
           setLoadingRestaurants(false)
           return
@@ -834,11 +827,8 @@ export default function Home() {
             return aDistance - bDistance
           })
         }
-
-        console.log('Transformed and sorted restaurants:', transformedRestaurants)
         setRestaurantsData(transformedRestaurants)
       } else {
-        console.warn('Invalid API response structure:', response.data)
         setRestaurantsData([])
       }
     } catch (error) {
@@ -849,7 +839,6 @@ export default function Home() {
       setRestaurantsData([])
     } finally {
       setLoadingRestaurants(false)
-      console.log('Restaurant loading completed. restaurantsData length:', restaurantsData.length)
     }
   }, [zoneId])
 
@@ -908,7 +897,6 @@ export default function Home() {
     })
 
     setRestaurantsData(updatedRestaurants)
-    console.log('🔄 Recalculated distances for all restaurants based on user location')
   }, [location?.latitude, location?.longitude])
 
   // Filter restaurants and foods based on active filters
@@ -2955,4 +2943,3 @@ export default function Home() {
     </div>
   )
 }
-

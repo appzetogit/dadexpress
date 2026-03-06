@@ -17,10 +17,6 @@ export default function RestaurantOTP() {
   const [contactInfo, setContactInfo] = useState("") // Can be phone or email
   const [contactType, setContactType] = useState("phone") // "phone" or "email"
   const [focusedIndex, setFocusedIndex] = useState(null)
-  const [name, setName] = useState("")
-  const [referralCode, setReferralCode] = useState("")
-  const [nameError, setNameError] = useState("")
-  const [showNameInput, setShowNameInput] = useState(false)
   const inputRefs = useRef([])
 
   useEffect(() => {
@@ -156,25 +152,6 @@ export default function RestaurantOTP() {
       return
     }
 
-    // For email-based signup, use a two-step UX:
-    // 1) First validate OTP format and show name input
-    // 2) Then, once name is provided, call the backend
-    // For email-based login, skip name input and go directly to verification
-    if (contactType === "email" && authData?.isSignUp && !showNameInput) {
-      // First step: show name input, don't hit backend yet (only for signups)
-      setShowNameInput(true)
-      setError("")
-      return
-    }
-
-    // If we are on step 2 for email signup (or any flow where name input is visible), require name
-    if (showNameInput) {
-      if (!name.trim()) {
-        setNameError("Please enter your name to continue")
-        return
-      }
-      setNameError("")
-    }
 
     setIsLoading(true)
     setError("")
@@ -189,15 +166,8 @@ export default function RestaurantOTP() {
       const email = authData.method === "email" ? authData.email : null
       const purpose = authData.isSignUp ? "register" : "login"
 
-      // Decide which name to send:
-      // - If we're currently showing the name input (either because backend returned needsName
-      //   or because this is an email/phone signup flow), always send the typed name.
-      // - Otherwise, for explicit signup flows where a name was already collected earlier,
-      //   send that stored name.
       let nameToSend = null
-      if (showNameInput) {
-        nameToSend = name.trim()
-      } else if (authData.isSignUp && authData.name) {
+      if (authData.isSignUp && authData.name) {
         nameToSend = authData.name
       }
 
@@ -212,30 +182,6 @@ export default function RestaurantOTP() {
       // Extract restaurant and token or special flags (like needsName) from backend response
       const data = response?.data?.data || response?.data
 
-      // If backend says we need a name (restaurant not found on login), treat this as a new signup:
-      // - flip authData.isSignUp -> true so subsequent verify calls use "register"
-      // - persist this updated state back to sessionStorage
-      // - show the name input instead of erroring
-      if (data?.needsName) {
-        setAuthData((prev) => {
-          const updated = {
-            ...prev,
-            isSignUp: true,
-            // Preserve any existing name, but prefer the typed one if present
-            name: name?.trim() || prev?.name,
-          }
-          try {
-            sessionStorage.setItem("restaurantAuthData", JSON.stringify(updated))
-          } catch {
-            // Ignore storage errors; state is enough for this flow
-          }
-          return updated
-        })
-        setShowNameInput(true)
-        setError("")
-        setNameError("")
-        return
-      }
 
       const accessToken = data?.accessToken
       const restaurant = data?.restaurant
@@ -251,7 +197,15 @@ export default function RestaurantOTP() {
         sessionStorage.removeItem("restaurantLoginPhone")
 
         setTimeout(async () => {
-          // Skip onboarding redirect as per user request
+          try {
+            const incompleteStep = await checkOnboardingStatus()
+            if (incompleteStep) {
+              navigate(`/restaurant/onboarding?step=${incompleteStep}`, { replace: true })
+              return
+            }
+          } catch {
+            // Fallback to dashboard if onboarding check fails
+          }
           navigate("/restaurant", { replace: true })
         }, 500)
       }
@@ -386,54 +340,6 @@ export default function RestaurantOTP() {
             })}
           </div>
 
-          {/* Name input:
-              - Email-based signup (existing behavior)
-              - Phone-based login when backend returns needsName=true (auto-registration)
-          */}
-          {showNameInput && (
-            <div className="mt-6 max-w-sm mx-auto text-left">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {authData?.method === "phone" ? "Restaurant name" : "Your name"}
-              </label>
-              <input
-                type="text"
-                value={name || ""}
-                onChange={(e) => {
-                  setName(e.target.value)
-                  if (nameError) setNameError("")
-                }}
-                placeholder="Enter your full name"
-                className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 ${nameError
-                  ? "border-red-500 focus:ring-red-500"
-                  : "border-gray-300 focus:ring-blue-500"
-                  }`}
-                disabled={isLoading}
-              />
-              <p className="mt-1 text-xs text-gray-500">
-                If you&apos;re new, we&apos;ll use this to create your restaurant account.
-              </p>
-              {nameError && (
-                <p className="mt-1 text-xs text-red-600">
-                  {nameError}
-                </p>
-              )}
-
-              {/* Referral Code input */}
-              <div className="mt-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Referral code (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={referralCode || ""}
-                  onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
-                  placeholder="Enter referral code"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 uppercase"
-                  disabled={isLoading}
-                />
-              </div>
-            </div>
-          )}
 
           {/* Error Message */}
           {error && (
