@@ -72,6 +72,15 @@ export default function Profile() {
     localStorage.setItem('appTheme', appearance)
   }, [appearance])
 
+  const handleVegModeToggle = (nextValue) => {
+    // Update context state
+    setVegMode(nextValue)
+    // Ensure persistence even if context provider remounts
+    localStorage.setItem("userVegMode", String(nextValue))
+    // Notify same-tab listeners/components, if any
+    window.dispatchEvent(new Event("userVegModeChanged"))
+  }
+
   // Get first letter of name for avatar
   const avatarInitial = userProfile?.name?.charAt(0)?.toUpperCase() || userProfile?.phone?.charAt(1)?.toUpperCase() || 'U'
   const displayName = userProfile?.name || userProfile?.phone || 'User'
@@ -884,7 +893,7 @@ export default function Profile() {
           <div className="space-y-2 px-5 pb-5">
             <button
               onClick={() => {
-                setVegMode(true)
+                handleVegModeToggle(true)
                 setVegModeOpen(false)
               }}
               className={`w-full p-3 rounded-xl border-2 transition-all flex items-center justify-between ${vegMode
@@ -906,7 +915,7 @@ export default function Profile() {
             </button>
             <button
               onClick={() => {
-                setVegMode(false)
+                handleVegModeToggle(false)
                 setVegModeOpen(false)
               }}
               className={`w-full p-3 rounded-xl border-2 transition-all flex items-center justify-between ${!vegMode

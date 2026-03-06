@@ -21,6 +21,9 @@ import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
 import { DatePicker } from '@mui/x-date-pickers/DatePicker'
 import dayjs from 'dayjs'
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const MOBILE_REGEX = /^\d{10}$/
+
 // Gender options
 const genderOptions = [
   { value: "male", label: "Male" },
@@ -131,6 +134,31 @@ export default function EditProfile() {
     }))
   }
 
+  const isFlutterCameraBridgeAvailable = () => {
+    return (
+      typeof window !== "undefined" &&
+      window.flutter_inappwebview &&
+      typeof window.flutter_inappwebview.callHandler === "function"
+    )
+  }
+
+  const isMobileDevice = () => {
+    if (typeof navigator === "undefined") return false
+    return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)
+  }
+
+  const base64ToFile = (base64Data, mimeType = "image/jpeg", fileName = "camera-image.jpg") => {
+    const byteString = atob(base64Data)
+    const ab = new ArrayBuffer(byteString.length)
+    const ia = new Uint8Array(ab)
+
+    for (let i = 0; i < byteString.length; i += 1) {
+      ia[i] = byteString.charCodeAt(i)
+    }
+
+    return new File([ab], fileName, { type: mimeType })
+  }
+
   const handleClear = (field) => {
     setFormData(prev => ({
       ...prev,
@@ -138,8 +166,7 @@ export default function EditProfile() {
     }))
   }
 
-  const handleImageSelect = async (e) => {
-    const file = e.target.files?.[0]
+  const handleImageFileUpload = async (file) => {
     if (!file) return
 
     // Validate file type
@@ -188,17 +215,79 @@ export default function EditProfile() {
     }
   }
 
+  const handleImageSelect = async (e) => {
+    const file = e.target.files?.[0]
+    await handleImageFileUpload(file)
+  }
+
+  const handleProfileImagePick = async () => {
+    if (isUploadingImage) return
+
+    // Mobile-only camera flow
+    if (!isMobileDevice()) {
+      fileInputRef.current?.click()
+      return
+    }
+
+    // Prefer Flutter in-app camera bridge to avoid WebView redirects/reloads
+    if (isFlutterCameraBridgeAvailable()) {
+      try {
+        const result = await window.flutter_inappwebview.callHandler("openCamera")
+
+        if (result?.success && result?.base64) {
+          const imageFile = base64ToFile(
+            result.base64,
+            result.mimeType || "image/jpeg",
+            result.fileName || `camera-${Date.now()}.jpg`,
+          )
+          await handleImageFileUpload(imageFile)
+          return
+        }
+      } catch (bridgeError) {
+        console.error("Flutter camera bridge error:", bridgeError)
+        toast.error("Unable to open camera. Please try again.")
+      }
+    }
+
+    // Web fallback
+    fileInputRef.current?.click()
+  }
+
   const handleUpdate = async () => {
     if (isSaving) return
 
     try {
       setIsSaving(true)
 
+      const today = dayjs().startOf('day')
+      const email = (formData.email || "").trim()
+      const mobile = (formData.mobile || "").trim()
+
+      if (formData.dateOfBirth && dayjs(formData.dateOfBirth).isAfter(today, 'day')) {
+        toast.error('Date of birth cannot be a future date')
+        return
+      }
+
+      if (formData.anniversary && dayjs(formData.anniversary).isAfter(today, 'day')) {
+        toast.error('Anniversary cannot be a future date')
+        return
+      }
+
+      if (email && !EMAIL_REGEX.test(email)) {
+        toast.error('Please enter a valid email format (eg. pqrs@gmail.com)')
+        return
+      }
+
+      if (mobile && !MOBILE_REGEX.test(mobile)) {
+        toast.error('Mobile number must contain exactly 10 digits')
+        return
+      }
+
       // Prepare data for API
       const updateData = {
         name: formData.name,
-        email: formData.email || undefined,
-        phone: formData.mobile || undefined,
+        email: email || undefined,
+        phone: mobile || undefined,
         dateOfBirth: formData.dateOfBirth ? formData.dateOfBirth.format('YYYY-MM-DD') : undefined,
         anniversary: formData.anniversary ? formData.anniversary.format('YYYY-MM-DD') : undefined,
         gender: formData.gender || undefined,
@@ -270,7 +359,7 @@ export default function EditProfile() {
       </div>
 
       {/* Content */}
-      <div className="max-w-2xl md:max-w-3xl lg:max-w-4xl xl:max-w-5xl mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-6 sm:py-8 md:py-10 lg:py-12 space-y-6 md:space-y-8 lg:space-y-10">
+      <div className="max-w-2xl md:max-w-3xl lg:max-w-4xl xl:max-w-5xl mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-6 sm:py-8 md:py-10 lg:py-12 pb-28 sm:pb-32 md:pb-10 space-y-6 md:space-y-8 lg:space-y-10">
         {/* Avatar Section */}
         <div className="flex justify-center">
           <div className="relative">
@@ -287,7 +376,7 @@ export default function EditProfile() {
             </Avatar>
             {/* Edit Icon */}
             <button
-              onClick={() => fileInputRef.current?.click()}
+              onClick={handleProfileImagePick}
               disabled={isUploadingImage}
               className="absolute bottom-0 right-0 w-8 h-8 bg-[#EB590E] rounded-full flex items-center justify-center shadow-lg border-2 border-white hover:bg-[#D94F0C] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -301,6 +390,7 @@ export default function EditProfile() {
               ref={fileInputRef}
               type="file"
               accept="image/*"
+              capture="environment"
               onChange={handleImageSelect}
               className="hidden"
             />
@@ -346,7 +436,10 @@ export default function EditProfile() {
                   id="mobile"
                   type="tel"
                   value={formData.mobile}
-                  onChange={(e) => handleChange('mobile', e.target.value)}
+                  onChange={(e) => {
+                    const digitsOnly = e.target.value.replace(/\D/g, '').slice(0, 10)
+                    handleChange('mobile', digitsOnly)
+                  }}
                   className="flex-1 h-12 text-base  border border-gray-300 dark:border-gray-700 focus:border-[#EB590E] focus:ring-1 focus:ring-[#EB590E] rounded-lg bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-white"
                   placeholder="Mobile"
                 />
@@ -379,6 +472,7 @@ export default function EditProfile() {
                 <DatePicker
                   value={formData.dateOfBirth}
                   onChange={(newValue) => handleChange('dateOfBirth', newValue)}
+                  disableFuture
                   slotProps={{
                     textField: {
                       className: "w-full",
@@ -417,6 +511,7 @@ export default function EditProfile() {
                 <DatePicker
                   value={formData.anniversary}
                   onChange={(newValue) => handleChange('anniversary', newValue)}
+                  disableFuture
                   slotProps={{
                     textField: {
                       className: "w-full",

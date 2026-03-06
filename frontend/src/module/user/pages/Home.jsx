@@ -2,7 +2,7 @@ import { useSearchParams, Link, useNavigate } from "react-router-dom"
 import React, { useRef, useEffect, useState, useMemo, useCallback } from "react"
 import { createPortal } from "react-dom"
 import Lenis from "lenis"
-import { Star, Clock, MapPin, Heart, Search, Tag, Flame, ShoppingBag, ShoppingCart, Mic, SlidersHorizontal, CheckCircle2, Bookmark, BadgePercent, X, ArrowDownUp, Timer, CalendarClock, ShieldCheck, IndianRupee, UtensilsCrossed, Leaf, AlertCircle, Loader2, Plus, Check, Share2 } from "lucide-react"
+import { Star, Clock, MapPin, Heart, Search, Tag, Flame, ShoppingBag, ShoppingCart, SlidersHorizontal, CheckCircle2, Bookmark, BadgePercent, X, ArrowDownUp, Timer, CalendarClock, ShieldCheck, IndianRupee, UtensilsCrossed, Leaf, AlertCircle, Loader2, Plus, Check, Share2 } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import Footer from "../components/Footer"
 import AddToCartButton from "../components/AddToCartButton"
@@ -1237,7 +1237,6 @@ export default function Home() {
                       )}
                     </div>
                   </div>
-                  <Mic className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400 mr-3 sm:mr-4 cursor-pointer hover:text-[#EB590E] transition-colors flex-shrink-0" />
                 </div>
               </div>
             </motion.div>
@@ -2358,18 +2357,6 @@ export default function Home() {
                 Apply
               </button>
 
-              {/* More settings link */}
-              <button
-                onClick={() => {
-                  setShowVegModePopup(false)
-                  // Revert veg mode to OFF if popup is closed without applying
-                  setVegModeContext(false)
-                  setPrevVegMode(false)
-                }}
-                className="w-full text-[#EB590E] dark:text-[#EB590E] font-medium text-xs hover:text-[#D94F0C] transition-colors"
-              >
-                More settings
-              </button>
             </motion.div>
           </>
         )}

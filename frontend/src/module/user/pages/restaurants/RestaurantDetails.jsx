@@ -72,6 +72,8 @@ export default function RestaurantDetails() {
   const [expandedCoupons, setExpandedCoupons] = useState(new Set())
   const [showMenuSheet, setShowMenuSheet] = useState(false)
   const [showLargeOrderMenu, setShowLargeOrderMenu] = useState(false)
+  const [showShareModal, setShowShareModal] = useState(false)
+  const [sharePayload, setSharePayload] = useState({ title: "", text: "", url: "" })
   const [showSearch, setShowSearch] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [showMenuOptionsSheet, setShowMenuOptionsSheet] = useState(false)
@@ -1004,11 +1006,11 @@ export default function RestaurantDetails() {
     const restaurantName = restaurant?.name || "this restaurant"
 
     // Create share URL
-    const shareUrl = `${window.location.origin}/user/restaurants/${restaurantSlug}`
+    const shareUrl = `${window.location.origin}/restaurants/${restaurantSlug}`
     const shareText = `Check out ${restaurantName} on ${companyName}! ${shareUrl}`
 
-    // Try Web Share API first (mobile)
-    if (navigator.share) {
+    // Try native system share first (mobile + supported desktop)
+    if (typeof navigator !== "undefined" && navigator.share) {
       try {
         await navigator.share({
           title: restaurantName,
@@ -1018,15 +1020,16 @@ export default function RestaurantDetails() {
         toast.success("Restaurant shared successfully")
         setShowMenuOptionsSheet(false)
       } catch (error) {
-        // User cancelled or error occurred
-        if (error.name !== "AbortError") {
-          // Fallback to copy to clipboard
-          await copyToClipboard(shareUrl)
-        }
+        // If user cancels share, do nothing
+        if (error?.name === "AbortError") return
+        // Fallback to in-app share modal
+        setSharePayload({ title: restaurantName, text: shareText, url: shareUrl })
+        setShowShareModal(true)
       }
     } else {
-      // Fallback to copy to clipboard
-      await copyToClipboard(shareUrl)
+      // Fallback to in-app share modal
+      setSharePayload({ title: restaurantName, text: shareText, url: shareUrl })
+      setShowShareModal(true)
     }
   }
 
@@ -1039,11 +1042,11 @@ export default function RestaurantDetails() {
     const restaurantSlug = restaurant?.slug || slug || ""
 
     // Create share URL
-    const shareUrl = `${window.location.origin}/user/restaurants/${restaurantSlug}?dish=${dishId}`
+    const shareUrl = `${window.location.origin}/restaurants/${restaurantSlug}?dish=${dishId}`
     const shareText = `Check out ${item.name} from ${restaurant?.name || "this restaurant"}! ${shareUrl}`
 
-    // Try Web Share API first (mobile)
-    if (navigator.share) {
+    // Try native system share first (mobile + supported desktop)
+    if (typeof navigator !== "undefined" && navigator.share) {
       try {
         await navigator.share({
           title: `${item.name} - ${restaurant?.name || ""}`,
@@ -1052,15 +1055,16 @@ export default function RestaurantDetails() {
         })
         toast.success("Dish shared successfully")
       } catch (error) {
-        // User cancelled or error occurred
-        if (error.name !== "AbortError") {
-          // Fallback to copy to clipboard
-          await copyToClipboard(shareUrl)
-        }
+        // If user cancels share, do nothing
+        if (error?.name === "AbortError") return
+        // Fallback to in-app share modal
+        setSharePayload({ title: `${item.name} - ${restaurant?.name || ""}`, text: shareText, url: shareUrl })
+        setShowShareModal(true)
       }
     } else {
-      // Fallback to copy to clipboard
-      await copyToClipboard(shareUrl)
+      // Fallback to in-app share modal
+      setSharePayload({ title: `${item.name} - ${restaurant?.name || ""}`, text: shareText, url: shareUrl })
+      setShowShareModal(true)
     }
   }
 
@@ -1084,6 +1088,32 @@ export default function RestaurantDetails() {
         toast.error("Failed to copy link")
       }
       document.body.removeChild(textArea)
+    }
+  }
+
+  const openShareTarget = (target) => {
+    const encodedUrl = encodeURIComponent(sharePayload.url || "")
+    const encodedText = encodeURIComponent(sharePayload.text || "")
+
+    if (target === "copy") {
+      copyToClipboard(sharePayload.url)
+      setShowShareModal(false)
+      return
+    }
+    if (target === "whatsapp") {
+      window.open(`https://wa.me/?text=${encodedText}`, "_blank", "noopener,noreferrer")
+      setShowShareModal(false)
+      return
+    }
+    if (target === "telegram") {
+      window.open(`https://t.me/share/url?url=${encodedUrl}&text=${encodedText}`, "_blank", "noopener,noreferrer")
+      setShowShareModal(false)
+      return
+    }
+    if (target === "email") {
+      window.location.href = `mailto:?subject=${encodeURIComponent(sharePayload.title || "Check this out")}&body=${encodedText}`
+      setShowShareModal(false)
+      return
     }
   }
 
@@ -3082,6 +3112,70 @@ export default function RestaurantDetails() {
                   {/* Bottom Handle */}
                   <div className="px-4 pb-2 pt-2 flex justify-center">
                     <div className="h-1 w-12 bg-gray-300 rounded-full" />
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
+
+      {/* Share Modal Fallback - shown when native system share is unavailable */}
+      {typeof window !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {showShareModal && (
+              <>
+                <motion.div
+                  className="fixed inset-0 bg-black/40 z-[9999]"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                  onClick={() => setShowShareModal(false)}
+                />
+                <motion.div
+                  className="fixed left-0 right-0 bottom-0 md:left-1/2 md:right-auto md:-translate-x-1/2 md:bottom-auto md:top-1/2 md:-translate-y-1/2 z-[10000] bg-white dark:bg-[#1a1a1a] rounded-t-3xl md:rounded-3xl shadow-2xl md:max-w-md w-full"
+                  initial={{ y: "100%" }}
+                  animate={{ y: 0 }}
+                  exit={{ y: "100%" }}
+                  transition={{ duration: 0.2, type: "spring", damping: 30, stiffness: 400 }}
+                >
+                  <div className="px-4 pt-6 pb-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">Share</h3>
+                    <button
+                      onClick={() => setShowShareModal(false)}
+                      className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
+                      aria-label="Close share modal"
+                    >
+                      <X className="h-4 w-4 text-gray-600 dark:text-gray-300" />
+                    </button>
+                  </div>
+                  <div className="p-4 space-y-3">
+                    <button
+                      onClick={() => openShareTarget("copy")}
+                      className="w-full text-left px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-900 dark:text-white"
+                    >
+                      Copy Link
+                    </button>
+                    <button
+                      onClick={() => openShareTarget("whatsapp")}
+                      className="w-full text-left px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-900 dark:text-white"
+                    >
+                      Share on WhatsApp
+                    </button>
+                    <button
+                      onClick={() => openShareTarget("telegram")}
+                      className="w-full text-left px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-900 dark:text-white"
+                    >
+                      Share on Telegram
+                    </button>
+                    <button
+                      onClick={() => openShareTarget("email")}
+                      className="w-full text-left px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-900 dark:text-white"
+                    >
+                      Share via Email
+                    </button>
                   </div>
                 </motion.div>
               </>
