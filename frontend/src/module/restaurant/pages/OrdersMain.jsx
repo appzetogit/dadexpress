@@ -630,7 +630,7 @@ export default function OrdersMain() {
           }
 
           const completedSteps = restaurant.onboarding?.completedSteps || 0
-          if (completedSteps < 4) {
+          if (!restaurant.isActive && completedSteps < 4) {
             // Onboarding is incomplete, redirect to onboarding page
             const incompleteStep = await checkOnboardingStatus()
             if (incompleteStep) {

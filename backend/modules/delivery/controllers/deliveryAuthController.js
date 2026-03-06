@@ -251,13 +251,16 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       }
 
       // Check if signup needs to be completed (missing required fields)
-      const needsSignup = !delivery.location?.city ||
+      // Only force signup if the delivery boy is pending (not if already active/approved/suspended)
+      const needsSignup = delivery.status === 'pending' && (
+        !delivery.location?.city ||
         !delivery.vehicle?.number ||
         !delivery.documents?.pan?.number ||
         !delivery.documents?.aadhar?.number ||
         !delivery.documents?.aadhar?.document ||
         !delivery.documents?.pan?.document ||
-        !delivery.documents?.drivingLicense?.document;
+        !delivery.documents?.drivingLicense?.document
+      );
 
       if (needsSignup) {
         // Generate tokens for signup flow

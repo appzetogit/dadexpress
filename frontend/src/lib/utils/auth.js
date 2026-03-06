@@ -18,7 +18,25 @@ export function decodeToken(token) {
 
     // Decode base64url encoded payload
     const payload = parts[1];
-    const decoded = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+    let base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+    
+    // Add missing padding
+    while (base64.length % 4) {
+      base64 += '=';
+    }
+    
+    // Properly decode UTF-8 characters instead of just using atob directly
+    // atob alone will fail on non-ASCII characters (e.g., emojis, international chars)
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map(function(c) {
+          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        })
+        .join('')
+    );
+    
+    const decoded = JSON.parse(jsonPayload);
     
     return decoded;
   } catch (error) {
