@@ -1873,6 +1873,15 @@ export default function RestaurantOnboarding() {
     return renderStep4()
   }
 
+  const handleBack = () => {
+    if (saving) return
+    if (step === 1) {
+      navigate("/restaurant/login")
+      return
+    }
+    setStep((s) => Math.max(1, s - 1))
+  }
+
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns}>
       <div className="min-h-screen bg-gray-100 flex flex-col">
@@ -1935,8 +1944,8 @@ export default function RestaurantOnboarding() {
           <div className="flex justify-between items-center">
             <Button
               variant="ghost"
-              disabled={step === 1 || saving}
-              onClick={() => setStep((s) => Math.max(1, s - 1))}
+              disabled={saving}
+              onClick={handleBack}
               className="text-sm text-gray-700 bg-transparent"
             >
               Back
