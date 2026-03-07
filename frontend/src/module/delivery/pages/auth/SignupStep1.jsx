@@ -5,6 +5,9 @@ import { deliveryAPI } from "@/lib/api"
 import { toast } from "sonner"
 
 export default function SignupStep1() {
+  const alphaWithSpacesRegex = /^[A-Za-z]+(?:\s+[A-Za-z]+)*$/
+  const vehicleNumberRegex = /^[A-Z]{2}\d{1,2}[A-Z]{1,2}\d{4}$/
+
   const navigate = useNavigate()
   const [formData, setFormData] = useState(() => {
     const saved = sessionStorage.getItem("deliverySignupDetails")
@@ -40,14 +43,19 @@ export default function SignupStep1() {
     const { name, value } = e.target
     let updatedValue = value
 
-    // Restrict Name to alphabets and spaces only
-    if (name === "name") {
+    // Restrict Name/City/State to alphabets and spaces only
+    if (name === "name" || name === "city" || name === "state") {
       updatedValue = value.replace(/[^a-zA-Z\s]/g, "")
     }
 
     // Auto-uppercase for Vehicle and PAN numbers
     if (name === "vehicleNumber" || name === "panNumber") {
       updatedValue = value.toUpperCase()
+    }
+
+    // Restrict Vehicle Number to alphanumeric characters, spaces, and hyphen
+    if (name === "vehicleNumber") {
+      updatedValue = updatedValue.replace(/[^A-Z0-9\s-]/g, "").slice(0, 15)
     }
 
     // Restrict Aadhaar to numeric only
@@ -71,9 +79,14 @@ export default function SignupStep1() {
   const validate = () => {
     const newErrors = {}
 
-    if (!formData.name.trim()) {
+    const trimmedName = formData.name.trim()
+    const trimmedCity = formData.city.trim()
+    const trimmedState = formData.state.trim()
+    const normalizedVehicleNumber = formData.vehicleNumber.toUpperCase().replace(/[\s-]/g, "")
+
+    if (!trimmedName) {
       newErrors.name = "Name is required"
-    } else if (/[^a-zA-Z\s]/.test(formData.name)) {
+    } else if (!alphaWithSpacesRegex.test(trimmedName)) {
       newErrors.name = "Name should contain alphabet characters only"
     }
 
@@ -85,17 +98,21 @@ export default function SignupStep1() {
       newErrors.address = "Address is required"
     }
 
-    if (!formData.city.trim()) {
+    if (!trimmedCity) {
       newErrors.city = "City is required"
+    } else if (!alphaWithSpacesRegex.test(trimmedCity)) {
+      newErrors.city = "City should contain alphabet characters only"
     }
 
-    if (!formData.state.trim()) {
+    if (!trimmedState) {
       newErrors.state = "State is required"
+    } else if (!alphaWithSpacesRegex.test(trimmedState)) {
+      newErrors.state = "State should contain alphabet characters only"
     }
 
     if (!formData.vehicleNumber.trim()) {
       newErrors.vehicleNumber = "Vehicle number is required"
-    } else if (!/^[A-Z]{2}[0-9]{1,2}[A-Z]{1,2}[0-9]{4}$/.test(formData.vehicleNumber)) {
+    } else if (!vehicleNumberRegex.test(normalizedVehicleNumber)) {
       newErrors.vehicleNumber = "Invalid Indian vehicle number format (e.g., MH12AB1234)"
     }
 

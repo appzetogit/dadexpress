@@ -311,7 +311,16 @@ export default function ItemDetailsPage() {
   ]
 
   const handleImageAdd = (e) => {
-    const files = Array.from(e.target.files)
+    const files = Array.from(e.target.files || [])
+    processSelectedFiles(files)
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""
+    }
+  }
+
+  const processSelectedFiles = (files) => {
+    if (!files.length) return
 
     // Validate file types
     const allowedTypes = ["image/png", "image/jpeg", "image/jpg", "image/webp"]
@@ -343,9 +352,67 @@ export default function ItemDetailsPage() {
 
     setImages([...images, ...newImagePreviews])
     setImageFiles(newImageFilesMap)
+  }
 
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ""
+  const parseCameraResult = (rawResult) => {
+    let result = rawResult
+
+    if (Array.isArray(result)) {
+      result = result[0]
+    }
+    if (typeof result === "string") {
+      try {
+        result = JSON.parse(result)
+      } catch {
+        return null
+      }
+    }
+
+    if (!result || !result.success || !result.base64) {
+      return null
+    }
+
+    return result
+  }
+
+  const convertBase64ToFile = (cameraResult) => {
+    const base64Content = cameraResult.base64.includes(",")
+      ? cameraResult.base64.split(",").pop()
+      : cameraResult.base64
+
+    const byteString = atob(base64Content)
+    const uint8Array = new Uint8Array(byteString.length)
+    for (let i = 0; i < byteString.length; i++) {
+      uint8Array[i] = byteString.charCodeAt(i)
+    }
+
+    const mimeType = cameraResult.mimeType || "image/jpeg"
+    const extension = mimeType.split("/")[1] || "jpg"
+    const fileName = cameraResult.fileName || `item-image-${Date.now()}.${extension}`
+    return new File([uint8Array], fileName, { type: mimeType })
+  }
+
+  const handleCameraCapture = async () => {
+    try {
+      if (!window.flutter_inappwebview?.callHandler) {
+        // Browser fallback: open regular picker
+        fileInputRef.current?.click()
+        return
+      }
+
+      const rawResult = await window.flutter_inappwebview.callHandler("openCamera")
+      const cameraResult = parseCameraResult(rawResult)
+
+      if (!cameraResult) {
+        toast.error("No photo captured from camera")
+        return
+      }
+
+      const cameraFile = convertBase64ToFile(cameraResult)
+      processSelectedFiles([cameraFile])
+    } catch (error) {
+      console.error("Camera capture failed:", error)
+      toast.error("Failed to capture image from camera")
     }
   }
 
@@ -885,15 +952,27 @@ export default function ItemDetailsPage() {
               className="hidden"
               id="image-upload"
             />
-            <label
-              htmlFor="image-upload"
-              className="flex items-center justify-center gap-2.5 px-6 py-3.5 bg-gradient-to-r from-gray-900 to-gray-800 text-white rounded-xl text-sm font-semibold cursor-pointer hover:from-gray-800 hover:to-gray-700 transition-all shadow-md hover:shadow-lg active:scale-95"
-            >
-              <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center">
-                <Plus className="w-4 h-4" />
-              </div>
-              <span>Add Images</span>
-            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <label
+                htmlFor="image-upload"
+                className="flex items-center justify-center gap-2.5 px-4 py-3.5 bg-gradient-to-r from-gray-900 to-gray-800 text-white rounded-xl text-sm font-semibold cursor-pointer hover:from-gray-800 hover:to-gray-700 transition-all shadow-md hover:shadow-lg active:scale-95"
+              >
+                <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center">
+                  <Plus className="w-4 h-4" />
+                </div>
+                <span>Add Images</span>
+              </label>
+              <button
+                type="button"
+                onClick={handleCameraCapture}
+                className="flex items-center justify-center gap-2.5 px-4 py-3.5 bg-white text-gray-900 border border-gray-300 rounded-xl text-sm font-semibold hover:bg-gray-50 transition-all shadow-sm active:scale-95"
+              >
+                <div className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center">
+                  <Camera className="w-4 h-4" />
+                </div>
+                <span>Live Camera</span>
+              </button>
+            </div>
           </div>
         </div>
 

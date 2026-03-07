@@ -6,6 +6,11 @@ import { toast } from "sonner"
 import { deliveryAPI } from "@/lib/api"
 
 export default function ProfileDetails() {
+  const accountHolderNameRegex = /^[A-Za-z]+(?:[ .'-][A-Za-z]+)*$/
+  const accountNumberRegex = /^\d{9,18}$/
+  const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/
+  const bankNameRegex = /^[A-Za-z]+(?:[ .&'-][A-Za-z]+)*$/
+
   const navigate = useNavigate()
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -458,7 +463,8 @@ export default function ProfileDetails() {
               type="text"
               value={bankDetails.accountHolderName}
               onChange={(e) => {
-                setBankDetails(prev => ({ ...prev, accountHolderName: e.target.value }))
+                const value = e.target.value.replace(/[^A-Za-z\s.'-]/g, '')
+                setBankDetails(prev => ({ ...prev, accountHolderName: value }))
                 setBankDetailsErrors(prev => ({ ...prev, accountHolderName: "" }))
               }}
               placeholder="Enter account holder name"
@@ -528,7 +534,8 @@ export default function ProfileDetails() {
               type="text"
               value={bankDetails.bankName}
               onChange={(e) => {
-                setBankDetails(prev => ({ ...prev, bankName: e.target.value }))
+                const value = e.target.value.replace(/[^A-Za-z\s.&'-]/g, '')
+                setBankDetails(prev => ({ ...prev, bankName: value }))
                 setBankDetailsErrors(prev => ({ ...prev, bankName: "" }))
               }}
               placeholder="Enter bank name"
@@ -548,19 +555,23 @@ export default function ProfileDetails() {
               const errors = {}
               if (!bankDetails.accountHolderName.trim()) {
                 errors.accountHolderName = "Account holder name is required"
+              } else if (!accountHolderNameRegex.test(bankDetails.accountHolderName.trim())) {
+                errors.accountHolderName = "Account holder name should contain alphabet characters only"
               }
               if (!bankDetails.accountNumber.trim()) {
                 errors.accountNumber = "Account number is required"
-              } else if (bankDetails.accountNumber.length < 9 || bankDetails.accountNumber.length > 18) {
-                errors.accountNumber = "Account number must be between 9 and 18 digits"
+              } else if (!accountNumberRegex.test(bankDetails.accountNumber.trim())) {
+                errors.accountNumber = "Account number must be 9 to 18 digits"
               }
               if (!bankDetails.ifscCode.trim()) {
                 errors.ifscCode = "IFSC code is required"
-              } else if (bankDetails.ifscCode.length !== 11) {
-                errors.ifscCode = "IFSC code must be 11 characters"
+              } else if (!ifscRegex.test(bankDetails.ifscCode.trim().toUpperCase())) {
+                errors.ifscCode = "Invalid IFSC format (e.g., HDFC0001234)"
               }
               if (!bankDetails.bankName.trim()) {
                 errors.bankName = "Bank name is required"
+              } else if (!bankNameRegex.test(bankDetails.bankName.trim())) {
+                errors.bankName = "Bank name should contain alphabet characters only"
               }
 
               if (Object.keys(errors).length > 0) {

@@ -23,56 +23,52 @@ export default function DeliveryOTP() {
   const inputRefs = useRef([])
 
   useEffect(() => {
-    // Check if user is already fully authenticated (has token and it's valid)
-    // Only redirect if token exists and is valid - don't redirect during OTP flow
+    // Get auth data from sessionStorage (delivery module key).
+    // If this exists, user is in active OTP flow (including account switch),
+    // so do not auto-redirect to currently logged-in delivery session.
+    const stored = sessionStorage.getItem("deliveryAuthData")
+    if (stored) {
+      const data = JSON.parse(stored)
+      setAuthData(data)
+
+      // OTP field should be empty - delivery boy needs to enter it manually
+      // No auto-fill for delivery OTP
+
+      // Start resend timer (60 seconds)
+      setResendTimer(60)
+      const timer = setInterval(() => {
+        setResendTimer((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer)
+            return 0
+          }
+          return prev - 1
+        })
+      }, 1000)
+
+      return () => clearInterval(timer)
+    }
+
+    // No pending OTP flow; allow redirect for already authenticated users.
     const token = localStorage.getItem("delivery_accessToken")
     const authenticated = localStorage.getItem("delivery_authenticated") === "true"
-
-    // Only redirect if both token and authenticated flag exist (user is fully logged in)
     if (token && authenticated) {
-      // Check if token is not expired
       try {
         const parts = token.split('.')
         if (parts.length === 3) {
           const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))
           const now = Math.floor(Date.now() / 1000)
-          // If token is valid and not expired, redirect to home
           if (payload.exp && payload.exp > now) {
             navigate("/delivery", { replace: true })
             return
           }
         }
       } catch (e) {
-        // Token parsing failed, continue with OTP flow
+        // Token parsing failed, redirect to sign in
       }
     }
 
-    // Get auth data from sessionStorage (delivery module key)
-    const stored = sessionStorage.getItem("deliveryAuthData")
-    if (!stored) {
-      // No auth data, redirect to sign in
-      navigate("/delivery/sign-in", { replace: true })
-      return
-    }
-    const data = JSON.parse(stored)
-    setAuthData(data)
-
-    // OTP field should be empty - delivery boy needs to enter it manually
-    // No auto-fill for delivery OTP
-
-    // Start resend timer (60 seconds)
-    setResendTimer(60)
-    const timer = setInterval(() => {
-      setResendTimer((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer)
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
-
-    return () => clearInterval(timer)
+    navigate("/delivery/sign-in", { replace: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

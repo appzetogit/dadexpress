@@ -39,33 +39,66 @@ export default function SignupStep2() {
     drivingLicensePhoto: false
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
-  
+
+  const parseCameraResult = (rawResult) => {
+    let result = rawResult
+
+    // Some bridges return [result] or JSON string payload.
+    if (Array.isArray(result)) {
+      result = result[0]
+    }
+    if (typeof result === "string") {
+      try {
+        result = JSON.parse(result)
+      } catch {
+        return null
+      }
+    }
+
+    if (!result || !result.success || !result.base64) {
+      return null
+    }
+
+    return result
+  }
+
+  const convertBase64ToFile = (cameraResult, docType) => {
+    const base64Content = cameraResult.base64.includes(",")
+      ? cameraResult.base64.split(",").pop()
+      : cameraResult.base64
+
+    const byteString = atob(base64Content)
+    const uint8Array = new Uint8Array(byteString.length)
+    for (let i = 0; i < byteString.length; i++) {
+      uint8Array[i] = byteString.charCodeAt(i)
+    }
+
+    const mimeType = cameraResult.mimeType || "image/jpeg"
+    const extension = mimeType.split("/")[1] || "jpg"
+    const fileName = cameraResult.fileName || `${docType}-${Date.now()}.${extension}`
+    return new File([uint8Array], fileName, { type: mimeType })
+  }
+
   const handleCameraCapture = async (docType) => {
     try {
-      if (window.flutter_inappwebview) {
-        const result = await window.flutter_inappwebview.callHandler('openCamera')
-        
-        if (result && result.success && result.base64) {
-          // Convert base64 to File object
-          const byteString = atob(result.base64)
-          const ab = new ArrayBuffer(byteString.length)
-          const ia = new Uint8Array(ab)
-          for (let i = 0; i < byteString.length; i++) {
-            ia[i] = byteString.charCodeAt(i)
-          }
-          const mimeType = result.mimeType || 'image/jpeg'
-          const blob = new Blob([ab], { type: mimeType })
-          const file = new File([blob], result.fileName || `${docType}.jpg`, { type: mimeType })
-          
-          // Use existing handleFileSelect to upload
-          await handleFileSelect(docType, file)
-        }
-      } else {
-        toast.error("Camera is only available in the app")
+      if (!window.flutter_inappwebview?.callHandler) {
+        toast.error("Live camera is only available in the app")
+        return
       }
+
+      const rawResult = await window.flutter_inappwebview.callHandler("openCamera")
+      const cameraResult = parseCameraResult(rawResult)
+
+      if (!cameraResult) {
+        toast.error("No photo captured from camera")
+        return
+      }
+
+      const file = convertBase64ToFile(cameraResult, docType)
+      await handleFileSelect(docType, file)
     } catch (error) {
       console.error("Camera error:", error)
-      toast.error("Failed to access camera")
+      toast.error("Failed to capture photo from camera")
     }
   }
 
@@ -205,7 +238,7 @@ export default function SignupStep2() {
               <span>Uploaded</span>
             </div>
           </div>
-        ) : docType === 'profilePhoto' ? (
+        ) : (
           <div className="flex border-2 border-dashed border-gray-300 rounded-lg overflow-hidden h-48">
             {/* Click to Upload - opens gallery */}
             <label className="flex-1 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors border-r border-dashed border-gray-300 relative">
@@ -247,36 +280,6 @@ export default function SignupStep2() {
               <p className="text-[10px] text-gray-400">Capture Photo</p>
             </button>
           </div>
-        ) : (
-          /* Original single-button upload for other documents */
-          <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-green-500 transition-colors">
-            <div className="flex flex-col items-center justify-center pt-5 pb-6">
-              {isUploading ? (
-                <>
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500 mb-2"></div>
-                  <p className="text-sm text-gray-500">Uploading...</p>
-                </>
-              ) : (
-                <>
-                  <Upload className="w-8 h-8 text-gray-400 mb-2" />
-                  <p className="text-sm text-gray-500 mb-1">Click to upload</p>
-                  <p className="text-xs text-gray-400">PNG, JPG up to 5MB</p>
-                </>
-              )}
-            </div>
-            <input
-              type="file"
-              className="hidden"
-              accept="image/*"
-              onChange={(e) => {
-                const selectedFile = e.target.files[0]
-                if (selectedFile) {
-                  handleFileSelect(docType, selectedFile)
-                }
-              }}
-              disabled={isUploading}
-            />
-          </label>
         )}
       </div>
     )
