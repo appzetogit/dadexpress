@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { restaurantAPI } from "@/lib/api"
 import { setAuthData as setRestaurantAuthData } from "@/lib/utils/auth"
-import { checkOnboardingStatus } from "../../utils/onboardingUtils"
+import { checkOnboardingStatus, determineStepToShow } from "../../utils/onboardingUtils"
 import { requestFcmToken } from "@/lib/firebase"
 
 export default function RestaurantOTP() {
@@ -187,27 +187,33 @@ export default function RestaurantOTP() {
       const restaurant = data?.restaurant
 
       if (accessToken && restaurant) {
-        // Store auth data using utility function to ensure proper module-specific token storage
-        setRestaurantAuthData("restaurant", accessToken, restaurant)
-
-        // Dispatch custom event for same-tab updates
-        window.dispatchEvent(new Event("restaurantAuthChanged"))
-
-        sessionStorage.removeItem("restaurantAuthData")
-        sessionStorage.removeItem("restaurantLoginPhone")
-
-        setTimeout(async () => {
+        // Determine route synchronously before setting tokens that would trigger redirects
+        let targetRoute = "/restaurant";
+        if (!restaurant?.isActive) {
           try {
-            const incompleteStep = await checkOnboardingStatus()
+            const incompleteStep = determineStepToShow(restaurant?.onboarding)
             if (incompleteStep) {
-              navigate(`/restaurant/onboarding?step=${incompleteStep}`, { replace: true })
-              return
+              targetRoute = `/restaurant/onboarding?step=${incompleteStep}`
             }
           } catch {
             // Fallback to dashboard if onboarding check fails
           }
-          navigate("/restaurant", { replace: true })
-        }, 500)
+        }
+
+        // Store auth data
+        setRestaurantAuthData("restaurant", accessToken, restaurant)
+
+        // Clear session data
+        sessionStorage.removeItem("restaurantAuthData")
+        sessionStorage.removeItem("restaurantLoginPhone")
+
+        // Navigate immediately so old route wrappers don't catch the truthy auth early
+        navigate(targetRoute, { replace: true })
+
+        // Post-dispatch to update globals
+        setTimeout(() => {
+          window.dispatchEvent(new Event("restaurantAuthChanged"))
+        }, 10)
       }
     } catch (err) {
       const message =

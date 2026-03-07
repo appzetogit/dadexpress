@@ -452,10 +452,11 @@ export default function RestaurantOnboarding() {
 
           // Determine which step to show based on completeness
           const stepToShow = determineStepToShow(data)
-          if (stepToShow) {
-            setStep(stepToShow)
-          } else {
+          if (stepToShow === null) {
             navigate("/restaurant", { replace: true })
+            return
+          } else {
+            setStep(stepToShow)
           }
         }
       } catch (err) {

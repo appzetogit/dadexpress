@@ -280,7 +280,7 @@ apiClient.interceptors.response.use(
     // If response contains new access token, store it for the current module
     if (response.data?.accessToken) {
       const currentPath = window.location.pathname;
-      let tokenKey = "accessToken"; // fallback
+      let tokenKey = "user_accessToken"; // fallback
       let expectedRole = "user";
 
       if (currentPath.startsWith("/admin")) {
@@ -296,15 +296,6 @@ apiClient.interceptors.response.use(
       } else if (currentPath.startsWith("/delivery")) {
         tokenKey = "delivery_accessToken";
         expectedRole = "delivery";
-      } else if (
-        currentPath.startsWith("/user") ||
-        currentPath.startsWith("/usermain") ||
-        currentPath === "/" ||
-        currentPath.startsWith("/restaurants")
-      ) {
-        // User module includes /restaurants/* and /usermain/* paths
-        tokenKey = "user_accessToken";
-        expectedRole = "user";
       }
 
       const token = response.data.accessToken;
@@ -358,7 +349,7 @@ apiClient.interceptors.response.use(
         if (accessToken) {
           // Determine which module's token to update based on current route
           const currentPath = window.location.pathname;
-          let tokenKey = "accessToken"; // fallback
+          let tokenKey = "user_accessToken"; // fallback
           let expectedRole = "user";
 
           if (currentPath.startsWith("/admin")) {
@@ -374,14 +365,6 @@ apiClient.interceptors.response.use(
           } else if (currentPath.startsWith("/delivery")) {
             tokenKey = "delivery_accessToken";
             expectedRole = "delivery";
-          } else if (
-            currentPath.startsWith("/user") ||
-            currentPath === "/" ||
-            currentPath.startsWith("/restaurants")
-          ) {
-            // User module includes /restaurants/* paths
-            tokenKey = "user_accessToken";
-            expectedRole = "user";
           }
 
           const role = getRoleFromToken(accessToken);

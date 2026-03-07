@@ -40,6 +40,11 @@ export default function SignupStep1() {
     const { name, value } = e.target
     let updatedValue = value
 
+    // Restrict Name to alphabets and spaces only
+    if (name === "name") {
+      updatedValue = value.replace(/[^a-zA-Z\s]/g, "")
+    }
+
     // Auto-uppercase for Vehicle and PAN numbers
     if (name === "vehicleNumber" || name === "panNumber") {
       updatedValue = value.toUpperCase()
@@ -68,6 +73,8 @@ export default function SignupStep1() {
 
     if (!formData.name.trim()) {
       newErrors.name = "Name is required"
+    } else if (/[^a-zA-Z\s]/.test(formData.name)) {
+      newErrors.name = "Name should contain alphabet characters only"
     }
 
     if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
@@ -349,8 +356,26 @@ export default function SignupStep1() {
           {/* Submit Button */}
           <button
             type="submit"
-            disabled={isSubmitting}
-            className={`w-full py-4 rounded-lg font-bold text-white text-base transition-colors mt-6 ${isSubmitting
+            disabled={
+              isSubmitting ||
+              !formData.name.trim() ||
+              !formData.address.trim() ||
+              !formData.city.trim() ||
+              !formData.state.trim() ||
+              !formData.vehicleNumber.trim() ||
+              !formData.panNumber.trim() ||
+              !formData.aadharNumber.trim() ||
+              Object.keys(errors).length > 0
+            }
+            className={`w-full py-4 rounded-lg font-bold text-white text-base transition-colors mt-6 ${isSubmitting ||
+              !formData.name.trim() ||
+              !formData.address.trim() ||
+              !formData.city.trim() ||
+              !formData.state.trim() ||
+              !formData.vehicleNumber.trim() ||
+              !formData.panNumber.trim() ||
+              !formData.aadharNumber.trim() ||
+              Object.keys(errors).length > 0
               ? "bg-gray-400 cursor-not-allowed"
               : "bg-[#00B761] hover:bg-[#00A055]"
               }`}
