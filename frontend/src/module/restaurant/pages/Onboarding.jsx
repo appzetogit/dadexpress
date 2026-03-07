@@ -1275,7 +1275,6 @@ export default function RestaurantOnboarding() {
               type="file"
               multiple
               accept="image/*"
-              capture="environment"
               className="hidden"
               onChange={(e) => {
                 const files = Array.from(e.target.files || [])
@@ -1426,7 +1425,6 @@ export default function RestaurantOnboarding() {
             id="profileImageInput"
             type="file"
             accept="image/*"
-            capture="environment"
             className="hidden"
             onChange={(e) => {
               const file = e.target.files?.[0] || null
