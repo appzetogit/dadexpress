@@ -211,7 +211,7 @@ export default function DiningExploreNear() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => navigate(-1)}
+              onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/') )}
               className="h-9 w-9 sm:h-10 sm:w-10 bg-white/90 backdrop-blur-sm rounded-full hover:bg-white transition-colors flex-shrink-0"
             >
               <ArrowLeft className="h-5 w-5 text-gray-800" strokeWidth={2.5} />
@@ -700,4 +700,5 @@ export default function DiningExploreNear() {
     </AnimatedPage>
   )
 }
+
 

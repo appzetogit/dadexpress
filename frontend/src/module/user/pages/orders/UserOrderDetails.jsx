@@ -311,7 +311,7 @@ export default function UserOrderDetails() {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => navigate(-1)}
+            onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/') )}
             className="p-1 rounded-full hover:bg-gray-100"
           >
             <ArrowLeft className="w-6 h-6 text-gray-700 cursor-pointer" />
@@ -615,5 +615,6 @@ export default function UserOrderDetails() {
     </div>
   )
 }
+
 
 

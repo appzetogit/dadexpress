@@ -91,7 +91,7 @@ export default function DiningRestaurantDetails() {
         return (
             <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 p-4">
                 <h2 className="text-xl font-bold text-slate-800">Restaurant not found</h2>
-                <Button onClick={() => navigate(-1)} className="mt-4" variant="outline">Go Back</Button>
+                <Button onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/') )} className="mt-4" variant="outline">Go Back</Button>
             </div>
         )
     }
@@ -110,7 +110,7 @@ export default function DiningRestaurantDetails() {
                 </div>
                 <h2 className="text-xl font-bold text-slate-800 mb-2">Dining Unavailable</h2>
                 <p className="text-slate-600 mb-6">Dining is currently unavailable for this restaurant.</p>
-                <Button onClick={() => navigate(-1)} variant="outline">Go Back</Button>
+                <Button onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/') )} variant="outline">Go Back</Button>
             </div>
         )
     }
@@ -120,7 +120,7 @@ export default function DiningRestaurantDetails() {
             {/* Sticky Header / Back Button */}
             <div className="fixed top-0 left-0 w-full z-50 p-4 flex justify-between items-center bg-gradient-to-b from-black/50 to-transparent pointer-events-none">
                 <button
-                    onClick={() => navigate(-1)}
+                    onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/') )}
                     className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white pointer-events-auto hover:bg-black/60 transition-colors"
                 >
                     <ArrowLeft className="w-6 h-6" />
@@ -354,3 +354,4 @@ export default function DiningRestaurantDetails() {
         </div>
     )
 }
+

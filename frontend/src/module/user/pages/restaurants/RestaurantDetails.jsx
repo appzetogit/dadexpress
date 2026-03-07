@@ -1298,7 +1298,7 @@ export default function RestaurantDetails() {
                   Make sure the backend server is running at {API_BASE_URL.replace('/api', '')}
                 </p>
               )}
-              <Button onClick={() => navigate(-1)} variant="outline">
+              <Button onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/') )} variant="outline">
                 Go Back
               </Button>
             </div>
@@ -1316,7 +1316,7 @@ export default function RestaurantDetails() {
           <div className="flex flex-col items-center gap-4">
             <AlertCircle className="h-12 w-12 text-red-500" />
             <span className="text-sm text-gray-600">Restaurant not found</span>
-            <Button onClick={() => navigate(-1)} variant="outline">
+            <Button onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/') )} variant="outline">
               Go Back
             </Button>
           </div>
@@ -1342,7 +1342,7 @@ export default function RestaurantDetails() {
             variant="outline"
             size="icon"
             className="rounded-full h-10 w-10 border-gray-200 dark:border-gray-800 shadow-sm bg-white dark:bg-[#1a1a1a]"
-            onClick={() => navigate(-1)}
+            onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/') )}
           >
             <ArrowLeft className="h-5 w-5 text-gray-900 dark:text-white" />
           </Button>
@@ -3197,4 +3197,5 @@ export default function RestaurantDetails() {
     </AnimatedPage>
   )
 }
+
 

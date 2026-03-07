@@ -114,7 +114,7 @@ export default function TableBooking() {
                 <div className="absolute bottom-0 left-0 w-48 h-48 bg-red-50 rounded-full blur-3xl opacity-30 -ml-16 -mb-16"></div>
 
                 <div className="relative z-10">
-                    <button onClick={() => navigate(-1)} className="p-2 -ml-2 mb-4 bg-white shadow-sm rounded-full">
+                    <button onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/') )} className="p-2 -ml-2 mb-4 bg-white shadow-sm rounded-full">
                         <ArrowLeft className="w-6 h-6" />
                     </button>
                     <div className="text-center">
@@ -257,3 +257,4 @@ export default function TableBooking() {
         </AnimatedPage>
     )
 }
+

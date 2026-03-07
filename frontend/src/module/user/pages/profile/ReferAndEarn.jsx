@@ -140,7 +140,7 @@ export default function ReferAndEarn() {
     <AnimatedPage className="min-h-screen bg-[#FDFDFD] dark:bg-[#0a0a0a] pb-10">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-white dark:bg-[#1a1a1a] px-4 py-5 flex items-center gap-4">
-        <button onClick={() => navigate(-1)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
+        <button onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/') )} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
           <ArrowLeft className="h-6 w-6 text-black dark:text-white" />
         </button>
         <h1 className="text-xl font-black text-black dark:text-white">Refer & Earn</h1>
@@ -273,3 +273,4 @@ function StatItem({ icon: Icon, color, label, value }) {
     </div>
   )
 }
+

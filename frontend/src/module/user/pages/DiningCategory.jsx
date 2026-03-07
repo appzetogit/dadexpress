@@ -169,7 +169,7 @@ export default function DiningCategory() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => navigate(-1)}
+              onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/') )}
               className="h-9 w-9 sm:h-10 sm:w-10 bg-white border border-gray-200 rounded-full hover:bg-gray-50 transition-colors flex-shrink-0"
             >
               <ArrowLeft className="h-5 w-5 text-gray-800" strokeWidth={2.5} />
@@ -632,4 +632,5 @@ export default function DiningCategory() {
     </AnimatedPage>
   )
 }
+
 

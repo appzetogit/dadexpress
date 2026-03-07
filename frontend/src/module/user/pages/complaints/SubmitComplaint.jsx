@@ -151,7 +151,7 @@ export default function SubmitComplaint() {
       <div className="bg-white p-4 flex items-center sticky top-0 z-20 shadow-sm">
         <button
           type="button"
-          onClick={() => navigate(-1)}
+          onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/') )}
           className="p-1 rounded-full hover:bg-gray-100"
         >
           <ArrowLeft className="w-6 h-6 text-gray-700" />
@@ -274,3 +274,4 @@ export default function SubmitComplaint() {
     </div>
   )
 }
+

@@ -279,7 +279,7 @@ export default function ProductDetail() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => navigate(-1)}
+              onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/') )}
               className="rounded-full bg-white/90 backdrop-blur-sm hover:bg-white shadow-md"
             >
               <ArrowLeft className="h-5 w-5" />
@@ -744,4 +744,5 @@ export default function ProductDetail() {
     </AnimatedPage>
   )
 }
+
 

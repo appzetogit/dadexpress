@@ -62,7 +62,7 @@ export default function CollectionDetail() {
                 variant="ghost" 
                 size="icon" 
                 className="rounded-full h-8 w-8 sm:h-10 sm:w-10"
-                onClick={() => navigate(-1)}
+                onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/') )}
               >
                 <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
               </Button>
@@ -95,7 +95,7 @@ export default function CollectionDetail() {
                 variant="ghost" 
                 size="icon" 
                 className="rounded-full h-8 w-8 sm:h-10 sm:w-10"
-                onClick={() => navigate(-1)}
+                onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/') )}
               >
                 <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
               </Button>
@@ -164,4 +164,5 @@ export default function CollectionDetail() {
     </AnimatedPage>
   )
 }
+
 

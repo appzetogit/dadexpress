@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { motion } from "framer-motion"
-import { ArrowLeft, Headphones, ArrowRight, CheckCircle, Contact } from "lucide-react"
+import { ArrowLeft, ArrowRight, CheckCircle, Contact } from "lucide-react"
 import BottomPopup from "../components/BottomPopup"
 import { getCompanyNameAsync } from "@/lib/utils/businessSettings"
 
@@ -88,10 +88,7 @@ export default function ReferAndEarn() {
           <ArrowLeft className="w-5 h-5" />
         </button>
         <h1 className="text-lg font-bold">Refer and earn</h1>
-        <div className="flex items-center gap-2">
-          <Headphones className="w-5 h-5" />
-          <span className="text-sm">Help</span>
-        </div>
+        <div className="w-10" />
       </div>
 
       {/* Black Background Section - Till below Active Referrals Card */}
