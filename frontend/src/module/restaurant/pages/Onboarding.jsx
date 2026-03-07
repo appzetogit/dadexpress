@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Image as ImageIcon, Upload, Clock, Calendar as CalendarIcon, Sparkles, X } from "lucide-react"
+import { Image as ImageIcon, Upload, Clock, Calendar as CalendarIcon, Sparkles, X, Camera } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import {
@@ -271,6 +271,65 @@ export default function RestaurantOnboarding() {
     offer: "",
     referralCode: "",
   })
+
+  const parseCameraResult = (rawResult) => {
+    let result = rawResult
+
+    if (Array.isArray(result)) {
+      result = result[0]
+    }
+    if (typeof result === "string") {
+      try {
+        result = JSON.parse(result)
+      } catch {
+        return null
+      }
+    }
+
+    if (!result || !result.success || !result.base64) {
+      return null
+    }
+
+    return result
+  }
+
+  const convertBase64ToFile = (cameraResult, fallbackName) => {
+    const base64Content = cameraResult.base64.includes(",")
+      ? cameraResult.base64.split(",").pop()
+      : cameraResult.base64
+
+    const byteString = atob(base64Content)
+    const uint8Array = new Uint8Array(byteString.length)
+    for (let i = 0; i < byteString.length; i++) {
+      uint8Array[i] = byteString.charCodeAt(i)
+    }
+
+    const mimeType = cameraResult.mimeType || "image/jpeg"
+    const fileName = cameraResult.fileName || fallbackName
+    return new File([uint8Array], fileName, { type: mimeType })
+  }
+
+  const captureImageFromLiveCamera = async (onSuccess, fallbackName) => {
+    try {
+      if (!window.flutter_inappwebview?.callHandler) {
+        toast.error("Live camera is only available in the app")
+        return
+      }
+
+      const rawResult = await window.flutter_inappwebview.callHandler("openCamera")
+      const cameraResult = parseCameraResult(rawResult)
+      if (!cameraResult) {
+        toast.error("No photo captured from camera")
+        return
+      }
+
+      const file = convertBase64ToFile(cameraResult, fallbackName)
+      onSuccess(file)
+    } catch (error) {
+      console.error("Camera capture error:", error)
+      toast.error("Failed to capture photo from camera")
+    }
+  }
 
 
   // Load from localStorage on mount and check URL parameter
@@ -1440,6 +1499,19 @@ export default function RestaurantOnboarding() {
               e.target.value = ''
             }}
           />
+          <button
+            type="button"
+            onClick={() =>
+              captureImageFromLiveCamera(
+                (file) => setStep2((prev) => ({ ...prev, profileImage: file })),
+                `restaurant-profile-${Date.now()}.jpg`,
+              )
+            }
+            className="inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm border border-gray-300 bg-white text-gray-900 text-xs font-medium w-full"
+          >
+            <Camera className="w-4 h-4" />
+            <span>Live Camera</span>
+          </button>
         </div>
       </section>
 
@@ -1547,12 +1619,24 @@ export default function RestaurantOnboarding() {
           <Input
             type="file"
             accept="image/*"
-            capture="environment"
             onChange={(e) =>
               setStep3({ ...step3, panImage: e.target.files?.[0] || null })
             }
             className="mt-1 bg-white text-sm text-black placeholder-black"
           />
+          <button
+            type="button"
+            onClick={() =>
+              captureImageFromLiveCamera(
+                (file) => setStep3((prev) => ({ ...prev, panImage: file })),
+                `pan-image-${Date.now()}.jpg`,
+              )
+            }
+            className="mt-2 inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm border border-gray-300 bg-white text-gray-900 text-xs font-medium w-full"
+          >
+            <Camera className="w-4 h-4" />
+            <span>Live Camera</span>
+          </button>
         </div>
       </section>
 
