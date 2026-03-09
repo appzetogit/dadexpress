@@ -2111,6 +2111,8 @@ function OrderCard({
   deliveryPartnerId,
   onSelect,
   onCancel,
+  onMarkReady,
+  isMarkingReady,
 }) {
   const isReady = status === "Ready"
 
@@ -2222,6 +2224,20 @@ function OrderCard({
                   {!deliveryPartnerId && (
                     <ResendNotificationButton orderId={orderId} mongoId={mongoId} onSuccess={onSelect} />
                   )}
+                  {onMarkReady && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onMarkReady()
+                      }}
+                      disabled={isMarkingReady}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border border-green-300 bg-green-50 text-green-700 hover:bg-green-100 disabled:opacity-70 disabled:cursor-not-allowed"
+                    >
+                      {isMarkingReady ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
+                      <span>{isMarkingReady ? 'Marking...' : 'Mark as ready'}</span>
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -2246,6 +2262,7 @@ function PreparingOrders({ onSelectOrder, onCancel }) {
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [currentTime, setCurrentTime] = useState(new Date())
+  const [markingReadyOrderIds, setMarkingReadyOrderIds] = useState([])
 
   useEffect(() => {
     let isMounted = true
@@ -2416,6 +2433,33 @@ function PreparingOrders({ onSelectOrder, onCancel }) {
     }
   }, [orders])
 
+  const handleMarkOrderReady = async (order) => {
+    const orderKey = order.mongoId || order.orderId
+    if (!orderKey) return
+    if (markingReadyOrderIds.includes(orderKey)) return
+
+    setMarkingReadyOrderIds((prev) => [...prev, orderKey])
+    markedReadyOrdersRef.current.add(orderKey)
+
+    try {
+      await restaurantAPI.markOrderReady(orderKey)
+      setOrders((prev) => prev.filter((item) => (item.mongoId || item.orderId) !== orderKey))
+      toast.success('Order marked as ready')
+    } catch (error) {
+      const status = error.response?.status
+      const message = (error.response?.data?.message || error.message || '').toLowerCase()
+
+      if (status === 400 && (message.includes('cannot be marked as ready') || message.includes('current status'))) {
+        setOrders((prev) => prev.filter((item) => (item.mongoId || item.orderId) !== orderKey))
+      } else {
+        markedReadyOrdersRef.current.delete(orderKey)
+        toast.error('Failed to mark order as ready')
+      }
+    } finally {
+      setMarkingReadyOrderIds((prev) => prev.filter((id) => id !== orderKey))
+    }
+  }
+
   if (loading) {
     return (
       <div className="pt-4 pb-6">
@@ -2478,6 +2522,8 @@ function PreparingOrders({ onSelectOrder, onCancel }) {
                 deliveryPartnerId={order.deliveryPartnerId}
                 onSelect={onSelectOrder}
                 onCancel={onCancel}
+                onMarkReady={() => handleMarkOrderReady(order)}
+                isMarkingReady={markingReadyOrderIds.includes(order.mongoId || order.orderId)}
               />
             )
           })}

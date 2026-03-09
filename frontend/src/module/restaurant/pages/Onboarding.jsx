@@ -20,6 +20,7 @@ import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns"
 import { determineStepToShow } from "../utils/onboardingUtils"
 import { toast } from "sonner"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
+import { clearModuleAuth } from "@/lib/utils/auth"
 
 const cuisinesOptions = [
   "North Indian",
@@ -325,10 +326,25 @@ export default function RestaurantOnboarding() {
 
       const file = convertBase64ToFile(cameraResult, fallbackName)
       onSuccess(file)
+      toast.success("Photo captured successfully")
     } catch (error) {
       console.error("Camera capture error:", error)
       toast.error("Failed to capture photo from camera")
     }
+  }
+
+  const getImageLabel = (imageValue, fallbackLabel) => {
+    if (!imageValue) return null
+    if (imageValue instanceof File) return imageValue.name
+    if (imageValue?.name) return imageValue.name
+    if (typeof imageValue === "string") {
+      if (imageValue.startsWith("http")) {
+        const parts = imageValue.split("/")
+        return parts[parts.length - 1] || fallbackLabel
+      }
+      return imageValue
+    }
+    return fallbackLabel
   }
 
 
@@ -1153,7 +1169,9 @@ export default function RestaurantOnboarding() {
     } catch {
       // best effort only
     } finally {
-      navigate("/restaurant", { replace: true })
+      clearModuleAuth("restaurant")
+      localStorage.removeItem("restaurant_user")
+      navigate("/restaurant/login", { replace: true })
     }
   }
 
@@ -1330,6 +1348,23 @@ export default function RestaurantOnboarding() {
               <Upload className="w-4.5 h-4.5" />
               <span>Choose files</span>
             </label>
+            <button
+              type="button"
+              onClick={() =>
+                captureImageFromLiveCamera(
+                  (file) =>
+                    setStep2((prev) => ({
+                      ...prev,
+                      menuImages: [...(prev.menuImages || []), file],
+                    })),
+                  `menu-image-${Date.now()}.jpg`,
+                )
+              }
+              className="inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm border border-gray-300 bg-white text-gray-900 text-xs font-medium w-full"
+            >
+              <Camera className="w-4 h-4" />
+              <span>Live Camera</span>
+            </button>
             <input
               id="menuImagesInput"
               type="file"
@@ -1637,6 +1672,11 @@ export default function RestaurantOnboarding() {
             <Camera className="w-4 h-4" />
             <span>Live Camera</span>
           </button>
+          {step3.panImage && (
+            <p className="mt-2 text-[11px] text-gray-500 truncate">
+              Selected: {getImageLabel(step3.panImage, "pan-image.jpg")}
+            </p>
+          )}
         </div>
       </section>
 
@@ -1876,7 +1916,9 @@ export default function RestaurantOnboarding() {
   const handleBack = () => {
     if (saving) return
     if (step === 1) {
-      navigate("/restaurant/login")
+      clearModuleAuth("restaurant")
+      localStorage.removeItem("restaurant_user")
+      navigate("/restaurant/login", { replace: true })
       return
     }
     setStep((s) => Math.max(1, s - 1))
