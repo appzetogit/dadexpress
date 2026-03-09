@@ -142,8 +142,8 @@ export default function AdminRouter() {
             </ProtectedRoute>
           }
         >
-          {/* Dashboard */}
-          <Route path="/" element={<AdminHome />} />
+          {/* Dashboard - default /admin route */}
+          <Route index element={<AdminHome />} />
 
 
           <Route path="/point-of-sale" element={<PointOfSale />} />
@@ -329,8 +329,8 @@ export default function AdminRouter() {
           <Route path="referral/adjustment" element={<ReferralAdjustment />} />
         </Route>
 
-        {/* Redirect /admin to /admin/ */}
-        <Route path="" element={<Navigate to="/admin/login" replace />} />
+        {/* Fallback: if no route matches under /admin, send to dashboard */}
+        <Route path="*" element={<Navigate to="/admin" replace />} />
       </Routes >
     </ >
   );
