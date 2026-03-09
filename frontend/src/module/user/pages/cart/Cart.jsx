@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react"
 import { Link, useNavigate } from "react-router-dom"
-import { Plus, Minus, ArrowLeft, ChevronRight, Clock, MapPin, Phone, FileText, Utensils, Tag, Percent, Truck, Leaf, Share2, ChevronUp, ChevronDown, X, Check, Settings, CreditCard, Wallet, Building2, Sparkles } from "lucide-react"
+import { Plus, Minus, ArrowLeft, ChevronRight, Clock, MapPin, Phone, FileText, Utensils, Tag, Percent, Truck, Leaf, ChevronUp, ChevronDown, X, Check, Settings, CreditCard, Wallet, Building2, Sparkles } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import confetti from "canvas-confetti"
 
@@ -100,25 +100,6 @@ export default function Cart() {
   const [note, setNote] = useState("")
   const [showNoteInput, setShowNoteInput] = useState(false)
 
-  const handleShare = async () => {
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title: `My Cart at ${restaurantName || 'Quick Spicy'}`,
-          text: `Check out what I'm ordering from ${restaurantName || 'Quick Spicy'}!`,
-          url: window.location.href,
-        });
-      } else {
-        await navigator.clipboard.writeText(window.location.href);
-        toast.success("Link copied to clipboard!");
-      }
-    } catch (error) {
-      if (error.name !== 'AbortError') {
-        console.error('Error sharing:', error);
-        toast.error("Failed to share link");
-      }
-    }
-  };
   const [sendCutlery, setSendCutlery] = useState(true)
   const [isPlacingOrder, setIsPlacingOrder] = useState(false)
   const [showBillDetails, setShowBillDetails] = useState(false)
@@ -1325,14 +1306,6 @@ export default function Cart() {
                 </p>
               </div>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 md:h-8 md:w-8 flex-shrink-0"
-              onClick={handleShare}
-            >
-              <Share2 className="h-4 w-4 md:h-5 md:w-5" />
-            </Button>
           </div>
         </div>
       </div>

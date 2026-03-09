@@ -2177,7 +2177,7 @@ function OrderCard({
               </p>
             </div>
 
-            <div className="flex flex-col items-end gap-1">
+            <div className={`flex flex-col items-end gap-1 ${status === 'preparing' && onCancel ? 'mr-8' : ''}`}>
               <span
                 className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium border ${isReady
                   ? "border-green-500 text-green-600"
