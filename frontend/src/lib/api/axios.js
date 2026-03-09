@@ -383,13 +383,19 @@ apiClient.interceptors.response.use(
           return apiClient(originalRequest);
         }
       } catch (refreshError) {
-        // Show error toast in development mode for refresh errors
+        const status = refreshError.response?.status;
+        const message =
+          refreshError.response?.data?.message ||
+          refreshError.response?.data?.error ||
+          refreshError.message ||
+          "";
+
+        // Show error toast in development mode for visibility
         if (import.meta.env.DEV) {
           const refreshErrorMessage =
-            refreshError.response?.data?.message ||
-            refreshError.response?.data?.error ||
-            refreshError.message ||
-            "Token refresh failed";
+            message && typeof message === "string"
+              ? message
+              : "Token refresh failed";
 
           toast.error(refreshErrorMessage, {
             duration: 3000,
@@ -408,16 +414,30 @@ apiClient.interceptors.response.use(
           });
         }
 
-        // Refresh failed, clear module-specific token and redirect to login
-        // BUT: Don't auto-redirect on certain pages - let them handle errors gracefully
+        // Determine if this is a true auth failure (expired/invalid token)
+        const lowerMsg = typeof message === "string" ? message.toLowerCase() : "";
+        const isAuthFailure =
+          status === 401 ||
+          lowerMsg.includes("invalid token") ||
+          lowerMsg.includes("token expired") ||
+          lowerMsg.includes("refresh token not found") ||
+          lowerMsg.includes("invalid refresh token") ||
+          lowerMsg.includes("role mismatch on refreshed token");
+
+        // For network / server errors during refresh (not real auth failures),
+        // don't log the user out – keep tokens and let the app retry later.
+        if (!isAuthFailure) {
+          return Promise.reject(refreshError);
+        }
+
+        // Refresh truly failed / token is invalid – clear module token and redirect to login,
+        // except on onboarding or landing-page-management screens which handle errors themselves.
         const currentPath = window.location.pathname;
         const isOnboardingPage = currentPath.includes("/onboarding");
         const isLandingPageManagement =
           currentPath.includes("/hero-banner-management") ||
           currentPath.includes("/landing-page");
 
-        // For landing page management, don't auto-logout on 401 - let component handle it
-        // Only auto-logout for other pages after token refresh fails
         if (!isOnboardingPage && !isLandingPageManagement) {
           if (currentPath.startsWith("/admin")) {
             localStorage.removeItem("admin_accessToken");
@@ -447,9 +467,7 @@ apiClient.interceptors.response.use(
           }
         }
 
-        // For onboarding page, reject the promise so component can handle it
-        return Promise.reject(refreshError);
-
+        // Let calling code know refresh ultimately failed
         return Promise.reject(refreshError);
       }
     }

@@ -2054,7 +2054,7 @@ export default function DeliveryHome() {
     }
   }, [isOnline]) // Re-run when online status changes - this controls start/stop of tracking
 
-  // Handle new order popup accept button swipe
+  // Handle new order popup accept button swipe (touch)
   const handleNewOrderAcceptTouchStart = (e) => {
     newOrderAcceptButtonSwipeStartX.current = e.touches[0].clientX
     newOrderAcceptButtonSwipeStartY.current = e.touches[0].clientY
@@ -2973,6 +2973,27 @@ export default function DeliveryHome() {
       }
     }
   }
+
+  // Desktop (mouse) support for the same swipe logic – wrap mouse events into touch-like events
+  const handleNewOrderAcceptMouseDown = (e) => {
+    if (e.button !== 0) return; // Only left click
+    handleNewOrderAcceptTouchStart({
+      touches: [{ clientX: e.clientX, clientY: e.clientY }]
+    });
+  };
+
+  const handleNewOrderAcceptMouseMove = (e) => {
+    if (!newOrderAcceptButtonIsSwiping.current) return;
+    handleNewOrderAcceptTouchMove({
+      touches: [{ clientX: e.clientX, clientY: e.clientY }]
+    });
+  };
+
+  const handleNewOrderAcceptMouseUp = (e) => {
+    handleNewOrderAcceptTouchEnd({
+      changedTouches: [{ clientX: e.clientX, clientY: e.clientY }]
+    });
+  };
 
   const handleNewOrderPopupTouchEnd = (e) => {
     if (!newOrderIsSwiping.current) {
@@ -9620,6 +9641,10 @@ export default function DeliveryHome() {
                       onTouchMove={handleNewOrderAcceptTouchMove}
                       onTouchEnd={handleNewOrderAcceptTouchEnd}
                       onTouchCancel={handleNewOrderAcceptTouchEnd}
+                      onMouseDown={handleNewOrderAcceptMouseDown}
+                      onMouseMove={handleNewOrderAcceptMouseMove}
+                      onMouseUp={handleNewOrderAcceptMouseUp}
+                      onMouseLeave={handleNewOrderAcceptMouseUp}
                       whileTap={{ scale: 0.98 }}
                     >
                       {/* Swipe progress background */}
