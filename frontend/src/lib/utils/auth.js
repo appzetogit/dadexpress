@@ -115,12 +115,9 @@ export function getCurrentUserRole(module = null) {
     const token = getModuleToken(module);
     if (!token) return null;
     
-    if (isTokenExpired(token)) {
-      // Token expired, clear it
-      clearModuleAuth(module);
-      return null;
-    }
-    
+    // Allow the axios interceptor to handle expired tokens via refresh
+    // We still return the role from the expired token so UI doesn't flicker
+    // before the interceptor kicks in.
     return getRoleFromToken(token);
   }
   
@@ -129,7 +126,7 @@ export function getCurrentUserRole(module = null) {
   const modules = ['user', 'restaurant', 'delivery', 'admin'];
   for (const mod of modules) {
     const token = getModuleToken(mod);
-    if (token && !isTokenExpired(token)) {
+    if (token) {
       return getRoleFromToken(token);
     }
   }
@@ -146,11 +143,9 @@ export function isModuleAuthenticated(module) {
   const token = getModuleToken(module);
   if (!token) return false;
   
-  if (isTokenExpired(token)) {
-    clearModuleAuth(module);
-    return false;
-  }
-  
+  // We don't check isTokenExpired here because we want the Axios
+  // interceptor to attempt a refresh if the token is expired.
+  // The backend and interceptor will handle actual authentication state.
   return true;
 }
 
