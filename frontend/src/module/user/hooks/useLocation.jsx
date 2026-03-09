@@ -1386,8 +1386,17 @@ export function useLocation() {
         }
       }
     } catch (err) {
-      // Silently fail for 404/401 (user not authenticated) or network errors
-      if (err.code !== "ERR_NETWORK" && err.response?.status !== 404 && err.response?.status !== 401) {
+      // Silently fail for 404/401 (user not authenticated), network errors, or aborted/Cancelled requests
+      const status = err.response?.status
+      const isNetworkError = err.code === "ERR_NETWORK"
+      const isAuthOrNotFound = status === 404 || status === 401
+      const message = err.message || ""
+      const isAborted =
+        err.code === "ERR_CANCELED" ||
+        message.toLowerCase().includes("aborted") ||
+        message.toLowerCase().includes("canceled")
+
+      if (!isNetworkError && !isAuthOrNotFound && !isAborted) {
         console.error("DB location fetch error:", err)
       }
     }
