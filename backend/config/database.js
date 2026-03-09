@@ -14,7 +14,7 @@ const logger = winston.createLogger({
 export const connectDB = async () => {
   try {
     const conn = await mongoose.connect(process.env.MONGODB_URI, {
-      // Mongoose 8.x options
+      family: 4, // Force IPv4 for better compatibility in local environments
     });
 
     logger.info(`MongoDB Connected: ${conn.connection.host}`);
