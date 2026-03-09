@@ -2890,20 +2890,6 @@ export default function Home() {
                       </div>
                     </div>
 
-                    {/* Create new Collection */}
-                    <button
-                      className="w-full flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg transition-colors"
-                      onClick={() => setShowManageCollections(false)}
-                    >
-                      <div className="h-12 w-12 rounded-lg bg-pink-100 flex items-center justify-center flex-shrink-0">
-                        <Plus className="h-6 w-6 text-red-500" />
-                      </div>
-                      <div className="flex-1 text-left">
-                        <span className="text-base font-medium text-gray-900">
-                          Create new Collection
-                        </span>
-                      </div>
-                    </button>
                   </div>
 
                   {/* Done Button */}
