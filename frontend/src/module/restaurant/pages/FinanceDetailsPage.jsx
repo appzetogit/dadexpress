@@ -120,7 +120,7 @@ export default function FinanceDetailsPage() {
       <div className="sticky bg-white top-0 z-40 px-4 py-3 border-b border-gray-200">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => navigate(-1)}
+            onClick={() => navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : "/restaurant")}
             className="p-1 rounded-full hover:bg-gray-100"
           >
             <ArrowLeft className="w-5 h-5 text-gray-700" />
@@ -627,3 +627,4 @@ export default function FinanceDetailsPage() {
     </div>
   )
 }
+

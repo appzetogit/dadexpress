@@ -161,7 +161,7 @@ export default function RestaurantConfigPage() {
             transition={{ duration: 0.3 }}
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
-            onClick={() => navigate(-1)}
+            onClick={() => navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : "/restaurant")}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
             <ArrowLeft className="w-5 h-5 text-gray-700" />
@@ -560,4 +560,5 @@ export default function RestaurantConfigPage() {
     </div>
   )
 }
+
 

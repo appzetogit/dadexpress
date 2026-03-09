@@ -56,7 +56,7 @@ export default function ManageOutlets() {
       {/* Header */}
       <div className="px-4 pt-4 pb-3 flex items-center gap-3 border-b border-gray-200">
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : "/restaurant")}
           className="p-2 rounded-full hover:bg-gray-100"
           aria-label="Back"
         >
@@ -129,4 +129,5 @@ export default function ManageOutlets() {
     </div>
   )
 }
+
 

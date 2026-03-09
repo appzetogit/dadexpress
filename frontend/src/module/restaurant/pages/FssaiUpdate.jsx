@@ -7,7 +7,7 @@ export default function FssaiUpdate() {
   const handleSubmit = (e) => {
     e.preventDefault()
     // For now just go back
-    navigate(-1)
+    navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : "/restaurant")
   }
 
   return (
@@ -15,7 +15,7 @@ export default function FssaiUpdate() {
       {/* Header */}
       <div className="px-4 pt-4 pb-3 flex items-center gap-3 border-b border-gray-200">
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : "/restaurant")}
           className="p-2 rounded-full hover:bg-gray-100"
           aria-label="Back"
         >
@@ -83,3 +83,4 @@ export default function FssaiUpdate() {
     </div>
   )
 }
+

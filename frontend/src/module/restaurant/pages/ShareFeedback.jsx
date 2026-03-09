@@ -18,7 +18,7 @@ export default function ShareFeedback() {
   const numbers = Array.from({ length: 11 }, (_, i) => i)
 
   const handleClose = () => {
-    navigate(-1)
+    navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : "/restaurant")
   }
 
   const handleContinue = async () => {
@@ -158,7 +158,7 @@ export default function ShareFeedback() {
             exit={{ opacity: 0 }}
             onClick={() => {
               setShowThanks(false)
-              navigate(-1)
+              navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : "/restaurant")
             }}
           >
             <motion.div
@@ -184,7 +184,7 @@ export default function ShareFeedback() {
                   className="w-full py-2.5 rounded-full bg-black text-white text-sm font-medium"
                   onClick={() => {
                     setShowThanks(false)
-                    navigate(-1)
+                    navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : "/restaurant")
                   }}
                 >
                   Done
@@ -197,3 +197,4 @@ export default function ShareFeedback() {
     </div>
   )
 }
+

@@ -380,7 +380,7 @@ export default function ZoneSetup() {
           <div className="flex items-center gap-3 mb-4 md:mb-0">
             {/* Back Button */}
             <button
-              onClick={() => navigate(-1)}
+              onClick={() => navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : "/restaurant")}
               className="p-2 hover:bg-gray-100 rounded-full transition-colors"
               aria-label="Go back"
             >
@@ -469,3 +469,4 @@ export default function ZoneSetup() {
     </div>
   )
 }
+

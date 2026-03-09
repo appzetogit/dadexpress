@@ -193,7 +193,7 @@ export default function EditRestaurantAddress() {
             // Dispatch event to notify other components
             window.dispatchEvent(new Event("addressUpdated"))
             setShowSelectOptionDialog(false)
-            navigate(-1)
+            navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : "/restaurant")
           } else {
             throw new Error("Invalid response from server")
           }
@@ -225,7 +225,7 @@ export default function EditRestaurantAddress() {
       {/* Sticky Header */}
       <div className="bg-white border-b border-gray-200 px-4 py-3 sticky top-0 z-50 flex items-center gap-3 shrink-0">
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : "/restaurant")}
           className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors shrink-0"
           aria-label="Go back"
         >
@@ -367,3 +367,4 @@ export default function EditRestaurantAddress() {
     </div>
   )
 }
+

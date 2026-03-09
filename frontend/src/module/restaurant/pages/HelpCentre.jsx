@@ -69,7 +69,7 @@ export default function HelpCentre() {
         <div className="px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
-              onClick={() => navigate(-1)}
+              onClick={() => navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : "/restaurant")}
               className="p-1 hover:bg-gray-100 rounded-full transition-colors"
             >
               <ChevronLeft className="w-6 h-6 text-gray-900" />
@@ -164,3 +164,4 @@ export default function HelpCentre() {
     </div>
   )
 }
+

@@ -597,7 +597,7 @@ export default function OutletInfo() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3 flex-1">
             <button
-              onClick={() => navigate(-1)}
+              onClick={() => navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : "/restaurant")}
               className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
               aria-label="Go back"
             >
@@ -889,3 +889,4 @@ export default function OutletInfo() {
     </div>
   )
 }
+

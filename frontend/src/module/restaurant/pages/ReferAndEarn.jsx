@@ -104,7 +104,7 @@ export default function ReferAndEarn() {
       {/* Header */}
       <div className="bg-white border-b border-slate-100 px-4 py-4 sticky top-0 z-50 flex items-center gap-3">
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : "/restaurant")}
           className="p-1.5 hover:bg-slate-100 rounded-xl transition-colors active:scale-90"
         >
           <ArrowLeft className="w-5 h-5 text-slate-600" />
@@ -239,3 +239,4 @@ export default function ReferAndEarn() {
     </div>
   );
 }
+

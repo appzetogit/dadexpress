@@ -232,10 +232,13 @@ export function ProfileProvider({ children }) {
 
   const setDefaultAddress = useCallback((id) => {
     setAddresses((prev) =>
-      prev.map((addr) => ({
-        ...addr,
-        isDefault: addr.id === id,
-      }))
+      prev.map((addr) => {
+        const addressId = addr.id || addr._id
+        return {
+          ...addr,
+          isDefault: String(addressId) === String(id),
+        }
+      })
     )
   }, [])
 
