@@ -23,64 +23,6 @@ import { toast } from "sonner"
 
 const INVENTORY_STORAGE_KEY = "restaurant_inventory_state"
 
-// Mock data - replace with actual data from API
-const mockCategories = [
-  {
-    id: "combo",
-    name: "Combo",
-    description: "Combo",
-    itemCount: 1,
-    inStock: true,
-    items: [
-      { id: 1, name: "Manchurian with Rice", inStock: true, isVeg: true }
-    ]
-  },
-  {
-    id: "starters",
-    name: "Starters",
-    description: "Starters",
-    itemCount: 2,
-    inStock: true,
-    items: [
-      { id: 2, name: "Paneer Manchurian", inStock: true, isVeg: true },
-      { id: 3, name: "Cheese Manchurian", inStock: true, isVeg: true }
-    ]
-  },
-  {
-    id: "main-course",
-    name: "Main Course",
-    description: "Main Course",
-    itemCount: 2,
-    inStock: true,
-    items: [
-      { id: 4, name: "Butter Chicken", inStock: true, isVeg: false },
-      { id: 5, name: "Dal Makhani", inStock: true, isVeg: true }
-    ]
-  },
-  {
-    id: "rice",
-    name: "Rice",
-    description: "Rice and Biryani",
-    itemCount: 1,
-    inStock: false,
-    items: [
-      { id: 6, name: "Tava Pulao", inStock: false, isVeg: true }
-    ]
-  },
-  {
-    id: "desserts",
-    name: "Desserts",
-    description: "Desserts",
-    itemCount: 3,
-    inStock: false,
-    items: [
-      { id: 7, name: "Gulab Jamun", inStock: false, isVeg: true },
-      { id: 8, name: "Ice Cream", inStock: true, isVeg: true },
-      { id: 9, name: "Kheer", inStock: false, isVeg: true }
-    ]
-  }
-]
-
 // Time Picker Wheel Component (copied from DaySlots.jsx)
 function TimePickerWheel({
   isOpen,
@@ -599,7 +541,7 @@ export default function Inventory() {
   const [loadingInventory, setLoadingInventory] = useState(false)
   const [categories, setCategories] = useState(() => {
     try {
-      if (typeof window === "undefined") return mockCategories
+      if (typeof window === "undefined") return []
       const saved = localStorage.getItem(INVENTORY_STORAGE_KEY)
       if (saved) {
         const parsed = JSON.parse(saved)
@@ -610,11 +552,10 @@ export default function Inventory() {
     } catch (error) {
       console.error("Error loading inventory from storage:", error)
     }
-    return mockCategories
+    // Fallback: start with empty list and rely on menu API
+    return []
   })
-  const [expandedCategories, setExpandedCategories] = useState(() =>
-    mockCategories.map(c => c.id)
-  )
+  const [expandedCategories, setExpandedCategories] = useState([])
   const [togglePopupOpen, setTogglePopupOpen] = useState(false)
   const [toggleTarget, setToggleTarget] = useState(null)
   const [isMenuOpen, setIsMenuOpen] = useState(false)

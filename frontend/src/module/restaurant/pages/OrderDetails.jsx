@@ -17,100 +17,6 @@ import {
   Loader2,
 } from "lucide-react"
 
-// Mock order data - fallback for testing
-const getMockOrderData = (orderId) => {
-  // Match data from AllOrdersPage mock orders
-  const orders = {
-    "7593519447": {
-      id: "7593519447",
-      status: "REJECTED",
-      date: "19 Dec",
-      time: "06:35 AM",
-      restaurant: "Kadhai Chammach Restaurant",
-      address: "By Pass Road (South), Indore",
-      customer: {
-        name: "Aryan baghel",
-        orderCount: 1,
-        location: "Indore, Madhya Pradesh",
-        distance: "5 kms"
-      },
-      items: [
-        { name: "Egg Biryani", quantity: 1, price: 199, type: "Full" }
-      ],
-      billing: {
-        itemSubtotal: 199,
-        taxes: 0,
-        total: 199,
-        paymentStatus: "PAID"
-      },
-      reason: "Rejected by Restaurant: items were out of stock",
-      timeline: [
-        { event: "Order placed", timestamp: "19 Dec, 06:35 AM", status: "completed" },
-        { event: "Rejected by manager", timestamp: "19 Dec, 06:37 AM", status: "rejected" }
-      ]
-    },
-    "7591372071": {
-      id: "7591372071",
-      status: "REJECTED",
-      date: "18 Dec",
-      time: "04:04 AM",
-      restaurant: "Kadhai Chammach Restaurant",
-      address: "By Pass Road (South), Indore",
-      customer: {
-        name: "Mantavya katkoria",
-        orderCount: 1,
-        location: "Indore, Madhya Pradesh",
-        distance: "5 kms"
-      },
-      items: [
-        { name: "Egg Biryani", quantity: 1, price: 199 },
-        { name: "Chicken Curry", quantity: 1, price: 39 }
-      ],
-      billing: {
-        itemSubtotal: 238,
-        taxes: 0,
-        total: 238,
-        paymentStatus: "PAID"
-      },
-      reason: "Rejected by Restaurant: items were out of stock",
-      timeline: [
-        { event: "Order placed", timestamp: "18 Dec, 04:04 AM", status: "completed" },
-        { event: "Rejected by manager", timestamp: "18 Dec, 04:06 AM", status: "rejected" }
-      ]
-    },
-    "7560307359": {
-      id: "7560307359",
-      status: "CANCELLED",
-      date: "12 Dec",
-      time: "04:27 AM",
-      restaurant: "Kadhai Chammach Restaurant",
-      address: "By Pass Road (South), Indore",
-      customer: {
-        name: "John Doe",
-        orderCount: 1,
-        location: "Indore, Madhya Pradesh",
-        distance: "5 kms"
-      },
-      items: [
-        { name: "Veg Biryani", quantity: 2, price: 150 }
-      ],
-      billing: {
-        itemSubtotal: 300,
-        taxes: 0,
-        total: 300,
-        paymentStatus: "PAID"
-      },
-      reason: "Cancelled by customer",
-      timeline: [
-        { event: "Order placed", timestamp: "12 Dec, 04:27 AM", status: "completed" },
-        { event: "Cancelled by customer", timestamp: "12 Dec, 04:30 AM", status: "rejected" }
-      ]
-    }
-  }
-  
-  return orders[orderId] || null
-}
-
 export default function OrderDetails() {
   const navigate = useNavigate()
   const { orderId } = useParams()
@@ -182,13 +88,6 @@ export default function OrderDetails() {
       } catch (err) {
         console.error('Error fetching order:', err)
         setError(err.response?.data?.message || err.message || 'Failed to fetch order')
-        
-        // Try fallback to mock data for testing
-        const mockData = getMockOrderData(orderId)
-        if (mockData) {
-          setOrderData(mockData)
-          setError(null)
-        }
       } finally {
         setLoading(false)
       }
