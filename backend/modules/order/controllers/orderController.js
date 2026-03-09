@@ -1047,8 +1047,20 @@ export const getOrderDetails = async (req, res) => {
 
     // If not found, try by orderId (custom order ID like "ORD-123456-789")
     if (!order) {
+      // Normalize id to handle accidental leading/trailing spaces in stored orderId
+      const normalizedId = id ? String(id).trim() : "";
+      const variants = [id];
+      if (normalizedId && normalizedId !== id) {
+        variants.push(normalizedId);
+      }
+      // Some historical orders were stored with a trailing space in orderId,
+      // so also try `normalizedId + ' '` as a safe fallback.
+      if (normalizedId && !normalizedId.endsWith(" ")) {
+        variants.push(`${normalizedId} `);
+      }
+
       order = await Order.findOne({
-        orderId: id,
+        orderId: { $in: variants },
         userId
       })
         .populate('deliveryPartnerId', 'name email phone')
@@ -1111,8 +1123,18 @@ export const cancelOrder = async (req, res) => {
     }
 
     if (!order) {
+      // Normalize id to handle leading/trailing spaces in stored orderId
+      const normalizedId = id ? String(id).trim() : "";
+      const variants = [id];
+      if (normalizedId && normalizedId !== id) {
+        variants.push(normalizedId);
+      }
+      if (normalizedId && !normalizedId.endsWith(" ")) {
+        variants.push(`${normalizedId} `);
+      }
+
       order = await Order.findOne({
-        orderId: id,
+        orderId: { $in: variants },
         userId
       });
     }
