@@ -32,6 +32,7 @@ export default function AdminHome() {
   const [selectedPeriod, setSelectedPeriod] = useState("overall")
   const [isLoading, setIsLoading] = useState(true)
   const [dashboardData, setDashboardData] = useState(null)
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
 
   // Fetch dashboard stats whenever period or zone changes
   useEffect(() => {
@@ -43,6 +44,7 @@ export default function AdminHome() {
         const response = await adminAPI.getDashboardStats(params)
         if (response.data?.success && response.data?.data) {
           setDashboardData(response.data.data)
+          setHasLoadedOnce(true)
         } else {
           console.error('❌ Invalid response format:', response.data)
         }
@@ -176,7 +178,7 @@ export default function AdminHome() {
               icon={<ShoppingBag className="h-5 w-5 text-emerald-600" />}
               accent="bg-emerald-200/40"
               path={transactionReportPath}
-              isLoading={isLoading}
+              isLoading={isLoading && !hasLoadedOnce}
             />
             <MetricCard
               title="Commission earned"
@@ -185,7 +187,7 @@ export default function AdminHome() {
               icon={<ArrowUpRight className="h-5 w-5 text-indigo-600" />}
               accent="bg-indigo-200/40"
               path="/admin/restaurants/commission"
-              isLoading={isLoading}
+              isLoading={isLoading && !hasLoadedOnce}
             />
             <MetricCard
               title="Orders processed"
@@ -194,7 +196,7 @@ export default function AdminHome() {
               icon={<Activity className="h-5 w-5 text-amber-600" />}
               accent="bg-amber-200/40"
               path="/admin/orders/all"
-              isLoading={isLoading}
+              isLoading={isLoading && !hasLoadedOnce}
             />
             <MetricCard
               title="Platform fee"
@@ -203,7 +205,7 @@ export default function AdminHome() {
               icon={<CreditCard className="h-5 w-5 text-purple-600" />}
               accent="bg-purple-200/40"
               path="/admin/fee-settings"
-              isLoading={isLoading}
+              isLoading={isLoading && !hasLoadedOnce}
             />
             <MetricCard
               title="Delivery fee"
@@ -212,7 +214,7 @@ export default function AdminHome() {
               icon={<Truck className="h-5 w-5 text-blue-600" />}
               accent="bg-blue-200/40"
               path={transactionReportPath}
-              isLoading={isLoading}
+              isLoading={isLoading && !hasLoadedOnce}
             />
             <MetricCard
               title="GST"
@@ -221,7 +223,7 @@ export default function AdminHome() {
               icon={<Receipt className="h-5 w-5 text-orange-600" />}
               accent="bg-orange-200/40"
               path="/admin/tax-report"
-              isLoading={isLoading}
+              isLoading={isLoading && !hasLoadedOnce}
             />
             <MetricCard
               title="Total revenue"
@@ -230,7 +232,7 @@ export default function AdminHome() {
               icon={<DollarSign className="h-5 w-5 text-green-600" />}
               accent="bg-green-200/40"
               path={transactionReportPath}
-              isLoading={isLoading}
+              isLoading={isLoading && !hasLoadedOnce}
             />
             <MetricCard
               title="Total restaurants"
@@ -239,7 +241,7 @@ export default function AdminHome() {
               icon={<Store className="h-5 w-5 text-blue-600" />}
               accent="bg-blue-200/40"
               path="/admin/restaurants"
-              isLoading={isLoading}
+              isLoading={isLoading && !hasLoadedOnce}
             />
             <MetricCard
               title="Restaurant request pending"
@@ -248,7 +250,7 @@ export default function AdminHome() {
               icon={<UserCheck className="h-5 w-5 text-orange-600" />}
               accent="bg-orange-200/40"
               path="/admin/restaurants/joining-request"
-              isLoading={isLoading}
+              isLoading={isLoading && !hasLoadedOnce}
             />
             <MetricCard
               title="Total delivery boy"
@@ -257,7 +259,7 @@ export default function AdminHome() {
               icon={<Truck className="h-5 w-5 text-indigo-600" />}
               accent="bg-indigo-200/40"
               path="/admin/delivery-partners"
-              isLoading={isLoading}
+              isLoading={isLoading && !hasLoadedOnce}
             />
             <MetricCard
               title="Delivery boy request pending"
@@ -266,7 +268,7 @@ export default function AdminHome() {
               icon={<Clock className="h-5 w-5 text-yellow-600" />}
               accent="bg-yellow-200/40"
               path="/admin/delivery-partners/join-request"
-              isLoading={isLoading}
+              isLoading={isLoading && !hasLoadedOnce}
             />
             <MetricCard
               title="Total foods"
@@ -275,7 +277,7 @@ export default function AdminHome() {
               icon={<Package className="h-5 w-5 text-purple-600" />}
               accent="bg-purple-200/40"
               path="/admin/foods"
-              isLoading={isLoading}
+              isLoading={isLoading && !hasLoadedOnce}
             />
             <MetricCard
               title="Total addons"
@@ -284,7 +286,7 @@ export default function AdminHome() {
               icon={<Plus className="h-5 w-5 text-pink-600" />}
               accent="bg-pink-200/40"
               path="/admin/addons"
-              isLoading={isLoading}
+              isLoading={isLoading && !hasLoadedOnce}
             />
             <MetricCard
               title="Total customers"
@@ -293,7 +295,7 @@ export default function AdminHome() {
               icon={<UserCircle className="h-5 w-5 text-cyan-600" />}
               accent="bg-cyan-200/40"
               path="/admin/customers"
-              isLoading={isLoading}
+              isLoading={isLoading && !hasLoadedOnce}
             />
             <MetricCard
               title="Pending orders"
@@ -302,7 +304,7 @@ export default function AdminHome() {
               icon={<Clock className="h-5 w-5 text-red-600" />}
               accent="bg-red-200/40"
               path="/admin/orders/pending"
-              isLoading={isLoading}
+              isLoading={isLoading && !hasLoadedOnce}
             />
             <MetricCard
               title="Completed orders"
@@ -311,7 +313,7 @@ export default function AdminHome() {
               icon={<CheckCircle className="h-5 w-5 text-emerald-600" />}
               accent="bg-emerald-200/40"
               path="/admin/orders/delivered"
-              isLoading={isLoading}
+              isLoading={isLoading && !hasLoadedOnce}
             />
           </div>
 

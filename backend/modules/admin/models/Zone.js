@@ -147,8 +147,8 @@ zoneSchema.methods.containsPoint = function(latitude, longitude) {
     const xi = coords[i][0], yi = coords[i][1];
     const xj = coords[j][0], yj = coords[j][1];
     
-    const intersect = ((yi > longitude) !== (yj > longitude)) &&
-      (longitude < (xj - xi) * (longitude - yi) / (yj - yi) + xi);
+    const intersect = ((yi > latitude) !== (yj > latitude)) &&
+      (longitude < (xj - xi) * (latitude - yi) / (yj - yi) + xi);
     
     if (intersect) inside = !inside;
   }
