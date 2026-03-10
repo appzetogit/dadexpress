@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { generateOrderId } from '../../../shared/utils/idUtils.js';
 
 const orderItemSchema = new mongoose.Schema({
   itemId: {
@@ -309,9 +310,7 @@ orderSchema.index({ 'payment.razorpayOrderId': 1 });
 // Generate order ID before saving (fallback if not provided)
 orderSchema.pre('save', async function(next) {
   if (!this.orderId) {
-    const timestamp = Date.now();
-    const random = Math.floor(Math.random() * 1000);
-    this.orderId = `ORD-${timestamp}-${random}`;
+    this.orderId = generateOrderId();
   }
   next();
 });
