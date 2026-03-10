@@ -467,6 +467,15 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       return errorResponse(res, 404, "Order not found");
     }
 
+    if (order.status === "preparing") {
+      return successResponse(
+        res,
+        200,
+        "Order is already accepted and preparing",
+        { order }
+      );
+    }
+
     if (!["pending", "confirmed"].includes(order.status)) {
       return errorResponse(
         res,
