@@ -15,6 +15,7 @@ export default function Restaurants() {
   const [restaurants, setRestaurants] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const [dietaryFilter, setDietaryFilter] = useState("all")
   const { addFavorite, removeFavorite, isFavorite } = useProfile()
 
   useEffect(() => {
@@ -23,7 +24,12 @@ export default function Restaurants() {
         setLoading(true)
         setError("")
 
-        const response = await restaurantAPI.getRestaurants()
+        const params = {}
+        if (dietaryFilter && dietaryFilter !== "all") {
+          params.dietary = dietaryFilter
+        }
+
+        const response = await restaurantAPI.getRestaurants(params)
         const restaurantsArray = response?.data?.data?.restaurants || []
 
         const transformed = restaurantsArray.map((restaurant) => {
@@ -62,7 +68,7 @@ export default function Restaurants() {
     }
 
     fetchRestaurants()
-  }, [])
+  }, [dietaryFilter])
 
   const content = useMemo(() => {
     if (loading) {
@@ -179,15 +185,65 @@ export default function Restaurants() {
         <ScrollReveal>
           <div className="flex items-center gap-3 sm:gap-4 lg:gap-5 mb-4 lg:mb-6">
             <Link to="/user">
-                <Button variant="ghost" size="icon" className="rounded-full h-8 w-8 sm:h-10 sm:w-10 lg:h-12 lg:w-12 hover:bg-gray-100 dark:hover:bg-gray-800">
-                  <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5 lg:h-6 lg:w-6 text-gray-900 dark:text-gray-100" />
-                </Button>
+              <Button variant="ghost" size="icon" className="rounded-full h-8 w-8 sm:h-10 sm:w-10 lg:h-12 lg:w-12 hover:bg-gray-100 dark:hover:bg-gray-800">
+                <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5 lg:h-6 lg:w-6 text-gray-900 dark:text-gray-100" />
+              </Button>
             </Link>
             <TextReveal className="flex items-center gap-2 sm:gap-3 lg:gap-4">
               <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl font-bold text-gray-900 dark:text-white">
                 All Restaurants
               </h1>
             </TextReveal>
+          </div>
+        </ScrollReveal>
+
+        <ScrollReveal delay={0.1}>
+          <div className="flex flex-wrap items-center gap-2 lg:mb-2">
+            <button
+              onClick={() => setDietaryFilter("all")}
+              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${dietaryFilter === "all"
+                  ? "bg-gray-900 text-white dark:bg-white dark:text-gray-900"
+                  : "bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 dark:bg-[#1a1a1a] dark:text-gray-300 dark:border-gray-800 dark:hover:bg-gray-800"
+                }`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setDietaryFilter("veg")}
+              className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors flex items-center gap-1.5 ${dietaryFilter === "veg"
+                  ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800"
+                  : "bg-white text-gray-700 border-gray-200 hover:bg-green-50 hover:text-green-600 hover:border-green-200 dark:bg-[#1a1a1a] dark:text-gray-300 dark:border-gray-800 dark:hover:bg-gray-800"
+                }`}
+            >
+              <div className="w-3 h-3 border border-green-600 rounded-sm flex items-center justify-center">
+                <div className="w-1.5 h-1.5 rounded-full bg-green-600" />
+              </div>
+              Veg
+            </button>
+            <button
+              onClick={() => setDietaryFilter("non-veg")}
+              className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors flex items-center gap-1.5 ${dietaryFilter === "non-veg"
+                  ? "bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800"
+                  : "bg-white text-gray-700 border-gray-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200 dark:bg-[#1a1a1a] dark:text-gray-300 dark:border-gray-800 dark:hover:bg-gray-800"
+                }`}
+            >
+              <div className="w-3 h-3 border border-red-600 rounded-sm flex items-center justify-center">
+                <div className="w-1.5 h-1.5 rounded-full bg-red-600" />
+              </div>
+              Non-Veg
+            </button>
+            <button
+              onClick={() => setDietaryFilter("pure-veg")}
+              className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors flex items-center gap-1.5 ${dietaryFilter === "pure-veg"
+                  ? "bg-green-600 text-white border-green-600 dark:bg-green-500 dark:border-green-500"
+                  : "bg-white text-green-700 border-green-600 hover:bg-green-50 dark:bg-[#1a1a1a] dark:text-green-400 dark:hover:bg-green-900/20"
+                }`}
+            >
+              <div className="w-3 h-3 border border-current rounded-sm flex items-center justify-center">
+                <div className="w-1.5 h-1.5 rounded-full bg-current" />
+              </div>
+              Pure Veg
+            </button>
           </div>
         </ScrollReveal>
 
