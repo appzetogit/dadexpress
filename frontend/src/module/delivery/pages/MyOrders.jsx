@@ -213,7 +213,7 @@ export default function MyOrders() {
       {/* Header */}
       <div className="bg-white p-4 flex items-center shadow-sm sticky top-0 z-10">
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : "/delivery")}
           className="p-1 hover:bg-gray-100 rounded-full transition-colors"
         >
           <ArrowLeft className="w-6 h-6 text-gray-700" />
@@ -427,3 +427,4 @@ export default function MyOrders() {
     </div>
   )
 }
+

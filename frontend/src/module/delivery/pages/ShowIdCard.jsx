@@ -102,7 +102,7 @@ export default function ShowIdCard() {
         <div className="text-center">
           <p className="text-gray-600 mb-4">Failed to load ID card data</p>
           <button
-            onClick={() => navigate(-1)}
+            onClick={() => navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : "/delivery")}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg"
           >
             Go Back
@@ -127,7 +127,7 @@ export default function ShowIdCard() {
     <div className="min-h-screen bg-gray-100 relative">
       {/* Close Button - Top Right */}
       <button
-        onClick={() => navigate(-1)}
+        onClick={() => navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : "/delivery")}
         className="absolute top-4 right-4 p-2 hover:bg-gray-100 rounded-full transition-colors z-20"
       >
         <X className="w-6 h-6 text-black" />
@@ -201,4 +201,5 @@ export default function ShowIdCard() {
     </div>
   )
 }
+
 

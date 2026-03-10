@@ -42,7 +42,7 @@ export default function TermsAndConditions() {
       {/* Header */}
       <div className="bg-white dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 px-4 py-4 md:py-3 flex items-center gap-4 sticky top-0 z-10 shadow-sm">
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : "/delivery")}
           className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
         >
           <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-400" />
@@ -91,3 +91,4 @@ export default function TermsAndConditions() {
     </div>
   )
 }
+

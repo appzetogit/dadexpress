@@ -368,6 +368,10 @@ export default function Category() {
   const handleRemoveImage = () => {
     setSelectedImageFile(null)
     setImagePreview(null)
+    setFormData((prev) => ({
+      ...prev,
+      image: ""
+    }))
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
     }
@@ -1097,7 +1101,7 @@ export default function Category() {
                       </label>
                       <div className="space-y-3">
                         {/* Image Preview */}
-                        {(imagePreview || formData.image) && (
+                        {(imagePreview || (formData.image && formData.image !== "https://via.placeholder.com/40")) && (
                           <div className="relative w-32 h-32 rounded-lg overflow-hidden border border-slate-300">
                             <img
                               src={imagePreview || formData.image}
@@ -1107,7 +1111,7 @@ export default function Category() {
                                 e.target.src = "https://via.placeholder.com/128"
                               }}
                             />
-                            {imagePreview && (
+                            {(imagePreview || (formData.image && formData.image !== "https://via.placeholder.com/40")) && (
                               <button
                                 type="button"
                                 onClick={handleRemoveImage}

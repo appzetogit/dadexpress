@@ -171,7 +171,7 @@ export default function TimeOnOrders() {
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-4 py-4 flex items-center">
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : "/delivery")}
           className="p-2 hover:bg-gray-100 rounded-full transition-colors mr-2"
         >
           <ArrowLeft className="w-5 h-5 text-black" />
@@ -305,4 +305,5 @@ export default function TimeOnOrders() {
     </div>
   )
 }
+
 

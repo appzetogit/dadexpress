@@ -244,7 +244,7 @@ export default function PocketBalancePage() {
 
       {/* Top Bar */}
       <div className="flex items-center gap-3 p-4 border-b border-gray-200">
-        <ArrowLeft onClick={() => navigate(-1)} size={22} className="cursor-pointer" />
+        <ArrowLeft onClick={() => navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : "/delivery")} size={22} className="cursor-pointer" />
         <h1 className="text-lg font-semibold">Pocket balance</h1>
       </div>
 
@@ -377,3 +377,4 @@ function DetailRow({ label, value, multiline = false }) {
     </div>
   )
 }
+
