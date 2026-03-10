@@ -105,6 +105,7 @@ export const getRestaurants = async (req, res) => {
       maxDistance,
       maxPrice,
       hasOffers,
+      dietary,
       zoneId // User's zone ID (optional - if provided, filters by zone)
     } = req.query;
     
@@ -120,6 +121,40 @@ export const getRestaurants = async (req, res) => {
     
     // Build query
     const query = { isActive: true };
+    
+    // Dietary filter
+    if (dietary) {
+      const menuQuery = { isActive: true };
+      
+      if (dietary === 'veg') {
+        menuQuery.$or = [
+          { "sections.items.foodType": "Veg" },
+          { "sections.subsections.items.foodType": "Veg" }
+        ];
+      } else if (dietary === 'non-veg') {
+        menuQuery.$or = [
+          { "sections.items.foodType": "Non-Veg" },
+          { "sections.subsections.items.foodType": "Non-Veg" }
+        ];
+      } else if (dietary === 'pure-veg') {
+        menuQuery.$and = [
+          {
+            $or: [
+              { "sections.items.foodType": "Veg" },
+              { "sections.subsections.items.foodType": "Veg" }
+            ]
+          },
+          { "sections.items.foodType": { $ne: "Non-Veg" } },
+          { "sections.subsections.items.foodType": { $ne: "Non-Veg" } }
+        ];
+      }
+
+      if (['veg', 'non-veg', 'pure-veg'].includes(dietary)) {
+        const matchingMenus = await Menu.find(menuQuery).select('restaurant').lean();
+        const dietaryRestaurantIds = matchingMenus.map(m => m.restaurant);
+        query._id = { $in: dietaryRestaurantIds };
+      }
+    }
     
     // Cuisine filter
     if (cuisine) {
@@ -239,7 +274,8 @@ export const getRestaurants = async (req, res) => {
       maxDeliveryTime,
       maxDistance,
       maxPrice,
-      hasOffers
+      hasOffers,
+      dietary
     });
 
     return successResponse(res, 200, 'Restaurants retrieved successfully', {
@@ -252,7 +288,8 @@ export const getRestaurants = async (req, res) => {
         maxDeliveryTime,
         maxDistance,
         maxPrice,
-        hasOffers
+        hasOffers,
+        dietary
       }
     });
   } catch (error) {

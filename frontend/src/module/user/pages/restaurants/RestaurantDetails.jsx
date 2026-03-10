@@ -81,7 +81,7 @@ export default function RestaurantDetails() {
   const [expandedSections, setExpandedSections] = useState(new Set([0])) // Default: Recommended section is expanded
   const [filters, setFilters] = useState({
     sortBy: null, // "low-to-high" | "high-to-low"
-    vegNonVeg: null, // "veg" | "non-veg"
+    vegNonVeg: null, // "veg" | "non-veg" | "pure-veg"
   })
 
   // Restaurant data state
@@ -1161,17 +1161,16 @@ export default function RestaurantDetails() {
       // VegMode filter - when vegMode is ON, show only Veg items
       // When vegMode is false/null/undefined, show all items (Veg and Non-Veg)
       if (vegMode === true) {
-        if (item.foodType !== "Veg") return false
+        if (item.foodType !== "Veg" && item.isVeg !== true) return false
       }
 
       // Veg/Non-veg filter (local filter override)
-      if (filters.vegNonVeg === "veg") {
+      if (filters.vegNonVeg === "veg" || filters.vegNonVeg === "pure-veg") {
         // Show only veg items
-        if (item.foodType !== "Veg") return false
+        if (item.foodType !== "Veg" && item.isVeg !== true) return false
       }
       if (filters.vegNonVeg === "non-veg") {
-        // Show only non-veg items
-        if (item.foodType !== "Non-Veg") return false
+        // Show both veg and non-veg items (no filtering out)
       }
 
 
@@ -1298,7 +1297,7 @@ export default function RestaurantDetails() {
                   Make sure the backend server is running at {API_BASE_URL.replace('/api', '')}
                 </p>
               )}
-              <Button onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/') )} variant="outline">
+              <Button onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))} variant="outline">
                 Go Back
               </Button>
             </div>
@@ -1316,7 +1315,7 @@ export default function RestaurantDetails() {
           <div className="flex flex-col items-center gap-4">
             <AlertCircle className="h-12 w-12 text-red-500" />
             <span className="text-sm text-gray-600">Restaurant not found</span>
-            <Button onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/') )} variant="outline">
+            <Button onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))} variant="outline">
               Go Back
             </Button>
           </div>
@@ -1342,7 +1341,7 @@ export default function RestaurantDetails() {
             variant="outline"
             size="icon"
             className="rounded-full h-10 w-10 border-gray-200 dark:border-gray-800 shadow-sm bg-white dark:bg-[#1a1a1a]"
-            onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/') )}
+            onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))}
           >
             <ArrowLeft className="h-5 w-5 text-gray-900 dark:text-white" />
           </Button>
@@ -1510,6 +1509,26 @@ export default function RestaurantDetails() {
                 Non-veg
                 {filters.vegNonVeg === "non-veg" && (
                   <X className="h-3 w-3 text-gray-600" />
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className={`flex items-center gap-1.5 whitespace-nowrap border-gray-300 bg-white rounded-full ${filters.vegNonVeg === "pure-veg" ? "border-green-600 bg-green-600 text-white font-bold" : ""
+                  }`}
+                onClick={() =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    vegNonVeg: prev.vegNonVeg === "pure-veg" ? null : "pure-veg",
+                  }))
+                }
+              >
+                <div className="h-3 w-3 border border-current rounded-sm flex items-center justify-center">
+                  <div className="w-1.5 h-1.5 rounded-full bg-current" />
+                </div>
+                Pure Veg
+                {filters.vegNonVeg === "pure-veg" && (
+                  <X className="h-3 w-3 text-white" />
                 )}
               </Button>
             </div>
