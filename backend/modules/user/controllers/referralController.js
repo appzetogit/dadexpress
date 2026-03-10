@@ -92,75 +92,99 @@ export const getUserReferralLogs = asyncHandler(async (req, res) => {
 export const getReferralAnalytics = asyncHandler(async (req, res) => {
     try {
         const { days } = req.query;
+        const daysInt = Number.parseInt(days, 10);
+
+        // Build date filters (optional)
         let matchStage = {};
+        let txMatch = {};
+        if (!Number.isNaN(daysInt) && daysInt > 0) {
+            const fromDate = new Date();
+            fromDate.setDate(fromDate.getDate() - daysInt);
+            matchStage = { createdAt: { $gte: fromDate } };
+            txMatch = { "transactions.createdAt": { $gte: fromDate } };
+        }
 
-        const groupByFormat = parseInt(days) === 7 ? "%a" : "%d %b";
+        const groupByFormat = daysInt === 7 ? "%a" : "%d %b";
 
-        const areaStats = await ReferralLog.aggregate([
-            { $match: matchStage },
-            {
-                $group: {
-                    _id: { $dateToString: { format: groupByFormat, date: "$createdAt", timezone: "Asia/Kolkata" } },
-                    referrals: { $sum: 1 },
-                    conversions: { $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] } },
-                    sortDate: { $first: "$createdAt" }
-                }
-            },
-            { $sort: { "sortDate": 1 } }
-        ]);
+        // Defensive aggregation: if any pipeline fails, log and fall back to empty data
+        let areaStats = [];
+        let stats = [];
+        let walletStats = [];
 
-        const stats = await ReferralLog.aggregate([
-            { $match: matchStage },
-            {
-                $lookup: {
-                    from: "orders",
-                    localField: "orderId",
-                    foreignField: "_id",
-                    as: "orderData"
-                }
-            },
-            {
-                $unwind: {
-                    path: "$orderData",
-                    preserveNullAndEmptyArrays: true
-                }
-            },
-            {
-                $group: {
-                    _id: "$status",
-                    count: { $sum: 1 },
-                    totalReferrerRewards: { $sum: "$referrerReward" },
-                    totalRefereeRewards: { $sum: "$refereeReward" },
-                    revenueGenerated: {
-                        $sum: {
-                            $cond: [{ $eq: ["$status", "completed"] }, "$orderData.pricing.total", 0]
+        try {
+            areaStats = await ReferralLog.aggregate([
+                { $match: matchStage },
+                {
+                    $group: {
+                        _id: { $dateToString: { format: groupByFormat, date: "$createdAt", timezone: "Asia/Kolkata" } },
+                        referrals: { $sum: 1 },
+                        conversions: { $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] } },
+                        sortDate: { $first: "$createdAt" }
+                    }
+                },
+                { $sort: { "sortDate": 1 } }
+            ]);
+        } catch (aggError) {
+            console.error("Error aggregating referral area stats:", aggError);
+            areaStats = [];
+        }
+
+        try {
+            stats = await ReferralLog.aggregate([
+                { $match: matchStage },
+                {
+                    $lookup: {
+                        from: "orders",
+                        localField: "orderId",
+                        foreignField: "_id",
+                        as: "orderData"
+                    }
+                },
+                {
+                    $unwind: {
+                        path: "$orderData",
+                        preserveNullAndEmptyArrays: true
+                    }
+                },
+                {
+                    $group: {
+                        _id: "$status",
+                        count: { $sum: 1 },
+                        totalReferrerRewards: { $sum: "$referrerReward" },
+                        totalRefereeRewards: { $sum: "$refereeReward" },
+                        revenueGenerated: {
+                            $sum: {
+                                $cond: [{ $eq: ["$status", "completed"] }, "$orderData.pricing.total", 0]
+                            }
                         }
                     }
                 }
-            }
-        ]);
-
-        const UserWallet = (await import('../../user/models/UserWallet.js')).default;
-        let txMatch = {};
-        if (days) {
-            const date = new Date();
-            date.setDate(date.getDate() - parseInt(days));
-            txMatch = { "transactions.createdAt": { $gte: date } };
+            ]);
+        } catch (aggError) {
+            console.error("Error aggregating referral stats:", aggError);
+            stats = [];
         }
 
-        const walletStats = await UserWallet.aggregate([
-            { $unwind: "$transactions" },
-            { $match: txMatch },
-            {
-                $group: {
-                    _id: { $dateToString: { format: groupByFormat, date: "$transactions.createdAt", timezone: "Asia/Kolkata" } },
-                    usage: { $sum: { $cond: [{ $eq: ["$transactions.type", "deduction"] }, "$transactions.amount", 0] } },
-                    distribution: { $sum: { $cond: [{ $eq: ["$transactions.type", "addition"] }, "$transactions.amount", 0] } },
-                    sortDate: { $first: "$transactions.createdAt" }
-                }
-            },
-            { $sort: { "sortDate": 1 } }
-        ]);
+        try {
+            const UserWallet = (await import('../../user/models/UserWallet.js')).default;
+
+            walletStats = await UserWallet.aggregate([
+                { $unwind: "$transactions" },
+                { $match: txMatch },
+                {
+                    $group: {
+                        _id: { $dateToString: { format: groupByFormat, date: "$transactions.createdAt", timezone: "Asia/Kolkata" } },
+                        usage: { $sum: { $cond: [{ $eq: ["$transactions.type", "deduction"] }, "$transactions.amount", 0] } },
+                        distribution: { $sum: { $cond: [{ $eq: ["$transactions.type", "addition"] }, "$transactions.amount", 0] } },
+                        sortDate: { $first: "$transactions.createdAt" }
+                    }
+                },
+                { $sort: { "sortDate": 1 } }
+            ]);
+        } catch (walletError) {
+            console.error("Error aggregating referral wallet stats:", walletError);
+            walletStats = [];
+        }
 
         const formattedStats = {
             total: 0,
