@@ -2849,13 +2849,14 @@ export default function Home() {
                   {/* Collections List */}
                   <div className="px-4 py-4 space-y-2 max-h-[60vh] overflow-y-auto">
                     {/* Bookmarks Collection */}
-                    <div
-                      className="w-full flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        // Don't close modal on click, let checkbox handle it
-                      }}
-                    >
+                  <div
+                    className="w-full flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                        setShowManageCollections(false)
+                        navigate("/user/profile/favorites")
+                    }}
+                  >
                       <div className="h-12 w-12 rounded-lg bg-pink-100 flex items-center justify-center flex-shrink-0">
                         <Bookmark className="h-6 w-6 text-red-500 fill-red-500" />
                       </div>

@@ -42,7 +42,7 @@ import {
 import { formatCurrency } from "../../restaurant/utils/currency"
 import { getAllDeliveryOrders } from "../utils/deliveryOrderStatus"
 import { getUnreadDeliveryNotificationCount } from "../utils/deliveryNotifications"
-import { deliveryAPI, restaurantAPI, uploadAPI } from "@/lib/api"
+import { deliveryAPI, restaurantAPI, uploadAPI, zoneAPI } from "@/lib/api"
 import { useDeliveryNotifications } from "../hooks/useDeliveryNotifications"
 import { getGoogleMapsApiKey } from "@/lib/utils/googleMapsApiKey"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
@@ -234,6 +234,96 @@ function animateMarkerSmoothly(marker, newPosition, duration = 1500, animationRe
   if (animationRef) animationRef.current = requestAnimationFrame(animate)
 }
 
+/**
+ * Check if a point is inside a polygon (ray-casting algorithm)
+ * @param {number[]} point - [lat, lng]
+ * @param {Array} polygon - Array of {lat|latitude, lng|longitude}
+ * @returns {boolean}
+ */
+function isPointInPolygon(point, polygon) {
+  if (!point || !polygon || polygon.length < 3) return false
+  const [lat, lng] = point
+  let inside = false
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i]?.lat ?? polygon[i]?.latitude
+    const yi = polygon[i]?.lng ?? polygon[i]?.longitude
+    const xj = polygon[j]?.lat ?? polygon[j]?.latitude
+    const yj = polygon[j]?.lng ?? polygon[j]?.longitude
+    if (
+      typeof xi !== "number" ||
+      typeof yi !== "number" ||
+      typeof xj !== "number" ||
+      typeof yj !== "number"
+    ) {
+      continue
+    }
+    const intersect =
+      (yi > lng) !== (yj > lng) &&
+      lat < ((xj - xi) * (lng - yi)) / (yj - yi + 0.0) + xi
+    if (intersect) inside = !inside
+  }
+  return inside
+}
+
+const normalizeZoneValue = (zone) => {
+  if (!zone) return { id: null, name: null }
+  if (typeof zone === "string") return { id: zone, name: zone }
+  return {
+    id: zone._id || zone.id || zone.zoneId || zone.zone?._id || zone.zone,
+    name: zone.displayName || zone.name || zone.title || zone.zoneName || zone.zoneId || zone.zone
+  }
+}
+
+const getZonePolygon = (zone, swap = false) => {
+  if (!zone?.coordinates || zone.coordinates.length < 3) return []
+  return zone.coordinates
+    .map((coord) => {
+      const lat = typeof coord === "object" ? (coord.latitude ?? coord.lat) : null
+      const lng = typeof coord === "object" ? (coord.longitude ?? coord.lng) : null
+      if (lat == null || lng == null) return null
+      return swap ? { lat: lng, lng: lat } : { lat, lng }
+    })
+    .filter(Boolean)
+}
+
+const getOrderIdCandidates = (selectedRestaurant, newOrder) => {
+  const mongoId =
+    selectedRestaurant?.orderMongoId ||
+    selectedRestaurant?.id ||
+    newOrder?.orderMongoId ||
+    newOrder?._id ||
+    null
+  const orderId = selectedRestaurant?.orderId || newOrder?.orderId || null
+  return { mongoId, orderId }
+}
+
+const fetchOrderIdString = async (orderId, deliveryAPI) => {
+  if (!orderId) return null
+  try {
+    const response = await deliveryAPI.getOrderDetails(orderId)
+    const order = response?.data?.data?.order || response?.data?.data || response?.data?.order
+    return order?.orderId || null
+  } catch {
+    return null
+  }
+}
+
+const isLikelySwappedCoord = (coord) => {
+  const lat = typeof coord === "object" ? (coord.latitude ?? coord.lat) : null
+  const lng = typeof coord === "object" ? (coord.longitude ?? coord.lng) : null
+  if (lat == null || lng == null) return false
+  // India ranges heuristic: lat ~8-37, lng ~68-97
+  return lat >= 68 && lat <= 98 && lng >= 8 && lng <= 38
+}
+
+const shouldSuppressDeliveryToast = (message, status) => {
+  const msg = (message || "").toString().toLowerCase()
+  if (status === 404) return true
+  if (msg.includes("not assigned")) return true
+  if (msg.includes("out of zone") || msg.includes("out of your zone")) return true
+  return false
+}
+
 export default function DeliveryHome() {
   const SWIPE_COMPLETE_THRESHOLD = 0.5
   const companyName = useCompanyName()
@@ -334,6 +424,13 @@ export default function DeliveryHome() {
   const [deliveryStatus, setDeliveryStatus] = useState(null) // Store delivery partner status
   const [rejectionReason, setRejectionReason] = useState(null) // Store rejection reason
   const [isReverifying, setIsReverifying] = useState(false) // Loading state for reverify
+  const [deliveryProfile, setDeliveryProfile] = useState(null)
+  const [assignedZoneIds, setAssignedZoneIds] = useState([])
+  const [assignedZoneNames, setAssignedZoneNames] = useState([])
+  const [currentZone, setCurrentZone] = useState(null)
+  const [isOutOfZone, setIsOutOfZone] = useState(false)
+  const [detectedZone, setDetectedZone] = useState(null)
+  const hasAssignedZones = assignedZoneIds.length > 0 || assignedZoneNames.length > 0
 
   // Map refs and state (Ola Maps removed)
   const mapContainerRef = useRef(null)
@@ -2076,10 +2173,10 @@ export default function DeliveryHome() {
 
       if (deltaX > 0) {
         // RIGHT swipe = Accept
-        const buttonWidth = newOrderAcceptButtonRef.current?.offsetWidth || 300
-        const circleWidth = 56 // w-14 = 56px
-        const padding = 16 // px-4 = 16px
-        const maxSwipe = buttonWidth - circleWidth - (padding * 2)
+    const buttonWidth = newOrderAcceptButtonRef.current?.offsetWidth || 300
+    const circleWidth = 56 // w-14 = 56px
+    const padding = 16 // px-4 = 16px
+    const maxSwipe = buttonWidth - (circleWidth * 2) - (padding * 2)
 
         const progress = Math.min(Math.max(deltaX / maxSwipe, 0), 1)
         newOrderAcceptButtonProgressRef.current = progress
@@ -2134,7 +2231,7 @@ export default function DeliveryHome() {
     const buttonWidth = newOrderAcceptButtonRef.current?.offsetWidth || 300
     const circleWidth = 56
     const padding = 16
-    const maxSwipe = buttonWidth - circleWidth - (padding * 2)
+    const maxSwipe = buttonWidth - (circleWidth * 2) - (padding * 2)
     const endTouch = e?.changedTouches?.[0] || e?.touches?.[0]
     const fallbackEndX = newOrderAcceptButtonSwipeStartX.current + (newOrderAcceptButtonProgressRef.current * maxSwipe)
     const endX = typeof endTouch?.clientX === 'number' ? endTouch.clientX : fallbackEndX
@@ -2146,7 +2243,7 @@ export default function DeliveryHome() {
 
       // CRITICAL: Mark order as accepted IMMEDIATELY to prevent useEffect from re-showing popup
       // The newOrder useEffect (line ~4309) checks acceptedOrderIdsRef - add order ID NOW
-      const immediateOrderId = selectedRestaurant?.id || newOrder?.orderMongoId || newOrder?.orderId
+      const immediateOrderId = selectedRestaurant?.orderMongoId || selectedRestaurant?.id || newOrder?.orderMongoId || newOrder?._id || newOrder?.orderId
       if (immediateOrderId) {
         acceptedOrderIdsRef.current.add(immediateOrderId)
         false && console.log('[NewOrder] ✅ Order marked as accepted immediately:', immediateOrderId)
@@ -2195,7 +2292,8 @@ export default function DeliveryHome() {
         newOrderAcceptRequestInFlightRef.current = true
 
         // Get order ID from selectedRestaurant or newOrder (define outside try-catch for error handling)
-        const orderId = selectedRestaurant?.id || newOrder?.orderMongoId || newOrder?.orderId
+        const { mongoId, orderId: orderIdStringInitial } = getOrderIdCandidates(selectedRestaurant, newOrder)
+        const orderId = mongoId || orderIdStringInitial
 
         false && console.log('🔍 Order ID lookup:', {
           selectedRestaurantId: selectedRestaurant?.id,
@@ -2271,10 +2369,27 @@ export default function DeliveryHome() {
 
           // Call backend API to accept order
           // Backend expects currentLat and currentLng
-          const response = await deliveryAPI.acceptOrder(orderId, {
-            lat: currentLocation[0], // latitude
-            lng: currentLocation[1]  // longitude
-          })
+          let response
+          try {
+            response = await deliveryAPI.acceptOrder(orderId, {
+              lat: currentLocation[0], // latitude
+              lng: currentLocation[1]  // longitude
+            })
+          } catch (acceptError) {
+            const status = acceptError.response?.status
+            let orderIdString = orderIdStringInitial
+            if (!orderIdString && orderId) {
+              orderIdString = await fetchOrderIdString(orderId, deliveryAPI)
+            }
+            if ((status === 403 || status === 404) && orderIdString && orderIdString !== orderId) {
+              response = await deliveryAPI.acceptOrder(orderIdString, {
+                lat: currentLocation[0],
+                lng: currentLocation[1]
+              })
+            } else {
+              throw acceptError
+            }
+          }
 
           false && console.log('📡 API Response:', response.data)
 
@@ -2849,7 +2964,8 @@ export default function DeliveryHome() {
               // Save accepted order to localStorage for refresh handling
               try {
                 const activeOrderData = {
-                  orderId: restaurantInfo.id || restaurantInfo.orderId,
+                  orderId: restaurantInfo.orderId || restaurantInfo.id,
+                  orderMongoId: restaurantInfo.orderMongoId || restaurantInfo.id || null,
                   restaurantInfo: restaurantInfo,
                   // Don't save directionsResponse - Google Maps objects can't be serialized to JSON
                   // Route will be recalculated on restore using Directions API
@@ -2869,8 +2985,10 @@ export default function DeliveryHome() {
 
           } else {
             console.error('❌ Failed to accept order:', response.data)
-            // Show error message to user
-            toast.error(response.data?.message || 'Failed to accept order. Please try again.')
+            const serverMessage = response.data?.message
+            if (!shouldSuppressDeliveryToast(serverMessage, response.status)) {
+              toast.error(serverMessage || 'Failed to accept order. Please try again.')
+            }
             // Still close popup
             setShowNewOrderPopup(false)
             setIsNewOrderPopupMinimized(false) // Reset minimized state
@@ -2889,7 +3007,8 @@ export default function DeliveryHome() {
             // For other errors (e.g. order already taken), show brief message
             console.error('❌ Error accepting order:', error.response?.data || error.message)
             const serverMessage = error.response?.data?.message
-            if (serverMessage && !serverMessage.toLowerCase().includes('timeout')) {
+            const status = error.response?.status
+            if (serverMessage && !serverMessage.toLowerCase().includes('timeout') && !shouldSuppressDeliveryToast(serverMessage, status)) {
               toast.error(serverMessage, { duration: 3000 })
             }
           }
@@ -3117,7 +3236,8 @@ export default function DeliveryHome() {
 
         // Get order ID - prioritize orderId (string) over id (MongoDB _id) for better compatibility
         // Backend accepts both _id and orderId, but orderId is more reliable
-        const orderId = selectedRestaurant?.orderId || selectedRestaurant?.id || newOrder?.orderId || newOrder?.orderMongoId
+        const { mongoId, orderId: orderIdStringInitial } = getOrderIdCandidates(selectedRestaurant, newOrder)
+        const orderId = mongoId || orderIdStringInitial
 
         false && console.log('🔍 Order ID lookup for reached pickup:', {
           selectedRestaurantId: selectedRestaurant?.id,
@@ -3177,7 +3297,21 @@ export default function DeliveryHome() {
             // Call backend API to confirm reached pickup and save status in database
             false && console.log('📦 Confirming reached pickup for order:', orderId)
             false && console.log('📦 API endpoint: /delivery/orders/:orderId/reached-pickup')
-            const response = await deliveryAPI.confirmReachedPickup(orderId)
+            let response
+            try {
+              response = await deliveryAPI.confirmReachedPickup(orderId)
+            } catch (pickupError) {
+              const status = pickupError.response?.status
+              let orderIdString = orderIdStringInitial
+              if (!orderIdString && orderId) {
+                orderIdString = await fetchOrderIdString(orderId, deliveryAPI)
+              }
+              if ((status === 403 || status === 404) && orderIdString && orderIdString !== orderId) {
+                response = await deliveryAPI.confirmReachedPickup(orderIdString)
+              } else {
+                throw pickupError
+              }
+            }
 
             false && console.log('📦 Reached pickup API response:', response.data)
 
@@ -3206,7 +3340,10 @@ export default function DeliveryHome() {
               }, 300) // 300ms delay for smooth transition
             } else {
               console.error('❌ Failed to confirm reached pickup:', response.data)
-              toast.error(response.data?.message || 'Failed to confirm reached pickup. Please try again.')
+              const serverMessage = response.data?.message
+              if (!shouldSuppressDeliveryToast(serverMessage, response.status)) {
+                toast.error(serverMessage || 'Failed to confirm reached pickup. Please try again.')
+              }
               // Ensure reached pickup popup is closed
               setShowreachedPickupPopup(false)
               // Still show order ID popup even if API call fails, after delay
@@ -3226,9 +3363,12 @@ export default function DeliveryHome() {
             })
 
             // Show specific error message
+            const status = error.response?.status
             const errorMessage = error.response?.data?.message ||
-              (error.response?.status === 404 ? 'Order not found. Please refresh and try again.' : 'Failed to confirm reached pickup. Please try again.')
-            toast.error(errorMessage)
+              (status === 404 ? 'Order not found. Please refresh and try again.' : 'Failed to confirm reached pickup. Please try again.')
+            if (!shouldSuppressDeliveryToast(errorMessage, status)) {
+              toast.error(errorMessage)
+            }
 
             // Ensure reached pickup popup is closed
             setShowreachedPickupPopup(false)
@@ -3341,11 +3481,8 @@ export default function DeliveryHome() {
           // Get order ID - prioritize MongoDB _id over orderId string for API call
           // Backend expects _id (MongoDB ObjectId) in the URL parameter
           // Use _id (MongoDB ObjectId) if available, otherwise fallback to orderId string
-          const orderIdForApi = selectedRestaurant?.id ||
-            newOrder?.orderMongoId ||
-            newOrder?._id ||
-            selectedRestaurant?.orderId ||
-            newOrder?.orderId
+          const { mongoId, orderId: orderIdStringInitial } = getOrderIdCandidates(selectedRestaurant, newOrder)
+          const orderIdForApi = mongoId || orderIdStringInitial
 
           false && console.log('🔍 Order ID lookup for reached drop:', {
             selectedRestaurantId: selectedRestaurant?.id,
@@ -3360,7 +3497,21 @@ export default function DeliveryHome() {
               // Call backend API to confirm reached drop (in background, don't block popup)
               // Use MongoDB _id for API call to avoid ObjectId casting errors
               false && console.log('📦 Confirming reached drop for order:', orderIdForApi)
-              const response = await deliveryAPI.confirmReachedDrop(orderIdForApi)
+              let response
+              try {
+                response = await deliveryAPI.confirmReachedDrop(orderIdForApi)
+              } catch (dropError) {
+                const status = dropError.response?.status
+                let orderIdString = orderIdStringInitial
+                if (!orderIdString && orderIdForApi) {
+                  orderIdString = await fetchOrderIdString(orderIdForApi, deliveryAPI)
+                }
+                if ((status === 403 || status === 404) && orderIdString && orderIdString !== orderIdForApi) {
+                  response = await deliveryAPI.confirmReachedDrop(orderIdString)
+                } else {
+                  throw dropError
+                }
+              }
 
               if (response.data?.success) {
                 false && console.log('✅ Reached drop confirmed')
@@ -3504,7 +3655,7 @@ export default function DeliveryHome() {
               base64Data = base64Data.split(',')[1]
             }
 
-            try {
+    try {
               const byteCharacters = atob(base64Data)
               const byteNumbers = new Array(byteCharacters.length)
               for (let i = 0; i < byteCharacters.length; i++) {
@@ -3737,10 +3888,10 @@ export default function DeliveryHome() {
           }
         }
 
-        try {
-          // Prefer string orderId (ORD-xxx) for URL; backend accepts both _id and orderId
-          const orderIdForApi = selectedRestaurant?.orderId || selectedRestaurant?.id
-          const confirmedOrderIdForApi = selectedRestaurant?.orderId || (orderIdForApi && String(orderIdForApi).startsWith('ORD-') ? orderIdForApi : undefined)
+    try {
+          const { mongoId, orderId: orderIdStringInitial } = getOrderIdCandidates(selectedRestaurant, newOrder)
+          const orderIdForApi = mongoId || orderIdStringInitial
+          const confirmedOrderIdForApi = orderIdStringInitial || (orderIdForApi && String(orderIdForApi).startsWith('ORD-') ? orderIdForApi : undefined)
 
           // Call backend API to confirm order ID with bill image
           false && console.log('📦 Confirming order ID:', {
@@ -3752,12 +3903,31 @@ export default function DeliveryHome() {
           })
 
           // Update API call to include bill image URL
-          const response = await deliveryAPI.confirmOrderId(orderIdForApi, confirmedOrderIdForApi, {
-            lat: currentLocation[0],
-            lng: currentLocation[1]
-          }, {
-            billImageUrl: billImageUrl
-          })
+          let response
+          try {
+            response = await deliveryAPI.confirmOrderId(orderIdForApi, confirmedOrderIdForApi, {
+              lat: currentLocation[0],
+              lng: currentLocation[1]
+            }, {
+              billImageUrl: billImageUrl
+            })
+          } catch (confirmError) {
+            const status = confirmError.response?.status
+            let orderIdString = orderIdStringInitial
+            if (!orderIdString && orderIdForApi) {
+              orderIdString = await fetchOrderIdString(orderIdForApi, deliveryAPI)
+            }
+            if ((status === 403 || status === 404) && orderIdString && orderIdString !== orderIdForApi) {
+              response = await deliveryAPI.confirmOrderId(orderIdString, confirmedOrderIdForApi || orderIdString, {
+                lat: currentLocation[0],
+                lng: currentLocation[1]
+              }, {
+                billImageUrl: billImageUrl
+              })
+            } else {
+              throw confirmError
+            }
+          }
 
           false && console.log('✅ Order ID confirmed, response:', response.data)
 
@@ -4383,7 +4553,8 @@ export default function DeliveryHome() {
       }
 
       const restaurantData = {
-        id: newOrder.orderMongoId || newOrder.orderId,
+        orderMongoId: newOrder.orderMongoId || newOrder._id || newOrder.id || null,
+        id: newOrder.orderMongoId || newOrder._id || newOrder.id || newOrder.orderId,
         orderId: newOrder.orderId,
         name: newOrder.restaurantName,
         address: restaurantAddress,
@@ -4450,12 +4621,12 @@ export default function DeliveryHome() {
 
   // Fetch restaurant address if missing when selectedRestaurant is set
   useEffect(() => {
-    if (!selectedRestaurant?.orderId && !selectedRestaurant?.id) return
+    if (!selectedRestaurant?.orderId && !selectedRestaurant?.id && !selectedRestaurant?.orderMongoId) return
     if (!selectedRestaurant?.address ||
       selectedRestaurant.address === 'Restaurant address' ||
       selectedRestaurant.address === 'Restaurant Address') {
       // Address is missing, fetch order details to get restaurant address
-      const orderId = selectedRestaurant.orderId || selectedRestaurant.id
+      const orderId = selectedRestaurant.orderMongoId || selectedRestaurant.id || selectedRestaurant.orderId
       false && console.log('🔄 Fetching restaurant address for order:', orderId)
 
       const fetchAddress = async () => {
@@ -4491,6 +4662,35 @@ export default function DeliveryHome() {
     }
   }, [selectedRestaurant?.orderId, selectedRestaurant?.id, selectedRestaurant?.address])
 
+  // Resolve MongoDB order id when only orderId string is available
+  useEffect(() => {
+    if (!selectedRestaurant) return
+    if (selectedRestaurant.orderMongoId) return
+    const orderId = selectedRestaurant.orderId || selectedRestaurant.id
+    if (!orderId) return
+
+    let isActive = true
+    const fetchOrderId = async () => {
+      try {
+        const response = await deliveryAPI.getOrderDetails(orderId)
+        const order = response?.data?.data
+        const mongoId = order?._id?.toString()
+        if (!isActive || !mongoId) return
+        setSelectedRestaurant(prev => ({
+          ...prev,
+          orderMongoId: mongoId,
+          id: prev?.id || mongoId
+        }))
+      } catch (error) {
+        // Ignore - fallback to existing id
+      }
+    }
+    fetchOrderId()
+    return () => {
+      isActive = false
+    }
+  }, [selectedRestaurant?.orderId, selectedRestaurant?.id, selectedRestaurant?.orderMongoId])
+
   // Handle online toggle - check for booked gigs
   const handleToggleOnline = () => {
     if (isOnline) {
@@ -4521,6 +4721,8 @@ export default function DeliveryHome() {
   const carouselStartX = useRef(0)
   const carouselIsSwiping = useRef(false)
   const carouselAutoRotateRef = useRef(null)
+  const carouselManualChangeRef = useRef(false)
+  const carouselSaveTimeoutRef = useRef(null)
 
   // Map view toggle state - Hotspot or Select drop (both show map, just different views)
   const [mapViewMode, setMapViewMode] = useState("hotspot") // "hotspot" or "selectDrop"
@@ -4635,7 +4837,7 @@ export default function DeliveryHome() {
         return
       }
 
-      try {
+    try {
         const walletData = await fetchDeliveryWallet()
         setWalletState(walletData)
       } catch (error) {
@@ -4677,6 +4879,10 @@ export default function DeliveryHome() {
   const fetchAssignedOrders = useCallback(async () => {
     if (!isOnline) {
       false && console.log('⚠️ Delivery person is offline, skipping order fetch')
+      return
+    }
+    if (hasAssignedZones && detectedZone && isOutOfZone) {
+      false && console.log('Out of zone, skipping order fetch')
       return
     }
 
@@ -4784,6 +4990,7 @@ export default function DeliveryHome() {
           }
 
           const restaurantData = {
+            orderMongoId: firstOrder._id?.toString() || null,
             id: firstOrder._id?.toString() || firstOrder.orderId,
             orderId: firstOrder.orderId,
             name: firstOrder.restaurantId?.name || 'Restaurant',
@@ -4836,7 +5043,7 @@ export default function DeliveryHome() {
       console.error('❌ Error fetching assigned orders:', error)
       // Don't show error to user, just log it
     }
-  }, [isOnline, calculateTimeAway])
+  }, [isOnline, calculateTimeAway, hasAssignedZones, detectedZone, isOutOfZone])
 
   // Fetch assigned orders when delivery person goes online
   useEffect(() => {
@@ -4853,7 +5060,7 @@ export default function DeliveryHome() {
   // Also fetch orders on initial page load if already online
   useEffect(() => {
     // Check if delivery person is already online when component mounts
-    const storedOnlineStatus = localStorage.getItem('delivery_online_status')
+    const storedOnlineStatus = localStorage.getItem(LS_KEY)
     const isCurrentlyOnline = storedOnlineStatus === 'true' || isOnline
 
     if (isCurrentlyOnline) {
@@ -4867,6 +5074,16 @@ export default function DeliveryHome() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // Only run once on mount
 
+  // Poll for new orders while online (ensures orders arrive after restaurant acceptance)
+  useEffect(() => {
+    if (!isOnline) return
+    const intervalId = setInterval(() => {
+      fetchAssignedOrders()
+    }, 10000)
+
+    return () => clearInterval(intervalId)
+  }, [isOnline, fetchAssignedOrders])
+
   // Fetch bank details status and delivery partner status
   useEffect(() => {
     const checkBankDetails = async () => {
@@ -4874,6 +5091,20 @@ export default function DeliveryHome() {
         const response = await deliveryAPI.getProfile()
         if (response?.data?.success && response?.data?.data?.profile) {
           const profile = response.data.data.profile
+          setDeliveryProfile(profile)
+          const assigned = Array.isArray(profile?.availability?.zones)
+            ? profile.availability.zones.map(normalizeZoneValue)
+            : []
+          setAssignedZoneIds(
+            assigned
+              .map(z => (z.id != null ? String(z.id) : null))
+              .filter(Boolean)
+          )
+          setAssignedZoneNames(
+            assigned
+              .map(z => (typeof z.name === "string" ? z.name.trim().toLowerCase() : null))
+              .filter(Boolean)
+          )
           const bankDetails = profile?.documents?.bankDetails
 
           // Store delivery partner status first
@@ -4963,6 +5194,13 @@ export default function DeliveryHome() {
 
   // Re-run map init when container might have become available (ref can be null on first run)
   const [mapInitRetry, setMapInitRetry] = useState(0)
+  const currentZoneLabel = useMemo(() => {
+    const normalized = normalizeZoneValue(detectedZone || currentZone)
+    if (normalized.name) return normalized.name
+    if (assignedZoneNames.length > 0) return assignedZoneNames[0]
+    const profileZone = normalizeZoneValue(deliveryProfile?.availability?.zones?.[0])
+    return profileZone.name || null
+  }, [detectedZone, currentZone, assignedZoneNames, deliveryProfile])
 
   // Initialize Google Map - Preserve map across navigation, re-attach when returning
   useEffect(() => {
@@ -6039,7 +6277,7 @@ export default function DeliveryHome() {
         return;
       }
 
-      try {
+    try {
         setDirectionsMapLoading(true);
 
         // Get current LIVE location (delivery boy) - prioritize riderLocation which is updated in real-time
@@ -6516,7 +6754,10 @@ export default function DeliveryHome() {
         false && console.log('📦 Found active order in localStorage:', activeOrderData);
 
         // Get order ID from saved data
-        const orderId = activeOrderData.orderId || activeOrderData.restaurantInfo?.id || activeOrderData.restaurantInfo?.orderId;
+        const orderId = activeOrderData.orderId ||
+          activeOrderData.restaurantInfo?.orderMongoId ||
+          activeOrderData.restaurantInfo?.id ||
+          activeOrderData.restaurantInfo?.orderId;
 
         if (!orderId) {
           false && console.log('⚠️ No order ID found in saved data, removing from localStorage');
@@ -7921,6 +8162,30 @@ export default function DeliveryHome() {
     }])
   ], [bankDetailsFilled])
 
+  // Restore carousel index from profile/localStorage (onboarding slider persistence)
+  useEffect(() => {
+    if (!carouselSlides.length) return
+    let restoredIndex = null
+
+    const profileIndex =
+      deliveryProfile?.uiState?.deliveryHomeCarouselIndex ??
+      deliveryProfile?.appState?.deliveryHomeCarouselIndex ??
+      null
+    if (typeof profileIndex === "number") {
+      restoredIndex = profileIndex
+    } else {
+      const stored = localStorage.getItem("delivery_home_carousel_index")
+      if (stored !== null && !Number.isNaN(Number(stored))) {
+        restoredIndex = Number(stored)
+      }
+    }
+
+    if (restoredIndex !== null) {
+      const clamped = Math.max(0, Math.min(restoredIndex, carouselSlides.length - 1))
+      setCurrentCarouselSlide(clamped)
+    }
+  }, [carouselSlides.length, deliveryProfile])
+
   // Auto-rotate carousel
   useEffect(() => {
     // Reset to first slide if current slide is out of bounds
@@ -7941,6 +8206,31 @@ export default function DeliveryHome() {
     }
   }, [carouselSlides])
 
+  // Persist carousel index when user swipes (save to DB + localStorage)
+  useEffect(() => {
+    if (!carouselSlides.length) return
+    if (!carouselManualChangeRef.current) return
+    carouselManualChangeRef.current = false
+
+    localStorage.setItem("delivery_home_carousel_index", String(currentCarouselSlide))
+
+    if (carouselSaveTimeoutRef.current) {
+      clearTimeout(carouselSaveTimeoutRef.current)
+    }
+
+    carouselSaveTimeoutRef.current = setTimeout(async () => {
+      try {
+        await deliveryAPI.updateProfile({
+          uiState: {
+            deliveryHomeCarouselIndex: currentCarouselSlide
+          }
+        })
+      } catch {
+        // Ignore persistence errors
+      }
+    }, 400)
+  }, [currentCarouselSlide, carouselSlides.length])
+
   // Reset auto-rotate timer after manual swipe
   const resetCarouselAutoRotate = useCallback(() => {
     if (carouselAutoRotateRef.current) {
@@ -7956,6 +8246,7 @@ export default function DeliveryHome() {
 
   const handleCarouselTouchStart = useCallback((e) => {
     carouselIsSwiping.current = true
+    carouselManualChangeRef.current = true
     carouselStartX.current = e.touches[0].clientX
     carouselStartY.current = e.touches[0].clientY
   }, [])
@@ -8004,6 +8295,7 @@ export default function DeliveryHome() {
   // Handle carousel mouse events for desktop
   const handleCarouselMouseDown = (e) => {
     carouselIsSwiping.current = true
+    carouselManualChangeRef.current = true
     carouselStartX.current = e.clientX
 
     const handleMouseMove = (moveEvent) => {
@@ -8374,32 +8666,59 @@ export default function DeliveryHome() {
     // Light orange color for all zones
     const lightOrangeColor = "#FFB84D" // Light orange
     const strokeColor = "#FF9500" // Slightly darker orange for border
+    const highlightFill = "#22c55e" // Green highlight
+    const highlightStroke = "#16a34a"
+    const highlightZone = detectedZone || currentZone
+    const highlightMeta = normalizeZoneValue(highlightZone)
 
     zonesToDraw.forEach((zone, index) => {
       if (!zone.coordinates || zone.coordinates.length < 3) return
+      const firstCoord = zone.coordinates?.[0]
+      const preferSwap = isLikelySwappedCoord(firstCoord)
+      const primary = getZonePolygon(zone, preferSwap)
+      const secondary = getZonePolygon(zone, !preferSwap)
+      let activePolygon = primary
+      let riderInside = false
+
+      if (riderLocation && riderLocation.length === 2) {
+        if (primary.length >= 3 && isPointInPolygon(riderLocation, primary)) {
+          riderInside = true
+        } else if (secondary.length >= 3 && isPointInPolygon(riderLocation, secondary)) {
+          riderInside = true
+          activePolygon = secondary
+        }
+      }
+
+      if (activePolygon.length < 3) return
 
       // Convert coordinates to LatLng array
-      const path = zone.coordinates.map(coord => {
-        const lat = typeof coord === 'object' ? (coord.latitude || coord.lat) : null
-        const lng = typeof coord === 'object' ? (coord.longitude || coord.lng) : null
+      const path = activePolygon.map(coord => {
+        const lat = coord.lat ?? coord.latitude
+        const lng = coord.lng ?? coord.longitude
         if (lat === null || lng === null) return null
         return new window.google.maps.LatLng(lat, lng)
       }).filter(Boolean)
 
       if (path.length < 3) return
 
-      // Create polygon with light orange fill
+      const zoneMeta = normalizeZoneValue(zone)
+      const isHighlight =
+        riderInside ||
+        (highlightMeta.id && zoneMeta.id && highlightMeta.id === zoneMeta.id) ||
+        (highlightMeta.name && zoneMeta.name && highlightMeta.name === zoneMeta.name)
+
+      // Create polygon with light orange fill (highlight current zone)
       const polygon = new window.google.maps.Polygon({
         paths: path,
-        strokeColor: strokeColor,
+        strokeColor: isHighlight ? highlightStroke : strokeColor,
         strokeOpacity: 0.8,
-        strokeWeight: 2,
-        fillColor: lightOrangeColor,
-        fillOpacity: 0.3, // Light fill opacity for better visibility
+        strokeWeight: isHighlight ? 3 : 2,
+        fillColor: isHighlight ? highlightFill : lightOrangeColor,
+        fillOpacity: isHighlight ? 0.45 : 0.3, // Light fill opacity for better visibility
         editable: false,
         draggable: false,
         clickable: true,
-        zIndex: 1
+        zIndex: isHighlight ? 2 : 1
       })
 
       polygon.setMap(map)
@@ -8416,6 +8735,100 @@ export default function DeliveryHome() {
     }
   }, [mapLoading, riderLocation])
 
+  // Re-draw zones when highlight zone changes
+  useEffect(() => {
+    if (!mapLoading && window.deliveryMapInstance && zones && zones.length > 0) {
+      drawZonesOnMap(zones)
+    }
+  }, [mapLoading, zones, currentZone, detectedZone])
+
+  // Detect zone from backend based on live location
+  useEffect(() => {
+    let isActive = true
+    const detect = async () => {
+      if (!riderLocation || riderLocation.length !== 2) return
+      try {
+        const [lat, lng] = riderLocation
+        const response = await zoneAPI.detectZone(lat, lng)
+        if (!isActive) return
+        const zone = response?.data?.data?.zone || response?.data?.data || response?.data?.zone || null
+        setDetectedZone(zone || null)
+      } catch (error) {
+        // Ignore detection errors; polygon-based check will be used
+      }
+    }
+    detect()
+    return () => {
+      isActive = false
+    }
+  }, [riderLocation])
+
+  // Determine current zone and out-of-zone status
+  useEffect(() => {
+    if (!riderLocation || riderLocation.length !== 2 || !zones || zones.length === 0) {
+      // Fallback to detected zone only
+      if (detectedZone) {
+        setCurrentZone(detectedZone)
+        if (assignedZoneIds.length > 0 || assignedZoneNames.length > 0) {
+          const matched = (() => {
+            const { id, name } = normalizeZoneValue(detectedZone)
+            if (id && assignedZoneIds.includes(id)) return true
+            if (name && assignedZoneNames.includes(name)) return true
+            return false
+          })()
+          setIsOutOfZone(!matched)
+        } else {
+          setIsOutOfZone(false)
+        }
+      } else {
+        setCurrentZone(null)
+        setIsOutOfZone(false)
+      }
+      return
+    }
+
+    const [lat, lng] = riderLocation
+    const hasAssignedZones = assignedZoneIds.length > 0 || assignedZoneNames.length > 0
+
+    const matchesAssignedZone = (zone) => {
+      const { id, name } = normalizeZoneValue(zone)
+      const idKey = id != null ? String(id) : null
+      const nameKey = typeof name === "string" ? name.trim().toLowerCase() : null
+      if (idKey && assignedZoneIds.includes(idKey)) return true
+      if (nameKey && assignedZoneNames.includes(nameKey)) return true
+      return false
+    }
+
+    // Prefer backend detected zone if available
+    if (detectedZone) {
+      const detectedMatches = matchesAssignedZone(detectedZone)
+      if (!hasAssignedZones || detectedMatches) {
+        setCurrentZone(detectedZone)
+        setIsOutOfZone(hasAssignedZones ? !detectedMatches : false)
+        return
+      }
+    }
+
+    const zonesToCheck = hasAssignedZones ? zones.filter(matchesAssignedZone) : zones
+
+    let matchedZone = null
+    for (const zone of zonesToCheck) {
+      const polygon = getZonePolygon(zone, false)
+      if (polygon.length >= 3 && isPointInPolygon([lat, lng], polygon)) {
+        matchedZone = zone
+        break
+      }
+      const swappedPolygon = getZonePolygon(zone, true)
+      if (swappedPolygon.length >= 3 && isPointInPolygon([lat, lng], swappedPolygon)) {
+        matchedZone = zone
+        break
+      }
+    }
+
+    setCurrentZone(matchedZone)
+    setIsOutOfZone(hasAssignedZones ? !matchedZone : false)
+  }, [riderLocation, zones, assignedZoneIds, assignedZoneNames, detectedZone])
+
   // Render normal feed view when offline or no gig booked
   return (
     <div className="min-h-screen bg-[#f6e9dc] overflow-x-hidden flex flex-col" style={{ height: '100vh' }}>
@@ -8426,6 +8839,33 @@ export default function DeliveryHome() {
         onEmergencyClick={() => setShowEmergencyPopup(true)}
         onHelpClick={() => setShowHelpPopup(true)}
       />
+      {(hasAssignedZones || currentZoneLabel || isOutOfZone) && (
+        <div className="px-4 pt-3">
+          <div
+            className={`rounded-lg border px-3 py-2 text-sm flex items-center justify-between ${
+              isOutOfZone
+                ? "bg-red-50 border-red-200 text-red-700"
+                : "bg-emerald-50 border-emerald-200 text-emerald-700"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <MapPin className="w-4 h-4" />
+              <span>
+                {currentZoneLabel
+                  ? `Zone: ${currentZoneLabel}`
+                  : hasAssignedZones
+                    ? "Zone: Assigned"
+                    : "Zone: Not assigned"}
+              </span>
+            </div>
+            {hasAssignedZones && (
+              <span className="text-xs font-semibold">
+                {isOutOfZone ? "Out of zone" : "In zone"}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Carousel - Only show if there are slides */}
       {carouselSlides.length > 0 && (
@@ -9639,10 +10079,10 @@ export default function DeliveryHome() {
                       ref={newOrderAcceptButtonRef}
                       className="relative w-full bg-green-600 rounded-full overflow-hidden shadow-xl"
                       style={{ touchAction: 'pan-x' }} // Prevent vertical scrolling, allow horizontal pan
-                      onTouchStart={handleNewOrderAcceptTouchStart}
-                      onTouchMove={handleNewOrderAcceptTouchMove}
-                      onTouchEnd={handleNewOrderAcceptTouchEnd}
-                      onTouchCancel={handleNewOrderAcceptTouchEnd}
+                        onTouchStart={(e) => { e.stopPropagation(); handleNewOrderAcceptTouchStart(e) }}
+                        onTouchMove={(e) => { e.stopPropagation(); handleNewOrderAcceptTouchMove(e) }}
+                        onTouchEnd={(e) => { e.stopPropagation(); handleNewOrderAcceptTouchEnd(e) }}
+                        onTouchCancel={(e) => { e.stopPropagation(); handleNewOrderAcceptTouchEnd(e) }}
                       onMouseDown={handleNewOrderAcceptMouseDown}
                       onMouseMove={handleNewOrderAcceptMouseMove}
                       onMouseUp={handleNewOrderAcceptMouseUp}
@@ -9668,7 +10108,7 @@ export default function DeliveryHome() {
                         <motion.div
                           className="w-14 h-14 bg-gray-900 rounded-full flex items-center justify-center shrink-0 relative z-20 shadow-2xl"
                           animate={{
-                            x: newOrderAcceptButtonProgress * (newOrderAcceptButtonRef.current ? (newOrderAcceptButtonRef.current.offsetWidth - 56 - 32) : 240)
+                            x: newOrderAcceptButtonProgress * (newOrderAcceptButtonRef.current ? (newOrderAcceptButtonRef.current.offsetWidth - (56 * 2) - 32) : 200)
                           }}
                           transition={newOrderIsAnimatingToComplete ? {
                             type: "spring",
@@ -9841,8 +10281,8 @@ export default function DeliveryHome() {
         showCloseButton={false}
         closeOnBackdropClick={false}
         disableSwipeToClose={true}
-        maxHeight="70vh"
-        showHandle={true}
+        maxHeight="90vh"
+        showHandle={false}
         showBackdrop={false}
         backdropBlocksInteraction={false}
       >
@@ -10172,7 +10612,7 @@ export default function DeliveryHome() {
         onClose={() => setShowOrderIdConfirmationPopup(false)}
         showCloseButton={false}
         closeOnBackdropClick={false}
-        maxHeight="60vh"
+        maxHeight="90vh"
         showHandle={false}
         showBackdrop={false}
         backdropBlocksInteraction={false}
@@ -10404,8 +10844,8 @@ export default function DeliveryHome() {
         onClose={() => setShowReachedDropPopup(false)}
         showCloseButton={false}
         closeOnBackdropClick={false}
-        maxHeight="70vh"
-        showHandle={true}
+        maxHeight="90vh"
+        showHandle={false}
         showBackdrop={false}
         backdropBlocksInteraction={false}
       >
@@ -10538,8 +10978,8 @@ export default function DeliveryHome() {
         }}
         showCloseButton={false}
         closeOnBackdropClick={false}
-        maxHeight="80vh"
-        showHandle={true}
+        maxHeight="90vh"
+        showHandle={false}
         showBackdrop={false}
         backdropBlocksInteraction={false}
       >
@@ -10925,3 +11365,7 @@ export default function DeliveryHome() {
     </div>
   )
 }
+
+
+
+

@@ -44,7 +44,7 @@ export default function ReportSafetyEmergency() {
 
   return (
     <AnimatedPage className="min-h-screen bg-[#f5f5f5] dark:bg-[#0a0a0a]">
-      <div className="max-w-5xl mx-auto px-4 md:px-6 lg:px-8 py-4 md:py-6 lg:py-8">
+      <div className="max-w-5xl mx-auto px-4 md:px-6 lg:px-8 py-4 md:py-6 lg:py-8 pb-24 md:pb-10">
         {/* Header */}
         <div className="flex items-center gap-3 md:gap-4 mb-4 md:mb-6 lg:mb-8">
           <Link to="/user/profile">
@@ -111,7 +111,7 @@ export default function ReportSafetyEmergency() {
                   placeholder="Please provide details about the safety issue..."
                   value={report}
                   onChange={(e) => setReport(e.target.value)}
-                  className="min-h-[150px] md:min-h-[200px] lg:min-h-[250px] w-full resize-y text-sm md:text-base leading-relaxed"
+                  className="min-h-[150px] md:min-h-[200px] lg:min-h-[250px] w-full resize-y text-sm md:text-base leading-relaxed p-3 md:p-4 box-border"
                   dir="ltr"
                   style={{
                     direction: 'ltr',
@@ -164,4 +164,5 @@ export default function ReportSafetyEmergency() {
     </AnimatedPage>
   )
 }
+
 

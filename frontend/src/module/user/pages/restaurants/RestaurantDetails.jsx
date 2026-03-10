@@ -2533,7 +2533,8 @@ export default function RestaurantDetails() {
                       className="w-full flex items-start gap-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors"
                       onClick={(e) => {
                         e.stopPropagation()
-                        // Don't close modal on click, let checkbox handle it
+                        setShowManageCollections(false)
+                        navigate("/user/profile/favorites")
                       }}
                     >
                       <div className="h-12 w-12 rounded-lg bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center flex-shrink-0">

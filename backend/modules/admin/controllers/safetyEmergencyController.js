@@ -17,7 +17,7 @@ export const createSafetyEmergency = asyncHandler(async (req, res) => {
     // Get user info from request (user is authenticated via middleware)
     const userId = req.user._id;
     const userName = req.user.name || req.user.firstName || req.user.email?.split('@')[0] || 'User';
-    const userEmail = req.user.email || '';
+    const userEmail = req.user.email || req.user.phone || `user-${userId.toString()}@no-email.local`;
 
     // Auto-detect priority based on keywords
     const messageLower = message.toLowerCase();
@@ -254,4 +254,5 @@ export const deleteSafetyEmergency = asyncHandler(async (req, res) => {
     return errorResponse(res, 500, 'Failed to delete safety emergency report');
   }
 });
+
 

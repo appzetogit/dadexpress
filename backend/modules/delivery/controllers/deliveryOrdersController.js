@@ -975,8 +975,13 @@ export const acceptOrder = asyncHandler(async (req, res) => {
 export const confirmReachedPickup = asyncHandler(async (req, res) => {
   try {
     const delivery = req.delivery;
-    const { orderId } = req.params;
+    let { orderId } = req.params;
     const deliveryId = delivery._id;
+
+    // Clean orderId string if it comes with spaces or URI encoded spaces
+    if (orderId && typeof orderId === 'string') {
+      orderId = decodeURIComponent(orderId).replace(/\s+/g, '');
+    }
 
     console.log(`📍 confirmReachedPickup called - orderId: ${orderId}, deliveryId: ${deliveryId}`);
 
@@ -1120,9 +1125,14 @@ export const confirmReachedPickup = asyncHandler(async (req, res) => {
 export const confirmOrderId = asyncHandler(async (req, res) => {
   try {
     const delivery = req.delivery;
-    const { orderId } = req.params;
+    let { orderId } = req.params;
     const { confirmedOrderId, billImageUrl } = req.body; // Order ID confirmed by delivery boy, bill image URL
     const { currentLat, currentLng } = req.body; // Current location for route calculation
+
+    // Clean orderId string if it comes with spaces or URI encoded spaces
+    if (orderId && typeof orderId === 'string') {
+      orderId = decodeURIComponent(orderId).replace(/\s+/g, '');
+    }
 
     // Find order by _id or orderId - try multiple methods for better compatibility
     let order = null;
@@ -1444,10 +1454,15 @@ export const confirmOrderId = asyncHandler(async (req, res) => {
 export const confirmReachedDrop = asyncHandler(async (req, res) => {
   try {
     const delivery = req.delivery;
-    const { orderId } = req.params;
+    let { orderId } = req.params;
 
     if (!delivery || !delivery._id) {
       return errorResponse(res, 401, 'Delivery partner authentication required');
+    }
+
+    // Clean orderId string if it comes with spaces or URI encoded spaces
+    if (orderId && typeof orderId === 'string') {
+      orderId = decodeURIComponent(orderId).replace(/\s+/g, '');
     }
 
     if (!orderId) {
@@ -2220,3 +2235,6 @@ export const completeDelivery = asyncHandler(async (req, res) => {
     return errorResponse(res, 500, `Failed to complete delivery: ${error.message}`);
   }
 });
+
+
+
