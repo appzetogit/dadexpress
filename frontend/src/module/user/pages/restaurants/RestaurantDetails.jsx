@@ -20,7 +20,6 @@ import {
   Star,
   SlidersHorizontal,
   Utensils,
-  Flame,
   Bookmark,
   Share2,
   Plus,
@@ -79,9 +78,11 @@ export default function RestaurantDetails() {
   const [showMenuOptionsSheet, setShowMenuOptionsSheet] = useState(false)
   const [expandedAddButtons, setExpandedAddButtons] = useState(new Set())
   const [expandedSections, setExpandedSections] = useState(new Set([0])) // Default: Recommended section is expanded
+  const filterSheetHistoryRef = useRef(false)
   const [filters, setFilters] = useState({
     sortBy: null, // "low-to-high" | "high-to-low"
     vegNonVeg: null, // "veg" | "non-veg" | "pure-veg"
+    highlyReordered: false,
   })
 
   // Restaurant data state
@@ -915,10 +916,45 @@ export default function RestaurantDetails() {
     let count = 0
     if (filters.sortBy) count++
     if (filters.vegNonVeg) count++
+    if (filters.highlyReordered) count++
     return count
   }
 
   const activeFilterCount = getActiveFilterCount()
+
+  useEffect(() => {
+    const handlePopState = () => {
+      if (filterSheetHistoryRef.current && showFilterSheet) {
+        filterSheetHistoryRef.current = false
+        setShowFilterSheet(false)
+      }
+    }
+
+    window.addEventListener("popstate", handlePopState)
+    return () => window.removeEventListener("popstate", handlePopState)
+  }, [showFilterSheet])
+
+  useEffect(() => {
+    if (showFilterSheet && !filterSheetHistoryRef.current) {
+      window.history.pushState({ filterSheet: true }, "")
+      filterSheetHistoryRef.current = true
+      return
+    }
+
+    if (!showFilterSheet && filterSheetHistoryRef.current) {
+      filterSheetHistoryRef.current = false
+    }
+  }, [showFilterSheet])
+
+  const closeFilterSheet = () => {
+    if (filterSheetHistoryRef.current) {
+      filterSheetHistoryRef.current = false
+      setShowFilterSheet(false)
+      window.history.back()
+      return
+    }
+    setShowFilterSheet(false)
+  }
 
   // Handle bookmark click
   const handleBookmarkClick = (item) => {
@@ -1124,20 +1160,29 @@ export default function RestaurantDetails() {
   }
 
   // Helper function to calculate final price after discount
+  const normalizePrice = (value) => {
+    if (typeof value === "number") return value
+    if (typeof value === "string") {
+      const parsed = Number(value.replace(/[^\d.]/g, ""))
+      return Number.isNaN(parsed) ? 0 : parsed
+    }
+    return 0
+  }
+
   const getFinalPrice = (item) => {
     // If discount exists, calculate from originalPrice, otherwise use price directly
     if (item.originalPrice && item.discountAmount && item.discountAmount > 0) {
       // Calculate discounted price from originalPrice
-      let discountedPrice = item.originalPrice;
+      let discountedPrice = normalizePrice(item.originalPrice);
       if (item.discountType === 'Percent') {
-        discountedPrice = item.originalPrice - (item.originalPrice * item.discountAmount / 100);
+        discountedPrice = discountedPrice - (discountedPrice * normalizePrice(item.discountAmount) / 100);
       } else if (item.discountType === 'Fixed') {
-        discountedPrice = item.originalPrice - item.discountAmount;
+        discountedPrice = discountedPrice - normalizePrice(item.discountAmount);
       }
       return Math.max(0, discountedPrice);
     }
     // Otherwise, use price as the final price
-    return Math.max(0, item.price || 0);
+    return Math.max(0, normalizePrice(item.price));
   };
 
   // Filter menu items based on active filters
@@ -1173,6 +1218,10 @@ export default function RestaurantDetails() {
         // Show both veg and non-veg items (no filtering out)
       }
 
+      // Highly reordered filter (based on item tag used in UI)
+      if (filters.highlyReordered) {
+        if (!item.customisable) return false
+      }
 
       return true
     })
@@ -1584,7 +1633,23 @@ export default function RestaurantDetails() {
                   )}
                   {sectionIndex > 0 && (
                     <div className="flex items-center justify-between">
-                      <div className="space-y-1">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setExpandedSections(prev => {
+                            const newSet = new Set(prev)
+                            if (newSet.has(originalIndex)) {
+                              newSet.delete(originalIndex)
+                            } else {
+                              newSet.add(originalIndex)
+                            }
+                            return newSet
+                          })
+                        }}
+                        className="text-left"
+                      >
+                        <div className="space-y-1">
                         <h2 className="text-lg font-bold text-gray-900 dark:text-white">
                           {(section?.name && typeof section.name === 'string' && section.name.trim())
                             ? section.name.trim()
@@ -1597,7 +1662,8 @@ export default function RestaurantDetails() {
                             {section.subtitle}
                           </button>
                         )}
-                      </div>
+                        </div>
+                      </button>
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
@@ -2173,7 +2239,7 @@ export default function RestaurantDetails() {
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.15 }}
-                  onClick={() => setShowFilterSheet(false)}
+                  onClick={closeFilterSheet}
                 />
 
                 {/* Bottom Sheet */}
@@ -2189,7 +2255,7 @@ export default function RestaurantDetails() {
                   <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-gray-200 dark:border-gray-800">
                     <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Filters and Sorting</h2>
                     <button
-                      onClick={() => setShowFilterSheet(false)}
+                      onClick={closeFilterSheet}
                       className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
                     >
                       <X className="h-5 w-5 text-gray-600 dark:text-gray-400" />
@@ -2290,25 +2356,6 @@ export default function RestaurantDetails() {
                       </button>
                     </div>
 
-                    {/* Dietary preference */}
-                    <div className="space-y-2">
-                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Dietary preference:</h3>
-                      <button
-                        onClick={() =>
-                          setFilters((prev) => ({
-                            ...prev,
-                            spicy: !prev.spicy,
-                          }))
-                        }
-                        className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 transition-all w-full ${filters.spicy
-                          ? "border-red-500 dark:border-red-400 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400"
-                          : "border-gray-200 dark:border-gray-700 bg-white dark:bg-[#2a2a2a] text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
-                          }`}
-                      >
-                        <Flame className="h-4 w-4" />
-                        <span className="font-medium">Spicy</span>
-                      </button>
-                    </div>
                   </div>
 
                   {/* Bottom Action Bar */}
@@ -2319,7 +2366,6 @@ export default function RestaurantDetails() {
                           sortBy: null,
                           vegNonVeg: null,
                           highlyReordered: false,
-                          spicy: false,
                         })
                       }}
                       className="text-red-600 dark:text-red-400 font-medium text-sm hover:text-red-700 dark:hover:text-red-500"
@@ -2328,7 +2374,7 @@ export default function RestaurantDetails() {
                     </button>
                     <Button
                       className="bg-[#EB590E] hover:bg-[#D94F0C] text-white px-6 py-2.5 rounded-lg font-bold"
-                      onClick={() => setShowFilterSheet(false)}
+                      onClick={closeFilterSheet}
                     >
                       Apply {activeFilterCount > 0 && `(${activeFilterCount})`}
                     </Button>

@@ -1,4 +1,5 @@
 import { Navigate, useLocation } from "react-router-dom";
+import { useEffect } from "react";
 import { isModuleAuthenticated } from "@/lib/utils/auth";
 
 /**
@@ -7,6 +8,27 @@ import { isModuleAuthenticated } from "@/lib/utils/auth";
  */
 export default function ProtectedRoute({ children, requiredRole, loginPath }) {
   const location = useLocation();
+
+  useEffect(() => {
+    if (requiredRole !== "restaurant") return;
+
+    document.body.classList.add("restaurant-module");
+    const meta = document.querySelector('meta[name="viewport"]');
+    const prevContent = meta?.getAttribute("content") || "";
+    if (meta) {
+      meta.setAttribute(
+        "content",
+        "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+      );
+    }
+
+    return () => {
+      document.body.classList.remove("restaurant-module");
+      if (meta) {
+        meta.setAttribute("content", prevContent);
+      }
+    };
+  }, [requiredRole]);
 
   // Check if user is authenticated for the required module using module-specific token
   if (!requiredRole) {

@@ -116,6 +116,26 @@ export default function UserLayout() {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' })
   }, [location.pathname, location.search, location.hash])
 
+  useEffect(() => {
+    document.body.classList.add("user-module")
+    return () => {
+      document.body.classList.remove("user-module")
+    }
+  }, [])
+
+  useEffect(() => {
+    const meta = document.querySelector('meta[name="viewport"]')
+    if (!meta) return
+    const prevContent = meta.getAttribute("content") || ""
+    meta.setAttribute(
+      "content",
+      "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+    )
+    return () => {
+      meta.setAttribute("content", prevContent)
+    }
+  }, [])
+
   // Note: Authentication checks and redirects are handled by ProtectedRoute components
   // UserLayout should not interfere with authentication redirects
 
