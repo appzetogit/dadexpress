@@ -7,8 +7,9 @@ import {
   CheckCircle
 } from "lucide-react"
 import { formatCurrency } from "../../restaurant/utils/currency"
-import { DateRangeCalendar } from "@/components/ui/date-range-calendar"
 import WeekSelector from "../components/WeekSelector"
+import { fetchWalletTransactions } from "../utils/deliveryWalletState"
+import { toast } from "sonner"
 
 export default function TipsStatement() {
   const navigate = useNavigate()
@@ -23,6 +24,8 @@ export default function TipsStatement() {
   const [endDate, setEndDate] = useState(new Date())
   const [showCalendar, setShowCalendar] = useState(false)
   const calendarRef = useRef(null)
+  const [tips, setTips] = useState([])
+  const [isLoading, setIsLoading] = useState(false)
   
   // Format date range display
   const dateRangeDisplay = useMemo(() => {
@@ -60,17 +63,75 @@ export default function TipsStatement() {
     }
   }, [showCalendar])
   
-  // Fetch tips data based on selected date range (mock function - replace with actual API call)
-  const getTipsDataForDateRange = (start, end) => {
-    // This would be an API call in a real application
-    // For now, return empty array
-    return []
-  }
-  
-  // Get tips data for current selected date range
-  const tips = useMemo(() => {
-    if (!startDate || !endDate) return []
-    return getTipsDataForDateRange(startDate, endDate)
+  // Fetch tips data based on selected date range from wallet transactions
+  useEffect(() => {
+    const fetchTips = async () => {
+      try {
+        if (!startDate || !endDate) {
+          setTips([])
+          return
+        }
+
+        setIsLoading(true)
+
+        // Get wallet transactions from backend (payments only, completed)
+        const transactions = await fetchWalletTransactions({
+          type: "payment",
+          status: "Completed",
+          page: 1,
+          limit: 200,
+        })
+
+        if (!transactions || transactions.length === 0) {
+          setTips([])
+          return
+        }
+
+        const start = new Date(startDate)
+        start.setHours(0, 0, 0, 0)
+        const end = new Date(endDate)
+        end.setHours(23, 59, 59, 999)
+
+        // Filter only tip-related payments within date range
+        const filtered = transactions
+          .filter((t) => {
+            const desc = (t.description || "").toLowerCase()
+            const isTip =
+              desc.includes("tip") ||
+              desc.includes("tips") ||
+              desc.includes("customer tip")
+
+            if (!isTip) return false
+
+            const txDate = t.date ? new Date(t.date) : t.createdAt ? new Date(t.createdAt) : null
+            if (!txDate) return false
+
+            return txDate >= start && txDate <= end
+          })
+          .map((t) => {
+            const txDate = t.date ? new Date(t.date) : t.createdAt ? new Date(t.createdAt) : new Date()
+            return {
+              description: t.description || "Customer tip",
+              date: txDate.toLocaleDateString("en-IN", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+              }),
+              amount: t.amount || 0,
+            }
+          })
+
+        setTips(filtered)
+      } catch (error) {
+        console.error("Error fetching tip transactions:", error)
+        toast.error(error.response?.data?.message || "Failed to fetch tip transactions")
+        setTips([])
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchTips()
   }, [startDate, endDate])
   
   return (
@@ -92,7 +153,12 @@ export default function TipsStatement() {
           <WeekSelector />
 
         {/* Transactions List */}
-        {tips.length === 0 ? (
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-12">
+            <div className="h-6 w-6 rounded-full border-2 border-gray-300 border-t-gray-500 animate-spin mb-4" />
+            <p className="text-gray-600 text-base font-medium">Loading tip statements...</p>
+          </div>
+        ) : tips.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12">
             {/* Empty State Illustration */}
             <div className="flex flex-col gap-2 mb-6">

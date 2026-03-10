@@ -8,9 +8,9 @@ import {
   ArrowLeft
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { 
-  getDeliveryWalletState, 
-  calculateDeliveryBalances 
+import {
+  fetchDeliveryWallet,
+  calculateDeliveryBalances,
 } from "../utils/deliveryWalletState"
 import { formatCurrency } from "../../restaurant/utils/currency"
 
@@ -18,29 +18,37 @@ export default function MyAccount() {
   const navigate = useNavigate()
   const location = useLocation()
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
-  const [walletState, setWalletState] = useState(() => getDeliveryWalletState())
+  const [walletState, setWalletState] = useState(null)
+  const [walletLoading, setWalletLoading] = useState(false)
 
-  // Listen for wallet state updates
+  // Fetch wallet data from backend and refresh when route changes
   useEffect(() => {
-    const handleWalletUpdate = () => {
-      setWalletState(getDeliveryWalletState())
+    const fetchWallet = async () => {
+      try {
+        setWalletLoading(true)
+        const data = await fetchDeliveryWallet()
+        setWalletState(data)
+      } catch (error) {
+        console.error("Error fetching delivery wallet in MyAccount:", error)
+        setWalletState(null)
+      } finally {
+        setWalletLoading(false)
+      }
     }
 
-    // Check on mount
-    handleWalletUpdate()
-
-    // Listen for custom event (for same tab updates)
-    window.addEventListener('deliveryWalletStateUpdated', handleWalletUpdate)
-    // Listen for storage event (for cross-tab updates)
-    window.addEventListener('storage', handleWalletUpdate)
-
-    return () => {
-      window.removeEventListener('deliveryWalletStateUpdated', handleWalletUpdate)
-      window.removeEventListener('storage', handleWalletUpdate)
-    }
+    fetchWallet()
   }, [location.pathname])
 
-  const balances = calculateDeliveryBalances(walletState)
+  const balances = calculateDeliveryBalances(
+    walletState || {
+      totalBalance: 0,
+      cashInHand: 0,
+      totalWithdrawn: 0,
+      pendingWithdrawals: 0,
+      totalEarnings: 0,
+      transactions: [],
+    },
+  )
 
   return (
     <div className="min-h-screen bg-[#f6e9dc] overflow-x-hidden pb-24">
@@ -71,22 +79,24 @@ export default function MyAccount() {
               <div className="min-w-0">
                 <p className="text-white text-sm md:text-base mb-1">Payable Amount</p>
                 <p className="text-white text-3xl md:text-4xl font-bold">
-                  {formatCurrency(balances.cashInHand)}
+                  {walletLoading
+                    ? "₹0"
+                    : formatCurrency(balances.cashInHand)}
                 </p>
               </div>
             </div>
             <div className="flex flex-col gap-2 w-full md:w-auto md:flex-shrink-0">
-              <Button 
+              <Button
                 onClick={() => setShowConfirmDialog(true)}
                 className="bg-[#ff8100] hover:bg-[#e67300] text-white font-semibold px-3 py-2 md:px-4 md:py-2 rounded-lg text-xs md:text-sm w-full md:w-auto"
               >
                 Adjust Payments
               </Button>
-              <Button 
+              <Button
                 onClick={() => {
-                  // TODO: Process payment
+                  // TODO: Integrate with delivery wallet deposit/payment flow
                   console.log("Pay Now clicked")
-                  alert("Payment processing feature coming soon")
+                  alert("Payment processing will be integrated with wallet soon")
                 }}
                 className="bg-[#ff8100] hover:bg-[#e67300] text-white font-semibold px-3 py-2 md:px-4 md:py-2 rounded-lg text-xs md:text-sm w-full md:w-auto"
               >

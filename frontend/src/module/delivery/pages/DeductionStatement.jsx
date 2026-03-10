@@ -7,8 +7,9 @@ import {
   CheckCircle
 } from "lucide-react"
 import { formatCurrency } from "../../restaurant/utils/currency"
-import { DateRangeCalendar } from "@/components/ui/date-range-calendar"
 import WeekSelector from "../components/WeekSelector"
+import { fetchWalletTransactions } from "../utils/deliveryWalletState"
+import { toast } from "sonner"
 
 export default function TipsStatement() {
   const navigate = useNavigate()
@@ -23,6 +24,8 @@ export default function TipsStatement() {
   const [endDate, setEndDate] = useState(new Date())
   const [showCalendar, setShowCalendar] = useState(false)
   const calendarRef = useRef(null)
+  const [deductions, setDeductions] = useState([])
+  const [isLoading, setIsLoading] = useState(false)
   
   // Format date range display
   const dateRangeDisplay = useMemo(() => {
@@ -60,17 +63,80 @@ export default function TipsStatement() {
     }
   }, [showCalendar])
   
-  // Fetch tips data based on selected date range (mock function - replace with actual API call)
-  const getTipsDataForDateRange = (start, end) => {
-    // This would be an API call in a real application
-    // For now, return empty array
-    return []
-  }
-  
-  // Get tips data for current selected date range
-  const tips = useMemo(() => {
-    if (!startDate || !endDate) return []
-    return getTipsDataForDateRange(startDate, endDate)
+  // Fetch deduction data based on selected date range from wallet transactions
+  useEffect(() => {
+    const fetchDeductions = async () => {
+      try {
+        if (!startDate || !endDate) {
+          setDeductions([])
+          return
+        }
+
+        setIsLoading(true)
+
+        // Get all wallet transactions (we will filter deductions by type/description)
+        const transactions = await fetchWalletTransactions({
+          page: 1,
+          limit: 200,
+        })
+
+        if (!transactions || transactions.length === 0) {
+          setDeductions([])
+          return
+        }
+
+        const start = new Date(startDate)
+        start.setHours(0, 0, 0, 0)
+        const end = new Date(endDate)
+        end.setHours(23, 59, 59, 999)
+
+        const filtered = transactions
+          .filter((t) => {
+            const type = (t.type || "").toLowerCase()
+            const desc = (t.description || "").toLowerCase()
+
+            // Heuristic: treat withdrawals, adjustments, fees, penalties as deductions
+            const isDeduction =
+              type === "withdrawal" ||
+              type === "adjustment" ||
+              type === "fee" ||
+              desc.includes("deduction") ||
+              desc.includes("penalty") ||
+              desc.includes("fine") ||
+              desc.includes("charge") ||
+              desc.includes("settlement")
+
+            if (!isDeduction) return false
+
+            const txDate = t.date ? new Date(t.date) : t.createdAt ? new Date(t.createdAt) : null
+            if (!txDate) return false
+
+            return txDate >= start && txDate <= end
+          })
+          .map((t) => {
+            const txDate = t.date ? new Date(t.date) : t.createdAt ? new Date(t.createdAt) : new Date()
+            return {
+              description: t.description || "Wallet deduction",
+              date: txDate.toLocaleDateString("en-IN", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+              }),
+              amount: t.amount || 0,
+            }
+          })
+
+        setDeductions(filtered)
+      } catch (error) {
+        console.error("Error fetching deduction transactions:", error)
+        toast.error(error.response?.data?.message || "Failed to fetch deduction statements")
+        setDeductions([])
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchDeductions()
   }, [startDate, endDate])
   
   return (
@@ -92,7 +158,12 @@ export default function TipsStatement() {
           <WeekSelector />
 
         {/* Transactions List */}
-        {tips.length === 0 ? (
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-12">
+            <div className="h-6 w-6 rounded-full border-2 border-gray-300 border-t-gray-500 animate-spin mb-4" />
+            <p className="text-gray-600 text-base font-medium">Loading deduction statements...</p>
+          </div>
+        ) : deductions.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12">
             {/* Empty State Illustration */}
             <div className="flex flex-col gap-2 mb-6">
@@ -128,7 +199,7 @@ export default function TipsStatement() {
           </div>
         ) : (
           <div className="space-y-3 mb-6">
-            {tips.map((tip, index) => (
+            {deductions.map((item, index) => (
               <div
                 key={index}
                 className="bg-white rounded-xl p-4 shadow-md border border-gray-100"
@@ -140,12 +211,12 @@ export default function TipsStatement() {
                       index % 3 === 1 ? 'bg-orange-500' : 'bg-blue-500'
                     }`}></div>
                     <div>
-                      <p className="text-gray-900 text-sm font-medium">{tip.description}</p>
-                      <p className="text-gray-500 text-xs">{tip.date}</p>
+                      <p className="text-gray-900 text-sm font-medium">{item.description}</p>
+                      <p className="text-gray-500 text-xs">{item.date}</p>
                     </div>
                   </div>
-                  <div className="text-green-600 text-sm font-medium">
-                    +{formatCurrency(Math.abs(tip.amount))}
+                  <div className="text-red-600 text-sm font-medium">
+                    -{formatCurrency(Math.abs(item.amount))}
                   </div>
                 </div>
               </div>

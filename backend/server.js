@@ -107,6 +107,7 @@ const allowedSocketOrigins = [
   process.env.CORS_ORIGIN,
   'https://dadexpress.in',
   'https://www.dadexpress.in',
+  'https://dadexpress-d2sed0c2w-appzetos-projects-70635cc3.vercel.app',
 
   'http://localhost:5173',
   'http://localhost:3000',
@@ -322,6 +323,7 @@ const allowedOrigins = [
   process.env.CORS_ORIGIN,
   'https://dadexpress.in',
   'https://www.dadexpress.in',
+  'https://dadexpress-d2sed0c2w-appzetos-projects-70635cc3.vercel.app',
   'http://localhost:3000',
   'http://localhost:5173',
   'http://localhost:5174',

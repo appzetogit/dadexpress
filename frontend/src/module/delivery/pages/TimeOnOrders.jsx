@@ -1,7 +1,9 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useNavigate } from "react-router-dom"
 import { ArrowLeft, ChevronDown } from "lucide-react"
 import { useProgressStore } from "../store/progressStore"
+import { deliveryAPI } from "@/lib/api"
+import { toast } from "sonner"
 
 export default function TimeOnOrders() {
   const navigate = useNavigate()
@@ -19,92 +21,106 @@ export default function TimeOnOrders() {
     "All Day"
   ]
 
-  // Generate dummy session data
-  const generateDummySessions = (date, timeRange) => {
-    const sessions = []
-    const seed = date.toISOString().split('T')[0].replace(/-/g, '')
-    const seedNum = parseInt(seed) % 1000
-    
-    const count = (seedNum % 8) + 2 // 2-9 sessions
-
-    for (let i = 0; i < count; i++) {
-      const startHour = Math.floor((seedNum + i) % 24)
-      const startMin = Math.floor((seedNum + i * 2) % 60)
-      const duration = ((seedNum + i) % 180) + 30 // 30-210 minutes
-      
-      const endMin = startMin + duration
-      const endHour = startHour + Math.floor(endMin / 60)
-      const finalEndMin = endMin % 60
-      
-      const startTime = `${String(startHour).padStart(2, '0')}:${String(startMin).padStart(2, '0')}`
-      const endTime = `${String(endHour % 24).padStart(2, '0')}:${String(finalEndMin).padStart(2, '0')}`
-      const timeRangeStr = `${startTime} - ${endTime}`
-      
-      const hours = Math.floor(duration / 60)
-      const minutes = duration % 60
-      const timeOnOrders = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
-
-      sessions.push({
-        id: i + 1,
-        session: `Session ${i + 1}`,
-        timeRange: timeRangeStr,
-        timeOnOrders,
-        hours,
-        minutes,
-        duration
-      })
-    }
-
-    // Filter by time range if selected
-    if (timeRange !== "Select Time" && timeRange !== "All Day") {
-      const [start, end] = timeRange.split(' - ').map(t => {
-        const [h, m] = t.split(':').map(Number)
-        return h * 60 + m
-      })
-      
-      return sessions.filter(session => {
-        const [sessionStart] = session.timeRange.split(' - ').map(t => {
-          const [h, m] = t.split(':').map(Number)
-          return h * 60 + m
-        })
-        return sessionStart >= start && sessionStart < end
-      })
-    }
-
-    return sessions.sort((a, b) => {
-      const [aStart] = a.timeRange.split(' - ').map(t => {
-        const [h, m] = t.split(':').map(Number)
-        return h * 60 + m
-      })
-      const [bStart] = b.timeRange.split(' - ').map(t => {
-        const [h, m] = t.split(':').map(Number)
-        return h * 60 + m
-      })
-      return aStart - bStart
-    })
-  }
-
-  const [sessions, setSessions] = useState(() => 
-    generateDummySessions(selectedDate, selectedTimeRange)
-  )
+  // Raw sessions fetched from backend (unfiltered)
+  const [rawSessions, setRawSessions] = useState([])
+  const [isLoading, setIsLoading] = useState(false)
 
   const { updateTodayTimeOnOrders } = useProgressStore()
 
+  // Fetch sessions from backend trip history API
   useEffect(() => {
-    const sessionsData = generateDummySessions(selectedDate, selectedTimeRange)
-    setSessions(sessionsData)
-    
-    // Update store if viewing today's data and all day
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const selectedDateNormalized = new Date(selectedDate)
-    selectedDateNormalized.setHours(0, 0, 0, 0)
-    
-    if (selectedDateNormalized.getTime() === today.getTime() && (selectedTimeRange === "Select Time" || selectedTimeRange === "All Day")) {
-      const totalHours = finalHours + (finalMinutes / 60)
-      updateTodayTimeOnOrders(totalHours)
+    const fetchSessions = async () => {
+      try {
+        setIsLoading(true)
+
+        const response = await deliveryAPI.getTripHistory({
+          period: "daily",
+          date: selectedDate.toISOString(),
+          page: 1,
+          limit: 200,
+        })
+
+        if (response?.data?.success && response.data?.data?.trips) {
+          const trips = response.data.data.trips
+
+          const sessionsFromTrips = trips.map((trip, index) => {
+            const createdAt = trip.createdAt ? new Date(trip.createdAt) : null
+            const deliveredAt = trip.deliveredAt ? new Date(trip.deliveredAt) : null
+
+            // Calculate duration in minutes using real timestamps when possible
+            let durationMinutes = 0
+            if (createdAt && deliveredAt && deliveredAt > createdAt) {
+              durationMinutes = Math.round((deliveredAt - createdAt) / (1000 * 60))
+            }
+
+            // Fallback: estimate 30 minutes per completed trip
+            if (!durationMinutes || durationMinutes < 0) {
+              durationMinutes = 30
+            }
+
+            const startTime = createdAt || new Date()
+            const endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000)
+
+            const formatTime = (date) => {
+              const h = String(date.getHours()).padStart(2, "0")
+              const m = String(date.getMinutes()).padStart(2, "0")
+              return `${h}:${m}`
+            }
+
+            const hours = Math.floor(durationMinutes / 60)
+            const minutes = durationMinutes % 60
+
+            return {
+              id: trip.id || trip.orderId || index + 1,
+              session: trip.orderId ? `Order ${trip.orderId}` : `Session ${index + 1}`,
+              timeRange: `${formatTime(startTime)} - ${formatTime(endTime)}`,
+              timeOnOrders: `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`,
+              hours,
+              minutes,
+              duration: durationMinutes,
+              _startMinutesSinceMidnight: startTime.getHours() * 60 + startTime.getMinutes(),
+            }
+          })
+
+          setRawSessions(sessionsFromTrips)
+        } else {
+          // If API doesn't return trips, keep empty sessions (same as previous behaviour)
+          setRawSessions([])
+        }
+      } catch (error) {
+        console.error("Error fetching time on orders (trip history):", error)
+        // Keep UI behaviour same: just show "No sessions found" and optional toast
+        toast.error(error.response?.data?.message || "Failed to fetch time on orders")
+        setRawSessions([])
+      } finally {
+        setIsLoading(false)
+      }
     }
-  }, [selectedDate, selectedTimeRange, updateTodayTimeOnOrders])
+
+    fetchSessions()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDate])
+
+  // Apply time range filter on top of raw sessions from backend
+  const sessions = useMemo(() => {
+    if (!rawSessions || rawSessions.length === 0) return []
+
+    if (selectedTimeRange === "Select Time" || selectedTimeRange === "All Day") {
+      return [...rawSessions].sort((a, b) => a._startMinutesSinceMidnight - b._startMinutesSinceMidnight)
+    }
+
+    const [start, end] = selectedTimeRange.split(" - ").map((t) => {
+      const [h, m] = t.split(":").map(Number)
+      return h * 60 + m
+    })
+
+    return rawSessions
+      .filter((session) => {
+        const startMinutes = session._startMinutesSinceMidnight
+        return startMinutes >= start && startMinutes < end
+      })
+      .sort((a, b) => a._startMinutesSinceMidnight - b._startMinutesSinceMidnight)
+  }, [rawSessions, selectedTimeRange])
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -254,9 +270,14 @@ export default function TimeOnOrders() {
       {/* Central Display */}
       <div className="flex flex-col items-center justify-center py-12">
         <p className="text-6xl font-bold text-black mb-2">
-          {String(finalHours).padStart(2, '0')}:{String(finalMinutes).padStart(2, '0')}
+          {String(finalHours).padStart(2, "0")}:{String(finalMinutes).padStart(2, "0")}
         </p>
         <p className="text-base text-gray-600 mt-2">Hours on orders</p>
+        {isLoading && (
+          <p className="text-xs text-gray-400 mt-2">
+            Loading from your trip history...
+          </p>
+        )}
       </div>
 
       {/* Sessions Table */}

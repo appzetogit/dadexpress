@@ -6,81 +6,9 @@ import { DateRangeCalendar } from "@/components/ui/date-range-calendar"
 import BottomNavOrders from "../components/BottomNavOrders"
 import { restaurantAPI } from "@/lib/api"
 
-const REVIEWS_STORAGE_KEY = "restaurant_reviews_data"
-
 const tabs = [
   { id: "complaints", label: "Complaints" },
   { id: "reviews", label: "Reviews" },
-]
-
-// Dummy review data
-const dummyReviews = [
-  {
-    id: 1,
-    orderNumber: "0",
-    outlet: "Kadhai Chammach Restaur.. By Pass Road (South)",
-    userName: "Pradeep Rajput",
-    userImage: "https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=80",
-    ordersCount: 0,
-    rating: 5,
-    date: "30 Dec, 2023 2:05 PM",
-    reviewText: "very good nice food"
-  },
-  {
-    id: 2,
-    orderNumber: "1234",
-    outlet: "Kadhai Chammach Restaur.. By Pass Road (North)",
-    userName: "Rahul Sharma",
-    userImage: "https://images.pexels.com/photos/1043471/pexels-photo-1043471.jpeg?auto=compress&cs=tinysrgb&w=80",
-    ordersCount: 3,
-    rating: 4,
-    date: "29 Dec, 2023 8:30 AM",
-    reviewText: "Great food quality and fast delivery. Will order again!"
-  },
-  {
-    id: 3,
-    orderNumber: "1235",
-    outlet: "Kadhai Chammach Restaur.. By Pass Road (South)",
-    userName: "Priya Patel",
-    userImage: "https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=80",
-    ordersCount: 1,
-    rating: 5,
-    date: "28 Dec, 2023 6:15 PM",
-    reviewText: "Amazing taste! The biryani was perfect."
-  },
-  {
-    id: 4,
-    orderNumber: "1236",
-    outlet: "Kadhai Chammach Restaur.. By Pass Road (Central)",
-    userName: "Amit Kumar",
-    userImage: "https://images.pexels.com/photos/1222271/pexels-photo-1222271.jpeg?auto=compress&cs=tinysrgb&w=80",
-    ordersCount: 5,
-    rating: 3,
-    date: "27 Dec, 2023 1:20 PM",
-    reviewText: "Food was okay, but delivery took longer than expected."
-  },
-  {
-    id: 5,
-    orderNumber: "1237",
-    outlet: "Kadhai Chammach Restaur.. By Pass Road (South)",
-    userName: "Sneha Reddy",
-    userImage: "https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=80",
-    ordersCount: 2,
-    rating: 5,
-    date: "26 Dec, 2023 9:45 AM",
-    reviewText: "Excellent service and delicious food. Highly recommended!"
-  },
-  {
-    id: 6,
-    orderNumber: "1238",
-    outlet: "Kadhai Chammach Restaur.. By Pass Road (North)",
-    userName: "Vikram Singh",
-    userImage: "https://images.pexels.com/photos/91227/pexels-photo-91227.jpeg?auto=compress&cs=tinysrgb&w=80",
-    ordersCount: 7,
-    rating: 4,
-    date: "25 Dec, 2023 4:10 PM",
-    reviewText: "Good quality food. Packaging was neat and clean."
-  }
 ]
 
 export default function Feedback() {
