@@ -78,6 +78,7 @@ export default function RestaurantDetails() {
   const [showMenuOptionsSheet, setShowMenuOptionsSheet] = useState(false)
   const [expandedAddButtons, setExpandedAddButtons] = useState(new Set())
   const [expandedSections, setExpandedSections] = useState(new Set([0])) // Default: Recommended section is expanded
+  const filterSheetHistoryRef = useRef(false)
   const [filters, setFilters] = useState({
     sortBy: null, // "low-to-high" | "high-to-low"
     vegNonVeg: null, // "veg" | "non-veg" | "pure-veg"
@@ -921,6 +922,40 @@ export default function RestaurantDetails() {
 
   const activeFilterCount = getActiveFilterCount()
 
+  useEffect(() => {
+    const handlePopState = () => {
+      if (filterSheetHistoryRef.current && showFilterSheet) {
+        filterSheetHistoryRef.current = false
+        setShowFilterSheet(false)
+      }
+    }
+
+    window.addEventListener("popstate", handlePopState)
+    return () => window.removeEventListener("popstate", handlePopState)
+  }, [showFilterSheet])
+
+  useEffect(() => {
+    if (showFilterSheet && !filterSheetHistoryRef.current) {
+      window.history.pushState({ filterSheet: true }, "")
+      filterSheetHistoryRef.current = true
+      return
+    }
+
+    if (!showFilterSheet && filterSheetHistoryRef.current) {
+      filterSheetHistoryRef.current = false
+    }
+  }, [showFilterSheet])
+
+  const closeFilterSheet = () => {
+    if (filterSheetHistoryRef.current) {
+      filterSheetHistoryRef.current = false
+      setShowFilterSheet(false)
+      window.history.back()
+      return
+    }
+    setShowFilterSheet(false)
+  }
+
   // Handle bookmark click
   const handleBookmarkClick = (item) => {
     const restaurantId = restaurant?.restaurantId || restaurant?._id || restaurant?.id
@@ -1598,7 +1633,23 @@ export default function RestaurantDetails() {
                   )}
                   {sectionIndex > 0 && (
                     <div className="flex items-center justify-between">
-                      <div className="space-y-1">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setExpandedSections(prev => {
+                            const newSet = new Set(prev)
+                            if (newSet.has(originalIndex)) {
+                              newSet.delete(originalIndex)
+                            } else {
+                              newSet.add(originalIndex)
+                            }
+                            return newSet
+                          })
+                        }}
+                        className="text-left"
+                      >
+                        <div className="space-y-1">
                         <h2 className="text-lg font-bold text-gray-900 dark:text-white">
                           {(section?.name && typeof section.name === 'string' && section.name.trim())
                             ? section.name.trim()
@@ -1611,7 +1662,8 @@ export default function RestaurantDetails() {
                             {section.subtitle}
                           </button>
                         )}
-                      </div>
+                        </div>
+                      </button>
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
@@ -2187,7 +2239,7 @@ export default function RestaurantDetails() {
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.15 }}
-                  onClick={() => setShowFilterSheet(false)}
+                  onClick={closeFilterSheet}
                 />
 
                 {/* Bottom Sheet */}
@@ -2203,7 +2255,7 @@ export default function RestaurantDetails() {
                   <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-gray-200 dark:border-gray-800">
                     <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Filters and Sorting</h2>
                     <button
-                      onClick={() => setShowFilterSheet(false)}
+                      onClick={closeFilterSheet}
                       className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
                     >
                       <X className="h-5 w-5 text-gray-600 dark:text-gray-400" />
@@ -2322,7 +2374,7 @@ export default function RestaurantDetails() {
                     </button>
                     <Button
                       className="bg-[#EB590E] hover:bg-[#D94F0C] text-white px-6 py-2.5 rounded-lg font-bold"
-                      onClick={() => setShowFilterSheet(false)}
+                      onClick={closeFilterSheet}
                     >
                       Apply {activeFilterCount > 0 && `(${activeFilterCount})`}
                     </Button>

@@ -136,6 +136,52 @@
   }
 }
 
+@layer base {
+  .user-module {
+    -webkit-text-size-adjust: 100%;
+    touch-action: pan-x pan-y;
+  }
+}
+
+@layer base {
+  .restaurant-module {
+    -webkit-text-size-adjust: 100%;
+    touch-action: pan-x pan-y;
+  }
+}
+
+@layer base {
+  .delivery-module {
+    -webkit-text-size-adjust: 100%;
+    touch-action: pan-x pan-y;
+  }
+}
+
+@supports (-webkit-touch-callout: none) {
+  .user-module input,
+  .user-module textarea,
+  .user-module select {
+    font-size: 16px;
+  }
+}
+
+@supports (-webkit-touch-callout: none) {
+  .restaurant-module input,
+  .restaurant-module textarea,
+  .restaurant-module select {
+    font-size: 16px;
+  }
+}
+
+@supports (-webkit-touch-callout: none) {
+  .delivery-module input,
+  .delivery-module textarea,
+  .delivery-module select {
+    font-size: 16px;
+  }
+}
+
+
 @layer utilities {
   .scrollbar-hide {
     -ms-overflow-style: none;
