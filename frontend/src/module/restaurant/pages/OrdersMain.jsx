@@ -587,6 +587,7 @@ export default function OrdersMain() {
   const [isReverifying, setIsReverifying] = useState(false)
   const [showReferrerCard, setShowReferrerCard] = useState(false)
   const [showReferredCard, setShowReferredCard] = useState(false)
+  const [isAccepting, setIsAccepting] = useState(false)
 
   // Restaurant notifications hook for real-time orders
   const { newOrder, clearNewOrder, isConnected } = useRestaurantNotifications()
@@ -861,47 +862,54 @@ export default function OrdersMain() {
 
   // Handle accept order
   const handleAcceptOrder = async () => {
-    if (audioRef.current) {
-      audioRef.current.pause()
-      audioRef.current.currentTime = 0
-    }
+    if (isAccepting) return
+    setIsAccepting(true)
 
-    // Use popupOrder (from Socket.IO or API fallback) or newOrder (from hook)
-    const orderToAccept = popupOrder || newOrder
-
-    // Accept order via API if we have a real order
-    if (orderToAccept?.orderMongoId || orderToAccept?.orderId) {
-      try {
-        const orderId = orderToAccept.orderMongoId || orderToAccept.orderId
-        const response = await restaurantAPI.acceptOrder(orderId, prepTime)
-        console.log('✅ Order accepted:', orderId)
-        toast.success('Order accepted successfully')
-      } catch (error) {
-        console.error('❌ Error accepting order:', error)
-        const errorMessage = error.response?.data?.message ||
-          error.message ||
-          'Failed to accept order. Please try again.'
-
-        // Show specific error message
-        if (error.response?.status === 400) {
-          toast.error(errorMessage)
-        } else if (error.response?.status === 404) {
-          toast.error('Order not found. It may have been cancelled or already processed.')
-        } else {
-          toast.error(errorMessage)
-        }
-        return
+    try {
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current.currentTime = 0
       }
+
+      // Use popupOrder (from Socket.IO or API fallback) or newOrder (from hook)
+      const orderToAccept = popupOrder || newOrder
+
+      // Accept order via API if we have a real order
+      if (orderToAccept?.orderMongoId || orderToAccept?.orderId) {
+        try {
+          const orderId = orderToAccept.orderMongoId || orderToAccept.orderId
+          const response = await restaurantAPI.acceptOrder(orderId, prepTime)
+          console.log('✅ Order accepted:', orderId)
+          toast.success('Order accepted successfully')
+        } catch (error) {
+          console.error('❌ Error accepting order:', error)
+          const errorMessage = error.response?.data?.message ||
+            error.message ||
+            'Failed to accept order. Please try again.'
+
+          // Show specific error message
+          if (error.response?.status === 400) {
+            toast.error(errorMessage)
+          } else if (error.response?.status === 404) {
+            toast.error('Order not found. It may have been cancelled or already processed.')
+          } else {
+            toast.error(errorMessage)
+          }
+          return
+        }
+      }
+
+      setShowNewOrderPopup(false)
+      setPopupOrder(null)
+      clearNewOrder()
+      setCountdown(240)
+      setPrepTime(11)
+
+      // Note: PreparingOrders component will automatically refresh orders via its own useEffect
+      // No need to manually refresh here as the component polls every 10 seconds
+    } finally {
+      setIsAccepting(false)
     }
-
-    setShowNewOrderPopup(false)
-    setPopupOrder(null)
-    clearNewOrder()
-    setCountdown(240)
-    setPrepTime(11)
-
-    // Note: PreparingOrders component will automatically refresh orders via its own useEffect
-    // No need to manually refresh here as the component polls every 10 seconds
   }
 
   // Handle reject order
@@ -1744,7 +1752,8 @@ export default function OrdersMain() {
                     <div className="relative">
                       <button
                         onClick={handleAcceptOrder}
-                        className="w-full bg-black text-white py-3.5 rounded-lg font-semibold text-sm hover:bg-gray-800 transition-colors relative overflow-hidden"
+                        disabled={isAccepting}
+                        className="w-full bg-black text-white py-3.5 rounded-lg font-semibold text-sm hover:bg-gray-800 transition-colors relative overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {/* Loading background */}
                         <motion.div
@@ -1753,7 +1762,16 @@ export default function OrdersMain() {
                           animate={{ width: `${(countdown / 240) * 100}%` }}
                           transition={{ duration: 1, ease: "linear" }}
                         />
-                        <span className="relative z-10">Accept ({formatTime(countdown)})</span>
+                        <span className="relative z-10">
+                          {isAccepting ? (
+                            <span className="flex items-center justify-center gap-2">
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              Accepting...
+                            </span>
+                          ) : (
+                            `Accept (${formatTime(countdown)})`
+                          )}
+                        </span>
                       </button>
                     </div>
 
