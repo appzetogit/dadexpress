@@ -2,6 +2,7 @@ import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import Delivery from '../models/Delivery.js';
 import Order from '../../order/models/Order.js';
+import Zone from '../../admin/models/Zone.js';
 import Payment from '../../payment/models/Payment.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
 import DeliveryWallet from '../models/DeliveryWallet.js';
@@ -41,28 +42,89 @@ export const getOrders = asyncHandler(async (req, res) => {
 
     // Build query
     const isDiscoverMode = discover === 'true' || discover === true;
-    const query = isDiscoverMode
-      ? {
-        $or: [
-          { deliveryPartnerId: delivery._id },
-          { deliveryPartnerId: null, status: { $in: ['pending', 'confirmed', 'preparing', 'ready'] } },
-          { deliveryPartnerId: { $exists: false }, status: { $in: ['pending', 'confirmed', 'preparing', 'ready'] } },
-        ],
+    
+    // Check if delivery partner is approved
+    const isApprovedOrActive = ['approved', 'active'].includes(delivery.status) && delivery.isActive;
+
+    // If unapproved partner tries to discover orders, return empty result
+    if (isDiscoverMode && !isApprovedOrActive) {
+      return successResponse(res, 200, 'Orders retrieved successfully', {
+        orders: [],
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total: 0,
+          pages: 0
+        }
+      });
+    }
+
+    let query = {};
+    const conditions = [];
+
+    if (isDiscoverMode) {
+      // Get all restaurants in the delivery partner's zones
+      let validRestaurantIds = [];
+      if (delivery.availability?.zones && delivery.availability.zones.length > 0) {
+        const zones = await Zone.find({
+          _id: { $in: delivery.availability.zones },
+          isActive: true
+        }).select('restaurantId').lean();
+        
+        validRestaurantIds = zones
+          .filter(z => z.restaurantId)
+          .map(z => z.restaurantId.toString());
+      } else if (delivery.zoneId) {
+        // Fallback for single zoneId field just in case
+        const zone = await Zone.findById(delivery.zoneId).select('restaurantId').lean();
+        if (zone && zone.restaurantId && zone.isActive) {
+          validRestaurantIds = [zone.restaurantId.toString()];
+        }
       }
-      : { deliveryPartnerId: delivery._id };
+
+      // Build the base condition for discover mode
+      if (validRestaurantIds.length > 0) {
+        conditions.push({
+          $or: [
+            { deliveryPartnerId: delivery._id },
+            {
+              $or: [
+                { deliveryPartnerId: null },
+                { deliveryPartnerId: { $exists: false } }
+              ],
+              status: { $in: ['pending', 'confirmed', 'preparing', 'ready'] },
+              restaurantId: { $in: validRestaurantIds }
+            }
+          ]
+        });
+      } else {
+        // No zones = only their assigned orders
+        conditions.push({ deliveryPartnerId: delivery._id });
+      }
+    } else {
+      // Not discover mode = only their assigned orders
+      conditions.push({ deliveryPartnerId: delivery._id });
+    }
 
     if (status) {
-      query.status = status;
+      conditions.push({ status: status });
     } else {
       // By default, exclude delivered and cancelled orders unless explicitly requested
       if (includeDelivered !== 'true' && includeDelivered !== true) {
-        query.status = { $nin: ['delivered', 'cancelled'] };
-        // Also exclude orders with completed delivery phase
-        query.$or = [
-          { 'deliveryState.currentPhase': { $ne: 'completed' } },
-          { 'deliveryState.currentPhase': { $exists: false } }
-        ];
+        conditions.push({ status: { $nin: ['delivered', 'cancelled'] } });
+        // Also exclude completed delivery phase
+        conditions.push({
+          $or: [
+            { 'deliveryState.currentPhase': { $ne: 'completed' } },
+            { 'deliveryState.currentPhase': { $exists: false } }
+          ]
+        });
       }
+    }
+
+    // Assign final query
+    if (conditions.length > 0) {
+      query = { $and: conditions };
     }
 
     // Calculate pagination
@@ -151,6 +213,13 @@ export const getOrderDetails = asyncHandler(async (req, res) => {
       // Order is assigned, proceed
       console.log(`✅ Order ${order.orderId} is assigned to current delivery partner ${currentDeliveryId}`);
     } else if (!orderDeliveryPartnerId) {
+      // STRICT CHECK: Unapproved partners cannot view unassigned orders
+      const isApprovedOrActive = ['approved', 'active'].includes(delivery.status) && delivery.isActive;
+      if (!isApprovedOrActive) {
+        console.warn(`⚠️ Unapproved delivery partner ${currentDeliveryId} attempting to view unassigned order ${order.orderId}`);
+        return errorResponse(res, 403, 'You are not approved to view unassigned orders');
+      }
+
       // Order not assigned yet - allow access if:
       // 1. Order is in a valid status for acceptance (preparing/ready), OR
       // 2. This delivery boy was notified about it
@@ -233,6 +302,13 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       return errorResponse(res, 400, 'Invalid order ID');
     }
 
+    // STRICT CHECK: Ensure delivery partner is approved and active
+    const isApprovedOrActive = ['approved', 'active'].includes(delivery.status) && delivery.isActive;
+    if (!isApprovedOrActive) {
+      console.warn(`⚠️ Unapproved delivery partner ${delivery._id} attempting to accept order ${orderId}`);
+      return errorResponse(res, 403, 'You must be an approved delivery partner to accept orders');
+    }
+
     console.log(`📦 Delivery partner ${delivery._id} attempting to accept order ${orderId}`);
     console.log(`📍 Location provided: lat=${currentLat}, lng=${currentLng}`);
 
@@ -257,9 +333,35 @@ export const acceptOrder = asyncHandler(async (req, res) => {
     const orderDeliveryPartnerId = order.deliveryPartnerId?.toString();
     const currentDeliveryId = delivery._id.toString();
 
-    // If order is not assigned, check if this delivery boy was notified (priority-based system)
-    // Also allow acceptance if order is in valid status (preparing/ready) - more permissive
+    // If order is not assigned, we do strict zone-matching along with priority checking
     if (!orderDeliveryPartnerId) {
+      // ZONE VALIDATION: Ensure the order's restaurant is within the delivery partner's zones
+      let isInValidZone = false;
+      const orderRestaurantIdStr = order.restaurantId?._id?.toString() || order.restaurantId?.toString();
+      
+      if (orderRestaurantIdStr && delivery.availability?.zones?.length > 0) {
+        const zone = await Zone.findOne({
+          _id: { $in: delivery.availability.zones },
+          restaurantId: orderRestaurantIdStr,
+          isActive: true
+        }).lean();
+        
+        if (zone) isInValidZone = true;
+      } else if (orderRestaurantIdStr && delivery.zoneId) {
+        const zone = await Zone.findOne({
+          _id: delivery.zoneId,
+          restaurantId: orderRestaurantIdStr,
+          isActive: true
+        }).lean();
+        
+        if (zone) isInValidZone = true;
+      }
+
+      if (!isInValidZone) {
+        console.warn(`⚠️ Order ${order.orderId} belongs to a restaurant outside delivery partner ${currentDeliveryId}'s assigned zones.`);
+        return errorResponse(res, 403, 'This order is outside your assigned delivery zone.');
+      }
+
       console.log(`ℹ️ Order ${order.orderId} is not assigned yet. Checking if this delivery partner was notified...`);
 
       // Check if this delivery boy was in the priority or expanded notification list
