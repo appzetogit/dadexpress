@@ -120,6 +120,17 @@ export default function AdminHome() {
   const pendingOrders = dashboardData?.orderStats?.pending || 0
   const completedOrders = dashboardData?.orderStats?.completed || 0
 
+  // Map selected dashboard period to Transaction Report time filter
+  const transactionTimeMap = {
+    overall: "All Time",
+    today: "Today",
+    week: "This Week",
+    month: "This Month",
+    year: "All Time",
+  }
+  const transactionTime = transactionTimeMap[selectedPeriod] || "All Time"
+  const transactionReportPath = `/admin/transaction-report?time=${encodeURIComponent(transactionTime)}`
+
   const pieData = orderStats.map((item) => ({
     name: item.label,
     value: item.value,
@@ -164,7 +175,7 @@ export default function AdminHome() {
               helper="Rolling 12 months"
               icon={<ShoppingBag className="h-5 w-5 text-emerald-600" />}
               accent="bg-emerald-200/40"
-              path="/admin/transaction-report"
+              path={transactionReportPath}
               isLoading={isLoading}
             />
             <MetricCard
@@ -200,7 +211,7 @@ export default function AdminHome() {
               helper="Total delivery fees"
               icon={<Truck className="h-5 w-5 text-blue-600" />}
               accent="bg-blue-200/40"
-              path="/admin/transaction-report"
+              path={transactionReportPath}
               isLoading={isLoading}
             />
             <MetricCard
@@ -218,7 +229,7 @@ export default function AdminHome() {
               helper={`Commission ₹${commissionTotal.toFixed(2)} + Platform ₹${platformFeeTotal.toFixed(2)} + Delivery ₹${deliveryFeeTotal.toFixed(2)} + GST ₹${gstTotal.toFixed(2)}`}
               icon={<DollarSign className="h-5 w-5 text-green-600" />}
               accent="bg-green-200/40"
-              path="/admin/transaction-report"
+              path={transactionReportPath}
               isLoading={isLoading}
             />
             <MetricCard
