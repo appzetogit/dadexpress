@@ -1007,19 +1007,6 @@ export default function PocketPage() {
               </CardContent>
             </Card>
 
-            {/* Deduction Statement */}
-            <Card
-              className=" py-0  bg-white border-0 shadow-none cursor-pointer hover:bg-gray-200 transition-colors"
-              onClick={() => navigate("/delivery/deduction-statement")}
-            >
-              <CardContent className="p-4 flex flex-col items-start text-start">
-                <div className="w-12 h-12 flex items-center justify-center mb-3">
-                  <FileTextIcon className="w-8 h-8 text-black" />
-                </div>
-                <div className="text-black text-sm font-medium">Deduction statement</div>
-              </CardContent>
-            </Card>
-
             {/* Pocket Details */}
             <Card
               className=" py-0  bg-white border-0 shadow-none cursor-pointer hover:bg-gray-200 transition-colors"

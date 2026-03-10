@@ -678,8 +678,20 @@ apiClient.interceptors.response.use(
         errorMessages = ["An error occurred"];
       }
 
+      const shouldSuppressToast = (message) => {
+        const msg = (message || "").toString().toLowerCase();
+        return (
+          msg.includes("outside your assigned delivery zone") ||
+          msg.includes("out of zone") ||
+          msg.includes("out of your zone") ||
+          msg.includes("not assigned") ||
+          msg.includes("order not found")
+        );
+      };
+
       // Show beautiful error toast for each error message
       errorMessages.forEach((errorMessage, index) => {
+        if (shouldSuppressToast(errorMessage)) return;
         // Add slight delay for multiple toasts to appear sequentially
         setTimeout(() => {
           toast.error(errorMessage, {

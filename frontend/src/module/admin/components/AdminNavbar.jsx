@@ -224,16 +224,23 @@ export default function AdminNavbar({ onMenuClick }) {
 
           {/* Center: Search Bar */}
           <div className="flex-1 flex justify-center max-w-md mx-8">
-            <button
-              onClick={() => setSearchOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-full bg-neutral-100 text-neutral-600 cursor-pointer hover:bg-neutral-200 transition-colors w-full border border-neutral-200"
-            >
-              <Search className="w-4 h-4 text-neutral-700" />
-              <span className="text-sm flex-1 text-left text-neutral-700">Search</span>
-              <span className="text-xs px-2 py-0.5 rounded bg-white text-neutral-600 border border-neutral-200">
+            <div className="relative w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-700" />
+              <Input
+                type="text"
+                placeholder="Search"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value)
+                  setSearchOpen(true)
+                }}
+                onFocus={() => setSearchOpen(true)}
+                className="pl-9 pr-16 py-2 rounded-full bg-neutral-100 text-neutral-700 border border-neutral-200 focus-visible:ring-0 focus-visible:ring-offset-0"
+              />
+              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs px-2 py-0.5 rounded bg-white text-neutral-600 border border-neutral-200">
                 Ctrl+K
               </span>
-            </button>
+            </div>
           </div>
 
           {/* Right: Notifications and User Profile */}

@@ -286,12 +286,42 @@ const getZonePolygon = (zone, swap = false) => {
     .filter(Boolean)
 }
 
+const getOrderIdCandidates = (selectedRestaurant, newOrder) => {
+  const mongoId =
+    selectedRestaurant?.orderMongoId ||
+    selectedRestaurant?.id ||
+    newOrder?.orderMongoId ||
+    newOrder?._id ||
+    null
+  const orderId = selectedRestaurant?.orderId || newOrder?.orderId || null
+  return { mongoId, orderId }
+}
+
+const fetchOrderIdString = async (orderId, deliveryAPI) => {
+  if (!orderId) return null
+  try {
+    const response = await deliveryAPI.getOrderDetails(orderId)
+    const order = response?.data?.data?.order || response?.data?.data || response?.data?.order
+    return order?.orderId || null
+  } catch {
+    return null
+  }
+}
+
 const isLikelySwappedCoord = (coord) => {
   const lat = typeof coord === "object" ? (coord.latitude ?? coord.lat) : null
   const lng = typeof coord === "object" ? (coord.longitude ?? coord.lng) : null
   if (lat == null || lng == null) return false
   // India ranges heuristic: lat ~8-37, lng ~68-97
   return lat >= 68 && lat <= 98 && lng >= 8 && lng <= 38
+}
+
+const shouldSuppressDeliveryToast = (message, status) => {
+  const msg = (message || "").toString().toLowerCase()
+  if (status === 404) return true
+  if (msg.includes("not assigned")) return true
+  if (msg.includes("out of zone") || msg.includes("out of your zone")) return true
+  return false
 }
 
 export default function DeliveryHome() {
@@ -2262,7 +2292,8 @@ export default function DeliveryHome() {
         newOrderAcceptRequestInFlightRef.current = true
 
         // Get order ID from selectedRestaurant or newOrder (define outside try-catch for error handling)
-        const orderId = selectedRestaurant?.orderMongoId || selectedRestaurant?.id || newOrder?.orderMongoId || newOrder?._id || newOrder?.orderId
+        const { mongoId, orderId: orderIdStringInitial } = getOrderIdCandidates(selectedRestaurant, newOrder)
+        const orderId = mongoId || orderIdStringInitial
 
         false && console.log('🔍 Order ID lookup:', {
           selectedRestaurantId: selectedRestaurant?.id,
@@ -2338,10 +2369,27 @@ export default function DeliveryHome() {
 
           // Call backend API to accept order
           // Backend expects currentLat and currentLng
-          const response = await deliveryAPI.acceptOrder(orderId, {
-            lat: currentLocation[0], // latitude
-            lng: currentLocation[1]  // longitude
-          })
+          let response
+          try {
+            response = await deliveryAPI.acceptOrder(orderId, {
+              lat: currentLocation[0], // latitude
+              lng: currentLocation[1]  // longitude
+            })
+          } catch (acceptError) {
+            const status = acceptError.response?.status
+            let orderIdString = orderIdStringInitial
+            if (!orderIdString && orderId) {
+              orderIdString = await fetchOrderIdString(orderId, deliveryAPI)
+            }
+            if ((status === 403 || status === 404) && orderIdString && orderIdString !== orderId) {
+              response = await deliveryAPI.acceptOrder(orderIdString, {
+                lat: currentLocation[0],
+                lng: currentLocation[1]
+              })
+            } else {
+              throw acceptError
+            }
+          }
 
           false && console.log('📡 API Response:', response.data)
 
@@ -2937,8 +2985,10 @@ export default function DeliveryHome() {
 
           } else {
             console.error('❌ Failed to accept order:', response.data)
-            // Show error message to user
-            toast.error(response.data?.message || 'Failed to accept order. Please try again.')
+            const serverMessage = response.data?.message
+            if (!shouldSuppressDeliveryToast(serverMessage, response.status)) {
+              toast.error(serverMessage || 'Failed to accept order. Please try again.')
+            }
             // Still close popup
             setShowNewOrderPopup(false)
             setIsNewOrderPopupMinimized(false) // Reset minimized state
@@ -2957,7 +3007,8 @@ export default function DeliveryHome() {
             // For other errors (e.g. order already taken), show brief message
             console.error('❌ Error accepting order:', error.response?.data || error.message)
             const serverMessage = error.response?.data?.message
-            if (serverMessage && !serverMessage.toLowerCase().includes('timeout')) {
+            const status = error.response?.status
+            if (serverMessage && !serverMessage.toLowerCase().includes('timeout') && !shouldSuppressDeliveryToast(serverMessage, status)) {
               toast.error(serverMessage, { duration: 3000 })
             }
           }
@@ -3185,7 +3236,8 @@ export default function DeliveryHome() {
 
         // Get order ID - prioritize orderId (string) over id (MongoDB _id) for better compatibility
         // Backend accepts both _id and orderId, but orderId is more reliable
-        const orderId = selectedRestaurant?.orderMongoId || selectedRestaurant?.id || newOrder?.orderMongoId || newOrder?._id || selectedRestaurant?.orderId || newOrder?.orderId
+        const { mongoId, orderId: orderIdStringInitial } = getOrderIdCandidates(selectedRestaurant, newOrder)
+        const orderId = mongoId || orderIdStringInitial
 
         false && console.log('🔍 Order ID lookup for reached pickup:', {
           selectedRestaurantId: selectedRestaurant?.id,
@@ -3245,7 +3297,21 @@ export default function DeliveryHome() {
             // Call backend API to confirm reached pickup and save status in database
             false && console.log('📦 Confirming reached pickup for order:', orderId)
             false && console.log('📦 API endpoint: /delivery/orders/:orderId/reached-pickup')
-            const response = await deliveryAPI.confirmReachedPickup(orderId)
+            let response
+            try {
+              response = await deliveryAPI.confirmReachedPickup(orderId)
+            } catch (pickupError) {
+              const status = pickupError.response?.status
+              let orderIdString = orderIdStringInitial
+              if (!orderIdString && orderId) {
+                orderIdString = await fetchOrderIdString(orderId, deliveryAPI)
+              }
+              if ((status === 403 || status === 404) && orderIdString && orderIdString !== orderId) {
+                response = await deliveryAPI.confirmReachedPickup(orderIdString)
+              } else {
+                throw pickupError
+              }
+            }
 
             false && console.log('📦 Reached pickup API response:', response.data)
 
@@ -3274,7 +3340,10 @@ export default function DeliveryHome() {
               }, 300) // 300ms delay for smooth transition
             } else {
               console.error('❌ Failed to confirm reached pickup:', response.data)
-              toast.error(response.data?.message || 'Failed to confirm reached pickup. Please try again.')
+              const serverMessage = response.data?.message
+              if (!shouldSuppressDeliveryToast(serverMessage, response.status)) {
+                toast.error(serverMessage || 'Failed to confirm reached pickup. Please try again.')
+              }
               // Ensure reached pickup popup is closed
               setShowreachedPickupPopup(false)
               // Still show order ID popup even if API call fails, after delay
@@ -3294,9 +3363,12 @@ export default function DeliveryHome() {
             })
 
             // Show specific error message
+            const status = error.response?.status
             const errorMessage = error.response?.data?.message ||
-              (error.response?.status === 404 ? 'Order not found. Please refresh and try again.' : 'Failed to confirm reached pickup. Please try again.')
-            toast.error(errorMessage)
+              (status === 404 ? 'Order not found. Please refresh and try again.' : 'Failed to confirm reached pickup. Please try again.')
+            if (!shouldSuppressDeliveryToast(errorMessage, status)) {
+              toast.error(errorMessage)
+            }
 
             // Ensure reached pickup popup is closed
             setShowreachedPickupPopup(false)
@@ -3409,12 +3481,8 @@ export default function DeliveryHome() {
           // Get order ID - prioritize MongoDB _id over orderId string for API call
           // Backend expects _id (MongoDB ObjectId) in the URL parameter
           // Use _id (MongoDB ObjectId) if available, otherwise fallback to orderId string
-          const orderIdForApi = selectedRestaurant?.orderMongoId ||
-            selectedRestaurant?.id ||
-            newOrder?.orderMongoId ||
-            newOrder?._id ||
-            selectedRestaurant?.orderId ||
-            newOrder?.orderId
+          const { mongoId, orderId: orderIdStringInitial } = getOrderIdCandidates(selectedRestaurant, newOrder)
+          const orderIdForApi = mongoId || orderIdStringInitial
 
           false && console.log('🔍 Order ID lookup for reached drop:', {
             selectedRestaurantId: selectedRestaurant?.id,
@@ -3429,7 +3497,21 @@ export default function DeliveryHome() {
               // Call backend API to confirm reached drop (in background, don't block popup)
               // Use MongoDB _id for API call to avoid ObjectId casting errors
               false && console.log('📦 Confirming reached drop for order:', orderIdForApi)
-              const response = await deliveryAPI.confirmReachedDrop(orderIdForApi)
+              let response
+              try {
+                response = await deliveryAPI.confirmReachedDrop(orderIdForApi)
+              } catch (dropError) {
+                const status = dropError.response?.status
+                let orderIdString = orderIdStringInitial
+                if (!orderIdString && orderIdForApi) {
+                  orderIdString = await fetchOrderIdString(orderIdForApi, deliveryAPI)
+                }
+                if ((status === 403 || status === 404) && orderIdString && orderIdString !== orderIdForApi) {
+                  response = await deliveryAPI.confirmReachedDrop(orderIdString)
+                } else {
+                  throw dropError
+                }
+              }
 
               if (response.data?.success) {
                 false && console.log('✅ Reached drop confirmed')
@@ -3807,9 +3889,9 @@ export default function DeliveryHome() {
         }
 
     try {
-          // Prefer string orderId (ORD-xxx) for URL; backend accepts both _id and orderId
-          const orderIdForApi = selectedRestaurant?.orderMongoId || selectedRestaurant?.id || selectedRestaurant?.orderId
-          const confirmedOrderIdForApi = selectedRestaurant?.orderId || (orderIdForApi && String(orderIdForApi).startsWith('ORD-') ? orderIdForApi : undefined)
+          const { mongoId, orderId: orderIdStringInitial } = getOrderIdCandidates(selectedRestaurant, newOrder)
+          const orderIdForApi = mongoId || orderIdStringInitial
+          const confirmedOrderIdForApi = orderIdStringInitial || (orderIdForApi && String(orderIdForApi).startsWith('ORD-') ? orderIdForApi : undefined)
 
           // Call backend API to confirm order ID with bill image
           false && console.log('📦 Confirming order ID:', {
@@ -3821,12 +3903,31 @@ export default function DeliveryHome() {
           })
 
           // Update API call to include bill image URL
-          const response = await deliveryAPI.confirmOrderId(orderIdForApi, confirmedOrderIdForApi, {
-            lat: currentLocation[0],
-            lng: currentLocation[1]
-          }, {
-            billImageUrl: billImageUrl
-          })
+          let response
+          try {
+            response = await deliveryAPI.confirmOrderId(orderIdForApi, confirmedOrderIdForApi, {
+              lat: currentLocation[0],
+              lng: currentLocation[1]
+            }, {
+              billImageUrl: billImageUrl
+            })
+          } catch (confirmError) {
+            const status = confirmError.response?.status
+            let orderIdString = orderIdStringInitial
+            if (!orderIdString && orderIdForApi) {
+              orderIdString = await fetchOrderIdString(orderIdForApi, deliveryAPI)
+            }
+            if ((status === 403 || status === 404) && orderIdString && orderIdString !== orderIdForApi) {
+              response = await deliveryAPI.confirmOrderId(orderIdString, confirmedOrderIdForApi || orderIdString, {
+                lat: currentLocation[0],
+                lng: currentLocation[1]
+              }, {
+                billImageUrl: billImageUrl
+              })
+            } else {
+              throw confirmError
+            }
+          }
 
           false && console.log('✅ Order ID confirmed, response:', response.data)
 
@@ -4620,6 +4721,8 @@ export default function DeliveryHome() {
   const carouselStartX = useRef(0)
   const carouselIsSwiping = useRef(false)
   const carouselAutoRotateRef = useRef(null)
+  const carouselManualChangeRef = useRef(false)
+  const carouselSaveTimeoutRef = useRef(null)
 
   // Map view toggle state - Hotspot or Select drop (both show map, just different views)
   const [mapViewMode, setMapViewMode] = useState("hotspot") // "hotspot" or "selectDrop"
@@ -4912,7 +5015,9 @@ export default function DeliveryHome() {
             customerLng: firstOrder.address?.location?.coordinates?.[0],
             items: firstOrder.items || [],
             total: firstOrder.pricing?.total || 0,
-            payment: firstOrder.payment?.method || 'COD',
+            // Keep both keys for backward-compatibility; UI should prefer paymentMethod.
+            paymentMethod: firstOrder.paymentMethod ?? firstOrder.payment?.method ?? null,
+            payment: firstOrder.paymentMethod ?? firstOrder.payment?.method ?? null,
             amount: firstOrder.pricing?.total || 0
           }
 
@@ -4990,10 +5095,14 @@ export default function DeliveryHome() {
           const assigned = Array.isArray(profile?.availability?.zones)
             ? profile.availability.zones.map(normalizeZoneValue)
             : []
-          setAssignedZoneIds(assigned.map(z => z.id).filter(Boolean))
+          setAssignedZoneIds(
+            assigned
+              .map(z => (z.id != null ? String(z.id) : null))
+              .filter(Boolean)
+          )
           setAssignedZoneNames(
             assigned
-              .map(z => (typeof z.name === "string" ? z.name.trim() : null))
+              .map(z => (typeof z.name === "string" ? z.name.trim().toLowerCase() : null))
               .filter(Boolean)
           )
           const bankDetails = profile?.documents?.bankDetails
@@ -8053,6 +8162,30 @@ export default function DeliveryHome() {
     }])
   ], [bankDetailsFilled])
 
+  // Restore carousel index from profile/localStorage (onboarding slider persistence)
+  useEffect(() => {
+    if (!carouselSlides.length) return
+    let restoredIndex = null
+
+    const profileIndex =
+      deliveryProfile?.uiState?.deliveryHomeCarouselIndex ??
+      deliveryProfile?.appState?.deliveryHomeCarouselIndex ??
+      null
+    if (typeof profileIndex === "number") {
+      restoredIndex = profileIndex
+    } else {
+      const stored = localStorage.getItem("delivery_home_carousel_index")
+      if (stored !== null && !Number.isNaN(Number(stored))) {
+        restoredIndex = Number(stored)
+      }
+    }
+
+    if (restoredIndex !== null) {
+      const clamped = Math.max(0, Math.min(restoredIndex, carouselSlides.length - 1))
+      setCurrentCarouselSlide(clamped)
+    }
+  }, [carouselSlides.length, deliveryProfile])
+
   // Auto-rotate carousel
   useEffect(() => {
     // Reset to first slide if current slide is out of bounds
@@ -8073,6 +8206,31 @@ export default function DeliveryHome() {
     }
   }, [carouselSlides])
 
+  // Persist carousel index when user swipes (save to DB + localStorage)
+  useEffect(() => {
+    if (!carouselSlides.length) return
+    if (!carouselManualChangeRef.current) return
+    carouselManualChangeRef.current = false
+
+    localStorage.setItem("delivery_home_carousel_index", String(currentCarouselSlide))
+
+    if (carouselSaveTimeoutRef.current) {
+      clearTimeout(carouselSaveTimeoutRef.current)
+    }
+
+    carouselSaveTimeoutRef.current = setTimeout(async () => {
+      try {
+        await deliveryAPI.updateProfile({
+          uiState: {
+            deliveryHomeCarouselIndex: currentCarouselSlide
+          }
+        })
+      } catch {
+        // Ignore persistence errors
+      }
+    }, 400)
+  }, [currentCarouselSlide, carouselSlides.length])
+
   // Reset auto-rotate timer after manual swipe
   const resetCarouselAutoRotate = useCallback(() => {
     if (carouselAutoRotateRef.current) {
@@ -8088,6 +8246,7 @@ export default function DeliveryHome() {
 
   const handleCarouselTouchStart = useCallback((e) => {
     carouselIsSwiping.current = true
+    carouselManualChangeRef.current = true
     carouselStartX.current = e.touches[0].clientX
     carouselStartY.current = e.touches[0].clientY
   }, [])
@@ -8136,6 +8295,7 @@ export default function DeliveryHome() {
   // Handle carousel mouse events for desktop
   const handleCarouselMouseDown = (e) => {
     carouselIsSwiping.current = true
+    carouselManualChangeRef.current = true
     carouselStartX.current = e.clientX
 
     const handleMouseMove = (moveEvent) => {
@@ -8632,8 +8792,10 @@ export default function DeliveryHome() {
 
     const matchesAssignedZone = (zone) => {
       const { id, name } = normalizeZoneValue(zone)
-      if (id && assignedZoneIds.includes(id)) return true
-      if (name && assignedZoneNames.includes(name)) return true
+      const idKey = id != null ? String(id) : null
+      const nameKey = typeof name === "string" ? name.trim().toLowerCase() : null
+      if (idKey && assignedZoneIds.includes(idKey)) return true
+      if (nameKey && assignedZoneNames.includes(nameKey)) return true
       return false
     }
 
@@ -10119,8 +10281,8 @@ export default function DeliveryHome() {
         showCloseButton={false}
         closeOnBackdropClick={false}
         disableSwipeToClose={true}
-        maxHeight="70vh"
-        showHandle={true}
+        maxHeight="90vh"
+        showHandle={false}
         showBackdrop={false}
         backdropBlocksInteraction={false}
       >
@@ -10167,11 +10329,11 @@ export default function DeliveryHome() {
               <p className="text-gray-500 text-sm font-medium">
                 Order ID: {selectedRestaurant?.orderId || 'ORD1234567890'}
               </p>
-              <div className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${((selectedRestaurant?.paymentMethod || '').toLowerCase() === 'cash' || (selectedRestaurant?.paymentMethod || '').toLowerCase() === 'cod')
+              <div className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${(String((selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment ?? '') || '').toLowerCase() === 'cash' || String((selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment ?? '') || '').toLowerCase() === 'cod')
                 ? 'bg-amber-100 text-amber-700 border border-amber-200'
                 : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
                 }`}>
-                {(selectedRestaurant?.paymentMethod || '').toLowerCase() === 'cash' || (selectedRestaurant?.paymentMethod || '').toLowerCase() === 'cod' ? 'COD' : 'Paid'}
+                {(String((selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment ?? '') || '').toLowerCase() === 'cash' || String((selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment ?? '') || '').toLowerCase() === 'cod') ? 'COD' : 'Paid'}
               </div>
             </div>
           </div>
@@ -10450,7 +10612,7 @@ export default function DeliveryHome() {
         onClose={() => setShowOrderIdConfirmationPopup(false)}
         showCloseButton={false}
         closeOnBackdropClick={false}
-        maxHeight="60vh"
+        maxHeight="90vh"
         showHandle={false}
         showBackdrop={false}
         backdropBlocksInteraction={false}
@@ -10632,11 +10794,11 @@ export default function DeliveryHome() {
                       <h3 className="text-base font-semibold text-gray-900">
                         Head to Customer Location
                       </h3>
-                      <div className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${((selectedRestaurant?.paymentMethod || '').toLowerCase() === 'cash' || (selectedRestaurant?.paymentMethod || '').toLowerCase() === 'cod')
+                      <div className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${(String((selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment ?? '') || '').toLowerCase() === 'cash' || String((selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment ?? '') || '').toLowerCase() === 'cod')
                         ? 'bg-amber-100 text-amber-700 border border-amber-200'
                         : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
                         }`}>
-                        {(selectedRestaurant?.paymentMethod || '').toLowerCase() === 'cash' || (selectedRestaurant?.paymentMethod || '').toLowerCase() === 'cod' ? 'COD' : 'Paid'}
+                        {(String((selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment ?? '') || '').toLowerCase() === 'cash' || String((selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment ?? '') || '').toLowerCase() === 'cod') ? 'COD' : 'Paid'}
                       </div>
                     </div>
                     <p className="text-sm text-gray-600 mt-0.5">
@@ -10682,8 +10844,8 @@ export default function DeliveryHome() {
         onClose={() => setShowReachedDropPopup(false)}
         showCloseButton={false}
         closeOnBackdropClick={false}
-        maxHeight="70vh"
-        showHandle={true}
+        maxHeight="90vh"
+        showHandle={false}
         showBackdrop={false}
         backdropBlocksInteraction={false}
       >
@@ -10707,7 +10869,7 @@ export default function DeliveryHome() {
               Order ID: {selectedRestaurant?.orderId || 'ORD1234567890'}
             </p>
             {/* Added Clear Payment Visibility */}
-            {((selectedRestaurant?.paymentMethod || '').toLowerCase() === 'cash' || (selectedRestaurant?.paymentMethod || '').toLowerCase() === 'cod') ? (
+            {(String((selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment ?? '') || '').toLowerCase() === 'cash' || String((selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment ?? '') || '').toLowerCase() === 'cod') ? (
               <div className="mt-4 bg-amber-50 border-2 border-amber-400 rounded-xl p-4 flex items-center gap-3 animate-pulse shadow-sm">
                 <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center">
                   <IndianRupee className="w-7 h-7 text-amber-600" />
@@ -10816,8 +10978,8 @@ export default function DeliveryHome() {
         }}
         showCloseButton={false}
         closeOnBackdropClick={false}
-        maxHeight="80vh"
-        showHandle={true}
+        maxHeight="90vh"
+        showHandle={false}
         showBackdrop={false}
         backdropBlocksInteraction={false}
       >

@@ -139,11 +139,23 @@ export const getOrders = asyncHandler(async (req, res) => {
       .populate('userId', 'name phone')
       .lean();
 
+    // Provide a stable, backward-compatible root-level paymentMethod for the delivery app.
+    // Source of truth remains order.payment.method; this is just a convenience field.
+    const ordersWithPaymentMethod = (orders || []).map((o) => {
+      const raw = o?.paymentMethod ?? o?.payment?.method ?? '';
+      const normalized = String(raw).toLowerCase().trim();
+      const paymentMethod =
+        normalized === 'cash' || normalized === 'cod' || normalized === 'cash on delivery'
+          ? 'cash'
+          : (raw || 'razorpay');
+      return { ...o, paymentMethod };
+    });
+
     // Get total count
     const total = await Order.countDocuments(query);
 
     return successResponse(res, 200, 'Orders retrieved successfully', {
-      orders,
+      orders: ordersWithPaymentMethod,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
@@ -933,8 +945,13 @@ export const acceptOrder = asyncHandler(async (req, res) => {
 export const confirmReachedPickup = asyncHandler(async (req, res) => {
   try {
     const delivery = req.delivery;
-    const { orderId } = req.params;
+    let { orderId } = req.params;
     const deliveryId = delivery._id;
+
+    // Clean orderId string if it comes with spaces or URI encoded spaces
+    if (orderId && typeof orderId === 'string') {
+      orderId = decodeURIComponent(orderId).replace(/\s+/g, '');
+    }
 
     console.log(`📍 confirmReachedPickup called - orderId: ${orderId}, deliveryId: ${deliveryId}`);
 
@@ -1078,9 +1095,14 @@ export const confirmReachedPickup = asyncHandler(async (req, res) => {
 export const confirmOrderId = asyncHandler(async (req, res) => {
   try {
     const delivery = req.delivery;
-    const { orderId } = req.params;
+    let { orderId } = req.params;
     const { confirmedOrderId, billImageUrl } = req.body; // Order ID confirmed by delivery boy, bill image URL
     const { currentLat, currentLng } = req.body; // Current location for route calculation
+
+    // Clean orderId string if it comes with spaces or URI encoded spaces
+    if (orderId && typeof orderId === 'string') {
+      orderId = decodeURIComponent(orderId).replace(/\s+/g, '');
+    }
 
     // Find order by _id or orderId - try multiple methods for better compatibility
     let order = null;
@@ -1402,10 +1424,15 @@ export const confirmOrderId = asyncHandler(async (req, res) => {
 export const confirmReachedDrop = asyncHandler(async (req, res) => {
   try {
     const delivery = req.delivery;
-    const { orderId } = req.params;
+    let { orderId } = req.params;
 
     if (!delivery || !delivery._id) {
       return errorResponse(res, 401, 'Delivery partner authentication required');
+    }
+
+    // Clean orderId string if it comes with spaces or URI encoded spaces
+    if (orderId && typeof orderId === 'string') {
+      orderId = decodeURIComponent(orderId).replace(/\s+/g, '');
     }
 
     if (!orderId) {
@@ -2178,4 +2205,6 @@ export const completeDelivery = asyncHandler(async (req, res) => {
     return errorResponse(res, 500, `Failed to complete delivery: ${error.message}`);
   }
 });
+
+
 

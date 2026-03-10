@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react"
+import { useLocation } from "react-router-dom"
 import { BarChart3, ChevronDown, Info, Settings, FileText, FileSpreadsheet, Code, Loader2 } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -18,6 +19,7 @@ import searchIcon from "../../assets/Dashboard-icons/image8.png"
 import exportIcon from "../../assets/Dashboard-icons/image9.png"
 
 export default function TransactionReport() {
+  const location = useLocation()
   const [searchQuery, setSearchQuery] = useState("")
   const [transactions, setTransactions] = useState([])
   const [loading, setLoading] = useState(true)
@@ -38,6 +40,19 @@ export default function TransactionReport() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [zones, setZones] = useState([])
   const [restaurants, setRestaurants] = useState([])
+
+  // Initialize time filter from URL (e.g., ?time=Today) when coming from dashboard
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    const urlTime = params.get("time")
+    const validTimes = ["All Time", "Today", "This Week", "This Month"]
+    if (urlTime && validTimes.includes(urlTime)) {
+      setFilters(prev => ({
+        ...prev,
+        time: urlTime,
+      }))
+    }
+  }, [location.search])
 
   // Fetch zones and restaurants for filters
   useEffect(() => {
