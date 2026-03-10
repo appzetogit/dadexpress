@@ -21,6 +21,8 @@ export default function TransactionReport() {
   const [searchQuery, setSearchQuery] = useState("")
   const [transactions, setTransactions] = useState([])
   const [loading, setLoading] = useState(true)
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
   const [summary, setSummary] = useState({
     completedTransaction: 0,
     refundedTransaction: 0,
@@ -84,7 +86,6 @@ export default function TransactionReport() {
         }
 
         const params = {
-          search: searchQuery || undefined,
           zone: filters.zone !== "All Zones" ? filters.zone : undefined,
           restaurant: filters.restaurant !== "All restaurants" ? filters.restaurant : undefined,
           fromDate: fromDate ? fromDate.toISOString() : undefined,
@@ -103,6 +104,7 @@ export default function TransactionReport() {
             restaurantEarning: 0,
             deliverymanEarning: 0
           })
+          setHasLoadedOnce(true)
         } else {
           setTransactions([])
           if (response?.data?.message) {
@@ -119,11 +121,27 @@ export default function TransactionReport() {
     }
 
     fetchTransactionReport()
-  }, [searchQuery, filters])
+  }, [filters])
 
   const filteredTransactions = useMemo(() => {
-    return transactions // Backend already filters, so just return transactions
-  }, [transactions])
+    // Backend already applies filters; additionally do a safe, case-insensitive
+    // search on orderId and customerName on the frontend for better UX.
+    const query = (searchQuery || "").trim().toLowerCase()
+    if (!query) return transactions
+
+    return transactions.filter((transaction) => {
+      const orderId = (transaction.orderId || "").toString().toLowerCase()
+      const customerName = (transaction.customerName || "").toString().toLowerCase()
+      return orderId.includes(query) || customerName.includes(query)
+    })
+  }, [transactions, searchQuery])
+
+  const pageSize = 50
+  const totalPages = Math.max(1, Math.ceil(filteredTransactions.length / pageSize))
+  const paginatedTransactions = useMemo(() => {
+    const start = (currentPage - 1) * pageSize
+    return filteredTransactions.slice(start, start + pageSize)
+  }, [filteredTransactions, currentPage])
 
   const handleExport = (format) => {
     if (filteredTransactions.length === 0) {
@@ -148,15 +166,17 @@ export default function TransactionReport() {
       restaurant: "All restaurants",
       time: "All Time",
     })
+    setCurrentPage(1)
   }
 
   const activeFiltersCount = (filters.zone !== "All Zones" ? 1 : 0) + (filters.restaurant !== "All restaurants" ? 1 : 0) + (filters.time !== "All Time" ? 1 : 0)
 
   const formatCurrency = (amount) => {
-    if (amount >= 1000) {
-      return `₹ ${(amount / 1000).toFixed(2)}K`
-    }
-    return `₹ ${amount.toFixed(2)}`
+    const numericAmount = Number(amount) || 0
+    return `₹ ${numericAmount.toLocaleString("en-IN", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`
   }
 
   const formatFullCurrency = (amount) => {
@@ -349,7 +369,10 @@ export default function TransactionReport() {
                   type="text"
                   placeholder="Search by Order ID"
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value)
+                    setCurrentPage(1)
+                  }}
                   className="pl-7 pr-2 py-1.5 w-full text-[11px] rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
                 <img src={searchIcon} alt="Search" className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3" />
@@ -413,7 +436,16 @@ export default function TransactionReport() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-slate-100">
-                {filteredTransactions.length === 0 ? (
+                {!hasLoadedOnce && loading ? (
+                  <tr>
+                    <td colSpan={12} className="px-6 py-10 text-center">
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
+                        <p className="text-sm text-slate-600">Loading transactions...</p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : filteredTransactions.length === 0 ? (
                   <tr>
                     <td colSpan={12} className="px-6 py-20 text-center">
                       <div className="flex flex-col items-center justify-center">
@@ -423,13 +455,13 @@ export default function TransactionReport() {
                     </td>
                   </tr>
                 ) : (
-                  filteredTransactions.map((transaction, index) => (
+                  paginatedTransactions.map((transaction, index) => (
                     <tr
                       key={transaction.id}
                       className="hover:bg-slate-50 transition-colors"
                     >
                       <td className="px-3 py-2">
-                        <span className="text-xs font-medium text-slate-700">{index + 1}</span>
+                        <span className="text-xs font-medium text-slate-700">{(currentPage - 1) * pageSize + index + 1}</span>
                       </td>
                       <td className="px-3 py-2">
                         <span className="text-xs text-slate-700 whitespace-nowrap">{transaction.orderId}</span>
@@ -480,6 +512,51 @@ export default function TransactionReport() {
               </tbody>
             </table>
           </div>
+
+          {/* Pagination */}
+          {filteredTransactions.length > pageSize && (
+            <div className="mt-3 flex items-center justify-between gap-2 text-xs text-slate-700">
+              <div>
+                Showing{" "}
+                <span className="font-semibold">
+                  {(currentPage - 1) * pageSize + 1} -{" "}
+                  {Math.min(currentPage * pageSize, filteredTransactions.length)}
+                </span>{" "}
+                of <span className="font-semibold">{filteredTransactions.length}</span> orders
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  className="px-2 py-1 border border-slate-300 rounded-md bg-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50"
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                >
+                  Prev
+                </button>
+                {Array.from({ length: totalPages }).map((_, idx) => {
+                  const page = idx + 1
+                  return (
+                    <button
+                      key={page}
+                      className={`px-2 py-1 border rounded-md text-xs ${page === currentPage
+                        ? "bg-blue-600 border-blue-600 text-white"
+                        : "bg-white border-slate-300 text-slate-700 hover:bg-slate-50"
+                        }`}
+                      onClick={() => setCurrentPage(page)}
+                    >
+                      {page}
+                    </button>
+                  )
+                })}
+                <button
+                  className="px-2 py-1 border border-slate-300 rounded-md bg-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50"
+                  disabled={currentPage === totalPages}
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

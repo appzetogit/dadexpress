@@ -44,17 +44,12 @@ export const getDeliveryEarnings = asyncHandler(async (req, res) => {
     });
 
     // Build query for delivery partners
+    // Note: We intentionally do NOT apply the text search here so that searching
+    // can also match orderId, restaurantName, etc. across all earnings.
+    // Search is applied later on the flattened earnings list.
     const deliveryQuery = {};
     if (deliveryPartnerId) {
       deliveryQuery._id = deliveryPartnerId;
-    }
-    if (search) {
-      deliveryQuery.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
-        { phone: { $regex: search, $options: 'i' } },
-        { deliveryId: { $regex: search, $options: 'i' } }
-      ];
     }
 
     // Get delivery partners
@@ -242,6 +237,24 @@ export const getDeliveryEarnings = asyncHandler(async (req, res) => {
       }
 
       console.log(`✅ Added ${transactions.length} earnings entries for ${delivery.name}`);
+    }
+
+    // Apply search across earnings if provided (name, phone, deliveryId, orderId, restaurant, email)
+    if (search && typeof search === 'string' && search.trim()) {
+      const query = search.trim().toLowerCase();
+      allEarnings = allEarnings.filter((e) => {
+        const fields = [
+          e.deliveryPartnerName,
+          e.deliveryPartnerPhone,
+          e.deliveryPartnerEmail,
+          e.deliveryId,
+          e.orderId,
+          e.restaurantName,
+        ];
+        return fields.some((field) =>
+          field?.toString().toLowerCase().includes(query)
+        );
+      });
     }
 
     // Sort by date (newest first)
