@@ -139,11 +139,23 @@ export const getOrders = asyncHandler(async (req, res) => {
       .populate('userId', 'name phone')
       .lean();
 
+    // Provide a stable, backward-compatible root-level paymentMethod for the delivery app.
+    // Source of truth remains order.payment.method; this is just a convenience field.
+    const ordersWithPaymentMethod = (orders || []).map((o) => {
+      const raw = o?.paymentMethod ?? o?.payment?.method ?? '';
+      const normalized = String(raw).toLowerCase().trim();
+      const paymentMethod =
+        normalized === 'cash' || normalized === 'cod' || normalized === 'cash on delivery'
+          ? 'cash'
+          : (raw || 'razorpay');
+      return { ...o, paymentMethod };
+    });
+
     // Get total count
     const total = await Order.countDocuments(query);
 
     return successResponse(res, 200, 'Orders retrieved successfully', {
-      orders,
+      orders: ordersWithPaymentMethod,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
@@ -2178,4 +2190,3 @@ export const completeDelivery = asyncHandler(async (req, res) => {
     return errorResponse(res, 500, `Failed to complete delivery: ${error.message}`);
   }
 });
-

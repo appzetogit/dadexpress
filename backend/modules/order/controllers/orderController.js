@@ -50,9 +50,12 @@ export const createOrder = async (req, res) => {
     // Normalize payment method: 'cod' / 'COD' / 'Cash on Delivery' → 'cash', 'wallet' → 'wallet'
     const normalizedPaymentMethod = (() => {
       const m = (paymentMethod && String(paymentMethod).toLowerCase().trim()) || '';
-      if (m === 'cash' || m === 'cod' || m === 'cash on delivery') return 'cash';
+      if (m === 'cash' || m === 'cod' || m === 'cash on delivery' || m === 'cash_on_delivery') return 'cash';
       if (m === 'wallet') return 'wallet';
-      return paymentMethod || 'razorpay';
+      if (m === 'razorpay' || m === 'online') return 'razorpay';
+      if (m === 'upi') return 'upi';
+      if (m === 'card') return 'card';
+      return 'razorpay';
     })();
     logger.info('Order create paymentMethod:', { raw: paymentMethod, normalized: normalizedPaymentMethod, bodyKeys: Object.keys(req.body || {}).filter(k => k.toLowerCase().includes('payment')) });
 
@@ -1274,4 +1277,3 @@ export const calculateOrder = async (req, res) => {
     });
   }
 };
-

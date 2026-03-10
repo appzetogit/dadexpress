@@ -4808,7 +4808,9 @@ export default function DeliveryHome() {
             customerLng: firstOrder.address?.location?.coordinates?.[0],
             items: firstOrder.items || [],
             total: firstOrder.pricing?.total || 0,
-            payment: firstOrder.payment?.method || 'COD',
+            // Keep both keys for backward-compatibility; UI should prefer paymentMethod.
+            paymentMethod: firstOrder.paymentMethod ?? firstOrder.payment?.method ?? null,
+            payment: firstOrder.paymentMethod ?? firstOrder.payment?.method ?? null,
             amount: firstOrder.pricing?.total || 0
           }
 
@@ -9887,11 +9889,11 @@ export default function DeliveryHome() {
               <p className="text-gray-500 text-sm font-medium">
                 Order ID: {selectedRestaurant?.orderId || 'ORD1234567890'}
               </p>
-              <div className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${((selectedRestaurant?.paymentMethod || '').toLowerCase() === 'cash' || (selectedRestaurant?.paymentMethod || '').toLowerCase() === 'cod')
+              <div className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${(String((selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment ?? '') || '').toLowerCase() === 'cash' || String((selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment ?? '') || '').toLowerCase() === 'cod')
                 ? 'bg-amber-100 text-amber-700 border border-amber-200'
                 : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
                 }`}>
-                {(selectedRestaurant?.paymentMethod || '').toLowerCase() === 'cash' || (selectedRestaurant?.paymentMethod || '').toLowerCase() === 'cod' ? 'COD' : 'Paid'}
+                {(String((selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment ?? '') || '').toLowerCase() === 'cash' || String((selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment ?? '') || '').toLowerCase() === 'cod') ? 'COD' : 'Paid'}
               </div>
             </div>
           </div>
@@ -10352,11 +10354,11 @@ export default function DeliveryHome() {
                       <h3 className="text-base font-semibold text-gray-900">
                         Head to Customer Location
                       </h3>
-                      <div className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${((selectedRestaurant?.paymentMethod || '').toLowerCase() === 'cash' || (selectedRestaurant?.paymentMethod || '').toLowerCase() === 'cod')
+                      <div className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${(String((selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment ?? '') || '').toLowerCase() === 'cash' || String((selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment ?? '') || '').toLowerCase() === 'cod')
                         ? 'bg-amber-100 text-amber-700 border border-amber-200'
                         : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
                         }`}>
-                        {(selectedRestaurant?.paymentMethod || '').toLowerCase() === 'cash' || (selectedRestaurant?.paymentMethod || '').toLowerCase() === 'cod' ? 'COD' : 'Paid'}
+                        {(String((selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment ?? '') || '').toLowerCase() === 'cash' || String((selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment ?? '') || '').toLowerCase() === 'cod') ? 'COD' : 'Paid'}
                       </div>
                     </div>
                     <p className="text-sm text-gray-600 mt-0.5">
@@ -10427,7 +10429,7 @@ export default function DeliveryHome() {
               Order ID: {selectedRestaurant?.orderId || 'ORD1234567890'}
             </p>
             {/* Added Clear Payment Visibility */}
-            {((selectedRestaurant?.paymentMethod || '').toLowerCase() === 'cash' || (selectedRestaurant?.paymentMethod || '').toLowerCase() === 'cod') ? (
+            {(String((selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment ?? '') || '').toLowerCase() === 'cash' || String((selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment ?? '') || '').toLowerCase() === 'cod') ? (
               <div className="mt-4 bg-amber-50 border-2 border-amber-400 rounded-xl p-4 flex items-center gap-3 animate-pulse shadow-sm">
                 <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center">
                   <IndianRupee className="w-7 h-7 text-amber-600" />
