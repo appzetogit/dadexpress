@@ -1651,13 +1651,21 @@ export default function RestaurantOnboarding() {
         </div>
         <div>
           <Label className="text-xs text-gray-700">PAN image</Label>
-          <Input
+          <label
+            htmlFor="panImageInput"
+            className="mt-1 inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-gray-300 text-xs font-medium cursor-pointer w-full"
+          >
+            <Upload className="w-4 h-4" />
+            <span>Choose file</span>
+          </label>
+          <input
+            id="panImageInput"
             type="file"
             accept="image/*"
+            className="hidden"
             onChange={(e) =>
               setStep3({ ...step3, panImage: e.target.files?.[0] || null })
             }
-            className="mt-1 bg-white text-sm text-black placeholder-black"
           />
           <button
             type="button"
@@ -1721,15 +1729,42 @@ export default function RestaurantOnboarding() {
               className="bg-white text-sm"
               placeholder="Registered address"
             />
-            <Input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={(e) =>
-                setStep3({ ...step3, gstImage: e.target.files?.[0] || null })
-              }
-              className="bg-white text-sm"
-            />
+            <div className="space-y-2">
+              <label
+                htmlFor="gstImageInput"
+                className="inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-gray-300 text-xs font-medium cursor-pointer w-full"
+              >
+                <Upload className="w-4 h-4" />
+                <span>Choose file</span>
+              </label>
+              <input
+                id="gstImageInput"
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) =>
+                  setStep3({ ...step3, gstImage: e.target.files?.[0] || null })
+                }
+              />
+              <button
+                type="button"
+                onClick={() =>
+                  captureImageFromLiveCamera(
+                    (file) => setStep3((prev) => ({ ...prev, gstImage: file })),
+                    `gst-image-${Date.now()}.jpg`,
+                  )
+                }
+                className="inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm border border-gray-300 bg-white text-gray-900 text-xs font-medium w-full"
+              >
+                <Camera className="w-4 h-4" />
+                <span>Live Camera</span>
+              </button>
+              {step3.gstImage && (
+                <p className="text-[11px] text-gray-500 truncate">
+                  Selected: {getImageLabel(step3.gstImage, "gst-image.jpg")}
+                </p>
+              )}
+            </div>
           </div>
         )}
       </section>
@@ -1786,15 +1821,42 @@ export default function RestaurantOnboarding() {
             </Popover>
           </div>
         </div>
-        <Input
-          type="file"
-          accept="image/*"
-          capture="environment"
-          onChange={(e) =>
-            setStep3({ ...step3, fssaiImage: e.target.files?.[0] || null })
-          }
-          className="bg-white text-sm"
-        />
+        <div className="space-y-2">
+          <label
+            htmlFor="fssaiImageInput"
+            className="inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-gray-300 text-xs font-medium cursor-pointer w-full"
+          >
+            <Upload className="w-4 h-4" />
+            <span>Choose file</span>
+          </label>
+          <input
+            id="fssaiImageInput"
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) =>
+              setStep3({ ...step3, fssaiImage: e.target.files?.[0] || null })
+            }
+          />
+          <button
+            type="button"
+            onClick={() =>
+              captureImageFromLiveCamera(
+                (file) => setStep3((prev) => ({ ...prev, fssaiImage: file })),
+                `fssai-image-${Date.now()}.jpg`,
+              )
+            }
+            className="inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm border border-gray-300 bg-white text-gray-900 text-xs font-medium w-full"
+          >
+            <Camera className="w-4 h-4" />
+            <span>Live Camera</span>
+          </button>
+          {step3.fssaiImage && (
+            <p className="text-[11px] text-gray-500 truncate">
+              Selected: {getImageLabel(step3.fssaiImage, "fssai-image.jpg")}
+            </p>
+          )}
+        </div>
       </section>
 
       <section className="bg-white p-4 sm:p-6 rounded-md space-y-4">
