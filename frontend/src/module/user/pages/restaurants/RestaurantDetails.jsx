@@ -1215,7 +1215,8 @@ export default function RestaurantDetails() {
         if (item.foodType !== "Veg" && item.isVeg !== true) return false
       }
       if (filters.vegNonVeg === "non-veg") {
-        // Show both veg and non-veg items (no filtering out)
+        // Show only non-veg items
+        if (item.foodType === "Veg" || item.isVeg === true) return false
       }
 
       // Highly reordered filter (based on item tag used in UI)
