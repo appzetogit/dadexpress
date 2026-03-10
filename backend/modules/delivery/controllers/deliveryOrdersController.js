@@ -178,21 +178,34 @@ export const getOrderDetails = asyncHandler(async (req, res) => {
     const delivery = req.delivery;
     let { orderId } = req.params;
 
-    // Clean orderId string if it comes with spaces or URI encoded spaces
-    if (orderId && typeof orderId === 'string') {
-      orderId = decodeURIComponent(orderId).replace(/\s+/g, '');
+    // Decode URI component and handle variants for backward compatibility
+    const decodedId = orderId ? decodeURIComponent(orderId) : "";
+    const trimmedId = decodedId.trim();
+    const cleanId = trimmedId.replace(/\s+/g, '');
+    
+    const variants = [orderId, decodedId, trimmedId, cleanId];
+    if (trimmedId && !variants.includes(`${trimmedId} `)) {
+      variants.push(`${trimmedId} `);
     }
+    if (cleanId.startsWith("ORD-")) {
+      const parts = cleanId.split("-");
+      if (parts.length === 3) {
+        variants.push(`ORD - ${parts[1]} -${parts[2]} `);
+      }
+    }
+    const orderIdVariants = [...new Set(variants.filter(Boolean))];
 
     // Build query to find order by either _id or orderId field
     // Allow access if order is assigned to this delivery partner OR if they were notified about it
     let query = {};
 
-    // Check if orderId is a valid MongoDB ObjectId
-    if (mongoose.Types.ObjectId.isValid(orderId) && orderId.length === 24) {
-      query._id = orderId;
+    // Check if any variant is a valid MongoDB ObjectId
+    const validObjectId = orderIdVariants.find(v => mongoose.Types.ObjectId.isValid(v) && v.length === 24);
+    if (validObjectId) {
+      query._id = validObjectId;
     } else {
-      // If not a valid ObjectId, search by orderId field
-      query.orderId = orderId;
+      // Search by any of the orderId variants
+      query.orderId = { $in: orderIdVariants };
     }
 
     // First, try to find order (without deliveryPartnerId filter)
@@ -303,10 +316,22 @@ export const acceptOrder = asyncHandler(async (req, res) => {
     let { orderId } = req.params;
     const { currentLat, currentLng } = req.body; // Delivery boy's current location
 
-    // Clean orderId string if it comes with spaces or URI encoded spaces
-    if (orderId && typeof orderId === 'string') {
-      orderId = decodeURIComponent(orderId).replace(/\s+/g, '');
+    // Decode URI component and handle variants for backward compatibility
+    const decodedId = orderId ? decodeURIComponent(orderId) : "";
+    const trimmedId = decodedId.trim();
+    const cleanId = trimmedId.replace(/\s+/g, '');
+    
+    const variants = [orderId, decodedId, trimmedId, cleanId];
+    if (trimmedId && !variants.includes(`${trimmedId} `)) {
+      variants.push(`${trimmedId} `);
     }
+    if (cleanId.startsWith("ORD-")) {
+      const parts = cleanId.split("-");
+      if (parts.length === 3) {
+        variants.push(`ORD - ${parts[1]} -${parts[2]} `);
+      }
+    }
+    const orderIdVariants = [...new Set(variants.filter(Boolean))];
 
     // Validate orderId
     if (!orderId || (typeof orderId !== 'string' && typeof orderId !== 'object')) {
@@ -324,14 +349,19 @@ export const acceptOrder = asyncHandler(async (req, res) => {
     console.log(`📦 Delivery partner ${delivery._id} attempting to accept order ${orderId}`);
     console.log(`📍 Location provided: lat=${currentLat}, lng=${currentLng}`);
 
-    // Find order - try both by _id and orderId
-    // First check if order exists (without deliveryPartnerId filter)
-    let order = await Order.findOne({
+    // Find order - try both by _id and orderId variants
+    const validObjectId = orderIdVariants.find(v => mongoose.Types.ObjectId.isValid(v) && v.length === 24);
+    let orderSearchQuery = {
       $or: [
-        { _id: orderId },
-        { orderId: orderId }
+        { orderId: { $in: orderIdVariants } }
       ]
-    })
+    };
+    if (validObjectId) {
+      orderSearchQuery.$or.push({ _id: validObjectId });
+    }
+
+    // First check if order exists (without deliveryPartnerId filter)
+    let order = await Order.findOne(orderSearchQuery)
       .populate('restaurantId', 'name location address phone ownerPhone')
       .populate('userId', 'name phone')
       .lean();

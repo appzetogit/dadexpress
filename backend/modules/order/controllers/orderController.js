@@ -286,10 +286,10 @@ export const createOrder = async (req, res) => {
       incomingRestaurantName: restaurantName
     });
 
-    // Generate order ID before creating order
+    // Generate order ID before creating order (URL safe: no spaces)
     const timestamp = Date.now();
     const random = Math.floor(Math.random() * 1000);
-    const generatedOrderId = `ORD - ${timestamp} -${random} `;
+    const generatedOrderId = `ORD-${timestamp}-${random}`;
 
     // Ensure couponCode is included in pricing
     if (!pricing.couponCode && pricing.appliedCoupon?.code) {
@@ -1050,20 +1050,28 @@ export const getOrderDetails = async (req, res) => {
 
     // If not found, try by orderId (custom order ID like "ORD-123456-789")
     if (!order) {
-      // Normalize id to handle accidental leading/trailing spaces in stored orderId
-      const normalizedId = id ? String(id).trim() : "";
-      const variants = [id];
-      if (normalizedId && normalizedId !== id) {
-        variants.push(normalizedId);
-      }
+      // Decode URI component to handle %20 etc.
+      const decodedId = id ? decodeURIComponent(id) : "";
+      const trimmedId = decodedId.trim();
+      
+      const variants = [id, decodedId, trimmedId];
+      
       // Some historical orders were stored with a trailing space in orderId,
-      // so also try `normalizedId + ' '` as a safe fallback.
-      if (normalizedId && !normalizedId.endsWith(" ")) {
-        variants.push(`${normalizedId} `);
+      // or with internal spaces like "ORD - ... - ..."
+      if (trimmedId && !variants.includes(`${trimmedId} `)) {
+        variants.push(`${trimmedId} `);
+      }
+      
+      // Try to re-construct the spaced version if it matches the pattern
+      if (trimmedId.startsWith("ORD-")) {
+        const parts = trimmedId.split("-");
+        if (parts.length === 3) {
+          variants.push(`ORD - ${parts[1]} -${parts[2]} `);
+        }
       }
 
       order = await Order.findOne({
-        orderId: { $in: variants },
+        orderId: { $in: [...new Set(variants)] },
         userId
       })
         .populate('deliveryPartnerId', 'name email phone')
@@ -1126,18 +1134,24 @@ export const cancelOrder = async (req, res) => {
     }
 
     if (!order) {
-      // Normalize id to handle leading/trailing spaces in stored orderId
-      const normalizedId = id ? String(id).trim() : "";
-      const variants = [id];
-      if (normalizedId && normalizedId !== id) {
-        variants.push(normalizedId);
+      // Decode and normalize id for backward compatibility with spaced IDs
+      const decodedId = id ? decodeURIComponent(id) : "";
+      const trimmedId = decodedId.trim();
+      
+      const variants = [id, decodedId, trimmedId];
+      if (trimmedId && !variants.includes(`${trimmedId} `)) {
+        variants.push(`${trimmedId} `);
       }
-      if (normalizedId && !normalizedId.endsWith(" ")) {
-        variants.push(`${normalizedId} `);
+      
+      if (trimmedId.startsWith("ORD-")) {
+        const parts = trimmedId.split("-");
+        if (parts.length === 3) {
+          variants.push(`ORD - ${parts[1]} -${parts[2]} `);
+        }
       }
 
       order = await Order.findOne({
-        orderId: { $in: variants },
+        orderId: { $in: [...new Set(variants)] },
         userId
       });
     }

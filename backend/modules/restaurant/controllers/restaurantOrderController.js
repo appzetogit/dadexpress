@@ -184,8 +184,21 @@ export const getRestaurantOrderById = asyncHandler(async (req, res) => {
 
     // If not found, try by orderId (custom order ID like "ORD-123456-789")
     if (!order) {
+      const decodedId = id ? decodeURIComponent(id) : "";
+      const trimmedId = decodedId.trim();
+      const variants = [id, decodedId, trimmedId];
+      if (trimmedId && !variants.includes(`${trimmedId} `)) {
+        variants.push(`${trimmedId} `);
+      }
+      if (trimmedId.startsWith("ORD-")) {
+        const parts = trimmedId.split("-");
+        if (parts.length === 3) {
+          variants.push(`ORD - ${parts[1]} -${parts[2]} `);
+        }
+      }
+
       order = await Order.findOne({
-        orderId: id,
+        orderId: { $in: [...new Set(variants)] },
         restaurantId
       })
         .populate('userId', 'name email phone')
@@ -232,8 +245,21 @@ export const acceptOrder = asyncHandler(async (req, res) => {
 
     // If not found, try by orderId (custom order ID like "ORD-123456-789")
     if (!order) {
+      const decodedId = id ? decodeURIComponent(id) : "";
+      const trimmedId = decodedId.trim();
+      const variants = [id, decodedId, trimmedId];
+      if (trimmedId && !variants.includes(`${trimmedId} `)) {
+        variants.push(`${trimmedId} `);
+      }
+      if (trimmedId.startsWith("ORD-")) {
+        const parts = trimmedId.split("-");
+        if (parts.length === 3) {
+          variants.push(`ORD - ${parts[1]} -${parts[2]} `);
+        }
+      }
+
       order = await Order.findOne({
-        orderId: id,
+        orderId: { $in: [...new Set(variants)] },
         restaurantId
       });
     }
@@ -539,8 +565,21 @@ export const rejectOrder = asyncHandler(async (req, res) => {
 
     // If not found, try by orderId (custom order ID like "ORD-123456-789")
     if (!order) {
+      const decodedId = id ? decodeURIComponent(id) : "";
+      const trimmedId = decodedId.trim();
+      const variants = [id, decodedId, trimmedId];
+      if (trimmedId && !variants.includes(`${trimmedId} `)) {
+        variants.push(`${trimmedId} `);
+      }
+      if (trimmedId.startsWith("ORD-")) {
+        const parts = trimmedId.split("-");
+        if (parts.length === 3) {
+          variants.push(`ORD - ${parts[1]} -${parts[2]} `);
+        }
+      }
+
       order = await Order.findOne({
-        orderId: id,
+        orderId: { $in: [...new Set(variants)] },
         restaurantId: { $in: restaurantIdVariations }
       });
       console.log('🔍 Order lookup by orderId:', {
