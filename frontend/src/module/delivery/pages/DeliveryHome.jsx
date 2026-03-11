@@ -10723,17 +10723,17 @@ export default function DeliveryHome() {
             <div className="relative w-full">
               <motion.div
                 ref={orderIdConfirmButtonRef}
-                className={`relative w-full rounded-full overflow-hidden shadow-xl ${billImageUploaded ? 'bg-green-600' : 'bg-gray-400 cursor-not-allowed'
+                className={`relative w-full rounded-full overflow-hidden shadow-xl ${pickupImageUploaded ? 'bg-green-600' : 'bg-gray-400 cursor-not-allowed'
                   }`}
                 style={{
-                  touchAction: billImageUploaded ? 'pan-x' : 'none',
-                  opacity: billImageUploaded ? 1 : 0.6
+                  touchAction: pickupImageUploaded ? 'pan-x' : 'none',
+                  opacity: pickupImageUploaded ? 1 : 0.6
                 }}
-                onTouchStart={billImageUploaded ? handleOrderIdConfirmTouchStart : undefined}
-                onTouchMove={billImageUploaded ? handleOrderIdConfirmTouchMove : undefined}
-                onTouchEnd={billImageUploaded ? handleOrderIdConfirmTouchEnd : undefined}
-                onTouchCancel={billImageUploaded ? handleOrderIdConfirmTouchEnd : undefined}
-                whileTap={billImageUploaded ? { scale: 0.98 } : {}}
+                onTouchStart={pickupImageUploaded ? handleOrderIdConfirmTouchStart : undefined}
+                onTouchMove={pickupImageUploaded ? handleOrderIdConfirmTouchMove : undefined}
+                onTouchEnd={pickupImageUploaded ? handleOrderIdConfirmTouchEnd : undefined}
+                onTouchCancel={pickupImageUploaded ? handleOrderIdConfirmTouchEnd : undefined}
+                whileTap={pickupImageUploaded ? { scale: 0.98 } : {}}
               >
                 {/* Swipe progress background */}
                 <motion.div
