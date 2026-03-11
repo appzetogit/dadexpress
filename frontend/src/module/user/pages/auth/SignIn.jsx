@@ -362,8 +362,8 @@ export default function SignIn() {
 
       let user = null
 
-      // 1. Try Google login via Flutter in-app webview (mobile apps)
       if (window.flutter_inappwebview && typeof window.flutter_inappwebview.callHandler === "function") {
+        // 🚀 Mobile app (Flutter InAppWebView) flow - DO NOT fall back to web popup on cancel
         console.log("📱 Starting Google sign-in via Flutter native bridge...")
         try {
           const result = await window.flutter_inappwebview.callHandler("nativeGoogleSignIn")
@@ -375,17 +375,19 @@ export default function SignIn() {
             user = userCredential.user
             console.log("✅ Website login successful via Flutter App!")
           } else {
-            console.log("ℹ️ Flutter nativeGoogleSignIn cancelled or failed, falling back to web popup...")
+            // User cancelled native sign-in or no success flag -> stay on login page
+            console.log("ℹ️ User cancelled native sign in. Staying on login page (no web popup fallback).")
+            setIsLoading(false)
+            return
           }
         } catch (e) {
           console.error("❌ Flutter Bridge Error during Google sign-in:", e)
-          console.log("ℹ️ Falling back to web popup Google sign-in...")
+          // On hard error, stop here as well (no silent popup fallback)
+          setIsLoading(false)
+          return
         }
-      }
-
-      // 2. Fallback: normal browser Google login using popup
-      if (!user) {
-        // Use popup for better UX and to avoid 'missing initial state' errors on redirect
+      } else {
+        // 🌐 Normal web browsers (Chrome/Safari etc.) -> use popup Google sign-in
         console.log("🚀 Starting Google sign-in popup (web browser)...")
         const result = await signInWithPopup(firebaseAuth, googleProvider)
         user = result?.user || null
