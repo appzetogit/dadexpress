@@ -393,6 +393,7 @@ export default function OrderTracking() {
 
       // If not in context, fetch from API
       try {
+        if (!orderId) return;
         setLoading(true)
         setError(null)
 

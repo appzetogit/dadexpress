@@ -1,14 +1,11 @@
 const decodeAndNormalize = (id) => {
+  if (!id) return [];
   const decodedId = id ? decodeURIComponent(id) : "";
-  const trimmedId = decodedId.trim();
-  const cleanId = trimmedId.replace(/\s+/g, '');
-    
-  const variants = [id, decodedId, trimmedId, cleanId];
-  if (trimmedId && !variants.includes(`${trimmedId} `)) {
-    variants.push(`${trimmedId} `);
-  }
-  if (cleanId.startsWith("ORD-")) {
-    const parts = cleanId.split("-");
+  const normalized = decodedId.replace(/\s+/g, "").replace(/ORD-?/i, "ORD-").trim();
+  
+  const variants = [id, decodedId, normalized];
+  if (normalized.startsWith("ORD-")) {
+    const parts = normalized.split("-");
     if (parts.length === 3) {
       variants.push(`ORD - ${parts[1]} -${parts[2]} `);
     }
