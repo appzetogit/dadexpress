@@ -37,9 +37,9 @@ export const authenticate = async (req, res, next) => {
       return errorResponse(res, 401, 'Restaurant not found');
     }
 
-    // Allow inactive restaurants to access onboarding and profile routes
-    // They need to complete onboarding even if not yet approved by admin
-    // Only block inactive restaurants from accessing other restricted routes
+    // Allow inactive/unapproved restaurants to access onboarding and profile routes
+    // They need to complete onboarding even if not yet approved by admin.
+    // Only block inactive/unapproved restaurants from accessing other restricted routes.
     const requestPath = req.originalUrl || req.url || '';
     const reqPath = req.path || '';
     const baseUrl = req.baseUrl || '';
@@ -72,12 +72,15 @@ export const authenticate = async (req, res, next) => {
                             reqPath === '/inventory' ||
                             reqPath.startsWith('/inventory/');
     
-    // Debug logging for inactive restaurants
-    if (!restaurant.isActive) {
+    const isApproved = !!restaurant.approvedAt;
+
+    // Debug logging for inactive/unapproved restaurants
+    if (!restaurant.isActive || !isApproved) {
       console.log('🔍 Inactive restaurant route check:', {
         restaurantId: restaurant._id,
         restaurantName: restaurant.name,
         isActive: restaurant.isActive,
+        isApproved,
         requestPath,
         reqPath,
         baseUrl,
@@ -91,14 +94,18 @@ export const authenticate = async (req, res, next) => {
       });
     }
     
-    // Allow access to onboarding, profile, menu, and inventory routes even if inactive
-    // These are essential for restaurant setup and management
-    // Also allow access to getCurrentRestaurant endpoint (used to check status)
-    if (!restaurant.isActive && !isOnboardingRoute && !isProfileRoute && !isMenuRoute && !isInventoryRoute) {
-      console.error('❌ Restaurant account is inactive - access denied:', {
+    // Allow access to onboarding, profile, menu, and inventory routes even if inactive/unapproved.
+    // These are essential for restaurant setup and management.
+    // Also allow access to getCurrentRestaurant endpoint (used to check status).
+    const isOperationalRoute = !isOnboardingRoute && !isProfileRoute && !isMenuRoute && !isInventoryRoute;
+
+    // Block all other routes for restaurants that are either inactive or not yet approved.
+    if ((!restaurant.isActive || !isApproved) && isOperationalRoute) {
+      console.error('❌ Restaurant account is inactive or not approved - access denied:', {
         restaurantId: restaurant._id,
         restaurantName: restaurant.name,
         isActive: restaurant.isActive,
+        isApproved,
         requestPath,
         reqPath,
         baseUrl,

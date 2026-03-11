@@ -222,50 +222,24 @@ export default function RestaurantStatus() {
             detail: { isOnline: restaurant.isAcceptingOrders } 
           }))
         } else {
-          // Fallback to localStorage
-          const savedStatus = localStorage.getItem('restaurant_online_status')
-          if (savedStatus !== null) {
-            const status = JSON.parse(savedStatus)
-            setDeliveryStatus(status)
-            // Dispatch event to update navbar
-            window.dispatchEvent(new CustomEvent('restaurantStatusChanged', { 
-              detail: { isOnline: status } 
-            }))
-          } else {
-            // Default to false if not set
-            setDeliveryStatus(false)
-            // Dispatch event to update navbar
-            window.dispatchEvent(new CustomEvent('restaurantStatusChanged', { 
-              detail: { isOnline: false } 
-            }))
-          }
+          // If backend does not return isAcceptingOrders, treat as offline by default.
+          // Do NOT trust any cached/localStorage value for security.
+          setDeliveryStatus(false)
+          window.dispatchEvent(new CustomEvent('restaurantStatusChanged', { 
+            detail: { isOnline: false } 
+          }))
         }
       } catch (error) {
         // Only log error if it's not a network/timeout error (backend might be down/slow)
         if (error.code !== 'ERR_NETWORK' && error.code !== 'ECONNABORTED' && !error.message?.includes('timeout')) {
           console.error("Error loading delivery status:", error)
         }
-        // Fallback to localStorage
-        try {
-          const savedStatus = localStorage.getItem('restaurant_online_status')
-          if (savedStatus !== null) {
-            const status = JSON.parse(savedStatus)
-            setDeliveryStatus(status)
-            window.dispatchEvent(new CustomEvent('restaurantStatusChanged', { 
-              detail: { isOnline: status } 
-            }))
-          } else {
-            setDeliveryStatus(false)
-            window.dispatchEvent(new CustomEvent('restaurantStatusChanged', { 
-              detail: { isOnline: false } 
-            }))
-          }
-        } catch (localError) {
-          setDeliveryStatus(false)
-          window.dispatchEvent(new CustomEvent('restaurantStatusChanged', { 
-            detail: { isOnline: false } 
-          }))
-        }
+        // On network/timeout errors, do NOT trust cached localStorage status.
+        // Default to offline to avoid accidentally granting access when backend is unreachable.
+        setDeliveryStatus(false)
+        window.dispatchEvent(new CustomEvent('restaurantStatusChanged', { 
+          detail: { isOnline: false } 
+        }))
       }
     }
 
@@ -285,19 +259,30 @@ export default function RestaurantStatus() {
       setShowOutsideTimingsDialog(true)
       return
     }
-    
+
+    const previousStatus = deliveryStatus
     setDeliveryStatus(checked)
     try {
-      // Save to localStorage
+      // Save to localStorage optimistically
       localStorage.setItem('restaurant_online_status', JSON.stringify(checked))
-      
+
       // Update backend
       try {
         await restaurantAPI.updateDeliveryStatus(checked)
         console.log('✅ Delivery status updated in backend:', checked)
       } catch (apiError) {
         console.error('Error updating delivery status in backend:', apiError)
-        // Still continue with local update even if backend fails
+
+        // Revert local state on authorization failures or hard errors
+        const shouldRevert =
+          apiError.response?.status === 401 ||
+          apiError.response?.status === 403
+
+        if (shouldRevert) {
+          setDeliveryStatus(previousStatus)
+          localStorage.setItem('restaurant_online_status', JSON.stringify(previousStatus))
+          toast.error(apiError.response?.data?.message || 'Your restaurant is not approved/active to go online yet.')
+        }
       }
       
       // Dispatch custom event for navbar to listen

@@ -862,6 +862,13 @@ export default function OrdersMain() {
 
   // Handle accept order
   const handleAcceptOrder = async () => {
+    // Hard gate: do not allow accepting orders when restaurant is not active/approved
+    if (!restaurantStatus.isLoading && !restaurantStatus.isActive) {
+      toast.error('Your restaurant is not yet approved/active. Please wait for admin approval before accepting orders.')
+      setShowNewOrderPopup(false)
+      return
+    }
+
     if (isAccepting) return
     setIsAccepting(true)
 
