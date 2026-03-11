@@ -3632,7 +3632,11 @@ export default function DeliveryHome() {
 
         false && console.log('📸 Flutter handler response:', result)
 
-        if (result && result.success) {
+        // Some Flutter integrations might not send an explicit `success` flag.
+        // Treat presence of file/base64 as a successful capture to keep UX smooth.
+        const hasImageData = !!(result && (result.file || result.base64))
+
+        if (result && (result.success || hasImageData)) {
           let file = null
           if (result.file) {
             file = result.file
