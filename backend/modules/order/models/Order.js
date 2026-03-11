@@ -223,6 +223,14 @@ const orderSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  pickupImageUrl: {
+    type: String,
+    default: null
+  },
+  dropImageUrl: {
+    type: String,
+    default: null
+  },
   cancelledAt: {
     type: Date
   },

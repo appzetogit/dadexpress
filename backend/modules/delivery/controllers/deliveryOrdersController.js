@@ -1149,7 +1149,7 @@ export const confirmOrderId = asyncHandler(async (req, res) => {
   try {
     const delivery = req.delivery;
     let { orderId } = req.params;
-    const { confirmedOrderId, billImageUrl } = req.body; // Order ID confirmed by delivery boy, bill image URL
+    const { confirmedOrderId, billImageUrl, pickupImageUrl } = req.body; // Order ID confirmed by delivery boy, bill image URL, pickup image URL
     const { currentLat, currentLng } = req.body; // Current location for route calculation
 
     // Clean orderId string if it comes with spaces or URI encoded spaces
@@ -1407,6 +1407,21 @@ export const confirmOrderId = asyncHandler(async (req, res) => {
       }
     }
 
+    // Add pickup image URL if provided (with validation)
+    if (pickupImageUrl) {
+      try {
+        const url = new URL(pickupImageUrl);
+        if (!['http:', 'https:'].includes(url.protocol)) {
+          return errorResponse(res, 400, 'Pickup image URL must be HTTP or HTTPS');
+        }
+        updateData.pickupImageUrl = pickupImageUrl;
+        console.log(`📸 Pickup image URL validated and saved for order ${order.orderId}`);
+      } catch (urlError) {
+        console.error(`❌ Invalid pickup image URL format: ${pickupImageUrl}`, urlError);
+        return errorResponse(res, 400, 'Invalid pickup image URL format');
+      }
+    }
+
     const updatedOrder = await Order.findByIdAndUpdate(
       orderMongoId,
       { $set: updateData },
@@ -1653,7 +1668,7 @@ export const completeDelivery = asyncHandler(async (req, res) => {
   try {
     const delivery = req.delivery;
     const { orderId } = req.params;
-    const { rating, review } = req.body; // Optional rating and review from delivery boy
+    const { rating, review, dropImageUrl } = req.body; // Optional rating and review from delivery boy, and drop image URL
 
     if (!delivery || !delivery._id) {
       return errorResponse(res, 401, 'Delivery partner authentication required');
@@ -1807,6 +1822,21 @@ export const completeDelivery = asyncHandler(async (req, res) => {
       }
       if (order.userId && !updateData['review.reviewedBy']) {
         updateData['review.reviewedBy'] = order.userId;
+      }
+    }
+
+    // Add drop image URL if provided (with validation)
+    if (dropImageUrl) {
+      try {
+        const url = new URL(dropImageUrl);
+        if (!['http:', 'https:'].includes(url.protocol)) {
+          return errorResponse(res, 400, 'Drop image URL must be HTTP or HTTPS');
+        }
+        updateData.dropImageUrl = dropImageUrl;
+        console.log(`📸 Drop image URL validated and saved for order ${order.orderId}`);
+      } catch (urlError) {
+        console.error(`❌ Invalid drop image URL format: ${dropImageUrl}`, urlError);
+        return errorResponse(res, 400, 'Invalid drop image URL format');
       }
     }
 
