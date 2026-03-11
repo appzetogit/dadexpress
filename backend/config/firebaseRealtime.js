@@ -5,6 +5,7 @@ import path from 'path';
 const REALTIME_APP_NAME = 'realtime-tracking';
 let realtimeDb = null;
 let initialized = false;
+const isRealtimeEnabled = process.env.FIREBASE_REALTIME_ENABLED === 'true';
 
 function resolveServiceAccountFromFile() {
   const configPath = path.resolve(
@@ -72,6 +73,11 @@ function resolveFirebaseCredentials() {
 export function initializeFirebaseRealtime() {
   if (initialized && realtimeDb) {
     return realtimeDb;
+  }
+
+  if (!isRealtimeEnabled) {
+    console.warn('⚠️ Firebase Realtime Database disabled via FIREBASE_REALTIME_ENABLED env flag.');
+    return null;
   }
 
   const { projectId, clientEmail, privateKey, databaseURL } = resolveFirebaseCredentials();
