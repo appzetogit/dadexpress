@@ -65,11 +65,26 @@ export default function MyOrders() {
           console.log('✅ Using direct array, found orders:', ordersData.length)
         }
         
-        console.log('✅ Final orders to set:', ordersData.length)
+        console.log('✅ Final orders to set (before filtering):', ordersData.length)
         console.log('✅ Orders sample:', ordersData.slice(0, 2))
-        
-        if (ordersData && ordersData.length > 0) {
-          setOrders(ordersData)
+
+        // Show only completed / delivered / cancelled orders in history.
+        // Active orders (accepted, preparing, out_for_delivery) should NOT appear here,
+        // so back press from active flow does not make order look like history.
+        const historyOrders = (ordersData || []).filter((order) => {
+          const status = (order.status || order.orderStatus || '').toLowerCase()
+          return (
+            status === 'delivered' ||
+            status === 'completed' ||
+            status === 'cancelled' ||
+            status === 'canceled'
+          )
+        })
+
+        console.log('✅ Orders after history filter:', historyOrders.length)
+
+        if (historyOrders && historyOrders.length > 0) {
+          setOrders(historyOrders)
           console.log('✅ Orders state updated successfully')
         } else {
           console.warn('⚠️ No orders found - trying getOrders API as fallback...')
@@ -81,8 +96,20 @@ export default function MyOrders() {
             })
             if (fallbackResponse?.data?.success && fallbackResponse?.data?.data?.orders) {
               const fallbackOrders = fallbackResponse.data.data.orders || []
-              console.log('✅ Fallback API found orders:', fallbackOrders.length)
-              setOrders(fallbackOrders)
+              console.log('✅ Fallback API found orders (before filtering):', fallbackOrders.length)
+
+              const fallbackHistoryOrders = (fallbackOrders || []).filter((order) => {
+                const status = (order.status || order.orderStatus || '').toLowerCase()
+                return (
+                  status === 'delivered' ||
+                  status === 'completed' ||
+                  status === 'cancelled' ||
+                  status === 'canceled'
+                )
+              })
+
+              console.log('✅ Fallback orders after history filter:', fallbackHistoryOrders.length)
+              setOrders(fallbackHistoryOrders)
     } else {
               setOrders([])
             }

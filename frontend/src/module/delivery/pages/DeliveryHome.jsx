@@ -4694,6 +4694,26 @@ export default function DeliveryHome() {
   // Handle online toggle - check for booked gigs
   const handleToggleOnline = () => {
     if (isOnline) {
+      // Prevent going offline while an order is active
+      try {
+        const activeOrderRaw = localStorage.getItem('deliveryActiveOrder')
+        if (activeOrderRaw) {
+          const activeOrder = JSON.parse(activeOrderRaw)
+          const hasActiveOrderId =
+            !!activeOrder?.orderId ||
+            !!activeOrder?.restaurantInfo?.id ||
+            !!activeOrder?.restaurantInfo?.orderId
+
+          if (hasActiveOrderId) {
+            toast.error('You have an active order. Please complete it before going offline.')
+            return
+          }
+        }
+      } catch (err) {
+        console.warn('Error checking active order status before going offline:', err)
+        // In case of error, allow toggle to proceed to avoid locking user
+      }
+
       goOffline()
     } else {
       // Check if there are any booked gigs

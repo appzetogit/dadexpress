@@ -29,6 +29,31 @@ export default function AcceptedOrderDetails() {
   const { orderId } = useParams()
   const [orderStatus, setOrderStatus] = useState(() => getDeliveryOrderStatus(orderId))
   const [paymentStatus, setPaymentStatus] = useState(() => getDeliveryOrderPaymentStatus(orderId))
+  const [activeOrderInfo, setActiveOrderInfo] = useState(null)
+
+  // Try to hydrate order details from localStorage (saved when order was accepted)
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("deliveryActiveOrder")
+      if (!saved) {
+        return
+      }
+
+      const parsed = JSON.parse(saved)
+      const storedOrderId =
+        parsed.orderId ||
+        parsed.restaurantInfo?.orderMongoId ||
+        parsed.restaurantInfo?.orderId ||
+        parsed.restaurantInfo?.id
+
+      if (storedOrderId && orderId && storedOrderId === orderId) {
+        setActiveOrderInfo(parsed.restaurantInfo || null)
+      }
+    } catch (e) {
+      // Don't break UI if parsing fails – just fall back to demo data
+      console.error("Failed to parse deliveryActiveOrder from localStorage", e)
+    }
+  }, [orderId])
 
   // Listen for order status updates
   useEffect(() => {
@@ -52,50 +77,126 @@ export default function AcceptedOrderDetails() {
 
   const statusMessage = getDeliveryStatusMessage(orderStatus)
 
-  // Order data matching the image exactly
+  // Helper to safely map items coming from backend into UI-friendly shape
+  const normalizedItems = (() => {
+    const rawItems = activeOrderInfo?.items
+    if (!Array.isArray(rawItems) || rawItems.length === 0) {
+      return null
+    }
+
+    return rawItems.map((item, index) => {
+      const name =
+        item.name ||
+        item.itemName ||
+        item.productName ||
+        item.menuItemName ||
+        "Item"
+
+      const price =
+        typeof item.price === "number"
+          ? item.price
+          : typeof item.totalPrice === "number"
+          ? item.totalPrice
+          : typeof item.amount === "number"
+          ? item.amount
+          : 0
+
+      const quantity =
+        item.quantity ?? item.qty ?? item.count ?? item.itemQuantity ?? 1
+
+      const isVeg =
+        item.isVeg ?? item.veg ?? item.isVegetarian ?? item.itemType === "veg"
+
+      return {
+        id: item.id || item._id || index + 1,
+        name,
+        price,
+        variation:
+          item.variation ||
+          item.variant ||
+          item.size ||
+          item.description ||
+          "Default",
+        quantity,
+        type: isVeg ? "Veg" : "Non Veg",
+        image:
+          item.image ||
+          item.photo ||
+          item.imageUrl ||
+          "https://images.unsplash.com/photo-1604908176997-1251884b08a6?w=100&h=100&fit=crop&q=80"
+      }
+    })
+  })()
+
+  // Build order data – prefer real backend data, fall back to design/demo values
   const orderData = {
-    id: orderId || "100102",
+    id:
+      orderId ||
+      activeOrderInfo?.orderId ||
+      activeOrderInfo?._id ||
+      "100102",
     status: orderStatus,
     deliveryTime: "1 - 5 Min",
     customer: {
-      name: "Hshsgs Gsvsgs",
-      address: "R9HC+GHV, Dhaka 1216,",
-      image: "https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=100&h=100&fit=crop&q=80"
+      name:
+        activeOrderInfo?.customerName ||
+        "Customer",
+      address:
+        activeOrderInfo?.customerAddress ||
+        "Customer address",
+      image:
+        "https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=100&h=100&fit=crop&q=80"
     },
     restaurant: {
-      name: "Hungry Puppets",
-      address: "House: 00, Road: 00, Tes..",
+      name: activeOrderInfo?.name || "Hungry Puppets",
+      address: activeOrderInfo?.address || "House: 00, Road: 00, Tes..",
       rating: 3.3
     },
-    items: [
-      {
-        id: 1,
-        name: "Medu Vada",
-        price: 95.00,
-        variation: "Capacity (1 Person)",
-        quantity: 1,
-        type: "Non Veg",
-        image: "https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=100&h=100&fit=crop&q=80"
-      },
-      {
-        id: 2,
-        name: "grilled lemon herb mediterrane...",
-        price: 540.00,
-        variation: "Size (Small)",
-        quantity: 1,
-        type: "Non Veg",
-        image: "https://images.unsplash.com/photo-1544025162-d76694265947?w=100&h=100&fit=crop&q=80"
-      }
-    ],
+    items:
+      normalizedItems ||
+      [
+        {
+          id: 1,
+          name: "Medu Vada",
+          price: 95.0,
+          variation: "Capacity (1 Person)",
+          quantity: 1,
+          type: "Non Veg",
+          image:
+            "https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=100&h=100&fit=crop&q=80"
+        },
+        {
+          id: 2,
+          name: "grilled lemon herb mediterrane...",
+          price: 540.0,
+          variation: "Size (Small)",
+          quantity: 1,
+          type: "Non Veg",
+          image:
+            "https://images.unsplash.com/photo-1544025162-d76694265947?w=100&h=100&fit=crop&q=80"
+        }
+      ],
     cutlery: "No",
     paymentMethod: {
       status: paymentStatus,
-      method: "Cash"
+      method:
+        activeOrderInfo?.paymentMethod === "cod" ||
+        activeOrderInfo?.paymentMethod === "cash_on_delivery"
+          ? "Cash"
+          : activeOrderInfo?.paymentMethod
+          ? activeOrderInfo.paymentMethod.toString()
+          : "Cash"
     },
     billing: {
-      subtotal: 697.35,
-      deliverymanTips: 0.00,
-      total: 697.35
+      subtotal:
+        typeof activeOrderInfo?.total === "number"
+          ? activeOrderInfo.total
+          : 697.35,
+      deliverymanTips: 0.0,
+      total:
+        typeof activeOrderInfo?.total === "number"
+          ? activeOrderInfo.total
+          : 697.35
     },
     statusMessage: statusMessage.message,
     statusDescription: statusMessage.description

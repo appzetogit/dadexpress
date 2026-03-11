@@ -305,11 +305,32 @@ export default function Orders() {
           // Sort by date (newest first)
           transformedOrders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
 
-          console.log('✅ Orders fetched and transformed:', {
+          // Show only completed history orders:
+          // - delivered/completed
+          // - or explicitly cancelled (user or restaurant)
+          // Pending / failed / in-progress orders should not appear in history list.
+          const historyOrders = transformedOrders.filter((o) => {
+            const status = (o.originalStatus || o.status || '').toLowerCase()
+
+            const isDeliveredOrCompleted =
+              status === 'delivered' ||
+              status === 'completed' ||
+              !!o.deliveredAt
+
+            const isCancelled =
+              status === 'cancelled' ||
+              status === 'canceled' ||
+              status === 'restaurant_cancelled'
+
+            return isDeliveredOrCompleted || isCancelled
+          })
+
+          console.log('✅ Orders fetched and transformed (history only):', {
             total: transformedOrders.length,
-            delivered: transformedOrders.filter(o => o.status === 'delivered' || o.originalStatus === 'delivered').length,
-            withRating: transformedOrders.filter(o => o.rating).length,
-            sample: transformedOrders.slice(0, 2).map(o => ({
+            historyCount: historyOrders.length,
+            delivered: historyOrders.filter(o => (o.originalStatus || o.status || '').toLowerCase() === 'delivered').length,
+            cancelled: historyOrders.filter(o => (o.originalStatus || o.status || '').toLowerCase().includes('cancel')).length,
+            sample: historyOrders.slice(0, 2).map(o => ({
               id: o.id,
               status: o.status,
               originalStatus: o.originalStatus,
@@ -318,7 +339,7 @@ export default function Orders() {
             }))
           })
 
-          setOrders(transformedOrders)
+          setOrders(historyOrders)
         } else {
           console.log('⚠️ No orders data in response')
           setOrders([])
