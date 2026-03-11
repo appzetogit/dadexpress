@@ -377,12 +377,15 @@ export default function SignIn() {
           } else {
             // User cancelled native sign-in or no success flag -> stay on login page
             console.log("ℹ️ User cancelled native sign in. Staying on login page (no web popup fallback).")
+            // Mark as handled so auth-state listener doesn't auto-redirect
+            redirectHandledRef.current = true
             setIsLoading(false)
             return
           }
         } catch (e) {
           console.error("❌ Flutter Bridge Error during Google sign-in:", e)
           // On hard error, stop here as well (no silent popup fallback)
+          redirectHandledRef.current = true
           setIsLoading(false)
           return
         }
@@ -403,7 +406,8 @@ export default function SignIn() {
     } catch (error) {
       console.error("❌ Google sign-in popup error:", error)
       setIsLoading(false)
-      redirectHandledRef.current = false
+      // Prevent auth-state listener from redirecting after a cancelled/failed popup
+      redirectHandledRef.current = true
 
       const errorCode = error?.code || ""
       const errorMessage = error?.message || ""
