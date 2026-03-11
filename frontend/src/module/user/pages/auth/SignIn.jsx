@@ -70,6 +70,13 @@ export default function SignIn() {
     }
   }, [searchParams])
 
+  // By default, treat redirects as already handled to avoid
+  // unwanted auto-navigation when returning to this page via back.
+  // Specific flows (e.g. Google sign-in) will explicitly reset this flag.
+  useEffect(() => {
+    redirectHandledRef.current = true
+  }, [])
+
   // Helper function to process signed-in user
   const processSignedInUser = async (user, source = "unknown") => {
     if (redirectHandledRef.current) {
