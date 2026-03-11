@@ -378,25 +378,36 @@ export const acceptOrder = asyncHandler(async (req, res) => {
     // If order is not assigned, we do strict zone-matching along with priority checking
     if (!orderDeliveryPartnerId) {
       // ZONE VALIDATION: Ensure the order's restaurant is within the delivery partner's zones
+      // IMPORTANT:
+      // - If zones are configured for the delivery partner, enforce them strictly
+      // - If NO zones are configured (common for legacy / testing accounts), allow the order
+      //   instead of blocking with "outside your assigned delivery zone"
       let isInValidZone = false;
       const orderRestaurantIdStr = order.restaurantId?._id?.toString() || order.restaurantId?.toString();
-      
-      if (orderRestaurantIdStr && delivery.availability?.zones?.length > 0) {
+
+      const hasZonesConfigured = Array.isArray(delivery.availability?.zones) && delivery.availability.zones.length > 0;
+      const hasLegacyZoneId = !!delivery.zoneId;
+
+      if (orderRestaurantIdStr && hasZonesConfigured) {
         const zone = await Zone.findOne({
           _id: { $in: delivery.availability.zones },
           restaurantId: orderRestaurantIdStr,
           isActive: true
         }).lean();
-        
+
         if (zone) isInValidZone = true;
-      } else if (orderRestaurantIdStr && delivery.zoneId) {
+      } else if (orderRestaurantIdStr && hasLegacyZoneId) {
         const zone = await Zone.findOne({
           _id: delivery.zoneId,
           restaurantId: orderRestaurantIdStr,
           isActive: true
         }).lean();
-        
+
         if (zone) isInValidZone = true;
+      } else {
+        // No zone configuration for this delivery partner – treat as global coverage
+        // to avoid false "outside your zone" errors for older accounts.
+        isInValidZone = true;
       }
 
       if (!isInValidZone) {
@@ -464,12 +475,18 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       // Reload order as document (not lean) to update it
       let orderDoc;
       try {
-        orderDoc = await Order.findOne({
+        // Reuse the same cleaned variants logic used earlier so we never fail
+        // to find a valid order document just because of minor formatting differences.
+        const reloadQuery = {
           $or: [
-            { _id: orderId },
-            { orderId: orderId }
+            { orderId: { $in: orderIdVariants } }
           ]
-        });
+        };
+        if (validObjectId) {
+          reloadQuery.$or.push({ _id: validObjectId });
+        }
+
+        orderDoc = await Order.findOne(reloadQuery);
 
         if (!orderDoc) {
           console.error(`❌ Order document not found for ID: ${orderId}`);
@@ -519,12 +536,18 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       // Reload order with populated data (use orderDoc._id to ensure we get the updated order)
       const updatedOrderId = orderDoc._id || orderId;
       try {
-        order = await Order.findOne({
+        const reloadQueryAfterAssign = {
           $or: [
-            { _id: updatedOrderId },
-            { orderId: orderId }
+            { orderId: { $in: orderIdVariants } }
           ]
-        })
+        };
+        if (validObjectId) {
+          reloadQueryAfterAssign.$or.push({ _id: validObjectId });
+        } else if (updatedOrderId) {
+          reloadQueryAfterAssign.$or.push({ _id: updatedOrderId });
+        }
+
+        order = await Order.findOne(reloadQueryAfterAssign)
           .populate('restaurantId', 'name location address phone ownerPhone')
           .populate('userId', 'name phone')
           .lean();

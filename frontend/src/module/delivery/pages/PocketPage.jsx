@@ -149,7 +149,9 @@ export default function PocketPage() {
           const summary = weekRes.data.data.summary
           setWeeklyEarningsFromAPI({
             totalEarnings: summary.totalEarnings || 0,
-            totalOrders: summary.totalOrders || 0
+            totalOrders: summary.totalOrders || 0,
+            startDate: summary.startDate || null,
+            endDate: summary.endDate || null
           })
         }
         // Fetch today's earnings
@@ -158,7 +160,9 @@ export default function PocketPage() {
           const summary = todayRes.data.data.summary
           setTodayEarningsFromAPI({
             totalEarnings: summary.totalEarnings || 0,
-            totalOrders: summary.totalOrders || 0
+            totalOrders: summary.totalOrders || 0,
+            startDate: summary.startDate || null,
+            endDate: summary.endDate || null
           })
         }
       } catch (err) {
@@ -661,19 +665,25 @@ export default function PocketPage() {
 
 
   // Get current week date range (17 Nov - 23 Nov format)
+  // Prefer backend-calculated start/end dates from earnings API; fall back to local calculation.
   const getCurrentWeekRange = () => {
+    const formatDate = (date) => {
+      const d = new Date(date)
+      const day = d.getDate()
+      const month = d.toLocaleString('en-US', { month: 'short' })
+      return `${day} ${month}`
+    }
+
+    if (weeklyEarningsFromAPI && weeklyEarningsFromAPI.startDate && weeklyEarningsFromAPI.endDate) {
+      return `${formatDate(weeklyEarningsFromAPI.startDate)} - ${formatDate(weeklyEarningsFromAPI.endDate)}`
+    }
+
     const now = new Date()
     const dayOfWeek = now.getDay()
     const startOfWeek = new Date(now)
     startOfWeek.setDate(now.getDate() - dayOfWeek)
     const endOfWeek = new Date(startOfWeek)
     endOfWeek.setDate(startOfWeek.getDate() + 6)
-
-    const formatDate = (date) => {
-      const day = date.getDate()
-      const month = date.toLocaleString('en-US', { month: 'short' })
-      return `${day} ${month}`
-    }
 
     return `${formatDate(startOfWeek)} - ${formatDate(endOfWeek)}`
   }
