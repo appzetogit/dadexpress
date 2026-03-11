@@ -358,17 +358,44 @@ export default function SignIn() {
         throw new Error("Firebase Auth is not initialized. Please check your Firebase configuration.")
       }
 
-      const { signInWithPopup } = await import("firebase/auth")
+      const { signInWithPopup, GoogleAuthProvider, signInWithCredential } = await import("firebase/auth")
 
-      // Use popup for better UX and to avoid 'missing initial state' errors on redirect
-      console.log("🚀 Starting Google sign-in popup...")
-      const result = await signInWithPopup(firebaseAuth, googleProvider)
+      let user = null
 
-      if (result && result.user) {
-        console.log("✅ Google sign-in popup successful, processing user...")
-        await processSignedInUser(result.user, "popup-result")
+      // 1. Try Google login via Flutter in-app webview (mobile apps)
+      if (window.flutter_inappwebview && typeof window.flutter_inappwebview.callHandler === "function") {
+        console.log("📱 Starting Google sign-in via Flutter native bridge...")
+        try {
+          const result = await window.flutter_inappwebview.callHandler("nativeGoogleSignIn")
+
+          if (result && result.success && result.idToken) {
+            const idToken = result.idToken
+            const credential = GoogleAuthProvider.credential(idToken)
+            const userCredential = await signInWithCredential(firebaseAuth, credential)
+            user = userCredential.user
+            console.log("✅ Website login successful via Flutter App!")
+          } else {
+            console.log("ℹ️ Flutter nativeGoogleSignIn cancelled or failed, falling back to web popup...")
+          }
+        } catch (e) {
+          console.error("❌ Flutter Bridge Error during Google sign-in:", e)
+          console.log("ℹ️ Falling back to web popup Google sign-in...")
+        }
+      }
+
+      // 2. Fallback: normal browser Google login using popup
+      if (!user) {
+        // Use popup for better UX and to avoid 'missing initial state' errors on redirect
+        console.log("🚀 Starting Google sign-in popup (web browser)...")
+        const result = await signInWithPopup(firebaseAuth, googleProvider)
+        user = result?.user || null
+      }
+
+      if (user) {
+        console.log("✅ Google sign-in successful, processing user...")
+        await processSignedInUser(user, window.flutter_inappwebview ? "flutter-bridge" : "popup-result")
       } else {
-        console.log("ℹ️ No user returned from popup (might have been closed)")
+        console.log("ℹ️ No user returned from Google sign-in (might have been closed)")
         setIsLoading(false)
       }
     } catch (error) {
