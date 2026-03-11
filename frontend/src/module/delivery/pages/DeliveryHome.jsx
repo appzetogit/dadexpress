@@ -3617,34 +3617,18 @@ export default function DeliveryHome() {
    * Handle camera capture for pickup or drop photo - Flutter InAppWebView compatible
    */
   const handleCameraCapture = async (captureMode = 'pickup') => {
-    const openHtmlInput = () => {
-      // Standard file-input fallback (web browsers / when native handler fails)
-      if (captureMode === 'pickup') {
-        if (cameraInputRef.current) cameraInputRef.current.click()
-      } else {
-        const dropInput = document.getElementById('drop-camera-input')
-        if (dropInput) dropInput.click()
-      }
-    }
-
     try {
-      // Prefer Flutter InAppWebView handler when available
+      // Check if Flutter InAppWebView handler is available
       if (window.flutter_inappwebview && typeof window.flutter_inappwebview.callHandler === 'function') {
         false && console.log(`📸 Using Flutter InAppWebView camera handler for ${captureMode}`)
 
-        let result = null
-        try {
-          result = await window.flutter_inappwebview.callHandler('openCamera', {
-            source: 'camera',
-            accept: 'image/*',
-            multiple: false,
-            quality: 0.8
-          })
-        } catch (handlerError) {
-          console.warn('⚠️ Flutter camera handler failed, falling back to HTML input:', handlerError)
-          openHtmlInput()
-          return
-        }
+        // Call Flutter handler to open camera
+        const result = await window.flutter_inappwebview.callHandler('openCamera', {
+          source: 'camera',
+          accept: 'image/*',
+          multiple: false,
+          quality: 0.8
+        })
 
         false && console.log('📸 Flutter handler response:', result)
 
@@ -3681,25 +3665,24 @@ export default function DeliveryHome() {
             } else {
               await processDropImageFile(file)
             }
-            return
+          } else {
+            console.error('❌ No file data in Flutter response:', result)
+            toast.error('Failed to get image from camera')
           }
-
-          console.error('❌ No file data in Flutter response:', result)
-          toast.error('Failed to get image from camera')
-          return
         }
-
-        // If result is falsy or success === false, silently fallback to HTML input
-        openHtmlInput()
       } else {
-        // No native handler – normal web path
-        openHtmlInput()
+        // Fallback to standard file input
+        if (captureMode === 'pickup') {
+          if (cameraInputRef.current) cameraInputRef.current.click()
+        } else {
+          // Drop photo might need its own input if they were both open, but usually they aren't
+          const dropInput = document.getElementById('drop-camera-input')
+          if (dropInput) dropInput.click()
+        }
       }
     } catch (error) {
       console.error('❌ Error opening camera:', error)
       toast.error('Failed to open camera. Please try again.')
-      // Last-resort fallback so button never feels dead
-      openHtmlInput()
     }
   }
 
