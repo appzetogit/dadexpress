@@ -39,6 +39,10 @@ const countryCodes = [
 ]
 
 export default function RestaurantLogin() {
+  const isDev = import.meta.env?.DEV === true
+  const debugLog = (...args) => {
+    if (isDev) console.log(...args)
+  }
   const companyName = useCompanyName()
   const navigate = useNavigate()
   const [loginMethod, setLoginMethod] = useState("phone") // "phone" or "email"
@@ -240,7 +244,7 @@ export default function RestaurantLogin() {
 
       // 1. Try Google login via Flutter in-app webview (restaurant app)
       if (window.flutter_inappwebview && typeof window.flutter_inappwebview.callHandler === "function") {
-        console.log("📱 Restaurant Google login via Flutter native bridge...")
+        debugLog("📱 Restaurant Google login via Flutter native bridge...")
         try {
           const result = await window.flutter_inappwebview.callHandler("nativeGoogleSignIn")
 
@@ -249,13 +253,13 @@ export default function RestaurantLogin() {
             const credential = GoogleAuthProvider.credential(idTokenFromFlutter)
             const userCredential = await signInWithCredential(firebaseAuth, credential)
             user = userCredential.user
-            console.log("✅ Restaurant website login successful via Flutter App!")
+            debugLog("✅ Restaurant website login successful via Flutter App!")
           } else {
-            console.log("ℹ️ Flutter nativeGoogleSignIn cancelled/failed, falling back to web popup...")
+            debugLog("ℹ️ Flutter nativeGoogleSignIn cancelled/failed, falling back to web popup...")
           }
         } catch (e) {
           console.error("❌ Flutter Bridge Error during restaurant Google login:", e)
-          console.log("ℹ️ Falling back to web popup Google sign-in for restaurant...")
+          debugLog("ℹ️ Falling back to web popup Google sign-in for restaurant...")
         }
       }
 
@@ -275,7 +279,7 @@ export default function RestaurantLogin() {
       // Get FCM token
       const fcmToken = await requestFcmToken();
       if (fcmToken) {
-        console.log('[PUSH-NOTIFICATION] Sending FCM token for restaurant Google login:', fcmToken);
+        debugLog('[PUSH-NOTIFICATION] Sending FCM token for restaurant Google login:', fcmToken);
       }
 
       // Call backend to login/register via Firebase Google
@@ -558,4 +562,3 @@ export default function RestaurantLogin() {
     </div>
   )
 }
-

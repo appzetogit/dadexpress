@@ -28,6 +28,28 @@ const logger = winston.createLogger({
   ]
 });
 
+let cachedActiveZones = null;
+let cachedActiveZonesAt = 0;
+const ACTIVE_ZONES_TTL_MS = 30000;
+
+const getActiveZonesCached = async () => {
+  const now = Date.now();
+  if (cachedActiveZones && (now - cachedActiveZonesAt) < ACTIVE_ZONES_TTL_MS) {
+    return cachedActiveZones;
+  }
+  try {
+    const zones = await Zone.find({ isActive: true }).lean();
+    cachedActiveZones = zones;
+    cachedActiveZonesAt = now;
+    return zones;
+  } catch (err) {
+    if (cachedActiveZones) {
+      return cachedActiveZones;
+    }
+    throw err;
+  }
+};
+
 /**
  * Create a new order and initiate Razorpay payment
  */
@@ -190,7 +212,7 @@ export const createOrder = async (req, res) => {
     }
 
     // Check if restaurant is within any active zone
-    const activeZones = await Zone.find({ isActive: true }).lean();
+    const activeZones = await getActiveZonesCached();
     let restaurantInZone = false;
     let restaurantZone = null;
 

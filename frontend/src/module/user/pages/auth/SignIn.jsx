@@ -41,6 +41,10 @@ const countryCodes = [
 ]
 
 export default function SignIn() {
+  const isDev = import.meta.env?.DEV === true
+  const debugLog = (...args) => {
+    if (isDev) console.log(...args)
+  }
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const isSignUp = searchParams.get("mode") === "signup"
@@ -66,7 +70,7 @@ export default function SignIn() {
     const ref = searchParams.get("ref")
     if (ref) {
       localStorage.setItem("referralCode", ref)
-      console.log("🎁 Referral code captured:", ref)
+      debugLog("🎁 Referral code captured:", ref)
     }
   }, [searchParams])
 
@@ -80,11 +84,11 @@ export default function SignIn() {
   // Helper function to process signed-in user
   const processSignedInUser = async (user, source = "unknown") => {
     if (redirectHandledRef.current) {
-      console.log(`ℹ️ User already being processed, skipping (source: ${source})`)
+      debugLog(`ℹ️ User already being processed, skipping (source: ${source})`)
       return
     }
 
-    console.log(`✅ Processing signed-in user from ${source}:`, {
+    debugLog(`✅ Processing signed-in user from ${source}:`, {
       email: user.email,
       uid: user.uid,
       displayName: user.displayName
@@ -96,18 +100,18 @@ export default function SignIn() {
 
     try {
       const idToken = await user.getIdToken()
-      console.log(`✅ Got ID token from ${source}, calling backend...`)
+      debugLog(`✅ Got ID token from ${source}, calling backend...`)
 
       // Get FCM token
       const fcmToken = await requestFcmToken();
       if (fcmToken) {
-        console.log(`[PUSH-NOTIFICATION] Sending FCM token for user Google login from ${source}:`, fcmToken);
+        debugLog(`[PUSH-NOTIFICATION] Sending FCM token for user Google login from ${source}:`, fcmToken);
       }
 
       const response = await authAPI.firebaseGoogleLogin(idToken, "user", fcmToken, "web")
       const data = response?.data?.data || {}
 
-      console.log(`✅ Backend response from ${source}:`, {
+      debugLog(`✅ Backend response from ${source}:`, {
         hasAccessToken: !!data.accessToken,
         hasUser: !!data.user,
         userEmail: data.user?.email
@@ -127,7 +131,7 @@ export default function SignIn() {
           window.history.replaceState({}, document.title, window.location.pathname)
         }
 
-        console.log(`✅ Navigating to user dashboard from ${source}...`)
+        debugLog(`✅ Navigating to user dashboard from ${source}...`)
         navigate("/user", { replace: true })
       } else {
         console.error(`❌ Invalid backend response from ${source}`)
@@ -164,10 +168,10 @@ export default function SignIn() {
         const { onAuthStateChanged } = await import("firebase/auth")
         ensureFirebaseInitialized()
 
-        console.log("🔔 Setting up auth state listener...")
+        debugLog("🔔 Setting up auth state listener...")
 
         unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
-          console.log("🔔 Auth state changed:", {
+          debugLog("🔔 Auth state changed:", {
             hasUser: !!user,
             userEmail: user?.email,
             redirectHandled: redirectHandledRef.current
@@ -371,7 +375,7 @@ export default function SignIn() {
 
       if (window.flutter_inappwebview && typeof window.flutter_inappwebview.callHandler === "function") {
         // 🚀 Mobile app (Flutter InAppWebView) flow - DO NOT fall back to web popup on cancel
-        console.log("📱 Starting Google sign-in via Flutter native bridge...")
+        debugLog("📱 Starting Google sign-in via Flutter native bridge...")
         try {
           const result = await window.flutter_inappwebview.callHandler("nativeGoogleSignIn")
 
@@ -380,10 +384,10 @@ export default function SignIn() {
             const credential = GoogleAuthProvider.credential(idToken)
             const userCredential = await signInWithCredential(firebaseAuth, credential)
             user = userCredential.user
-            console.log("✅ Website login successful via Flutter App!")
+            debugLog("✅ Website login successful via Flutter App!")
           } else {
             // User cancelled native sign-in or no success flag -> stay on login page
-            console.log("ℹ️ User cancelled native sign in. Staying on login page (no web popup fallback).")
+            debugLog("ℹ️ User cancelled native sign in. Staying on login page (no web popup fallback).")
             // Mark as handled so auth-state listener doesn't auto-redirect
             redirectHandledRef.current = true
             setIsLoading(false)
@@ -398,16 +402,16 @@ export default function SignIn() {
         }
       } else {
         // 🌐 Normal web browsers (Chrome/Safari etc.) -> use popup Google sign-in
-        console.log("🚀 Starting Google sign-in popup (web browser)...")
+        debugLog("🚀 Starting Google sign-in popup (web browser)...")
         const result = await signInWithPopup(firebaseAuth, googleProvider)
         user = result?.user || null
       }
 
       if (user) {
-        console.log("✅ Google sign-in successful, processing user...")
+        debugLog("✅ Google sign-in successful, processing user...")
         await processSignedInUser(user, window.flutter_inappwebview ? "flutter-bridge" : "popup-result")
       } else {
-        console.log("ℹ️ No user returned from Google sign-in (might have been closed)")
+        debugLog("ℹ️ No user returned from Google sign-in (might have been closed)")
         setIsLoading(false)
       }
     } catch (error) {
