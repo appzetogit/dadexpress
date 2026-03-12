@@ -196,7 +196,7 @@ orderSettlementSchema.statics.findOrCreateByOrderId = async function(orderId) {
   return settlement;
 };
 
-const OrderSettlement = mongoose.model('OrderSettlement', orderSettlementSchema);
+const OrderSettlement = mongoose.models.OrderSettlement || mongoose.model('OrderSettlement', orderSettlementSchema);
 
 export default OrderSettlement;
 

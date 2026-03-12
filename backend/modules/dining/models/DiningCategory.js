@@ -24,4 +24,4 @@ const diningCategorySchema = new mongoose.Schema({
     timestamps: true
 });
 
-export default mongoose.model('DiningCategory', diningCategorySchema);
+export default mongoose.models.DiningCategory || mongoose.model('DiningCategory', diningCategorySchema);

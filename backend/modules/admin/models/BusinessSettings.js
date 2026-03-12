@@ -114,7 +114,7 @@ const businessSettingsSchema = new mongoose.Schema(
         },
         {
           title: { type: String, default: "They place first order" },
-          description: { type: String, default: "Friend completes their first order of min ₹{minOrderValue}." }
+          description: { type: String, default: "Friend completes their first order of min â‚¹{minOrderValue}." }
         },
         {
           title: { type: String, default: "You get rewards!" },
@@ -181,4 +181,4 @@ businessSettingsSchema.statics.getSettings = async function () {
   }
 };
 
-export default mongoose.model("BusinessSettings", businessSettingsSchema);
+export default mongoose.models.BusinessSettings || mongoose.model("BusinessSettings", businessSettingsSchema);

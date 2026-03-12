@@ -62,7 +62,7 @@ deliveryEmergencyHelpSchema.statics.getActive = async function() {
   };
 };
 
-const DeliveryEmergencyHelp = mongoose.model('DeliveryEmergencyHelp', deliveryEmergencyHelpSchema);
+const DeliveryEmergencyHelp = mongoose.models.DeliveryEmergencyHelp || mongoose.model('DeliveryEmergencyHelp', deliveryEmergencyHelpSchema);
 
 export default DeliveryEmergencyHelp;
 

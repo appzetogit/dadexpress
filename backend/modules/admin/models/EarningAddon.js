@@ -144,7 +144,7 @@ earningAddonSchema.statics.getActiveOffers = function(date = new Date()) {
   });
 };
 
-const EarningAddon = mongoose.model('EarningAddon', earningAddonSchema);
+const EarningAddon = mongoose.models.EarningAddon || mongoose.model('EarningAddon', earningAddonSchema);
 
 export default EarningAddon;
 

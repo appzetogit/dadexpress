@@ -34,5 +34,5 @@ const diningBankOfferSchema = new mongoose.Schema({
     timestamps: true
 });
 
-const DiningBankOffer = mongoose.model('DiningBankOffer', diningBankOfferSchema);
+const DiningBankOffer = mongoose.models.DiningBankOffer || mongoose.model('DiningBankOffer', diningBankOfferSchema);
 export default DiningBankOffer;

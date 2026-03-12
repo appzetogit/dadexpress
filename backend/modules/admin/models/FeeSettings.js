@@ -73,7 +73,7 @@ const feeSettingsSchema = new mongoose.Schema(
 feeSettingsSchema.index({ isActive: 1 });
 feeSettingsSchema.index({ createdAt: -1 });
 
-const FeeSettings = mongoose.model('FeeSettings', feeSettingsSchema);
+const FeeSettings = mongoose.models.FeeSettings || mongoose.model('FeeSettings', feeSettingsSchema);
 
 export default FeeSettings;
 

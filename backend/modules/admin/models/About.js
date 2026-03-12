@@ -100,5 +100,5 @@ const aboutSchema = new mongoose.Schema(
 // Indexes
 aboutSchema.index({ isActive: 1 });
 
-export default mongoose.model('About', aboutSchema);
+export default mongoose.models.About || mongoose.model('About', aboutSchema);
 

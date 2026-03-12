@@ -60,5 +60,5 @@ top10RestaurantSchema.pre('save', async function(next) {
   next();
 });
 
-export default mongoose.model('Top10Restaurant', top10RestaurantSchema);
+export default mongoose.models.Top10Restaurant || mongoose.model('Top10Restaurant', top10RestaurantSchema);
 

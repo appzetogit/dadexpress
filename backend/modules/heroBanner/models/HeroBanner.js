@@ -41,5 +41,5 @@ const heroBannerSchema = new mongoose.Schema({
 // Index for ordering
 heroBannerSchema.index({ order: 1, isActive: 1 });
 
-export default mongoose.model('HeroBanner', heroBannerSchema);
+export default mongoose.models.HeroBanner || mongoose.model('HeroBanner', heroBannerSchema);
 

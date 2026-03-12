@@ -156,7 +156,7 @@ earningAddonHistorySchema.statics.getStatistics = function(earningAddonId = null
   ]);
 };
 
-const EarningAddonHistory = mongoose.model('EarningAddonHistory', earningAddonHistorySchema);
+const EarningAddonHistory = mongoose.models.EarningAddonHistory || mongoose.model('EarningAddonHistory', earningAddonHistorySchema);
 
 export default EarningAddonHistory;
 

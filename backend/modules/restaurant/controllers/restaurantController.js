@@ -557,6 +557,23 @@ export const updateRestaurantProfile = asyncHandler(async (req, res) => {
       }
       
       updateData.location = location;
+      
+      // Sync lat/long to Firebase Realtime Database (non-blocking)
+      if (location.latitude && location.longitude) {
+        const { syncUserRealtime } = await import('../../delivery/services/firebaseTrackingService.js');
+        syncUserRealtime({
+          userId: restaurant._id.toString(),
+          lat: parseFloat(location.latitude),
+          lng: parseFloat(location.longitude),
+          address: location.address || location.formattedAddress || '',
+          area: location.area || '',
+          city: location.city || '',
+          state: location.state || '',
+          formattedAddress: location.formattedAddress || ''
+        }).catch((syncError) => {
+          logger.warn(`Firebase restaurant location sync failed: ${syncError.message}`);
+        });
+      }
     }
 
     // Update owner details if provided

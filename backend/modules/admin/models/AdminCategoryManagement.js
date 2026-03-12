@@ -55,7 +55,7 @@ adminCategoryManagementSchema.virtual('sl').get(function() {
   return null;
 });
 
-const AdminCategoryManagement = mongoose.model('AdminCategoryManagement', adminCategoryManagementSchema);
+const AdminCategoryManagement = mongoose.models.AdminCategoryManagement || mongoose.model('AdminCategoryManagement', adminCategoryManagementSchema);
 
 export default AdminCategoryManagement;
 

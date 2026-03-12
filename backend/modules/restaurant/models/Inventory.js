@@ -38,5 +38,5 @@ const inventorySchema = new mongoose.Schema({
 // Index for faster queries
 inventorySchema.index({ restaurant: 1, isActive: 1 });
 
-export default mongoose.model('Inventory', inventorySchema);
+export default mongoose.models.Inventory || mongoose.model('Inventory', inventorySchema);
 

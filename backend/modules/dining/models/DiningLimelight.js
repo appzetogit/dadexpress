@@ -33,5 +33,5 @@ const diningLimelightSchema = new mongoose.Schema({
     timestamps: true
 });
 
-const DiningLimelight = mongoose.model('DiningLimelight', diningLimelightSchema);
+const DiningLimelight = mongoose.models.DiningLimelight || mongoose.model('DiningLimelight', diningLimelightSchema);
 export default DiningLimelight;

@@ -31,5 +31,5 @@ const diningReviewSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-const DiningReview = mongoose.model("DiningReview", diningReviewSchema);
+const DiningReview = mongoose.models.DiningReview || mongoose.model("DiningReview", diningReviewSchema);
 export default DiningReview;

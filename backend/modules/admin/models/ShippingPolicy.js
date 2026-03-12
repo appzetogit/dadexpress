@@ -30,5 +30,5 @@ const shippingPolicySchema = new mongoose.Schema(
 // Indexes
 shippingPolicySchema.index({ isActive: 1 });
 
-export default mongoose.model('ShippingPolicy', shippingPolicySchema);
+export default mongoose.models.ShippingPolicy || mongoose.model('ShippingPolicy', shippingPolicySchema);
 

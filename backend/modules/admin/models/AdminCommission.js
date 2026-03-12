@@ -97,7 +97,7 @@ adminCommissionSchema.statics.getCommissionByDateRange = async function(startDat
   .sort({ orderDate: -1 });
 };
 
-const AdminCommission = mongoose.model('AdminCommission', adminCommissionSchema);
+const AdminCommission = mongoose.models.AdminCommission || mongoose.model('AdminCommission', adminCommissionSchema);
 
 export default AdminCommission;
 

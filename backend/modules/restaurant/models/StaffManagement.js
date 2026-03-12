@@ -78,7 +78,7 @@ staffManagementSchema.index(
   { unique: true, sparse: true, partialFilterExpression: { email: { $exists: true, $ne: null } } }
 );
 
-const StaffManagement = mongoose.model('StaffManagement', staffManagementSchema);
+const StaffManagement = mongoose.models.StaffManagement || mongoose.model('StaffManagement', staffManagementSchema);
 
 export default StaffManagement;
 

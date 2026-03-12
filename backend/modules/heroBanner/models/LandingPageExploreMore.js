@@ -44,5 +44,5 @@ const landingPageExploreMoreSchema = new mongoose.Schema({
 // Index for ordering
 landingPageExploreMoreSchema.index({ order: 1, isActive: 1 });
 
-export default mongoose.model('LandingPageExploreMore', landingPageExploreMoreSchema);
+export default mongoose.models.LandingPageExploreMore || mongoose.model('LandingPageExploreMore', landingPageExploreMoreSchema);
 

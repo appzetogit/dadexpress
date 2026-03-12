@@ -117,7 +117,6 @@ const restaurantCommissionSchema = new mongoose.Schema(
 );
 
 // Indexes
-restaurantCommissionSchema.index({ restaurant: 1 });
 restaurantCommissionSchema.index({ restaurantId: 1 });
 restaurantCommissionSchema.index({ status: 1 });
 restaurantCommissionSchema.index({ createdAt: -1 });
@@ -231,7 +230,6 @@ restaurantCommissionSchema.statics.calculateCommissionForOrder = async function(
   return commission.calculateCommission(orderAmount);
 };
 
-const RestaurantCommission = mongoose.model('RestaurantCommission', restaurantCommissionSchema);
+const RestaurantCommission = mongoose.models.RestaurantCommission || mongoose.model('RestaurantCommission', restaurantCommissionSchema);
 
 export default RestaurantCommission;
-

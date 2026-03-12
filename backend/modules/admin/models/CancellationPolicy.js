@@ -30,5 +30,5 @@ const cancellationPolicySchema = new mongoose.Schema(
 // Indexes
 cancellationPolicySchema.index({ isActive: 1 });
 
-export default mongoose.model('CancellationPolicy', cancellationPolicySchema);
+export default mongoose.models.CancellationPolicy || mongoose.model('CancellationPolicy', cancellationPolicySchema);
 

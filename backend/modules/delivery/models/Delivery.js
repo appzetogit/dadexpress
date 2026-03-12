@@ -276,8 +276,6 @@ const deliverySchema = new mongoose.Schema(
 );
 
 // Indexes
-deliverySchema.index({ phone: 1 }, { unique: true });
-deliverySchema.index({ deliveryId: 1 }, { unique: true, sparse: true });
 deliverySchema.index({ 'availability.currentLocation': '2dsphere' });
 deliverySchema.index({ status: 1 });
 deliverySchema.index({ isActive: 1 });
@@ -366,5 +364,4 @@ deliverySchema.methods.comparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-export default mongoose.model('Delivery', deliverySchema);
-
+export default mongoose.models.Delivery || mongoose.model('Delivery', deliverySchema);

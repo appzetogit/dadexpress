@@ -43,4 +43,4 @@ referralLogSchema.index({ referrer: 1 });
 referralLogSchema.index({ referee: 1 });
 referralLogSchema.index({ status: 1 });
 
-export default mongoose.model("ReferralLog", referralLogSchema);
+export default mongoose.models.ReferralLog || mongoose.model("ReferralLog", referralLogSchema);

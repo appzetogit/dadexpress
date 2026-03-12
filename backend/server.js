@@ -524,6 +524,9 @@ io.on('connection', (socket) => {
     return { order, trackingIds };
   };
 
+  // Throttle Firebase sync to 10 seconds per order
+  const firebaseSyncTimers = new Map(); // orderId -> timer
+
   // Delivery boy sends location update
   socket.on('update-location', (data) => {
     try {
@@ -543,19 +546,51 @@ io.on('connection', (socket) => {
         timestamp: Date.now()
       };
 
-      // Send to specific order room
+      // Send to specific order room (Socket.IO - real-time, 1-3 sec)
       io.to(`order:${data.orderId}`).emit(`location-receive-${data.orderId}`, locationData);
 
-      // Keep active order location mirrored in Firebase Realtime Database
-      syncActiveOrderRealtime({
-        orderId: data.orderId,
-        boyId: data.deliveryId || null,
-        boyLat: data.lat,
-        boyLng: data.lng,
-        status: 'on_the_way'
-      }).catch((error) => {
-        console.warn(`⚠️ Failed Firebase active_orders sync for ${data.orderId}: ${error.message}`);
-      });
+      // Throttle Firebase sync to 10 seconds per order
+      const orderId = data.orderId;
+      if (!firebaseSyncTimers.has(orderId)) {
+        // First update - sync immediately and set timer
+        syncActiveOrderRealtime({
+          orderId: orderId,
+          boyId: data.deliveryId || null,
+          boyLat: data.lat,
+          boyLng: data.lng,
+          status: 'on_the_way'
+        }).catch((error) => {
+          console.warn(`⚠️ Failed Firebase active_orders sync for ${orderId}: ${error.message}`);
+        });
+
+        // Set timer for next sync (10 seconds)
+        const timer = setTimeout(() => {
+          firebaseSyncTimers.delete(orderId);
+        }, 10000); // 10 seconds
+
+        firebaseSyncTimers.set(orderId, timer);
+      } else {
+        // Update pending location but don't sync yet (will sync after 10 sec)
+        // Store latest location for next sync
+        const timer = firebaseSyncTimers.get(orderId);
+        clearTimeout(timer);
+        
+        // Set new timer with latest location
+        const newTimer = setTimeout(() => {
+          syncActiveOrderRealtime({
+            orderId: orderId,
+            boyId: data.deliveryId || null,
+            boyLat: data.lat,
+            boyLng: data.lng,
+            status: 'on_the_way'
+          }).catch((error) => {
+            console.warn(`⚠️ Failed Firebase active_orders sync for ${orderId}: ${error.message}`);
+          });
+          firebaseSyncTimers.delete(orderId);
+        }, 10000); // 10 seconds
+
+        firebaseSyncTimers.set(orderId, newTimer);
+      }
 
       console.log(`📍 Location broadcasted to order room ${data.orderId}:`, {
         lat: locationData.lat,

@@ -52,5 +52,5 @@ feedbackSchema.index({ userId: 1 });
 feedbackSchema.index({ status: 1 });
 feedbackSchema.index({ createdAt: -1 });
 
-export default mongoose.model('Feedback', feedbackSchema);
+export default mongoose.models.Feedback || mongoose.model('Feedback', feedbackSchema);
 

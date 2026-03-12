@@ -13,8 +13,66 @@ const logger = winston.createLogger({
 
 /**
  * Reverse geocode coordinates to address using OLA Maps API
+ * DISABLED: Reverse geocoding disabled to reduce Google Maps API costs
+ * Returns coordinates only - no address lookup
  */
 export const reverseGeocode = async (req, res) => {
+  try {
+    const { lat, lng } = req.query;
+
+    if (!lat || !lng) {
+      return res.status(400).json({
+        success: false,
+        message: 'Latitude and longitude are required'
+      });
+    }
+
+    const latNum = parseFloat(lat);
+    const lngNum = parseFloat(lng);
+
+    // SKIP REVERSE GEOCODING - Return coordinates only to reduce API costs
+    logger.info('Reverse geocoding disabled - returning coordinates only', { lat: latNum, lng: lngNum });
+    
+    const minimalData = {
+      results: [{
+        formatted_address: '',
+        address_components: {
+          city: '',
+          state: '',
+          country: '',
+          area: ''
+        },
+        geometry: {
+          location: {
+            lat: latNum,
+            lng: lngNum
+          }
+        }
+      }]
+    };
+
+    return res.json({
+      success: true,
+      data: minimalData,
+      source: 'coordinates_only'
+    });
+  } catch (error) {
+    logger.error('Reverse geocode error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// OLD CODE COMMENTED OUT - Reverse geocoding disabled to reduce costs
+/*
+export const reverseGeocode_OLD = async (req, res) => {
   try {
     const { lat, lng } = req.query;
 

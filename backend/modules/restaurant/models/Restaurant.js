@@ -45,6 +45,7 @@ const restaurantSchema = new mongoose.Schema(
       },
       lowercase: true,
       trim: true,
+      unique: true,
       sparse: true, // Allow multiple null values in unique index
     },
     phone: {
@@ -53,6 +54,8 @@ const restaurantSchema = new mongoose.Schema(
         return !this.email && !this.googleId;
       },
       trim: true,
+      unique: true,
+      sparse: true,
     },
     phoneVerified: {
       type: Boolean,
@@ -64,6 +67,8 @@ const restaurantSchema = new mongoose.Schema(
     },
     googleId: {
       type: String,
+      unique: true,
+      sparse: true,
     },
     googleEmail: {
       type: String,
@@ -328,10 +333,7 @@ const restaurantSchema = new mongoose.Schema(
   },
 );
 
-// Indexes for authentication
-restaurantSchema.index({ email: 1 }, { unique: true, sparse: true });
-restaurantSchema.index({ phone: 1 }, { unique: true, sparse: true });
-restaurantSchema.index({ googleId: 1 }, { unique: true, sparse: true });
+// Note: email, phone, and googleId indexes are now defined at the field level
 
 // Hash password before saving
 restaurantSchema.pre("save", async function (next) {
@@ -424,4 +426,4 @@ restaurantSchema.methods.comparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-export default mongoose.model("Restaurant", restaurantSchema);
+export default mongoose.models.Restaurant || mongoose.model("Restaurant", restaurantSchema);

@@ -11,6 +11,9 @@ const logger = winston.createLogger({
   ]
 });
 
+// Ensure indexes are built automatically in development, disabled in production for performance
+mongoose.set('autoIndex', process.env.NODE_ENV !== 'production');
+
 export const connectDB = async () => {
   try {
     const conn = await mongoose.connect(process.env.MONGODB_URI, {
@@ -43,4 +46,3 @@ export const connectDB = async () => {
 };
 
 export default connectDB;
-

@@ -88,5 +88,5 @@ const orderEventSchema = new mongoose.Schema({
 orderEventSchema.index({ orderId: 1, timestamp: -1 });
 orderEventSchema.index({ eventType: 1, timestamp: -1 });
 
-export default mongoose.model('OrderEvent', orderEventSchema);
+export default mongoose.models.OrderEvent || mongoose.model('OrderEvent', orderEventSchema);
 

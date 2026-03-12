@@ -24,5 +24,5 @@ landingPageSettingsSchema.statics.getSettings = async function() {
   return settings;
 };
 
-export default mongoose.model('LandingPageSettings', landingPageSettingsSchema);
+export default mongoose.models.LandingPageSettings || mongoose.model('LandingPageSettings', landingPageSettingsSchema);
 
