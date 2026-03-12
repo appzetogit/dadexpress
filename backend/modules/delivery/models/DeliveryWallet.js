@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+﻿import mongoose from 'mongoose';
 
 // Transaction Schema
 const transactionSchema = new mongoose.Schema({
@@ -190,7 +190,7 @@ deliveryWalletSchema.methods.addTransaction = function(transactionData) {
       
       // Log bonus/earning_addon transaction for debugging
       if (transaction.type === 'bonus' || transaction.type === 'earning_addon') {
-        console.log(`ðŸ’° ${transaction.type.toUpperCase()} TRANSACTION ADDED:`, {
+        console.log(`💰 ${transaction.type.toUpperCase()} TRANSACTION ADDED:`, {
           amount: transaction.amount,
           oldBalance: oldBalance,
           newBalance: this.totalBalance,
@@ -321,3 +321,4 @@ deliveryWalletSchema.statics.findOrCreateByDeliveryId = async function(deliveryI
 };
 
 export default mongoose.models.DeliveryWallet || mongoose.model('DeliveryWallet', deliveryWalletSchema);
+

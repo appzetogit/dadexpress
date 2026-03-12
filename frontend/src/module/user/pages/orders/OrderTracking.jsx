@@ -1,4 +1,4 @@
-import { useParams, Link, useSearchParams, useNavigate } from "react-router-dom"
+﻿import { useParams, Link, useSearchParams, useNavigate } from "react-router-dom"
 import { useState, useEffect, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { toast } from "sonner"
@@ -413,7 +413,7 @@ export default function OrderTracking() {
                   }
                 }
               } catch (err) {
-                console.error('ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Error fetching restaurant details:', err);
+                console.error('Error fetching restaurant details:', err);
               }
             }
 
@@ -517,7 +517,7 @@ export default function OrderTracking() {
                 }
               }
             } catch (err) {
-              console.error('ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Error fetching restaurant details:', err);
+              console.error('Error fetching restaurant details:', err);
             }
           }
           // Priority 4: Check nested restaurant data
@@ -677,7 +677,7 @@ export default function OrderTracking() {
       if (message) {
         toast.success(message, {
           duration: 5000,
-          icon: 'ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸Ãƒâ€šÃ‚ÂÃƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â',
+          icon: '🚚',
           position: 'top-center',
           description: estimatedDeliveryTime
             ? `Estimated delivery in ${Math.round(estimatedDeliveryTime / 60)} minutes`
@@ -890,7 +890,7 @@ export default function OrderTracking() {
               }
             }
           } catch (err) {
-            console.error('ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Error fetching restaurant details:', err);
+            console.error('Error fetching restaurant details:', err);
           }
         }
 
@@ -1226,7 +1226,7 @@ export default function OrderTracking() {
           transition={{ delay: 0.65 }}
         >
           <p className="text-yellow-800 font-medium">
-            All your delivery details in one place ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡
+            All your delivery details in one place 👋
           </p>
         </motion.div>
 
@@ -1335,7 +1335,7 @@ export default function OrderTracking() {
         >
           <div className="flex items-center gap-3 p-4 border-b border-dashed border-gray-200">
             <div className="w-12 h-12 rounded-full bg-orange-100 overflow-hidden flex items-center justify-center">
-              <span className="text-2xl">ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸Ãƒâ€šÃ‚ÂÃƒÂ¢Ã¢â€šÂ¬Ã‚Â</span>
+              <span className="text-2xl">🍽️</span>
             </div>
             <div className="flex-1">
               <p className="font-semibold text-gray-900">{order.restaurant}</p>
@@ -1589,7 +1589,7 @@ export default function OrderTracking() {
                         <p className="text-sm text-gray-500 mt-0.5">Quantity: {item.quantity}</p>
                       </div>
                     </div>
-                    <p className="font-semibold text-gray-900">ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¹{item.price * item.quantity}</p>
+                    <p className="font-semibold text-gray-900">₹{item.price * item.quantity}</p>
                   </div>
                 ))}
               </div>
@@ -1600,19 +1600,19 @@ export default function OrderTracking() {
               <p className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-1">Bill Summary</p>
               <div className="flex justify-between items-center text-sm">
                 <span className="text-gray-600">Item Total</span>
-                <span className="text-gray-900 font-medium">ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¹{order?.totalAmount - (order?.deliveryFee || 0) - (order?.gst || 0)}</span>
+                <span className="text-gray-900 font-medium">₹{order?.totalAmount - (order?.deliveryFee || 0) - (order?.gst || 0)}</span>
               </div>
               <div className="flex justify-between items-center text-sm">
                 <span className="text-gray-600">Delivery Fee</span>
-                <span className="text-gray-900 font-medium">ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¹{order?.deliveryFee || 0}</span>
+                <span className="text-gray-900 font-medium">₹{order?.deliveryFee || 0}</span>
               </div>
               <div className="flex justify-between items-center text-sm">
                 <span className="text-gray-600">Taxes & Charges</span>
-                <span className="text-gray-900 font-medium">ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¹{order?.gst || 0}</span>
+                <span className="text-gray-900 font-medium">₹{order?.gst || 0}</span>
               </div>
               <div className="pt-2 border-t border-gray-200 flex justify-between items-center">
                 <span className="text-base font-bold text-gray-900">Total Amount</span>
-                <span className="text-lg font-bold text-gray-900">ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¹{order?.totalAmount}</span>
+                <span className="text-lg font-bold text-gray-900">₹{order?.totalAmount}</span>
               </div>
             </div>
 
@@ -1643,3 +1643,6 @@ export default function OrderTracking() {
     </div>
   )
 }
+
+
+

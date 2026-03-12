@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+﻿import mongoose from 'mongoose';
 
 const deliveryBoyCommissionSchema = new mongoose.Schema(
   {
@@ -169,24 +169,24 @@ deliveryBoyCommissionSchema.statics.calculateCommission = async function(distanc
   let distanceCommission = 0;
   
   // Per km commission logic based on user requirement:
-  // - Base payout: â‚¹10 (always given)
-  // - If distance > 4 km: Additional â‚¹5 per km for the entire distance
+  // - Base payout: ₹10 (always given)
+  // - If distance > 4 km: Additional ₹5 per km for the entire distance
   // Example scenarios:
-  // - Distance = 4 km: commission = â‚¹10 (base only, 4 is not > 4)
-  // - Distance = 5 km: commission = â‚¹10 + (5 Ã— â‚¹5) = â‚¹35
-  // - Distance = 6 km: commission = â‚¹10 + (6 Ã— â‚¹5) = â‚¹40
-  // - Distance = 2 km: commission = â‚¹10 (base only, 2 < 4)
+  // - Distance = 4 km: commission = ₹10 (base only, 4 is not > 4)
+  // - Distance = 5 km: commission = ₹10 + (5 × ₹5) = ₹35
+  // - Distance = 6 km: commission = ₹10 + (6 × ₹5) = ₹40
+  // - Distance = 2 km: commission = ₹10 (base only, 2 < 4)
   if (distance > applicableRule.minDistance) {
     // Apply per km commission for the entire distance if distance > minDistance
     // Example: If minDistance = 4, commissionPerKm = 5, distance = 5
-    // Then: 5 Ã— 5 = â‚¹25 additional, total = â‚¹10 + â‚¹25 = â‚¹35
+    // Then: 5 × 5 = ₹25 additional, total = ₹10 + ₹25 = ₹35
     distanceCommission = distance * applicableRule.commissionPerKm;
   }
   // If distance <= minDistance, only base payout is given (distanceCommission = 0)
   
   const commission = basePayout + distanceCommission;
   
-  console.log(`ðŸ“Š Commission calculation for ${distance.toFixed(2)} km:`, {
+  console.log(`📊 Commission calculation for ${distance.toFixed(2)} km:`, {
     rule: applicableRule.name,
     minDistance: applicableRule.minDistance,
     maxDistance: applicableRule.maxDistance,
@@ -216,4 +216,5 @@ deliveryBoyCommissionSchema.statics.calculateCommission = async function(distanc
 const DeliveryBoyCommission = mongoose.models.DeliveryBoyCommission || mongoose.model('DeliveryBoyCommission', deliveryBoyCommissionSchema);
 
 export default DeliveryBoyCommission;
+
 
