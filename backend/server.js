@@ -32,6 +32,7 @@ import userRoutes from './modules/user/index.js';
 import restaurantRoutes from './modules/restaurant/index.js';
 import deliveryRoutes from './modules/delivery/index.js';
 import orderRoutes from './modules/order/index.js';
+import orderLocationRoutes from './modules/order/routes/orderLocationRoutes.js';
 import paymentRoutes from './modules/payment/index.js';
 import menuRoutes from './modules/menu/index.js';
 import campaignRoutes from './modules/campaign/index.js';
@@ -396,6 +397,7 @@ app.use('/api/user', userRoutes);
 app.use('/api/restaurant', restaurantRoutes);
 app.use('/api/delivery', deliveryRoutes);
 app.use('/api/order', orderRoutes);
+app.use('/api', orderLocationRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/menu', menuRoutes);
 app.use('/api/campaign', campaignRoutes);
@@ -794,4 +796,3 @@ process.on('unhandledRejection', (err) => {
 });
 
 export default app;
-

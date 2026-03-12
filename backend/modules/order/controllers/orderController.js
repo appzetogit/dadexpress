@@ -1071,12 +1071,9 @@ export const getOrderDetails = async (req, res) => {
 
     // If not found, try by orderId (custom order ID like "ORD-123456-789")
     if (!order) {
-      console.log("🔍 [DEBUG] Incoming orderId param:", id);
       const decodedId = id ? decodeURIComponent(id) : "";
-      console.log("🔍 [DEBUG] Decoded orderId:", decodedId);
       
       const normalized = normalizeOrderId(id);
-      console.log("🔍 [DEBUG] Normalized orderId for lookup:", normalized);
 
       const variants = [id, decodedId, normalized];
       
@@ -1099,12 +1096,6 @@ export const getOrderDetails = async (req, res) => {
         .populate('deliveryPartnerId', 'name email phone')
         .populate('userId', 'name fullName phone email')
         .lean();
-        
-      if (order) {
-        console.log("✅ [DEBUG] Order found via robust lookup:", order.orderId);
-      } else {
-        console.warn("❌ [DEBUG] Order not found for variants:", variants);
-      }
     }
 
     if (!order) {
@@ -1131,6 +1122,164 @@ export const getOrderDetails = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch order details'
+    });
+  }
+};
+
+/**
+ * Update delivery location for an order
+ * PATCH /api/orders/:orderId/location
+ */
+export const updateOrderLocation = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { orderId } = req.params;
+    const payload = req.body || {};
+    const address = payload.address || payload;
+
+    if (!orderId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Order ID is required'
+      });
+    }
+
+    if (!address || typeof address !== 'object') {
+      return res.status(400).json({
+        success: false,
+        message: 'Address payload is required'
+      });
+    }
+
+    // Find order by MongoDB _id or orderId (custom order ID)
+    let order = null;
+    if (mongoose.Types.ObjectId.isValid(orderId) && orderId.length === 24) {
+      order = await Order.findOne({
+        _id: orderId,
+        userId
+      });
+    }
+
+    if (!order) {
+      const decodedId = orderId ? decodeURIComponent(orderId) : "";
+      const normalized = normalizeOrderId(orderId);
+      const variants = [orderId, decodedId, normalized];
+
+      if (normalized.startsWith("ORD-")) {
+        const parts = normalized.split("-");
+        if (parts.length === 3) {
+          variants.push(`ORD - ${parts[1]} -${parts[2]} `);
+        }
+      }
+
+      order = await Order.findOne({
+        $or: [
+          { orderId: normalized },
+          { orderId: { $in: [...new Set(variants)] } }
+        ],
+        userId
+      });
+    }
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found'
+      });
+    }
+
+    const allowedStatuses = new Set(['pending', 'confirmed']);
+    if (!allowedStatuses.has(order.status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Delivery location can only be updated while the order is pending or confirmed'
+      });
+    }
+
+    const deliveryStateStatus = order.deliveryState?.status;
+    const deliveryPhase = order.deliveryState?.currentPhase;
+    const isAssigned =
+      !!order.deliveryPartnerId ||
+      !!order.assignmentInfo?.deliveryPartnerId ||
+      ['accepted', 'en_route_to_pickup', 'at_pickup', 'en_route_to_delivery', 'delivered'].includes(deliveryStateStatus) ||
+      ['en_route_to_pickup', 'at_pickup', 'en_route_to_delivery', 'completed'].includes(deliveryPhase);
+
+    if (isAssigned) {
+      return res.status(400).json({
+        success: false,
+        message: 'Delivery location cannot be updated after a delivery partner has been assigned'
+      });
+    }
+
+    const coordsFromAddress = (() => {
+      if (Array.isArray(address?.location?.coordinates) && address.location.coordinates.length >= 2) {
+        return address.location.coordinates;
+      }
+      if (Array.isArray(address?.coordinates) && address.coordinates.length >= 2) {
+        return address.coordinates;
+      }
+      const lat = address?.lat ?? address?.latitude;
+      const lng = address?.lng ?? address?.longitude;
+      if (typeof lat === 'number' && typeof lng === 'number') {
+        return [lng, lat];
+      }
+      return null;
+    })();
+
+    const existingCoords = order.address?.location?.coordinates;
+    const nextCoords = coordsFromAddress || existingCoords;
+
+    if (!nextCoords || !Array.isArray(nextCoords) || nextCoords.length < 2) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid location coordinates are required'
+      });
+    }
+
+    const updatedAddress = {
+      ...(order.address || {}),
+      ...(address || {})
+    };
+
+    updatedAddress.location = {
+      ...(order.address?.location || {}),
+      ...(address.location || {}),
+      type: address.location?.type || order.address?.location?.type || 'Point',
+      coordinates: nextCoords
+    };
+
+    if (address.formattedAddress !== undefined) updatedAddress.formattedAddress = address.formattedAddress;
+    if (address.street !== undefined) updatedAddress.street = address.street;
+    if (address.additionalDetails !== undefined) updatedAddress.additionalDetails = address.additionalDetails;
+    if (address.city !== undefined) updatedAddress.city = address.city;
+    if (address.state !== undefined) updatedAddress.state = address.state;
+    if (address.zipCode !== undefined) updatedAddress.zipCode = address.zipCode;
+    if (address.label !== undefined) updatedAddress.label = address.label;
+
+    order.address = updatedAddress;
+    await order.save();
+
+    const responseAddress = {
+      ...(order.address || {}),
+      coordinates: order.address?.location?.coordinates || undefined
+    };
+
+    return res.json({
+      success: true,
+      message: 'Delivery location updated',
+      data: {
+        orderId: order.orderId || order._id?.toString(),
+        address: responseAddress
+      }
+    });
+  } catch (error) {
+    logger.error(`Error updating delivery location: ${error.message} `, {
+      error: error.message,
+      stack: error.stack
+    });
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update delivery location'
     });
   }
 };

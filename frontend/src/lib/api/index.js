@@ -1959,6 +1959,14 @@ export const orderAPI = {
       reason,
     });
   },
+
+  // Update delivery location
+  updateDeliveryLocation: (orderId, address) => {
+    return apiClient.patch(
+      API_ENDPOINTS.ORDER.LOCATION.replace(":orderId", encodeURIComponent(orderId)),
+      { address }
+    );
+  },
 };
 
 // Export dining API helper functions
@@ -2093,5 +2101,4 @@ export const publicAPI = {
     });
   }
 };
-
 

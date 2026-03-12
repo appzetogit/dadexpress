@@ -28,6 +28,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
+import { Input } from "@/components/ui/input"
 import { useOrders } from "../../context/OrdersContext"
 import { useProfile } from "../../context/ProfileContext"
 import { useLocation as useUserLocation } from "../../hooks/useLocation"
@@ -76,15 +77,6 @@ const DeliveryMap = ({ orderId, order, isVisible }) => {
 
   // Get coordinates from order or use defaults (Indore)
   const getRestaurantCoords = () => {
-    console.log('🔍 Getting restaurant coordinates from order:', {
-      hasOrder: !!order,
-      restaurantLocation: order?.restaurantLocation,
-      coordinates: order?.restaurantLocation?.coordinates,
-      restaurantId: order?.restaurantId,
-      restaurantIdLocation: order?.restaurantId?.location,
-      restaurantIdCoordinates: order?.restaurantId?.location?.coordinates
-    });
-
     // Try multiple sources for restaurant coordinates
     let coords = null;
 
@@ -93,19 +85,16 @@ const DeliveryMap = ({ orderId, order, isVisible }) => {
       Array.isArray(order.restaurantLocation.coordinates) &&
       order.restaurantLocation.coordinates.length >= 2) {
       coords = order.restaurantLocation.coordinates;
-      console.log('✅ Using restaurantLocation.coordinates:', coords);
     }
     // Priority 2: restaurantId.location.coordinates (if restaurantId is populated)
     else if (order?.restaurantId?.location?.coordinates &&
       Array.isArray(order.restaurantId.location.coordinates) &&
       order.restaurantId.location.coordinates.length >= 2) {
       coords = order.restaurantId.location.coordinates;
-      console.log('✅ Using restaurantId.location.coordinates:', coords);
     }
     // Priority 3: restaurantId.location with latitude/longitude
     else if (order?.restaurantId?.location?.latitude && order?.restaurantId?.location?.longitude) {
       coords = [order.restaurantId.location.longitude, order.restaurantId.location.latitude];
-      console.log('✅ Using restaurantId.location (lat/lng):', coords);
     }
 
     if (coords && coords.length >= 2) {
@@ -114,11 +103,9 @@ const DeliveryMap = ({ orderId, order, isVisible }) => {
         lat: coords[1], // Latitude is second element
         lng: coords[0]  // Longitude is first element
       };
-      console.log('✅ Final restaurant coordinates (lat, lng):', result, 'from GeoJSON:', coords);
       return result;
     }
 
-    console.warn('⚠️ Restaurant coordinates not found, using default Indore coordinates');
     // Default Indore coordinates
     return { lat: 22.7196, lng: 75.8577 };
   };
@@ -212,6 +199,7 @@ export default function OrderTracking() {
   const confirmed = searchParams.get("confirmed") === "true"
   const { getOrderById } = useOrders()
   const { profile, getDefaultAddress } = useProfile()
+  const { location: liveLocation, requestLocation, loading: locationLoading } = useUserLocation()
 
   // State for order data
   const [order, setOrder] = useState(null)
@@ -227,6 +215,18 @@ export default function OrderTracking() {
   const [cancellationReason, setCancellationReason] = useState("")
   const [isCancelling, setIsCancelling] = useState(false)
   const [timerNow, setTimerNow] = useState(Date.now())
+  const [showLocationDialog, setShowLocationDialog] = useState(false)
+  const [isUpdatingLocation, setIsUpdatingLocation] = useState(false)
+  const [locationForm, setLocationForm] = useState({
+    formattedAddress: "",
+    street: "",
+    additionalDetails: "",
+    city: "",
+    state: "",
+    zipCode: "",
+    lat: "",
+    lng: ""
+  })
 
   const defaultAddress = getDefaultAddress()
 
@@ -260,6 +260,45 @@ export default function OrderTracking() {
     const seconds = totalSeconds % 60
     return `${minutes}:${String(seconds).padStart(2, '0')}`
   }, [editWindowRemainingMs])
+
+  const canUpdateLocationStatus = useMemo(() => {
+    return ['pending', 'confirmed'].includes(order?.status)
+  }, [order?.status])
+
+  const isDeliveryPartnerAssigned = useMemo(() => {
+    const deliveryStateStatus = order?.deliveryState?.status
+    const deliveryPhase = order?.deliveryState?.currentPhase
+    return Boolean(
+      order?.deliveryPartnerId ||
+      order?.assignmentInfo?.deliveryPartnerId ||
+      ['accepted', 'en_route_to_pickup', 'at_pickup', 'en_route_to_delivery', 'delivered'].includes(deliveryStateStatus) ||
+      ['en_route_to_pickup', 'at_pickup', 'en_route_to_delivery', 'completed'].includes(deliveryPhase)
+    )
+  }, [order?.deliveryPartnerId, order?.assignmentInfo?.deliveryPartnerId, order?.deliveryState?.status, order?.deliveryState?.currentPhase])
+
+  const canUpdateLocation = canUpdateLocationStatus && !isDeliveryPartnerAssigned
+
+  const locationUpdateBlockedReason = useMemo(() => {
+    if (!order?.status) return "Order status unavailable"
+    if (!canUpdateLocationStatus) return "Location updates allowed only while pending or confirmed"
+    if (isDeliveryPartnerAssigned) return "Delivery partner already assigned"
+    return ""
+  }, [order?.status, canUpdateLocationStatus, isDeliveryPartnerAssigned])
+
+  useEffect(() => {
+    if (!order || showLocationDialog) return
+    const coords = order?.address?.location?.coordinates || []
+    setLocationForm({
+      formattedAddress: order?.address?.formattedAddress || "",
+      street: order?.address?.street || "",
+      additionalDetails: order?.address?.additionalDetails || "",
+      city: order?.address?.city || "",
+      state: order?.address?.state || "",
+      zipCode: order?.address?.zipCode || "",
+      lat: coords[1] ?? "",
+      lng: coords[0] ?? ""
+    })
+  }, [order, showLocationDialog])
 
   useEffect(() => {
     if (!isEditWindowOpen) return
@@ -308,13 +347,6 @@ export default function OrderTracking() {
             (newDeliveryStatus !== currentDeliveryStatus) ||
             (newPhase !== currentPhase) ||
             (newOrderStatus !== currentOrderStatus)) {
-            console.log('🔄 Order status updated:', {
-              oldStatus: currentDeliveryStatus,
-              newStatus: newDeliveryStatus,
-              oldPhase: currentPhase,
-              newPhase: newPhase
-            });
-
             // Re-fetch and update order (same logic as initial fetch)
             let restaurantCoords = null;
             if (apiOrder.restaurantId?.location?.coordinates &&
@@ -331,7 +363,7 @@ export default function OrderTracking() {
                   }
                 }
               } catch (err) {
-                console.error('❌ Error fetching restaurant details:', err);
+                console.error('ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Error fetching restaurant details:', err);
               }
             }
 
@@ -369,6 +401,7 @@ export default function OrderTracking() {
     const fetchOrder = async () => {
       // First try to get from context (localStorage)
       const contextOrder = getOrderById(orderId)
+      const hasContextOrder = Boolean(contextOrder)
       if (contextOrder) {
         contextOrder.mongoId = contextOrder.mongoId ||
           contextOrder._id ||
@@ -384,17 +417,17 @@ export default function OrderTracking() {
         // Also ensure restaurantId is present
         if (!contextOrder.restaurantId && contextOrder.restaurant) {
           // Try to preserve restaurantId if it exists
-          console.log('⚠️ Context order missing restaurantId, will fetch from API');
         }
         setOrder(contextOrder)
         setLoading(false)
-        return
       }
 
       // If not in context, fetch from API
       try {
         if (!orderId) return;
-        setLoading(true)
+        if (!hasContextOrder) {
+          setLoading(true)
+        }
         setError(null)
 
         const response = await orderAPI.getOrderDetails(orderId)
@@ -403,17 +436,6 @@ export default function OrderTracking() {
           const apiOrder = response.data.data.order
 
           // Log full API response structure for debugging
-          console.log('🔍 Full API Order Response:', {
-            orderId: apiOrder.orderId || apiOrder._id,
-            hasRestaurantId: !!apiOrder.restaurantId,
-            restaurantIdType: typeof apiOrder.restaurantId,
-            restaurantIdKeys: apiOrder.restaurantId ? Object.keys(apiOrder.restaurantId) : [],
-            restaurantIdLocation: apiOrder.restaurantId?.location,
-            restaurantIdLocationKeys: apiOrder.restaurantId?.location ? Object.keys(apiOrder.restaurantId.location) : [],
-            restaurantIdCoordinates: apiOrder.restaurantId?.location?.coordinates,
-            fullRestaurantId: apiOrder.restaurantId
-          });
-
           // Extract restaurant location coordinates with multiple fallbacks
           let restaurantCoords = null;
 
@@ -422,37 +444,30 @@ export default function OrderTracking() {
             Array.isArray(apiOrder.restaurantId.location.coordinates) &&
             apiOrder.restaurantId.location.coordinates.length >= 2) {
             restaurantCoords = apiOrder.restaurantId.location.coordinates;
-            console.log('✅ Found coordinates in restaurantId.location.coordinates:', restaurantCoords);
           }
           // Priority 2: restaurantId.location with latitude/longitude properties
           else if (apiOrder.restaurantId?.location?.latitude && apiOrder.restaurantId?.location?.longitude) {
             restaurantCoords = [apiOrder.restaurantId.location.longitude, apiOrder.restaurantId.location.latitude];
-            console.log('✅ Found coordinates in restaurantId.location (lat/lng):', restaurantCoords);
           }
           // Priority 3: Check if restaurantId is a string ID and fetch restaurant details
           else if (typeof apiOrder.restaurantId === 'string') {
-            console.log('⚠️ restaurantId is a string ID, fetching restaurant details...', apiOrder.restaurantId);
             try {
               const restaurantResponse = await restaurantAPI.getRestaurantById(apiOrder.restaurantId);
               if (restaurantResponse?.data?.success && restaurantResponse.data.data?.restaurant) {
                 const restaurant = restaurantResponse.data.data.restaurant;
                 if (restaurant.location?.coordinates && Array.isArray(restaurant.location.coordinates) && restaurant.location.coordinates.length >= 2) {
                   restaurantCoords = restaurant.location.coordinates;
-                  console.log('✅ Fetched restaurant coordinates from API:', restaurantCoords);
                 }
               }
             } catch (err) {
-              console.error('❌ Error fetching restaurant details:', err);
+              console.error('ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Error fetching restaurant details:', err);
             }
           }
           // Priority 4: Check nested restaurant data
           else if (apiOrder.restaurant?.location?.coordinates) {
             restaurantCoords = apiOrder.restaurant.location.coordinates;
-            console.log('✅ Found coordinates in restaurant.location.coordinates:', restaurantCoords);
           }
 
-          console.log('📍 Final restaurant coordinates:', restaurantCoords);
-          console.log('📍 Customer coordinates:', apiOrder.address?.location?.coordinates);
 
           // Transform API order to match component structure
           const transformedOrder = {
@@ -555,7 +570,6 @@ export default function OrderTracking() {
     const handleOrderStatusNotification = (event) => {
       const { message, title, status, estimatedDeliveryTime } = event.detail;
 
-      console.log('📢 Order status notification received:', { message, status });
 
       // Update order status in UI
       if (status === 'out_for_delivery') {
@@ -566,7 +580,7 @@ export default function OrderTracking() {
       if (message) {
         toast.success(message, {
           duration: 5000,
-          icon: '🏍️',
+          icon: 'ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸Ãƒâ€šÃ‚ÂÃƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â',
           position: 'top-center',
           description: estimatedDeliveryTime
             ? `Estimated delivery in ${Math.round(estimatedDeliveryTime / 60)} minutes`
@@ -672,6 +686,78 @@ export default function OrderTracking() {
     }
   };
 
+  const handleUseCurrentLocation = async () => {
+    try {
+      const freshLocation = (liveLocation?.latitude && liveLocation?.longitude)
+        ? liveLocation
+        : await requestLocation();
+
+      if (!freshLocation?.latitude || !freshLocation?.longitude) {
+        toast.error('Unable to get current location');
+        return;
+      }
+
+      setLocationForm((prev) => ({
+        ...prev,
+        lat: freshLocation.latitude,
+        lng: freshLocation.longitude,
+        formattedAddress: prev.formattedAddress || freshLocation.formattedAddress || freshLocation.address || ""
+      }))
+    } catch (error) {
+      console.error('Failed to get current location:', error);
+      toast.error('Failed to get current location');
+    }
+  };
+
+  const handleUpdateLocation = async () => {
+    if (!canUpdateLocation) {
+      toast.error(locationUpdateBlockedReason || 'Location update not allowed');
+      return;
+    }
+
+    const latNum = Number(locationForm.lat);
+    const lngNum = Number(locationForm.lng);
+    if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) {
+      toast.error('Please provide valid latitude and longitude');
+      return;
+    }
+
+    setIsUpdatingLocation(true);
+    try {
+      const payload = {
+        formattedAddress: locationForm.formattedAddress?.trim() || "",
+        street: locationForm.street?.trim() || "",
+        additionalDetails: locationForm.additionalDetails?.trim() || "",
+        city: locationForm.city?.trim() || "",
+        state: locationForm.state?.trim() || "",
+        zipCode: locationForm.zipCode?.trim() || "",
+        location: {
+          type: "Point",
+          coordinates: [lngNum, latNum]
+        }
+      };
+
+      const response = await orderAPI.updateDeliveryLocation(orderId, payload);
+      if (response.data?.success) {
+        const updatedAddress = response.data?.data?.address || payload;
+        const normalizedAddress = {
+          ...updatedAddress,
+          coordinates: updatedAddress?.coordinates || updatedAddress?.location?.coordinates || payload.location.coordinates
+        };
+        setOrder((prev) => prev ? { ...prev, address: normalizedAddress } : prev);
+        toast.success('Delivery location updated');
+        setShowLocationDialog(false);
+      } else {
+        toast.error(response.data?.message || 'Failed to update delivery location');
+      }
+    } catch (error) {
+      console.error('Error updating delivery location:', error);
+      toast.error(error.response?.data?.message || 'Failed to update delivery location');
+    } finally {
+      setIsUpdatingLocation(false);
+    }
+  };
+
   const handleRefresh = async () => {
     setIsRefreshing(true)
     try {
@@ -698,18 +784,16 @@ export default function OrderTracking() {
         }
         // Priority 4: Check if restaurantId is a string ID and fetch restaurant details
         else if (typeof apiOrder.restaurantId === 'string') {
-          console.log('⚠️ restaurantId is a string ID, fetching restaurant details...', apiOrder.restaurantId);
           try {
             const restaurantResponse = await restaurantAPI.getRestaurantById(apiOrder.restaurantId);
             if (restaurantResponse?.data?.success && restaurantResponse.data.data?.restaurant) {
               const restaurant = restaurantResponse.data.data.restaurant;
               if (restaurant.location?.coordinates && Array.isArray(restaurant.location.coordinates) && restaurant.location.coordinates.length >= 2) {
                 restaurantCoords = restaurant.location.coordinates;
-                console.log('✅ Fetched restaurant coordinates from API:', restaurantCoords);
               }
             }
           } catch (err) {
-            console.error('❌ Error fetching restaurant details:', err);
+            console.error('ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Error fetching restaurant details:', err);
           }
         }
 
@@ -1040,7 +1124,7 @@ export default function OrderTracking() {
           transition={{ delay: 0.65 }}
         >
           <p className="text-yellow-800 font-medium">
-            All your delivery details in one place 👇
+            All your delivery details in one place ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡
           </p>
         </motion.div>
 
@@ -1112,6 +1196,21 @@ export default function OrderTracking() {
               return 'Add delivery address'
             })()}
           />
+          <div className="px-4 pb-4">
+            <Button
+              type="button"
+              onClick={() => setShowLocationDialog(true)}
+              disabled={!canUpdateLocation}
+              className="w-full bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-60"
+            >
+              Update Delivery Location
+            </Button>
+            {!canUpdateLocation && (
+              <p className="text-xs text-gray-500 mt-2">
+                {locationUpdateBlockedReason}
+              </p>
+            )}
+          </div>
           <SectionItem
             icon={MessageSquare}
             title="Add delivery instructions"
@@ -1128,7 +1227,7 @@ export default function OrderTracking() {
         >
           <div className="flex items-center gap-3 p-4 border-b border-dashed border-gray-200">
             <div className="w-12 h-12 rounded-full bg-orange-100 overflow-hidden flex items-center justify-center">
-              <span className="text-2xl">🍔</span>
+              <span className="text-2xl">ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸Ãƒâ€šÃ‚ÂÃƒÂ¢Ã¢â€šÂ¬Ã‚Â</span>
             </div>
             <div className="flex-1">
               <p className="font-semibold text-gray-900">{order.restaurant}</p>
@@ -1242,6 +1341,93 @@ export default function OrderTracking() {
         </DialogContent>
       </Dialog>
 
+      {/* Update Delivery Location Dialog */}
+      <Dialog open={showLocationDialog} onOpenChange={setShowLocationDialog}>
+        <DialogContent className="sm:max-w-xl w-[95%] max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-gray-900">
+              Update Delivery Location
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-gray-700">Full Address</p>
+              <Textarea
+                value={locationForm.formattedAddress}
+                onChange={(e) => setLocationForm((prev) => ({ ...prev, formattedAddress: e.target.value }))}
+                placeholder="Enter complete delivery address"
+                className="min-h-[90px] resize-none"
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Input
+                value={locationForm.street}
+                onChange={(e) => setLocationForm((prev) => ({ ...prev, street: e.target.value }))}
+                placeholder="Street"
+              />
+              <Input
+                value={locationForm.additionalDetails}
+                onChange={(e) => setLocationForm((prev) => ({ ...prev, additionalDetails: e.target.value }))}
+                placeholder="Additional details"
+              />
+              <Input
+                value={locationForm.city}
+                onChange={(e) => setLocationForm((prev) => ({ ...prev, city: e.target.value }))}
+                placeholder="City"
+              />
+              <Input
+                value={locationForm.state}
+                onChange={(e) => setLocationForm((prev) => ({ ...prev, state: e.target.value }))}
+                placeholder="State"
+              />
+              <Input
+                value={locationForm.zipCode}
+                onChange={(e) => setLocationForm((prev) => ({ ...prev, zipCode: e.target.value }))}
+                placeholder="Zip Code"
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Input
+                type="number"
+                value={locationForm.lat}
+                onChange={(e) => setLocationForm((prev) => ({ ...prev, lat: e.target.value }))}
+                placeholder="Latitude"
+              />
+              <Input
+                type="number"
+                value={locationForm.lng}
+                onChange={(e) => setLocationForm((prev) => ({ ...prev, lng: e.target.value }))}
+                placeholder="Longitude"
+              />
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleUseCurrentLocation}
+                disabled={locationLoading}
+                className="flex-1"
+              >
+                Use Current Location
+              </Button>
+              <Button
+                type="button"
+                onClick={handleUpdateLocation}
+                disabled={isUpdatingLocation || !canUpdateLocation}
+                className="flex-1 bg-gray-900 text-white hover:bg-gray-800"
+              >
+                {isUpdatingLocation ? 'Updating...' : 'Update Location'}
+              </Button>
+            </div>
+            {!canUpdateLocation && (
+              <p className="text-xs text-gray-500">
+                {locationUpdateBlockedReason}
+              </p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Order Details Dialog */}
       <Dialog open={showOrderDetails} onOpenChange={setShowOrderDetails}>
         <DialogContent className="max-w-[calc(100vw-32px)] sm:max-w-md bg-white rounded-2xl p-0 overflow-hidden border-none outline-none">
@@ -1295,7 +1481,7 @@ export default function OrderTracking() {
                         <p className="text-sm text-gray-500 mt-0.5">Quantity: {item.quantity}</p>
                       </div>
                     </div>
-                    <p className="font-semibold text-gray-900">₹{item.price * item.quantity}</p>
+                    <p className="font-semibold text-gray-900">ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¹{item.price * item.quantity}</p>
                   </div>
                 ))}
               </div>
@@ -1306,19 +1492,19 @@ export default function OrderTracking() {
               <p className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-1">Bill Summary</p>
               <div className="flex justify-between items-center text-sm">
                 <span className="text-gray-600">Item Total</span>
-                <span className="text-gray-900 font-medium">₹{order?.totalAmount - (order?.deliveryFee || 0) - (order?.gst || 0)}</span>
+                <span className="text-gray-900 font-medium">ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¹{order?.totalAmount - (order?.deliveryFee || 0) - (order?.gst || 0)}</span>
               </div>
               <div className="flex justify-between items-center text-sm">
                 <span className="text-gray-600">Delivery Fee</span>
-                <span className="text-gray-900 font-medium">₹{order?.deliveryFee || 0}</span>
+                <span className="text-gray-900 font-medium">ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¹{order?.deliveryFee || 0}</span>
               </div>
               <div className="flex justify-between items-center text-sm">
                 <span className="text-gray-600">Taxes & Charges</span>
-                <span className="text-gray-900 font-medium">₹{order?.gst || 0}</span>
+                <span className="text-gray-900 font-medium">ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¹{order?.gst || 0}</span>
               </div>
               <div className="pt-2 border-t border-gray-200 flex justify-between items-center">
                 <span className="text-base font-bold text-gray-900">Total Amount</span>
-                <span className="text-lg font-bold text-gray-900">₹{order?.totalAmount}</span>
+                <span className="text-lg font-bold text-gray-900">ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¹{order?.totalAmount}</span>
               </div>
             </div>
 
