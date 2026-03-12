@@ -4,6 +4,7 @@ import { motion } from "framer-motion"
 import { ArrowLeft, ArrowRight, CheckCircle, Contact } from "lucide-react"
 import BottomPopup from "../components/BottomPopup"
 import { getCompanyNameAsync } from "@/lib/utils/businessSettings"
+import apiClient from "@/lib/api/axios"
 
 const STORAGE_KEY = "appzeto_food_referrals"
 
@@ -13,8 +14,13 @@ export default function ReferAndEarn() {
   const [mobileNumber, setMobileNumber] = useState("")
   const [showSuccessPopup, setShowSuccessPopup] = useState(false)
   const [referralCount, setReferralCount] = useState(0)
+  const [referralStats, setReferralStats] = useState(null)
+  const [loadingStats, setLoadingStats] = useState(false)
+  const [bannerText, setBannerText] = useState(
+    "Vijay Mourya from Indore has earned ₹6000 through referrals"
+  )
 
-  // Load referral count from localStorage on component mount
+  // Load referral count from localStorage on component mount (fallback / offline)
   useEffect(() => {
     const storedReferrals = localStorage.getItem(STORAGE_KEY)
     if (storedReferrals) {
@@ -25,6 +31,61 @@ export default function ReferAndEarn() {
         console.error("Error parsing referrals from localStorage:", error)
         setReferralCount(0)
       }
+    }
+  }, [])
+
+  // Load referral stats from backend (dynamic)
+  useEffect(() => {
+    let isMounted = true
+
+    const fetchReferralStats = async () => {
+      try {
+        setLoadingStats(true)
+        // Use delivery-specific referral stats endpoint
+        const response = await apiClient.get("/delivery/referral/stats")
+        const data = response.data?.data
+
+        if (!isMounted || !data) return
+
+        setReferralStats(data)
+
+        // Prefer backend referralStats.invited as primary count
+        const invitedCount = data.referralStats?.invited ?? null
+        if (typeof invitedCount === "number" && invitedCount >= 0) {
+          setReferralCount(invitedCount)
+        }
+
+        // Build a dynamic banner message if we have earned amount
+        const earned = data.referralStats?.earned
+        const referrerReward = data.referralSettings?.referrerReward
+
+        if (typeof earned === "number" && earned > 0) {
+          setBannerText(
+            `You and your friends have earned ₹${earned.toFixed(
+              0
+            )} through referrals`
+          )
+        } else if (typeof referrerReward === "number" && referrerReward > 0) {
+          setBannerText(
+            `Earn ₹${referrerReward.toFixed(
+              0
+            )} or more for every friend who joins and completes their first order`
+          )
+        }
+      } catch (error) {
+        // If API fails, silently fall back to localStorage + default banner
+        console.error("Error fetching referral stats:", error)
+      } finally {
+        if (isMounted) {
+          setLoadingStats(false)
+        }
+      }
+    }
+
+    fetchReferralStats()
+
+    return () => {
+      isMounted = false
     }
   }, [])
 
@@ -108,7 +169,9 @@ export default function ReferAndEarn() {
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
             <div className="text-center mb-4">
               <p className="text-sm text-gray-600 mb-2">Active referrals</p>
-              <p className="text-4xl font-bold text-gray-900">{referralCount}</p>
+              <p className="text-4xl font-bold text-gray-900">
+                {loadingStats ? "…" : referralCount}
+              </p>
             </div>
             <button
               onClick={() => navigate("/delivery/your-referrals")}
@@ -166,13 +229,13 @@ export default function ReferAndEarn() {
           </div>
         </div>
 
-        {/* Success Story Banner */}
+        {/* Success Story Banner - now backed by dynamic stats when available */}
         <div className="bg-yellow-100 rounded-lg p-4 flex items-center gap-3">
           <div className="w-12 h-12 bg-yellow-400 rounded-full flex items-center justify-center flex-shrink-0">
             <span className="text-2xl font-bold text-white">₹</span>
           </div>
           <p className="text-sm text-gray-900 flex-1">
-            Vijay Mourya from Indore has earned ₹6000 through referrals
+            {bannerText}
           </p>
         </div>
 

@@ -14,6 +14,11 @@ import { jsPDF } from "jspdf"
 import autoTable from "jspdf-autotable"
 
 const STORAGE_KEY = "restaurant_online_status"
+const isDev = import.meta.env?.DEV === true
+const debugLog = (...args) => {
+  if (isDev) console.log(...args)
+}
+const isPageVisible = () => typeof document !== "undefined" && document.visibilityState === "visible"
 
 // Top filter tabs
 const filterTabs = [
@@ -30,12 +35,17 @@ const filterTabs = [
 function CompletedOrders({ onSelectOrder }) {
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
+  const inFlightRef = useRef(false)
 
   useEffect(() => {
     let isMounted = true
     let intervalId = null
 
     const fetchOrders = async () => {
+      if (!isMounted || !isPageVisible()) return
+      if (inFlightRef.current) return
+      inFlightRef.current = true
+
       try {
         const response = await restaurantAPI.getOrders()
 
@@ -88,6 +98,8 @@ function CompletedOrders({ onSelectOrder }) {
           setOrders([])
           setLoading(false)
         }
+      } finally {
+        inFlightRef.current = false
       }
     }
 
@@ -232,12 +244,17 @@ function CompletedOrders({ onSelectOrder }) {
 function CancelledOrders({ onSelectOrder }) {
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
+  const inFlightRef = useRef(false)
 
   useEffect(() => {
     let isMounted = true
     let intervalId = null
 
     const fetchOrders = async () => {
+      if (!isMounted || !isPageVisible()) return
+      if (inFlightRef.current) return
+      inFlightRef.current = true
+
       try {
         const response = await restaurantAPI.getOrders()
 
@@ -293,6 +310,8 @@ function CancelledOrders({ onSelectOrder }) {
           setOrders([])
           setLoading(false)
         }
+      } finally {
+        inFlightRef.current = false
       }
     }
 
@@ -452,11 +471,16 @@ function CancelledOrders({ onSelectOrder }) {
 function TableBookings() {
   const [bookings, setBookings] = useState([])
   const [loading, setLoading] = useState(true)
+  const inFlightRef = useRef(false)
 
   useEffect(() => {
     let isMounted = true
 
     const fetchBookings = async () => {
+      if (!isMounted || !isPageVisible()) return
+      if (inFlightRef.current) return
+      inFlightRef.current = true
+
       try {
         const res = await restaurantAPI.getCurrentRestaurant()
         const restaurant = res.data?.data?.restaurant || res.data?.restaurant || res.data?.data
@@ -471,6 +495,7 @@ function TableBookings() {
       } catch (error) {
         console.error("Error fetching table bookings:", error)
       } finally {
+        inFlightRef.current = false
         if (isMounted) setLoading(false)
       }
     }
@@ -744,7 +769,7 @@ export default function OrdersMain() {
   // Show new order popup when real order notification arrives from Socket.IO
   useEffect(() => {
     if (newOrder) {
-      console.log('📦 New order received via Socket.IO:', newOrder)
+      debugLog('📦 New order received via Socket.IO:', newOrder)
       const orderId = newOrder.orderId || newOrder.orderMongoId
       if (orderId && !shownOrdersRef.current.has(orderId)) {
         shownOrdersRef.current.add(orderId)
@@ -758,6 +783,7 @@ export default function OrdersMain() {
   // Track popup state with ref to avoid stale closures
   const showNewOrderPopupRef = useRef(showNewOrderPopup)
   const newOrderRef = useRef(newOrder)
+  const confirmedPollInFlightRef = useRef(false)
 
   useEffect(() => {
     showNewOrderPopupRef.current = showNewOrderPopup
@@ -772,6 +798,9 @@ export default function OrdersMain() {
     const checkConfirmedOrders = async () => {
       // Skip if popup is already showing or Socket.IO order exists
       if (showNewOrderPopupRef.current || newOrderRef.current) return
+      if (!isPageVisible()) return
+      if (confirmedPollInFlightRef.current) return
+      confirmedPollInFlightRef.current = true
 
       try {
         const response = await restaurantAPI.getOrders()
@@ -805,7 +834,7 @@ export default function OrdersMain() {
               payment: latestConfirmedOrder.payment
             }
 
-            console.log('📦 Found confirmed order (fallback):', orderForPopup)
+            debugLog('📦 Found confirmed order (fallback):', orderForPopup)
             shownOrdersRef.current.add(orderId)
             setPopupOrder(orderForPopup)
             setShowNewOrderPopup(true)
@@ -818,6 +847,8 @@ export default function OrdersMain() {
         if (error.response?.status !== 401) {
           console.error('Error checking confirmed orders:', error)
         }
+      } finally {
+        confirmedPollInFlightRef.current = false
       }
     }
 
@@ -862,6 +893,13 @@ export default function OrdersMain() {
 
   // Handle accept order
   const handleAcceptOrder = async () => {
+    // Hard gate: do not allow accepting orders when restaurant is not active/approved
+    if (!restaurantStatus.isLoading && !restaurantStatus.isActive) {
+      toast.error('Your restaurant is not yet approved/active. Please wait for admin approval before accepting orders.')
+      setShowNewOrderPopup(false)
+      return
+    }
+
     if (isAccepting) return
     setIsAccepting(true)
 
@@ -2281,6 +2319,7 @@ function PreparingOrders({ onSelectOrder, onCancel }) {
   const [loading, setLoading] = useState(true)
   const [currentTime, setCurrentTime] = useState(new Date())
   const [markingReadyOrderIds, setMarkingReadyOrderIds] = useState([])
+  const inFlightRef = useRef(false)
 
   useEffect(() => {
     let isMounted = true
@@ -2288,6 +2327,10 @@ function PreparingOrders({ onSelectOrder, onCancel }) {
     let countdownIntervalId = null
 
     const fetchOrders = async () => {
+      if (!isMounted || !isPageVisible()) return
+      if (inFlightRef.current) return
+      inFlightRef.current = true
+
       try {
         // Fetch all orders and filter for 'preparing' status on frontend
         const response = await restaurantAPI.getOrders()
@@ -2350,6 +2393,8 @@ function PreparingOrders({ onSelectOrder, onCancel }) {
           setOrders([])
           setLoading(false)
         }
+      } finally {
+        inFlightRef.current = false
       }
     }
 
@@ -2409,10 +2454,10 @@ function PreparingOrders({ onSelectOrder, onCancel }) {
           // Mark as ready when ETA time has elapsed (with 2 second buffer)
           if (elapsedSeconds >= totalETASeconds - 2) {
             try {
-              console.log(`🔄 Auto-marking order ${order.orderId} as ready (ETA reached 0)`)
+              debugLog(`🔄 Auto-marking order ${order.orderId} as ready (ETA reached 0)`)
               markedReadyOrdersRef.current.add(orderKey) // Mark as processing
               await restaurantAPI.markOrderReady(order.mongoId || order.orderId)
-              console.log(`✅ Order ${order.orderId} marked as ready`)
+              debugLog(`✅ Order ${order.orderId} marked as ready`)
               // Order will be removed from preparing list on next fetch
             } catch (error) {
               const status = error.response?.status
@@ -2555,12 +2600,17 @@ function PreparingOrders({ onSelectOrder, onCancel }) {
 function ReadyOrders({ onSelectOrder }) {
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
+  const inFlightRef = useRef(false)
 
   useEffect(() => {
     let isMounted = true
     let intervalId = null
 
     const fetchOrders = async () => {
+      if (!isMounted || !isPageVisible()) return
+      if (inFlightRef.current) return
+      inFlightRef.current = true
+
       try {
         // Fetch all orders and filter for 'ready' status on frontend
         const response = await restaurantAPI.getOrders()
@@ -2609,6 +2659,8 @@ function ReadyOrders({ onSelectOrder }) {
           setOrders([])
           setLoading(false)
         }
+      } finally {
+        inFlightRef.current = false
       }
     }
 
@@ -2672,12 +2724,17 @@ function ReadyOrders({ onSelectOrder }) {
 const OutForDeliveryOrders = ({ onSelectOrder }) => {
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
+  const inFlightRef = useRef(false)
 
   useEffect(() => {
     let isMounted = true
     let intervalId = null
 
     const fetchOrders = async () => {
+      if (!isMounted || !isPageVisible()) return
+      if (inFlightRef.current) return
+      inFlightRef.current = true
+
       try {
         // Fetch all orders and filter for 'out_for_delivery' status on frontend
         const response = await restaurantAPI.getOrders()
@@ -2726,6 +2783,8 @@ const OutForDeliveryOrders = ({ onSelectOrder }) => {
           setOrders([])
           setLoading(false)
         }
+      } finally {
+        inFlightRef.current = false
       }
     }
 

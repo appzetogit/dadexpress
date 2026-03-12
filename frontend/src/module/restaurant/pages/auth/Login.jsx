@@ -39,6 +39,10 @@ const countryCodes = [
 ]
 
 export default function RestaurantLogin() {
+  const isDev = import.meta.env?.DEV === true
+  const debugLog = (...args) => {
+    if (isDev) console.log(...args)
+  }
   const companyName = useCompanyName()
   const navigate = useNavigate()
   const [loginMethod, setLoginMethod] = useState("phone") // "phone" or "email"
@@ -234,11 +238,40 @@ export default function RestaurantLogin() {
     setIsSending(true)
 
     try {
-      const { signInWithPopup } = await import("firebase/auth")
+      const { signInWithPopup, GoogleAuthProvider, signInWithCredential } = await import("firebase/auth")
 
-      // Sign in with Google using Firebase Auth
-      const result = await signInWithPopup(firebaseAuth, googleProvider)
-      const user = result.user
+      let user = null
+
+      // 1. Try Google login via Flutter in-app webview (restaurant app)
+      if (window.flutter_inappwebview && typeof window.flutter_inappwebview.callHandler === "function") {
+        debugLog("📱 Restaurant Google login via Flutter native bridge...")
+        try {
+          const result = await window.flutter_inappwebview.callHandler("nativeGoogleSignIn")
+
+          if (result && result.success && result.idToken) {
+            const idTokenFromFlutter = result.idToken
+            const credential = GoogleAuthProvider.credential(idTokenFromFlutter)
+            const userCredential = await signInWithCredential(firebaseAuth, credential)
+            user = userCredential.user
+            debugLog("✅ Restaurant website login successful via Flutter App!")
+          } else {
+            debugLog("ℹ️ Flutter nativeGoogleSignIn cancelled/failed, falling back to web popup...")
+          }
+        } catch (e) {
+          console.error("❌ Flutter Bridge Error during restaurant Google login:", e)
+          debugLog("ℹ️ Falling back to web popup Google sign-in for restaurant...")
+        }
+      }
+
+      // 2. Fallback: normal browser Google login using popup
+      if (!user) {
+        const result = await signInWithPopup(firebaseAuth, googleProvider)
+        user = result.user
+      }
+
+      if (!user) {
+        throw new Error("Google sign-in failed or was cancelled")
+      }
 
       // Get Firebase ID token
       const idToken = await user.getIdToken()
@@ -246,7 +279,7 @@ export default function RestaurantLogin() {
       // Get FCM token
       const fcmToken = await requestFcmToken();
       if (fcmToken) {
-        console.log('[PUSH-NOTIFICATION] Sending FCM token for restaurant Google login:', fcmToken);
+        debugLog('[PUSH-NOTIFICATION] Sending FCM token for restaurant Google login:', fcmToken);
       }
 
       // Call backend to login/register via Firebase Google
@@ -529,4 +562,3 @@ export default function RestaurantLogin() {
     </div>
   )
 }
-

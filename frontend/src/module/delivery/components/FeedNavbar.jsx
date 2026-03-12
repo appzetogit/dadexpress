@@ -113,6 +113,28 @@ export default function FeedNavbar({ className = "" }) {
     e?.preventDefault?.();
     e?.stopPropagation?.();
 
+    // Prevent going offline while an order is active
+    if (isOnline) {
+      try {
+        const activeOrderRaw = localStorage.getItem("deliveryActiveOrder");
+        if (activeOrderRaw) {
+          const activeOrder = JSON.parse(activeOrderRaw);
+          const hasActiveOrderId =
+            !!activeOrder?.orderId ||
+            !!activeOrder?.restaurantInfo?.id ||
+            !!activeOrder?.restaurantInfo?.orderId;
+
+          if (hasActiveOrderId) {
+            toast.error("You have an active order. Please complete it before going offline.");
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn("Error checking active order status before going offline:", err);
+        // In case of error, allow toggle to proceed to avoid locking user
+      }
+    }
+
     const next = !isOnline;
     
     // Update state immediately for better UX

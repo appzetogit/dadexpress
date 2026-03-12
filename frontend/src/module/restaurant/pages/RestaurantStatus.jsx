@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import Lenis from "lenis"
 import { ArrowLeft, Settings, ChevronRight } from "lucide-react"
@@ -17,6 +17,10 @@ import { Button } from "@/components/ui/button"
 
 export default function RestaurantStatus() {
   const navigate = useNavigate()
+  const isDev = import.meta.env?.DEV === true
+  const debugLog = (...args) => {
+    if (isDev) console.log(...args)
+  }
   const [deliveryStatus, setDeliveryStatus] = useState(false)
   const [restaurantData, setRestaurantData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -26,6 +30,8 @@ export default function RestaurantStatus() {
   const [showOutsideTimingsDialog, setShowOutsideTimingsDialog] = useState(false)
   const [isDayClosed, setIsDayClosed] = useState(false)
   const [outletTimings, setOutletTimings] = useState(null)
+  const deliveryStatusLoadedRef = useRef(false)
+  const outletTimingsRef = useRef(null)
 
   // Update current date/time every minute
   useEffect(() => {
@@ -66,6 +72,10 @@ export default function RestaurantStatus() {
       try {
         const saved = localStorage.getItem("restaurant_outlet_timings")
         if (saved) {
+          if (outletTimingsRef.current === saved) {
+            return
+          }
+          outletTimingsRef.current = saved
           const data = JSON.parse(saved)
           setOutletTimings(data)
         }
@@ -97,16 +107,14 @@ export default function RestaurantStatus() {
       const currentTimeInMinutes = currentHour * 60 + currentMinute
 
       // First check outlet timings from localStorage (OutletTimings.jsx stores it there)
-      const STORAGE_KEY = "restaurant_outlet_timings"
-      let outletTimingsData = null
-      try {
-        const saved = localStorage.getItem(STORAGE_KEY)
-        if (saved) {
-          outletTimingsData = JSON.parse(saved)
-          setOutletTimings(outletTimingsData)
+      let outletTimingsData = outletTimings
+      if (!outletTimingsData) {
+        try {
+          const saved = localStorage.getItem("restaurant_outlet_timings")
+          outletTimingsData = saved ? JSON.parse(saved) : null
+        } catch (error) {
+          console.error("Error loading outlet timings:", error)
         }
-      } catch (error) {
-        console.error("Error loading outlet timings:", error)
       }
 
       // Check if current day is closed in outlet timings
@@ -200,7 +208,7 @@ export default function RestaurantStatus() {
       clearInterval(interval)
       window.removeEventListener("outletTimingsUpdated", handleOutletTimingsUpdate)
     }
-  }, [restaurantData, currentDateTime])
+  }, [restaurantData, outletTimings])
 
   // Note: Delivery status is now manually controlled by user via toggle
   // We don't automatically set it based on timings anymore
@@ -210,6 +218,18 @@ export default function RestaurantStatus() {
   useEffect(() => {
     const loadDeliveryStatus = async () => {
       try {
+        if (restaurantData?.isAcceptingOrders !== undefined) {
+          setDeliveryStatus(restaurantData.isAcceptingOrders)
+          localStorage.setItem('restaurant_online_status', JSON.stringify(restaurantData.isAcceptingOrders))
+          window.dispatchEvent(new CustomEvent('restaurantStatusChanged', { 
+            detail: { isOnline: restaurantData.isAcceptingOrders } 
+          }))
+          deliveryStatusLoadedRef.current = true
+          return
+        }
+        if (deliveryStatusLoadedRef.current) {
+          return
+        }
         // First try to get from backend
         const response = await restaurantAPI.getCurrentRestaurant()
         const restaurant = response?.data?.data?.restaurant || response?.data?.restaurant
@@ -221,56 +241,33 @@ export default function RestaurantStatus() {
           window.dispatchEvent(new CustomEvent('restaurantStatusChanged', { 
             detail: { isOnline: restaurant.isAcceptingOrders } 
           }))
+          deliveryStatusLoadedRef.current = true
         } else {
-          // Fallback to localStorage
-          const savedStatus = localStorage.getItem('restaurant_online_status')
-          if (savedStatus !== null) {
-            const status = JSON.parse(savedStatus)
-            setDeliveryStatus(status)
-            // Dispatch event to update navbar
-            window.dispatchEvent(new CustomEvent('restaurantStatusChanged', { 
-              detail: { isOnline: status } 
-            }))
-          } else {
-            // Default to false if not set
-            setDeliveryStatus(false)
-            // Dispatch event to update navbar
-            window.dispatchEvent(new CustomEvent('restaurantStatusChanged', { 
-              detail: { isOnline: false } 
-            }))
-          }
+          // If backend does not return isAcceptingOrders, treat as offline by default.
+          // Do NOT trust any cached/localStorage value for security.
+          setDeliveryStatus(false)
+          window.dispatchEvent(new CustomEvent('restaurantStatusChanged', { 
+            detail: { isOnline: false } 
+          }))
+          deliveryStatusLoadedRef.current = true
         }
       } catch (error) {
         // Only log error if it's not a network/timeout error (backend might be down/slow)
         if (error.code !== 'ERR_NETWORK' && error.code !== 'ECONNABORTED' && !error.message?.includes('timeout')) {
           console.error("Error loading delivery status:", error)
         }
-        // Fallback to localStorage
-        try {
-          const savedStatus = localStorage.getItem('restaurant_online_status')
-          if (savedStatus !== null) {
-            const status = JSON.parse(savedStatus)
-            setDeliveryStatus(status)
-            window.dispatchEvent(new CustomEvent('restaurantStatusChanged', { 
-              detail: { isOnline: status } 
-            }))
-          } else {
-            setDeliveryStatus(false)
-            window.dispatchEvent(new CustomEvent('restaurantStatusChanged', { 
-              detail: { isOnline: false } 
-            }))
-          }
-        } catch (localError) {
-          setDeliveryStatus(false)
-          window.dispatchEvent(new CustomEvent('restaurantStatusChanged', { 
-            detail: { isOnline: false } 
-          }))
-        }
+        // On network/timeout errors, do NOT trust cached localStorage status.
+        // Default to offline to avoid accidentally granting access when backend is unreachable.
+        setDeliveryStatus(false)
+        window.dispatchEvent(new CustomEvent('restaurantStatusChanged', { 
+          detail: { isOnline: false } 
+        }))
+        deliveryStatusLoadedRef.current = true
       }
     }
 
     loadDeliveryStatus()
-  }, [])
+  }, [restaurantData])
 
   // Handle delivery status change
   const handleDeliveryStatusChange = async (checked) => {
@@ -285,19 +282,30 @@ export default function RestaurantStatus() {
       setShowOutsideTimingsDialog(true)
       return
     }
-    
+
+    const previousStatus = deliveryStatus
     setDeliveryStatus(checked)
     try {
-      // Save to localStorage
+      // Save to localStorage optimistically
       localStorage.setItem('restaurant_online_status', JSON.stringify(checked))
-      
+
       // Update backend
       try {
         await restaurantAPI.updateDeliveryStatus(checked)
-        console.log('✅ Delivery status updated in backend:', checked)
+        debugLog('✅ Delivery status updated in backend:', checked)
       } catch (apiError) {
         console.error('Error updating delivery status in backend:', apiError)
-        // Still continue with local update even if backend fails
+
+        // Revert local state on authorization failures or hard errors
+        const shouldRevert =
+          apiError.response?.status === 401 ||
+          apiError.response?.status === 403
+
+        if (shouldRevert) {
+          setDeliveryStatus(previousStatus)
+          localStorage.setItem('restaurant_online_status', JSON.stringify(previousStatus))
+          toast.error(apiError.response?.data?.message || 'Your restaurant is not approved/active to go online yet.')
+        }
       }
       
       // Dispatch custom event for navbar to listen
@@ -575,4 +583,3 @@ export default function RestaurantStatus() {
     </div>
   )
 }
-

@@ -312,8 +312,42 @@ export const useDeliveryNotifications = () => {
       }
     });
 
+    // Helper: ensure we only show *real* orders to the delivery partner
+    const isValidNewOrderNotification = (orderData) => {
+      if (!orderData || typeof orderData !== 'object') return false;
+
+      // Must have some kind of order identifier
+      const hasOrderId =
+        !!orderData.orderMongoId ||
+        !!orderData.orderId ||
+        !!orderData._id;
+
+      // Must have some restaurant information
+      const hasRestaurantInfo =
+        !!orderData.restaurantLocation ||
+        !!orderData.restaurantId ||
+        !!orderData.restaurantName ||
+        !!orderData.restaurant;
+
+      // Optional but helpful: basic payout / distance info
+      const hasDynamicData =
+        orderData.estimatedEarnings != null ||
+        orderData.deliveryFee != null ||
+        orderData.pickupDistance != null;
+
+      return hasOrderId && hasRestaurantInfo && hasDynamicData;
+    };
+
     socketRef.current.on('new_order', (orderData) => {
       false && console.log('📦 New order received via socket:', orderData);
+
+      // Ignore unknown / incomplete notifications so random or test data
+      // doesn't show up as an order in the delivery app
+      if (!isValidNewOrderNotification(orderData)) {
+        false && console.warn('⚠️ Ignoring invalid new_order notification:', orderData);
+        return;
+      }
+
       setNewOrder(orderData);
       playNotificationSound();
     });
@@ -322,7 +356,14 @@ export const useDeliveryNotifications = () => {
     socketRef.current.on('new_order_available', (orderData) => {
       false && console.log('📦 New order available (priority notification):', orderData);
       false && console.log('📦 Notification phase:', orderData.phase || 'unknown');
-      // Treat it the same as new_order for now - delivery boy can accept it
+
+      // Apply the same validation so only real user orders show up
+      if (!isValidNewOrderNotification(orderData)) {
+        false && console.warn('⚠️ Ignoring invalid new_order_available notification:', orderData);
+        return;
+      }
+
+      // Treat it the same as new_order for now - delivery partner can accept it
       setNewOrder(orderData);
       playNotificationSound();
     });

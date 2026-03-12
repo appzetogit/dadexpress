@@ -69,6 +69,7 @@ const console = {
   warn: () => { },
   error: () => { },
 }
+const isPageVisible = () => typeof document !== "undefined" && document.visibilityState === "visible"
 
 // Ola Maps API Key removed
 
@@ -408,6 +409,8 @@ export default function DeliveryHome() {
     transactions: [],
     joiningBonusClaimed: false
   })
+  const walletFetchInFlightRef = useRef(false)
+  const assignedOrdersInFlightRef = useRef(false)
   const [activeOrder, setActiveOrder] = useState(() => {
     const stored = localStorage.getItem('activeOrder')
     return stored ? JSON.parse(stored) : null
@@ -674,10 +677,13 @@ export default function DeliveryHome() {
   const orderIdConfirmSwipeStartX = useRef(0)
   const orderIdConfirmSwipeStartY = useRef(0)
   const orderIdConfirmIsSwiping = useRef(false)
-  // Bill image upload state
-  const [billImageUrl, setBillImageUrl] = useState(null)
-  const [isUploadingBill, setIsUploadingBill] = useState(false)
-  const [billImageUploaded, setBillImageUploaded] = useState(false)
+  // Pickup and Drop image upload state
+  const [pickupImageUrl, setPickupImageUrl] = useState(null)
+  const [isUploadingPickup, setIsUploadingPickup] = useState(false)
+  const [pickupImageUploaded, setPickupImageUploaded] = useState(false)
+  const [dropImageUrl, setDropImageUrl] = useState(null)
+  const [isUploadingDrop, setIsUploadingDrop] = useState(false)
+  const [dropImageUploaded, setDropImageUploaded] = useState(false)
   const fileInputRef = useRef(null)
   const cameraInputRef = useRef(null)
   const [orderDeliveredButtonProgress, setOrderDeliveredButtonProgress] = useState(0)
@@ -2173,10 +2179,10 @@ export default function DeliveryHome() {
 
       if (deltaX > 0) {
         // RIGHT swipe = Accept
-    const buttonWidth = newOrderAcceptButtonRef.current?.offsetWidth || 300
-    const circleWidth = 56 // w-14 = 56px
-    const padding = 16 // px-4 = 16px
-    const maxSwipe = buttonWidth - (circleWidth * 2) - (padding * 2)
+        const buttonWidth = newOrderAcceptButtonRef.current?.offsetWidth || 300
+        const circleWidth = 56 // w-14 = 56px
+        const padding = 16 // px-4 = 16px
+        const maxSwipe = buttonWidth - (circleWidth * 2) - (padding * 2)
 
         const progress = Math.min(Math.max(deltaX / maxSwipe, 0), 1)
         newOrderAcceptButtonProgressRef.current = progress
@@ -3446,6 +3452,13 @@ export default function DeliveryHome() {
   }
 
   const handleReachedDropTouchEnd = (e) => {
+    // Disable swipe if drop photo is not uploaded
+    if (!dropImageUploaded) {
+      toast.error('Please upload drop-off photo first')
+      setSliderProgressImmediate('reachedDrop', 0, setReachedDropButtonProgress)
+      return
+    }
+
     if (!reachedDropIsSwiping.current && reachedDropButtonProgress < SWIPE_COMPLETE_THRESHOLD) {
       if (!reachedDropIsAnimatingToComplete) {
         setSliderProgressImmediate('reachedDrop', 0, setReachedDropButtonProgress)
@@ -3604,58 +3617,39 @@ export default function DeliveryHome() {
   }
 
   /**
-   * Handle camera capture for bill image - Flutter InAppWebView compatible
-   * 
-   * Flutter Handler Requirements:
-   * Handler name: 'openCamera'
-   * Expected response format:
-   * {
-   *   success: true,
-   *   file?: File,              // Preferred: JavaScript File object
-   *   base64?: string,          // Alternative: Base64 encoded image (with or without data:image/jpeg;base64, prefix)
-   *   mimeType?: string,        // MIME type (e.g., 'image/jpeg', 'image/png')
-   *   fileName?: string,        // File name (e.g., 'bill-image.jpg')
-   *   filePath?: string         // Not recommended: File path (requires additional handler to read)
-   * }
-   * 
-   * If user cancels:
-   * { success: false } or null
+   * Handle camera capture for pickup or drop photo - Flutter InAppWebView compatible
    */
-  const handleCameraCapture = async () => {
+  const handleCameraCapture = async (captureMode = 'pickup') => {
     try {
       // Check if Flutter InAppWebView handler is available
       if (window.flutter_inappwebview && typeof window.flutter_inappwebview.callHandler === 'function') {
-        false && console.log('📸 Using Flutter InAppWebView camera handler')
+        false && console.log(`📸 Using Flutter InAppWebView camera handler for ${captureMode}`)
 
         // Call Flutter handler to open camera
         const result = await window.flutter_inappwebview.callHandler('openCamera', {
-          source: 'camera', // 'camera' for camera, 'gallery' for file picker
+          source: 'camera',
           accept: 'image/*',
           multiple: false,
-          quality: 0.8 // Image quality (0.0 to 1.0)
+          quality: 0.8
         })
 
         false && console.log('📸 Flutter handler response:', result)
 
-        if (result && result.success) {
-          // Handle the result - could be base64, file path, or file object
+        // Some Flutter integrations might not send an explicit `success` flag.
+        // Treat presence of file/base64 as a successful capture to keep UX smooth.
+        const hasImageData = !!(result && (result.file || result.base64))
+
+        if (result && (result.success || hasImageData)) {
           let file = null
-
           if (result.file) {
-            // If Flutter returns a File object (preferred method)
             file = result.file
-            false && console.log('✅ Received File object from Flutter')
           } else if (result.base64) {
-            // If Flutter returns base64, convert to File
-            false && console.log('📸 Converting base64 to File object')
             let base64Data = result.base64
-
-            // Remove data URL prefix if present
             if (base64Data.includes(',')) {
               base64Data = base64Data.split(',')[1]
             }
 
-    try {
+            try {
               const byteCharacters = atob(base64Data)
               const byteNumbers = new Array(byteCharacters.length)
               for (let i = 0; i < byteCharacters.length; i++) {
@@ -3664,88 +3658,66 @@ export default function DeliveryHome() {
               const byteArray = new Uint8Array(byteNumbers)
               const mimeType = result.mimeType || 'image/jpeg'
               const blob = new Blob([byteArray], { type: mimeType })
-              file = new File([blob], result.fileName || `bill-image-${Date.now()}.jpg`, { type: mimeType })
-              false && console.log('✅ Converted base64 to File:', { name: file.name, size: file.size, type: file.type })
+              file = new File([blob], result.fileName || `${captureMode}-image-${Date.now()}.jpg`, { type: mimeType })
             } catch (base64Error) {
               console.error('❌ Error converting base64 to File:', base64Error)
               toast.error('Failed to process image. Please try again.')
               return
             }
-          } else if (result.filePath) {
-            // If Flutter returns file path, we need to fetch it
-            // This would require additional Flutter handler to read file
-            false && console.warn('⚠️ File path returned, but file reading not implemented')
-            toast.error('File path handling not implemented. Please use base64 or File object.')
-            return
           }
 
           if (file) {
-            // Process the file the same way as handleBillImageSelect
-            await processBillImageFile(file)
+            if (captureMode === 'pickup') {
+              await processPickupImageFile(file)
+            } else {
+              await processDropImageFile(file)
+            }
           } else {
             console.error('❌ No file data in Flutter response:', result)
             toast.error('Failed to get image from camera')
           }
-        } else {
-          false && console.log('ℹ️ Camera cancelled by user or failed')
         }
       } else {
-        // Fallback to standard file input for web browsers
-        false && console.log('📸 Flutter handler not available, using standard file input')
-        if (cameraInputRef.current) {
-          cameraInputRef.current.click()
+        // Fallback to standard file input
+        if (captureMode === 'pickup') {
+          if (cameraInputRef.current) cameraInputRef.current.click()
+        } else {
+          // Drop photo might need its own input if they were both open, but usually they aren't
+          const dropInput = document.getElementById('drop-camera-input')
+          if (dropInput) dropInput.click()
         }
       }
     } catch (error) {
       console.error('❌ Error opening camera:', error)
       toast.error('Failed to open camera. Please try again.')
-
-      // Fallback to standard file input
-      if (cameraInputRef.current) {
-        cameraInputRef.current.click()
-      }
     }
   }
 
-  // Process bill image file (extracted from handleBillImageSelect for reuse)
-  const processBillImageFile = async (file) => {
+  // Process pickup image file
+  const processPickupImageFile = async (file) => {
     if (!file) return
-
-    // Validate file type
     if (!file.type.startsWith('image/')) {
       toast.error('Please select an image file')
       return
     }
-
-    // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
       toast.error('Image size should be less than 5MB')
       return
     }
 
-    setIsUploadingBill(true)
-
+    setIsUploadingPickup(true)
     try {
-      false && console.log('📸 Uploading bill image to Cloudinary...')
-
-      // Upload to Cloudinary via backend
+      false && console.log('📸 Uploading pickup photo to Cloudinary...')
       const uploadResponse = await uploadAPI.uploadMedia(file, {
-        folder: 'appzeto/delivery/bills'
+        folder: 'appzeto/delivery/pickup'
       })
 
       if (uploadResponse?.data?.success && uploadResponse?.data?.data) {
         const imageUrl = uploadResponse.data.data.url || uploadResponse.data.data.secure_url
-        const publicId = uploadResponse.data.data.publicId || uploadResponse.data.data.public_id
-
         if (imageUrl) {
-          false && console.log('✅ Bill image uploaded to Cloudinary:', imageUrl)
-          setBillImageUrl(imageUrl)
-
-          // Bill image is uploaded to Cloudinary, now enable the button
-          // The bill image URL will be sent when confirming order ID
-          false && console.log('✅ Bill image uploaded to Cloudinary, ready to save to database')
-          setBillImageUploaded(true)
-          toast.success('Bill image uploaded! You can now confirm order ID.')
+          setPickupImageUrl(imageUrl)
+          setPickupImageUploaded(true)
+          toast.success('Pickup photo uploaded! You can now confirm pickup.')
         } else {
           throw new Error('Failed to get image URL from upload response')
         }
@@ -3753,30 +3725,73 @@ export default function DeliveryHome() {
         throw new Error('Upload failed')
       }
     } catch (error) {
-      console.error('❌ Error uploading bill image:', error)
-      toast.error('Failed to upload bill image. Please try again.')
-      setBillImageUrl(null)
-      setBillImageUploaded(false)
+      console.error('❌ Error uploading pickup photo:', error)
+      toast.error('Failed to upload pickup photo. Please try again.')
+      setPickupImageUrl(null)
+      setPickupImageUploaded(false)
     } finally {
-      setIsUploadingBill(false)
-      // Reset file input
-      if (cameraInputRef.current) {
-        cameraInputRef.current.value = ''
-      }
+      setIsUploadingPickup(false)
+      if (cameraInputRef.current) cameraInputRef.current.value = ''
     }
   }
 
-  // Handle bill image file selection and upload (fallback for web browsers)
-  const handleBillImageSelect = async (e) => {
+  // Process drop image file
+  const processDropImageFile = async (file) => {
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file')
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image size should be less than 5MB')
+      return
+    }
+
+    setIsUploadingDrop(true)
+    try {
+      false && console.log('📸 Uploading drop photo to Cloudinary...')
+      const uploadResponse = await uploadAPI.uploadMedia(file, {
+        folder: 'appzeto/delivery/dropoff'
+      })
+
+      if (uploadResponse?.data?.success && uploadResponse?.data?.data) {
+        const imageUrl = uploadResponse.data.data.url || uploadResponse.data.data.secure_url
+        if (imageUrl) {
+          setDropImageUrl(imageUrl)
+          setDropImageUploaded(true)
+          toast.success('Drop-off photo uploaded! You can now complete delivery.')
+        } else {
+          throw new Error('Failed to get image URL from upload response')
+        }
+      } else {
+        throw new Error('Upload failed')
+      }
+    } catch (error) {
+      console.error('❌ Error uploading drop photo:', error)
+      toast.error('Failed to upload drop photo. Please try again.')
+      setDropImageUrl(null)
+      setDropImageUploaded(false)
+    } finally {
+      setIsUploadingDrop(false)
+    }
+  }
+
+  const handlePickupImageSelect = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
-    await processBillImageFile(file)
+    await processPickupImageFile(file)
+  }
+
+  const handleDropImageSelect = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    await processDropImageFile(file)
   }
 
   const handleOrderIdConfirmTouchEnd = (e) => {
-    // Disable swipe if bill image is not uploaded
-    if (!billImageUploaded) {
-      toast.error('Please upload bill image first')
+    // Disable swipe if pickup photo is not uploaded
+    if (!pickupImageUploaded) {
+      toast.error('Please upload pickup photo first')
       setSliderProgressImmediate('orderIdConfirm', 0, setOrderIdConfirmButtonProgress)
       return
     }
@@ -3888,7 +3903,7 @@ export default function DeliveryHome() {
           }
         }
 
-    try {
+        try {
           const { mongoId, orderId: orderIdStringInitial } = getOrderIdCandidates(selectedRestaurant, newOrder)
           const orderIdForApi = mongoId || orderIdStringInitial
           const confirmedOrderIdForApi = orderIdStringInitial || (orderIdForApi && String(orderIdForApi).startsWith('ORD-') ? orderIdForApi : undefined)
@@ -3899,17 +3914,17 @@ export default function DeliveryHome() {
             confirmedOrderIdForApi,
             lat: currentLocation[0],
             lng: currentLocation[1],
-            billImageUrl
+            pickupImageUrl: pickupImageUrl
           })
 
-          // Update API call to include bill image URL
+          // Update API call to include pickup image URL
           let response
           try {
             response = await deliveryAPI.confirmOrderId(orderIdForApi, confirmedOrderIdForApi, {
               lat: currentLocation[0],
               lng: currentLocation[1]
             }, {
-              billImageUrl: billImageUrl
+              pickupImageUrl: pickupImageUrl
             })
           } catch (confirmError) {
             const status = confirmError.response?.status
@@ -3922,7 +3937,7 @@ export default function DeliveryHome() {
                 lat: currentLocation[0],
                 lng: currentLocation[1]
               }, {
-                billImageUrl: billImageUrl
+                pickupImageUrl: pickupImageUrl
               })
             } else {
               throw confirmError
@@ -4694,6 +4709,26 @@ export default function DeliveryHome() {
   // Handle online toggle - check for booked gigs
   const handleToggleOnline = () => {
     if (isOnline) {
+      // Prevent going offline while an order is active
+      try {
+        const activeOrderRaw = localStorage.getItem('deliveryActiveOrder')
+        if (activeOrderRaw) {
+          const activeOrder = JSON.parse(activeOrderRaw)
+          const hasActiveOrderId =
+            !!activeOrder?.orderId ||
+            !!activeOrder?.restaurantInfo?.id ||
+            !!activeOrder?.restaurantInfo?.orderId
+
+          if (hasActiveOrderId) {
+            toast.error('You have an active order. Please complete it before going offline.')
+            return
+          }
+        }
+      } catch (err) {
+        console.warn('Error checking active order status before going offline:', err)
+        // In case of error, allow toggle to proceed to avoid locking user
+      }
+
       goOffline()
     } else {
       // Check if there are any booked gigs
@@ -4824,6 +4859,10 @@ export default function DeliveryHome() {
   // Fetch wallet data from API
   useEffect(() => {
     const fetchWalletData = async () => {
+      if (!isPageVisible()) return
+      if (walletFetchInFlightRef.current) return
+      walletFetchInFlightRef.current = true
+
       // Skip wallet fetch if status is pending
       if (deliveryStatus === 'pending') {
         setWalletState({
@@ -4834,10 +4873,11 @@ export default function DeliveryHome() {
           transactions: [],
           joiningBonusClaimed: false
         })
+        walletFetchInFlightRef.current = false
         return
       }
 
-    try {
+      try {
         const walletData = await fetchDeliveryWallet()
         setWalletState(walletData)
       } catch (error) {
@@ -4854,6 +4894,8 @@ export default function DeliveryHome() {
           transactions: [],
           joiningBonusClaimed: false
         })
+      } finally {
+        walletFetchInFlightRef.current = false
       }
     }
 
@@ -4881,12 +4923,15 @@ export default function DeliveryHome() {
       false && console.log('⚠️ Delivery person is offline, skipping order fetch')
       return
     }
+    if (!isPageVisible()) return
+    if (assignedOrdersInFlightRef.current) return
     if (hasAssignedZones && detectedZone && isOutOfZone) {
       false && console.log('Out of zone, skipping order fetch')
       return
     }
 
     try {
+      assignedOrdersInFlightRef.current = true
       false && console.log('📦 Fetching assigned orders from API...')
       const response = await deliveryAPI.getOrders({
         limit: 50, // Get up to 50 pending orders
@@ -5042,6 +5087,8 @@ export default function DeliveryHome() {
     } catch (error) {
       console.error('❌ Error fetching assigned orders:', error)
       // Don't show error to user, just log it
+    } finally {
+      assignedOrdersInFlightRef.current = false
     }
   }, [isOnline, calculateTimeAway, hasAssignedZones, detectedZone, isOutOfZone])
 
@@ -6277,7 +6324,7 @@ export default function DeliveryHome() {
         return;
       }
 
-    try {
+      try {
         setDirectionsMapLoading(true);
 
         // Get current LIVE location (delivery boy) - prioritize riderLocation which is updated in real-time
@@ -8842,11 +8889,10 @@ export default function DeliveryHome() {
       {(hasAssignedZones || currentZoneLabel || isOutOfZone) && (
         <div className="px-4 pt-3">
           <div
-            className={`rounded-lg border px-3 py-2 text-sm flex items-center justify-between ${
-              isOutOfZone
-                ? "bg-red-50 border-red-200 text-red-700"
-                : "bg-emerald-50 border-emerald-200 text-emerald-700"
-            }`}
+            className={`rounded-lg border px-3 py-2 text-sm flex items-center justify-between ${isOutOfZone
+              ? "bg-red-50 border-red-200 text-red-700"
+              : "bg-emerald-50 border-emerald-200 text-emerald-700"
+              }`}
           >
             <div className="flex items-center gap-2">
               <MapPin className="w-4 h-4" />
@@ -9966,13 +10012,13 @@ export default function DeliveryHome() {
                             const fallback = newOrder?.deliveryFee ?? selectedRestaurant?.deliveryFee ?? 0;
                             let value = 0;
 
-                        false && console.log('💰 Display earnings calculation:', {
-                          earnings,
-                          earningsType: typeof earnings,
-                          newOrderEarnings: newOrder?.estimatedEarnings,
-                          selectedRestaurantEarnings: selectedRestaurant?.estimatedEarnings,
-                          fallback
-                        });
+                            false && console.log('💰 Display earnings calculation:', {
+                              earnings,
+                              earningsType: typeof earnings,
+                              newOrderEarnings: newOrder?.estimatedEarnings,
+                              selectedRestaurantEarnings: selectedRestaurant?.estimatedEarnings,
+                              fallback
+                            });
 
                             if (earnings) {
                               if (typeof earnings === 'object') {
@@ -9993,39 +10039,39 @@ export default function DeliveryHome() {
                               value = Number(fallback);
                             }
 
-                        false && console.log('💰 Final earnings value to display:', value);
-                        return value > 0 ? value.toFixed(2) : '0.00';
-                      })()}
-                    </p>
-                    {/* Earnings Breakdown */}
-                    {(() => {
-                      const earnings = newOrder?.estimatedEarnings || selectedRestaurant?.estimatedEarnings || 0;
-                      if (typeof earnings === 'object' && earnings.breakdown) {
-                        return (
-                          <div className="bg-green-50 rounded-lg p-3 mb-2">
-                            <p className="text-green-800 text-xs font-medium mb-1">Earnings Breakdown:</p>
-                            <p className="text-green-700 text-xs">
-                              Base: ₹{earnings.basePayout?.toFixed(0) || '0'}
-                              {earnings.distanceCommission > 0 && (
-                                <> + Distance ({earnings.distance?.toFixed(1)} km × ₹{earnings.commissionPerKm?.toFixed(0)}/km) = ₹{earnings.distanceCommission?.toFixed(0)}</>
-                              )}
-                            </p>
-                            {earnings.distance <= earnings.minDistance && earnings.distanceCommission === 0 && (
-                              <p className="text-green-600 text-xs mt-1">
-                                Note: Distance {earnings.distance?.toFixed(1)} km ≤ {earnings.minDistance} km, per km commission not applicable
-                              </p>
-                            )}
-                          </div>
-                        );
-                      }
-                      return null;
-                    })()}
-                    <p className="text-gray-400 text-xs">
-                      Pickup: {newOrder?.pickupDistance || selectedRestaurant?.pickupDistance || '0 km'} | Drop: {newOrder?.deliveryDistance || selectedRestaurant?.dropDistance || '0 km'}
-                    </p>
+                            false && console.log('💰 Final earnings value to display:', value);
+                            return value > 0 ? value.toFixed(2) : '0.00';
+                          })()}
+                        </p>
+                        {/* Earnings Breakdown */}
+                        {(() => {
+                          const earnings = newOrder?.estimatedEarnings || selectedRestaurant?.estimatedEarnings || 0;
+                          if (typeof earnings === 'object' && earnings.breakdown) {
+                            return (
+                              <div className="bg-green-50 rounded-lg p-3 mb-2">
+                                <p className="text-green-800 text-xs font-medium mb-1">Earnings Breakdown:</p>
+                                <p className="text-green-700 text-xs">
+                                  Base: ₹{earnings.basePayout?.toFixed(0) || '0'}
+                                  {earnings.distanceCommission > 0 && (
+                                    <> + Distance ({earnings.distance?.toFixed(1)} km × ₹{earnings.commissionPerKm?.toFixed(0)}/km) = ₹{earnings.distanceCommission?.toFixed(0)}</>
+                                  )}
+                                </p>
+                                {earnings.distance <= earnings.minDistance && earnings.distanceCommission === 0 && (
+                                  <p className="text-green-600 text-xs mt-1">
+                                    Note: Distance {earnings.distance?.toFixed(1)} km ≤ {earnings.minDistance} km, per km commission not applicable
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
+                        <p className="text-gray-400 text-xs">
+                          Pickup: {newOrder?.pickupDistance || selectedRestaurant?.pickupDistance || '0 km'} | Drop: {newOrder?.deliveryDistance || selectedRestaurant?.dropDistance || '0 km'}
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
 
                   {/* Order ID */}
                   <div className="mb-4">
@@ -10033,6 +10079,15 @@ export default function DeliveryHome() {
                     <p className="text-base font-semibold text-gray-900">
                       {newOrder?.orderId || selectedRestaurant?.orderId || 'ORD1234567890'}
                     </p>
+                  </div>
+
+                  {/* Customer details hidden in Stage 1 */}
+                  <div className="mb-4 p-3 bg-blue-50 border border-blue-100 rounded-xl">
+                    <div className="flex items-center gap-2 text-blue-700">
+                      <Lock className="w-4 h-4" />
+                      <span className="text-xs font-semibold">Customer details hidden</span>
+                    </div>
+                    <p className="text-[10px] text-blue-600 mt-1">Details will be revealed after order pickup confirmation</p>
                   </div>
 
                   {/* Pickup Details */}
@@ -10079,10 +10134,10 @@ export default function DeliveryHome() {
                       ref={newOrderAcceptButtonRef}
                       className="relative w-full bg-green-600 rounded-full overflow-hidden shadow-xl"
                       style={{ touchAction: 'pan-x' }} // Prevent vertical scrolling, allow horizontal pan
-                        onTouchStart={(e) => { e.stopPropagation(); handleNewOrderAcceptTouchStart(e) }}
-                        onTouchMove={(e) => { e.stopPropagation(); handleNewOrderAcceptTouchMove(e) }}
-                        onTouchEnd={(e) => { e.stopPropagation(); handleNewOrderAcceptTouchEnd(e) }}
-                        onTouchCancel={(e) => { e.stopPropagation(); handleNewOrderAcceptTouchEnd(e) }}
+                      onTouchStart={(e) => { e.stopPropagation(); handleNewOrderAcceptTouchStart(e) }}
+                      onTouchMove={(e) => { e.stopPropagation(); handleNewOrderAcceptTouchMove(e) }}
+                      onTouchEnd={(e) => { e.stopPropagation(); handleNewOrderAcceptTouchEnd(e) }}
+                      onTouchCancel={(e) => { e.stopPropagation(); handleNewOrderAcceptTouchEnd(e) }}
                       onMouseDown={handleNewOrderAcceptMouseDown}
                       onMouseMove={handleNewOrderAcceptMouseMove}
                       onMouseUp={handleNewOrderAcceptMouseUp}
@@ -10634,38 +10689,38 @@ export default function DeliveryHome() {
               </p>
             </div>
 
-            {/* Bill Image Upload Section */}
+            {/* Pickup Photo Upload Section */}
             <div className="mb-6">
               <p className="text-gray-600 text-sm mb-3 text-center">
-                {billImageUploaded ? '✅ Bill image uploaded' : 'Please capture bill image'}
+                {pickupImageUploaded ? '✅ Pickup photo uploaded' : 'Please capture pickup photo'}
               </p>
 
               {/* Camera Button */}
               <div className="flex justify-center mb-4">
                 <button
                   onClick={handleCameraCapture}
-                  disabled={isUploadingBill}
-                  className={`flex items-center justify-center gap-2 px-6 py-3 rounded-lg transition-colors ${isUploadingBill
+                  disabled={isUploadingPickup}
+                  className={`flex items-center justify-center gap-2 px-6 py-3 rounded-lg transition-colors ${isUploadingPickup
                     ? 'bg-gray-400 cursor-not-allowed'
-                    : billImageUploaded
+                    : pickupImageUploaded
                       ? 'bg-green-600 hover:bg-green-700'
                       : 'bg-blue-600 hover:bg-blue-700'
                     } text-white font-medium`}
                 >
-                  {isUploadingBill ? (
+                  {isUploadingPickup ? (
                     <>
                       <Loader2 className="w-5 h-5 animate-spin" />
                       <span>Uploading...</span>
                     </>
-                  ) : billImageUploaded ? (
+                  ) : pickupImageUploaded ? (
                     <>
                       <CheckCircle className="w-5 h-5" />
-                      <span>Bill Uploaded</span>
+                      <span>Photo Uploaded</span>
                     </>
                   ) : (
                     <>
                       <Camera className="w-5 h-5" />
-                      <span>Capture Bill</span>
+                      <span>Capture Pickup Photo</span>
                     </>
                   )}
                 </button>
@@ -10673,12 +10728,12 @@ export default function DeliveryHome() {
 
               {/* Hidden file input for camera (sr-only keeps it in DOM for mobile camera) */}
               <input
-                id="bill-camera-input"
+                id="pickup-camera-input"
                 ref={cameraInputRef}
                 type="file"
                 accept="image/*"
                 capture="environment"
-                onChange={handleBillImageSelect}
+                onChange={handlePickupImageSelect}
                 className="sr-only"
               />
             </div>
@@ -10687,17 +10742,17 @@ export default function DeliveryHome() {
             <div className="relative w-full">
               <motion.div
                 ref={orderIdConfirmButtonRef}
-                className={`relative w-full rounded-full overflow-hidden shadow-xl ${billImageUploaded ? 'bg-green-600' : 'bg-gray-400 cursor-not-allowed'
+                className={`relative w-full rounded-full overflow-hidden shadow-xl ${pickupImageUploaded ? 'bg-green-600' : 'bg-gray-400 cursor-not-allowed'
                   }`}
                 style={{
-                  touchAction: billImageUploaded ? 'pan-x' : 'none',
-                  opacity: billImageUploaded ? 1 : 0.6
+                  touchAction: pickupImageUploaded ? 'pan-x' : 'none',
+                  opacity: pickupImageUploaded ? 1 : 0.6
                 }}
-                onTouchStart={billImageUploaded ? handleOrderIdConfirmTouchStart : undefined}
-                onTouchMove={billImageUploaded ? handleOrderIdConfirmTouchMove : undefined}
-                onTouchEnd={billImageUploaded ? handleOrderIdConfirmTouchEnd : undefined}
-                onTouchCancel={billImageUploaded ? handleOrderIdConfirmTouchEnd : undefined}
-                whileTap={billImageUploaded ? { scale: 0.98 } : {}}
+                onTouchStart={pickupImageUploaded ? handleOrderIdConfirmTouchStart : undefined}
+                onTouchMove={pickupImageUploaded ? handleOrderIdConfirmTouchMove : undefined}
+                onTouchEnd={pickupImageUploaded ? handleOrderIdConfirmTouchEnd : undefined}
+                onTouchCancel={pickupImageUploaded ? handleOrderIdConfirmTouchEnd : undefined}
+                whileTap={pickupImageUploaded ? { scale: 0.98 } : {}}
               >
                 {/* Swipe progress background */}
                 <motion.div
@@ -10743,8 +10798,8 @@ export default function DeliveryHome() {
                         damping: 25
                       } : { duration: 0 }}
                     >
-                      {!billImageUploaded
-                        ? 'Upload Bill First'
+                      {!pickupImageUploaded
+                        ? 'Upload Photo First'
                         : orderIdConfirmButtonProgress > 0.5
                           ? 'Release to Confirm'
                           : 'Order Picked Up'}
@@ -10904,17 +10959,68 @@ export default function DeliveryHome() {
             </button>
           </div>
 
+          {/* Drop Image Upload Section */}
+          <div className="mb-6 bg-teal-50/50 p-4 rounded-xl border border-teal-100">
+            <p className="text-teal-800 text-sm mb-3 font-semibold text-center">
+              {dropImageUploaded ? '✅ Drop-off photo uploaded' : 'Please capture drop-off photo'}
+            </p>
+
+            {/* Camera Button */}
+            <div className="flex justify-center mb-1">
+              <button
+                onClick={() => handleCameraCapture('drop')}
+                disabled={isUploadingDrop}
+                className={`flex items-center justify-center gap-2 px-6 py-3 rounded-lg transition-colors w-full ${isUploadingDrop
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : dropImageUploaded
+                    ? 'bg-green-600 hover:bg-green-700'
+                    : 'bg-teal-600 hover:bg-teal-700'
+                  } text-white font-medium shadow-sm`}
+              >
+                {isUploadingDrop ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Uploading...</span>
+                  </>
+                ) : dropImageUploaded ? (
+                  <>
+                    <CheckCircle className="w-5 h-5" />
+                    <span>Drop Photo Uploaded</span>
+                  </>
+                ) : (
+                  <>
+                    <Camera className="w-5 h-5" />
+                    <span>Capture Drop Photo</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Hidden file input for camera */}
+            <input
+              id="drop-camera-input"
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleDropImageSelect}
+              className="sr-only"
+            />
+          </div>
+
           {/* Reached Drop Button with Swipe */}
           <div className="relative w-full">
             <motion.div
               ref={reachedDropButtonRef}
-              className="relative w-full bg-green-600 rounded-full overflow-hidden shadow-xl"
-              style={{ touchAction: 'pan-x' }} // Prevent vertical scrolling, allow horizontal pan
-              onTouchStart={handleReachedDropTouchStart}
-              onTouchMove={handleReachedDropTouchMove}
-              onTouchEnd={handleReachedDropTouchEnd}
-              onTouchCancel={handleReachedDropTouchEnd}
-              whileTap={{ scale: 0.98 }}
+              className={`relative w-full rounded-full overflow-hidden shadow-xl ${dropImageUploaded ? 'bg-green-600' : 'bg-gray-400 cursor-not-allowed'}`}
+              style={{
+                touchAction: dropImageUploaded ? 'pan-x' : 'none',
+                opacity: dropImageUploaded ? 1 : 0.6
+              }}
+              onTouchStart={dropImageUploaded ? handleReachedDropTouchStart : undefined}
+              onTouchMove={dropImageUploaded ? handleReachedDropTouchMove : undefined}
+              onTouchEnd={dropImageUploaded ? handleReachedDropTouchEnd : undefined}
+              onTouchCancel={dropImageUploaded ? handleReachedDropTouchEnd : undefined}
+              whileTap={dropImageUploaded ? { scale: 0.98 } : {}}
             >
               {/* Swipe progress background */}
               <motion.div
@@ -10960,7 +11066,11 @@ export default function DeliveryHome() {
                       damping: 25
                     } : { duration: 0 }}
                   >
-                    {reachedDropButtonProgress > 0.5 ? 'Release to Confirm' : 'Reached Drop'}
+                    {!dropImageUploaded
+                      ? 'Upload Drop Photo First'
+                      : reachedDropButtonProgress > 0.5
+                        ? 'Release to Confirm'
+                        : 'Reached Drop'}
                   </motion.span>
                 </div>
               </div>
@@ -11183,11 +11293,12 @@ export default function DeliveryHome() {
                       review: customerReviewText
                     })
 
-                    // Call completeDelivery API with rating and review
+                    // Call completeDelivery API with rating, review, and dropImageUrl
                     const response = await deliveryAPI.completeDelivery(
                       orderIdForApi,
                       customerRating > 0 ? customerRating : null,
-                      customerReviewText.trim() || ''
+                      customerReviewText.trim() || '',
+                      dropImageUrl
                     )
 
                     if (response.data?.success) {
@@ -11365,7 +11476,4 @@ export default function DeliveryHome() {
     </div>
   )
 }
-
-
-
 

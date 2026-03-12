@@ -37,6 +37,8 @@ export default function ProfilePage() {
   const sectionsRef = useRef(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [referralReward, setReferralReward] = useState(2000)
+  const [loadingReferral, setLoadingReferral] = useState(false)
   const [showAlertSoundPopup, setShowAlertSoundPopup] = useState(false)
   const [selectedAlertSound, setSelectedAlertSound] = useState(() => {
     // Load from localStorage, default to "zomato_tone"
@@ -135,6 +137,37 @@ export default function ProfilePage() {
     }
 
     fetchProfile()
+  }, [])
+
+  // Fetch referral settings for delivery partner (dynamic referral bonus)
+  useEffect(() => {
+    const fetchReferralSettings = async () => {
+      try {
+        setLoadingReferral(true)
+        const response = await deliveryAPI.getReferralSettings?.()
+          ? await deliveryAPI.getReferralSettings()
+          : await deliveryAPI.getDashboard() // fallback; should normally not be used
+
+        const data = response?.data?.data
+        const reward =
+          data?.referralSettings?.referrerReward ??
+          data?.referralSettings?.referrer_reward
+
+        if (typeof reward === "number" && reward > 0) {
+          setReferralReward(reward)
+        }
+      } catch (error) {
+        console.error("Error fetching delivery referral settings:", error)
+        // silently fall back to default 2000
+      } finally {
+        setLoadingReferral(false)
+      }
+    }
+
+    // Safe guard: only call if API exists (older builds may not have it)
+    if (deliveryAPI.getReferralSettings || deliveryAPI.getDashboard) {
+      fetchReferralSettings()
+    }
   }, [])
 
   // Listen for refresh events from bottom navigation
@@ -343,7 +376,9 @@ export default function ProfilePage() {
           >
             <CardContent className="p-4 flex items-center justify-between">
               <div>
-                <h3 className="text-base font-medium mb-1">₹2000 referral bonus</h3>
+                <h3 className="text-base font-medium mb-1">
+                  ₹{loadingReferral ? "…" : referralReward} referral bonus
+                </h3>
                 <p className="text-gray-600 text-sm">Refer your friend and earn</p>
               </div>
               <div className="flex items-center justify-center w-12 h-12">

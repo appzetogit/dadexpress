@@ -41,6 +41,10 @@ const countryCodes = [
 ]
 
 export default function SignIn() {
+  const isDev = import.meta.env?.DEV === true
+  const debugLog = (...args) => {
+    if (isDev) console.log(...args)
+  }
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const isSignUp = searchParams.get("mode") === "signup"
@@ -66,18 +70,25 @@ export default function SignIn() {
     const ref = searchParams.get("ref")
     if (ref) {
       localStorage.setItem("referralCode", ref)
-      console.log("🎁 Referral code captured:", ref)
+      debugLog("🎁 Referral code captured:", ref)
     }
   }, [searchParams])
+
+  // By default, treat redirects as already handled to avoid
+  // unwanted auto-navigation when returning to this page via back.
+  // Specific flows (e.g. Google sign-in) will explicitly reset this flag.
+  useEffect(() => {
+    redirectHandledRef.current = true
+  }, [])
 
   // Helper function to process signed-in user
   const processSignedInUser = async (user, source = "unknown") => {
     if (redirectHandledRef.current) {
-      console.log(`ℹ️ User already being processed, skipping (source: ${source})`)
+      debugLog(`ℹ️ User already being processed, skipping (source: ${source})`)
       return
     }
 
-    console.log(`✅ Processing signed-in user from ${source}:`, {
+    debugLog(`✅ Processing signed-in user from ${source}:`, {
       email: user.email,
       uid: user.uid,
       displayName: user.displayName
@@ -89,18 +100,18 @@ export default function SignIn() {
 
     try {
       const idToken = await user.getIdToken()
-      console.log(`✅ Got ID token from ${source}, calling backend...`)
+      debugLog(`✅ Got ID token from ${source}, calling backend...`)
 
       // Get FCM token
       const fcmToken = await requestFcmToken();
       if (fcmToken) {
-        console.log(`[PUSH-NOTIFICATION] Sending FCM token for user Google login from ${source}:`, fcmToken);
+        debugLog(`[PUSH-NOTIFICATION] Sending FCM token for user Google login from ${source}:`, fcmToken);
       }
 
       const response = await authAPI.firebaseGoogleLogin(idToken, "user", fcmToken, "web")
       const data = response?.data?.data || {}
 
-      console.log(`✅ Backend response from ${source}:`, {
+      debugLog(`✅ Backend response from ${source}:`, {
         hasAccessToken: !!data.accessToken,
         hasUser: !!data.user,
         userEmail: data.user?.email
@@ -120,7 +131,7 @@ export default function SignIn() {
           window.history.replaceState({}, document.title, window.location.pathname)
         }
 
-        console.log(`✅ Navigating to user dashboard from ${source}...`)
+        debugLog(`✅ Navigating to user dashboard from ${source}...`)
         navigate("/user", { replace: true })
       } else {
         console.error(`❌ Invalid backend response from ${source}`)
@@ -157,10 +168,10 @@ export default function SignIn() {
         const { onAuthStateChanged } = await import("firebase/auth")
         ensureFirebaseInitialized()
 
-        console.log("🔔 Setting up auth state listener...")
+        debugLog("🔔 Setting up auth state listener...")
 
         unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
-          console.log("🔔 Auth state changed:", {
+          debugLog("🔔 Auth state changed:", {
             hasUser: !!user,
             userEmail: user?.email,
             redirectHandled: redirectHandledRef.current
@@ -358,23 +369,56 @@ export default function SignIn() {
         throw new Error("Firebase Auth is not initialized. Please check your Firebase configuration.")
       }
 
-      const { signInWithPopup } = await import("firebase/auth")
+      const { signInWithPopup, GoogleAuthProvider, signInWithCredential } = await import("firebase/auth")
 
-      // Use popup for better UX and to avoid 'missing initial state' errors on redirect
-      console.log("🚀 Starting Google sign-in popup...")
-      const result = await signInWithPopup(firebaseAuth, googleProvider)
+      let user = null
 
-      if (result && result.user) {
-        console.log("✅ Google sign-in popup successful, processing user...")
-        await processSignedInUser(result.user, "popup-result")
+      if (window.flutter_inappwebview && typeof window.flutter_inappwebview.callHandler === "function") {
+        // 🚀 Mobile app (Flutter InAppWebView) flow - DO NOT fall back to web popup on cancel
+        debugLog("📱 Starting Google sign-in via Flutter native bridge...")
+        try {
+          const result = await window.flutter_inappwebview.callHandler("nativeGoogleSignIn")
+
+          if (result && result.success && result.idToken) {
+            const idToken = result.idToken
+            const credential = GoogleAuthProvider.credential(idToken)
+            const userCredential = await signInWithCredential(firebaseAuth, credential)
+            user = userCredential.user
+            debugLog("✅ Website login successful via Flutter App!")
+          } else {
+            // User cancelled native sign-in or no success flag -> stay on login page
+            debugLog("ℹ️ User cancelled native sign in. Staying on login page (no web popup fallback).")
+            // Mark as handled so auth-state listener doesn't auto-redirect
+            redirectHandledRef.current = true
+            setIsLoading(false)
+            return
+          }
+        } catch (e) {
+          console.error("❌ Flutter Bridge Error during Google sign-in:", e)
+          // On hard error, stop here as well (no silent popup fallback)
+          redirectHandledRef.current = true
+          setIsLoading(false)
+          return
+        }
       } else {
-        console.log("ℹ️ No user returned from popup (might have been closed)")
+        // 🌐 Normal web browsers (Chrome/Safari etc.) -> use popup Google sign-in
+        debugLog("🚀 Starting Google sign-in popup (web browser)...")
+        const result = await signInWithPopup(firebaseAuth, googleProvider)
+        user = result?.user || null
+      }
+
+      if (user) {
+        debugLog("✅ Google sign-in successful, processing user...")
+        await processSignedInUser(user, window.flutter_inappwebview ? "flutter-bridge" : "popup-result")
+      } else {
+        debugLog("ℹ️ No user returned from Google sign-in (might have been closed)")
         setIsLoading(false)
       }
     } catch (error) {
       console.error("❌ Google sign-in popup error:", error)
       setIsLoading(false)
-      redirectHandledRef.current = false
+      // Prevent auth-state listener from redirecting after a cancelled/failed popup
+      redirectHandledRef.current = true
 
       const errorCode = error?.code || ""
       const errorMessage = error?.message || ""

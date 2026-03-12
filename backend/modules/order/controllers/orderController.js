@@ -1,4 +1,5 @@
 import Order from '../models/Order.js';
+import { generateOrderId, normalizeOrderId } from '../../../shared/utils/idUtils.js';
 import Payment from '../../payment/models/Payment.js';
 import { createOrder as createRazorpayOrder, verifyPayment } from '../../payment/services/razorpayService.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
@@ -26,6 +27,28 @@ const logger = winston.createLogger({
     })
   ]
 });
+
+let cachedActiveZones = null;
+let cachedActiveZonesAt = 0;
+const ACTIVE_ZONES_TTL_MS = 30000;
+
+const getActiveZonesCached = async () => {
+  const now = Date.now();
+  if (cachedActiveZones && (now - cachedActiveZonesAt) < ACTIVE_ZONES_TTL_MS) {
+    return cachedActiveZones;
+  }
+  try {
+    const zones = await Zone.find({ isActive: true }).lean();
+    cachedActiveZones = zones;
+    cachedActiveZonesAt = now;
+    return zones;
+  } catch (err) {
+    if (cachedActiveZones) {
+      return cachedActiveZones;
+    }
+    throw err;
+  }
+};
 
 /**
  * Create a new order and initiate Razorpay payment
@@ -189,7 +212,7 @@ export const createOrder = async (req, res) => {
     }
 
     // Check if restaurant is within any active zone
-    const activeZones = await Zone.find({ isActive: true }).lean();
+    const activeZones = await getActiveZonesCached();
     let restaurantInZone = false;
     let restaurantZone = null;
 
@@ -286,10 +309,8 @@ export const createOrder = async (req, res) => {
       incomingRestaurantName: restaurantName
     });
 
-    // Generate order ID before creating order (URL safe: no spaces)
-    const timestamp = Date.now();
-    const random = Math.floor(Math.random() * 1000);
-    const generatedOrderId = `ORD-${timestamp}-${random}`;
+    // Generate strict URL-safe order ID
+    const generatedOrderId = generateOrderId();
 
     // Ensure couponCode is included in pricing
     if (!pricing.couponCode && pricing.appliedCoupon?.code) {
@@ -1050,33 +1071,40 @@ export const getOrderDetails = async (req, res) => {
 
     // If not found, try by orderId (custom order ID like "ORD-123456-789")
     if (!order) {
-      // Decode URI component to handle %20 etc.
+      console.log("🔍 [DEBUG] Incoming orderId param:", id);
       const decodedId = id ? decodeURIComponent(id) : "";
-      const trimmedId = decodedId.trim();
+      console.log("🔍 [DEBUG] Decoded orderId:", decodedId);
       
-      const variants = [id, decodedId, trimmedId];
+      const normalized = normalizeOrderId(id);
+      console.log("🔍 [DEBUG] Normalized orderId for lookup:", normalized);
+
+      const variants = [id, decodedId, normalized];
       
-      // Some historical orders were stored with a trailing space in orderId,
-      // or with internal spaces like "ORD - ... - ..."
-      if (trimmedId && !variants.includes(`${trimmedId} `)) {
-        variants.push(`${trimmedId} `);
-      }
-      
-      // Try to re-construct the spaced version if it matches the pattern
-      if (trimmedId.startsWith("ORD-")) {
-        const parts = trimmedId.split("-");
+      // Legacy compatibility: check for the "spaced" format explicitly if needed
+      // Most of these are handled by normalizeOrderId, but we keep explicit check for old data
+      if (normalized.startsWith("ORD-")) {
+        const parts = normalized.split("-");
         if (parts.length === 3) {
           variants.push(`ORD - ${parts[1]} -${parts[2]} `);
         }
       }
 
       order = await Order.findOne({
-        orderId: { $in: [...new Set(variants)] },
+        $or: [
+          { orderId: normalized },
+          { orderId: { $in: [...new Set(variants)] } }
+        ],
         userId
       })
         .populate('deliveryPartnerId', 'name email phone')
         .populate('userId', 'name fullName phone email')
         .lean();
+        
+      if (order) {
+        console.log("✅ [DEBUG] Order found via robust lookup:", order.orderId);
+      } else {
+        console.warn("❌ [DEBUG] Order not found for variants:", variants);
+      }
     }
 
     if (!order) {
@@ -1134,24 +1162,22 @@ export const cancelOrder = async (req, res) => {
     }
 
     if (!order) {
-      // Decode and normalize id for backward compatibility with spaced IDs
+      const normalized = normalizeOrderId(id);
       const decodedId = id ? decodeURIComponent(id) : "";
-      const trimmedId = decodedId.trim();
+      const variants = [id, decodedId, normalized];
       
-      const variants = [id, decodedId, trimmedId];
-      if (trimmedId && !variants.includes(`${trimmedId} `)) {
-        variants.push(`${trimmedId} `);
-      }
-      
-      if (trimmedId.startsWith("ORD-")) {
-        const parts = trimmedId.split("-");
+      if (normalized.startsWith("ORD-")) {
+        const parts = normalized.split("-");
         if (parts.length === 3) {
           variants.push(`ORD - ${parts[1]} -${parts[2]} `);
         }
       }
 
       order = await Order.findOne({
-        orderId: { $in: [...new Set(variants)] },
+        $or: [
+          { orderId: normalized },
+          { orderId: { $in: [...new Set(variants)] } }
+        ],
         userId
       });
     }

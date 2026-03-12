@@ -105,6 +105,7 @@ const httpServer = createServer(app);
 // Initialize Socket.IO with proper CORS configuration
 const allowedSocketOrigins = [
   process.env.CORS_ORIGIN,
+  'https://dadexpress-4e5fo5hel-appzetos-projects-70635cc3.vercel.app',
   'https://dadexpress.in',
   'https://www.dadexpress.in',
   'https://dadexpress-d2sed0c2w-appzetos-projects-70635cc3.vercel.app',
@@ -321,6 +322,7 @@ app.use(helmet());
 // CORS configuration - allow multiple origins
 const allowedOrigins = [
   process.env.CORS_ORIGIN,
+  'https://dadexpress-4e5fo5hel-appzetos-projects-70635cc3.vercel.app',
   'https://dadexpress.in',
   'https://www.dadexpress.in',
   'https://dadexpress-d2sed0c2w-appzetos-projects-70635cc3.vercel.app',
@@ -368,6 +370,9 @@ if (process.env.NODE_ENV === 'production') {
     message: 'Too many requests from this IP, please try again later.',
     standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
     legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+    // For rate limiting, DO NOT trust proxy headers to avoid spoofed IPs.
+    // This keeps IP-based limiting safe even though Express trusts the proxy.
+    trustProxy: false,
   });
 
   app.use('/api/', limiter);

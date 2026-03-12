@@ -378,25 +378,36 @@ export const acceptOrder = asyncHandler(async (req, res) => {
     // If order is not assigned, we do strict zone-matching along with priority checking
     if (!orderDeliveryPartnerId) {
       // ZONE VALIDATION: Ensure the order's restaurant is within the delivery partner's zones
+      // IMPORTANT:
+      // - If zones are configured for the delivery partner, enforce them strictly
+      // - If NO zones are configured (common for legacy / testing accounts), allow the order
+      //   instead of blocking with "outside your assigned delivery zone"
       let isInValidZone = false;
       const orderRestaurantIdStr = order.restaurantId?._id?.toString() || order.restaurantId?.toString();
-      
-      if (orderRestaurantIdStr && delivery.availability?.zones?.length > 0) {
+
+      const hasZonesConfigured = Array.isArray(delivery.availability?.zones) && delivery.availability.zones.length > 0;
+      const hasLegacyZoneId = !!delivery.zoneId;
+
+      if (orderRestaurantIdStr && hasZonesConfigured) {
         const zone = await Zone.findOne({
           _id: { $in: delivery.availability.zones },
           restaurantId: orderRestaurantIdStr,
           isActive: true
         }).lean();
-        
+
         if (zone) isInValidZone = true;
-      } else if (orderRestaurantIdStr && delivery.zoneId) {
+      } else if (orderRestaurantIdStr && hasLegacyZoneId) {
         const zone = await Zone.findOne({
           _id: delivery.zoneId,
           restaurantId: orderRestaurantIdStr,
           isActive: true
         }).lean();
-        
+
         if (zone) isInValidZone = true;
+      } else {
+        // No zone configuration for this delivery partner – treat as global coverage
+        // to avoid false "outside your zone" errors for older accounts.
+        isInValidZone = true;
       }
 
       if (!isInValidZone) {
@@ -464,12 +475,18 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       // Reload order as document (not lean) to update it
       let orderDoc;
       try {
-        orderDoc = await Order.findOne({
+        // Reuse the same cleaned variants logic used earlier so we never fail
+        // to find a valid order document just because of minor formatting differences.
+        const reloadQuery = {
           $or: [
-            { _id: orderId },
-            { orderId: orderId }
+            { orderId: { $in: orderIdVariants } }
           ]
-        });
+        };
+        if (validObjectId) {
+          reloadQuery.$or.push({ _id: validObjectId });
+        }
+
+        orderDoc = await Order.findOne(reloadQuery);
 
         if (!orderDoc) {
           console.error(`❌ Order document not found for ID: ${orderId}`);
@@ -519,12 +536,18 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       // Reload order with populated data (use orderDoc._id to ensure we get the updated order)
       const updatedOrderId = orderDoc._id || orderId;
       try {
-        order = await Order.findOne({
+        const reloadQueryAfterAssign = {
           $or: [
-            { _id: updatedOrderId },
-            { orderId: orderId }
+            { orderId: { $in: orderIdVariants } }
           ]
-        })
+        };
+        if (validObjectId) {
+          reloadQueryAfterAssign.$or.push({ _id: validObjectId });
+        } else if (updatedOrderId) {
+          reloadQueryAfterAssign.$or.push({ _id: updatedOrderId });
+        }
+
+        order = await Order.findOne(reloadQueryAfterAssign)
           .populate('restaurantId', 'name location address phone ownerPhone')
           .populate('userId', 'name phone')
           .lean();
@@ -1126,7 +1149,7 @@ export const confirmOrderId = asyncHandler(async (req, res) => {
   try {
     const delivery = req.delivery;
     let { orderId } = req.params;
-    const { confirmedOrderId, billImageUrl } = req.body; // Order ID confirmed by delivery boy, bill image URL
+    const { confirmedOrderId, billImageUrl, pickupImageUrl } = req.body; // Order ID confirmed by delivery boy, bill image URL, pickup image URL
     const { currentLat, currentLng } = req.body; // Current location for route calculation
 
     // Clean orderId string if it comes with spaces or URI encoded spaces
@@ -1384,6 +1407,21 @@ export const confirmOrderId = asyncHandler(async (req, res) => {
       }
     }
 
+    // Add pickup image URL if provided (with validation)
+    if (pickupImageUrl) {
+      try {
+        const url = new URL(pickupImageUrl);
+        if (!['http:', 'https:'].includes(url.protocol)) {
+          return errorResponse(res, 400, 'Pickup image URL must be HTTP or HTTPS');
+        }
+        updateData.pickupImageUrl = pickupImageUrl;
+        console.log(`📸 Pickup image URL validated and saved for order ${order.orderId}`);
+      } catch (urlError) {
+        console.error(`❌ Invalid pickup image URL format: ${pickupImageUrl}`, urlError);
+        return errorResponse(res, 400, 'Invalid pickup image URL format');
+      }
+    }
+
     const updatedOrder = await Order.findByIdAndUpdate(
       orderMongoId,
       { $set: updateData },
@@ -1630,7 +1668,7 @@ export const completeDelivery = asyncHandler(async (req, res) => {
   try {
     const delivery = req.delivery;
     const { orderId } = req.params;
-    const { rating, review } = req.body; // Optional rating and review from delivery boy
+    const { rating, review, dropImageUrl } = req.body; // Optional rating and review from delivery boy, and drop image URL
 
     if (!delivery || !delivery._id) {
       return errorResponse(res, 401, 'Delivery partner authentication required');
@@ -1784,6 +1822,21 @@ export const completeDelivery = asyncHandler(async (req, res) => {
       }
       if (order.userId && !updateData['review.reviewedBy']) {
         updateData['review.reviewedBy'] = order.userId;
+      }
+    }
+
+    // Add drop image URL if provided (with validation)
+    if (dropImageUrl) {
+      try {
+        const url = new URL(dropImageUrl);
+        if (!['http:', 'https:'].includes(url.protocol)) {
+          return errorResponse(res, 400, 'Drop image URL must be HTTP or HTTPS');
+        }
+        updateData.dropImageUrl = dropImageUrl;
+        console.log(`📸 Drop image URL validated and saved for order ${order.orderId}`);
+      } catch (urlError) {
+        console.error(`❌ Invalid drop image URL format: ${dropImageUrl}`, urlError);
+        return errorResponse(res, 400, 'Invalid drop image URL format');
       }
     }
 

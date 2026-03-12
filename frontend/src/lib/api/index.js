@@ -974,6 +974,7 @@ export const deliveryAPI = {
         confirmedOrderId,
         currentLat: currentLocation.lat,
         currentLng: currentLocation.lng,
+        pickupImageUrl: additionalData.pickupImageUrl,
         ...additionalData,
       },
     );
@@ -983,7 +984,7 @@ export const deliveryAPI = {
       API_ENDPOINTS.DELIVERY.ORDER_REACHED_DROP.replace(":orderId", orderId),
     );
   },
-  completeDelivery: (orderId, rating = null, review = "") => {
+  completeDelivery: (orderId, rating = null, review = "", dropImageUrl = null) => {
     return apiClient.patch(
       API_ENDPOINTS.DELIVERY.ORDER_COMPLETE_DELIVERY.replace(
         ":orderId",
@@ -992,6 +993,7 @@ export const deliveryAPI = {
       {
         rating,
         review,
+        dropImageUrl,
       },
     );
   },
@@ -1948,12 +1950,12 @@ export const orderAPI = {
 
   // Get order details
   getOrderDetails: (orderId) => {
-    return apiClient.get(API_ENDPOINTS.ORDER.DETAILS.replace(":id", orderId));
+    return apiClient.get(API_ENDPOINTS.ORDER.DETAILS.replace(":id", encodeURIComponent(orderId)));
   },
 
   // Cancel order
   cancelOrder: (orderId, reason) => {
-    return apiClient.patch(API_ENDPOINTS.ORDER.CANCEL.replace(":id", orderId), {
+    return apiClient.patch(API_ENDPOINTS.ORDER.CANCEL.replace(":id", encodeURIComponent(orderId)), {
       reason,
     });
   },

@@ -48,6 +48,7 @@ export default function PickupDirectionsPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const { goOffline } = useGigStore()
+  const mapRef = useRef(null)
   const [riderLocation, setRiderLocation] = useState([28.2849, 76.1209]) // Set default immediately
   const [expandedRestaurant, setExpandedRestaurant] = useState(null)
   const [routePolylines, setRoutePolylines] = useState([])
@@ -142,6 +143,34 @@ export default function PickupDirectionsPage() {
   const handleOpenMap = (lat, lng, address) => {
     const url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`
     window.open(url, '_blank')
+  }
+
+  const handleZoomIn = () => {
+    if (mapRef.current) {
+      mapRef.current.zoomIn()
+    }
+  }
+
+  const handleZoomOut = () => {
+    if (mapRef.current) {
+      mapRef.current.zoomOut()
+    }
+  }
+
+  const handleRecenter = () => {
+    if (mapRef.current && riderLocation) {
+      mapRef.current.setView(riderLocation, mapRef.current.getZoom())
+    }
+  }
+
+  const handleNavigateToCurrentRestaurant = () => {
+    const current =
+      acceptedRestaurants.find(r => r.id === expandedRestaurant) ||
+      acceptedRestaurants[0]
+
+    if (current && current.lat && current.lng) {
+      handleOpenMap(current.lat, current.lng, current.address)
+    }
   }
 
   const toggleRestaurantExpansion = (restaurantId) => {
@@ -354,10 +383,16 @@ export default function PickupDirectionsPage() {
           <button className="p-2 hover:bg-gray-800 rounded-full transition-colors">
             <div className="w-5 h-5 bg-[#ff8100] rounded-full" />
           </button>
-          <button className="p-2 hover:bg-gray-800 rounded-full transition-colors">
+          <button
+            className="p-2 hover:bg-gray-800 rounded-full transition-colors"
+            onClick={handleNavigateToCurrentRestaurant}
+          >
             <Navigation className="w-5 h-5 text-white" />
           </button>
-          <button className="p-2 hover:bg-gray-800 rounded-full transition-colors">
+          <button
+            className="p-2 hover:bg-gray-800 rounded-full transition-colors"
+            onClick={handleRecenter}
+          >
             <RefreshCw className="w-5 h-5 text-white" />
           </button>
         </div>
@@ -379,6 +414,9 @@ export default function PickupDirectionsPage() {
             style={{ height: '100%', width: '100%', zIndex: 1 }}
             zoomControl={false}
             scrollWheelZoom={true}
+            whenCreated={(mapInstance) => {
+              mapRef.current = mapInstance
+            }}
           >
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -429,17 +467,26 @@ export default function PickupDirectionsPage() {
 
         {/* Map Zoom Controls */}
         <div className="absolute right-4 top-20 z-40 flex flex-col gap-2">
-          <button className="w-10 h-10 bg-white rounded-lg shadow-lg flex items-center justify-center text-gray-700 text-xl font-semibold">
+          <button
+            className="w-10 h-10 bg-white rounded-lg shadow-lg flex items-center justify-center text-gray-700 text-xl font-semibold"
+            onClick={handleZoomIn}
+          >
             +
           </button>
-          <button className="w-10 h-10 bg-white rounded-lg shadow-lg flex items-center justify-center text-gray-700 text-xl font-semibold">
+          <button
+            className="w-10 h-10 bg-white rounded-lg shadow-lg flex items-center justify-center text-gray-700 text-xl font-semibold"
+            onClick={handleZoomOut}
+          >
             −
           </button>
         </div>
 
         {/* Location Button */}
         <div className="absolute right-4 top-44 z-40">
-          <button className="w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center">
+          <button
+            className="w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center"
+            onClick={handleRecenter}
+          >
             <Navigation className="w-5 h-5 text-gray-700" />
           </button>
         </div>
