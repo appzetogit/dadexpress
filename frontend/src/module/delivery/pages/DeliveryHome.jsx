@@ -3616,6 +3616,20 @@ export default function DeliveryHome() {
     }
   }
 
+  const parseFlutterCameraResult = (rawResult) => {
+    let parsed = rawResult
+    if (typeof parsed === 'string') {
+      try {
+        parsed = JSON.parse(parsed)
+      } catch {
+        return null
+      }
+    }
+
+    if (!parsed || typeof parsed !== 'object') return null
+    return parsed
+  }
+
   /**
    * Handle camera capture for pickup or drop photo - Flutter InAppWebView compatible
    */
@@ -3626,12 +3640,8 @@ export default function DeliveryHome() {
         false && console.log(`📸 Using Flutter InAppWebView camera handler for ${captureMode}`)
 
         // Call Flutter handler to open camera
-        const result = await window.flutter_inappwebview.callHandler('openCamera', {
-          source: 'camera',
-          accept: 'image/*',
-          multiple: false,
-          quality: 0.8
-        })
+        const rawResult = await window.flutter_inappwebview.callHandler('openCamera')
+        const result = parseFlutterCameraResult(rawResult)
 
         false && console.log('📸 Flutter handler response:', result)
 
@@ -10698,7 +10708,7 @@ export default function DeliveryHome() {
               {/* Camera Button */}
               <div className="flex justify-center mb-4">
                 <button
-                  onClick={handleCameraCapture}
+                  onClick={() => handleCameraCapture('pickup')}
                   disabled={isUploadingPickup}
                   className={`flex items-center justify-center gap-2 px-6 py-3 rounded-lg transition-colors ${isUploadingPickup
                     ? 'bg-gray-400 cursor-not-allowed'

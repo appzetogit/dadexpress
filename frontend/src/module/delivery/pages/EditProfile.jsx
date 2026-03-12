@@ -1,5 +1,4 @@
-import { useState } from "react"
-import { motion } from "framer-motion"
+import { useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { 
   ArrowLeft,
@@ -8,9 +7,12 @@ import {
 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { toast } from "sonner"
 
 export default function EditProfile() {
   const navigate = useNavigate()
+  const fileInputRef = useRef(null)
+  const [profilePreview, setProfilePreview] = useState("https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face")
   const [formData, setFormData] = useState({
     name: "Jhon Doe",
     phone: "+8801700000000",
@@ -23,6 +25,72 @@ export default function EditProfile() {
       ...prev,
       [field]: value
     }))
+  }
+
+  const parseCameraResult = (rawResult) => {
+    let result = rawResult
+    if (typeof result === "string") {
+      try {
+        result = JSON.parse(result)
+      } catch {
+        return null
+      }
+    }
+    if (!result || typeof result !== "object") return null
+    if (!result.success || !result.base64) return null
+    return result
+  }
+
+  const convertBase64ToFile = (cameraResult) => {
+    const base64Content = cameraResult.base64.includes(",")
+      ? cameraResult.base64.split(",").pop()
+      : cameraResult.base64
+
+    const byteString = atob(base64Content)
+    const uint8Array = new Uint8Array(byteString.length)
+    for (let i = 0; i < byteString.length; i += 1) {
+      uint8Array[i] = byteString.charCodeAt(i)
+    }
+
+    const mimeType = cameraResult.mimeType || "image/jpeg"
+    const extension = mimeType.split("/")[1] || "jpg"
+    const fileName = cameraResult.fileName || `profile-${Date.now()}.${extension}`
+    return new File([uint8Array], fileName, { type: mimeType })
+  }
+
+  const handleProfileImageFile = (file) => {
+    if (!file) return
+    if (!file.type?.startsWith("image/")) {
+      toast.error("Please select an image file")
+      return
+    }
+    setProfilePreview(URL.createObjectURL(file))
+    // TODO: Wire this file to actual profile image upload API for delivery profile.
+  }
+
+  const handleCameraCapture = async (event) => {
+    try {
+      event?.preventDefault()
+      event?.stopPropagation()
+
+      if (!window.flutter_inappwebview?.callHandler) {
+        fileInputRef.current?.click()
+        return
+      }
+
+      const rawResult = await window.flutter_inappwebview.callHandler("openCamera")
+      const cameraResult = parseCameraResult(rawResult)
+      if (!cameraResult) {
+        toast.error("No photo captured from camera")
+        return
+      }
+
+      const file = convertBase64ToFile(cameraResult)
+      handleProfileImageFile(file)
+    } catch (error) {
+      console.error("Profile camera error:", error)
+      toast.error("Failed to capture photo from camera")
+    }
   }
 
   const handleSubmit = (e) => {
@@ -54,20 +122,21 @@ export default function EditProfile() {
               <div className="flex flex-col items-center">
                 <div className="relative mb-2 md:mb-4">
                   <img 
-                    src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face"
+                    src={profilePreview}
                     alt="Profile"
                     className="w-20 h-20 md:w-32 md:h-32 rounded-full border-2 md:border-4 border-white object-cover shadow-md"
                   />
-                  <label className="absolute bottom-0 right-0 bg-[#ff8100] text-white p-1.5 md:p-2 rounded-full cursor-pointer hover:bg-[#e67300] transition-colors">
+                  <label
+                    onClick={handleCameraCapture}
+                    className="absolute bottom-0 right-0 bg-[#ff8100] text-white p-1.5 md:p-2 rounded-full cursor-pointer hover:bg-[#e67300] transition-colors"
+                  >
                     <Camera className="w-3 h-3 md:w-4 md:h-4" />
                     <input
+                      ref={fileInputRef}
                       type="file"
                       accept="image/*"
                       className="hidden"
-                      onChange={(e) => {
-                        // Handle image upload
-                        console.log("Image selected:", e.target.files[0])
-                      }}
+                      onChange={(e) => handleProfileImageFile(e.target.files?.[0])}
                     />
                   </label>
                 </div>
