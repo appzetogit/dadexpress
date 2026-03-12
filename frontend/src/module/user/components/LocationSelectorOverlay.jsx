@@ -1553,10 +1553,6 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
             zipCode: postalCode || prev.zipCode,
             additionalDetails: fullAddressForField || prev.additionalDetails, // Store FULL address in Address details field
           }))
-        } else {
-          console.warn("⚠️ No address data found from Google Maps or backend")
-          setCurrentAddress(`${roundedLat.toFixed(6)}, ${roundedLng.toFixed(6)}`)
-        }
       } catch (error) {
         console.error("❌ Error reverse geocoding:", error)
         console.error("Error details:", {
