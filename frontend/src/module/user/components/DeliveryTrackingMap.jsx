@@ -739,6 +739,23 @@ const DeliveryTrackingMap = ({
       }
     });
 
+    const handleEtaUpdated = (data) => {
+      if (!data) return;
+      const idMatches = [data.orderId, data.orderMongoId]
+        .filter(Boolean)
+        .some((id) => trackingIds.includes(String(id)));
+
+      if (!idMatches) return;
+
+      if (window.dispatchEvent) {
+        window.dispatchEvent(new CustomEvent('etaUpdated', {
+          detail: data
+        }));
+      }
+    };
+
+    socketRef.current.on('ETA_UPDATED', handleEtaUpdated);
+
     const handlePageHide = () => {
       if (socketRef.current) {
         socketRef.current.disconnect();
@@ -759,6 +776,7 @@ const DeliveryTrackingMap = ({
           socketRef.current.off(`route-polyline-${trackingId}`, handleRoutePolyline);
         });
         socketRef.current.off('order_status_update');
+        socketRef.current.off('ETA_UPDATED', handleEtaUpdated);
         socketRef.current.disconnect();
       }
     };
@@ -1483,4 +1501,3 @@ const DeliveryTrackingMap = ({
 };
 
 export default DeliveryTrackingMap;
-

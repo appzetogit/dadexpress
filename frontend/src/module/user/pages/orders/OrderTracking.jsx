@@ -208,7 +208,6 @@ export default function OrderTracking() {
 
   const [showConfirmation, setShowConfirmation] = useState(confirmed)
   const [orderStatus, setOrderStatus] = useState('placed')
-  const [estimatedTime, setEstimatedTime] = useState(29)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [showCancelDialog, setShowCancelDialog] = useState(false)
   const [showOrderDetails, setShowOrderDetails] = useState(false)
@@ -313,6 +312,19 @@ export default function OrderTracking() {
     return ""
   }, [order?.status, canUpdateLocationStatus, isDeliveryPartnerAssigned])
 
+  const etaLabel = useMemo(() => {
+    const minEta = Number(order?.eta?.min)
+    const maxEta = Number(order?.eta?.max)
+    if (Number.isFinite(minEta) && Number.isFinite(maxEta)) {
+      return `${Math.round(minEta)}-${Math.round(maxEta)} mins`
+    }
+    const estimated = Number(order?.estimatedDeliveryTime)
+    if (Number.isFinite(estimated)) {
+      return `${Math.round(estimated)} mins`
+    }
+    return ""
+  }, [order?.eta?.min, order?.eta?.max, order?.estimatedDeliveryTime])
+
   useEffect(() => {
     if (!order || showLocationDialog) return
     const coords = order?.address?.location?.coordinates || []
@@ -364,6 +376,15 @@ export default function OrderTracking() {
           const newPhase = apiOrder.deliveryState?.currentPhase;
           const newOrderStatus = apiOrder.status;
           const currentOrderStatus = order?.status;
+          const newEtaMin = Number(apiOrder.eta?.min);
+          const newEtaMax = Number(apiOrder.eta?.max);
+          const currentEtaMin = Number(order?.eta?.min);
+          const currentEtaMax = Number(order?.eta?.max);
+          const newEstimatedTime = Number(apiOrder.estimatedDeliveryTime);
+          const currentEstimatedTime = Number(order?.estimatedDeliveryTime);
+          const etaChanged = (Number.isFinite(newEtaMin) && newEtaMin !== currentEtaMin) ||
+            (Number.isFinite(newEtaMax) && newEtaMax !== currentEtaMax) ||
+            (Number.isFinite(newEstimatedTime) && newEstimatedTime !== currentEstimatedTime);
 
           // Check if order was cancelled
           if (newOrderStatus === 'cancelled' && currentOrderStatus !== 'cancelled') {
@@ -374,7 +395,8 @@ export default function OrderTracking() {
           if (newDeliveryStatus === 'accepted' ||
             (newDeliveryStatus !== currentDeliveryStatus) ||
             (newPhase !== currentPhase) ||
-            (newOrderStatus !== currentOrderStatus)) {
+            (newOrderStatus !== currentOrderStatus) ||
+            etaChanged) {
             // Re-fetch and update order (same logic as initial fetch)
             let restaurantCoords = null;
             if (apiOrder.restaurantId?.location?.coordinates &&
@@ -415,7 +437,9 @@ export default function OrderTracking() {
               totalAmount: apiOrder.pricing?.total || apiOrder.totalAmount || 0,
               deliveryFee: apiOrder.pricing?.deliveryFee || apiOrder.deliveryFee || 0,
               gst: apiOrder.pricing?.gst || apiOrder.gst || 0,
-              paymentMethod: apiOrder.paymentMethod || null
+              paymentMethod: apiOrder.paymentMethod || null,
+              eta: apiOrder.eta || null,
+              estimatedDeliveryTime: apiOrder.estimatedDeliveryTime ?? null
             };
 
             setOrder(transformedOrder);
@@ -547,7 +571,9 @@ export default function OrderTracking() {
             totalAmount: apiOrder.pricing?.total || apiOrder.totalAmount || 0,
             deliveryFee: apiOrder.pricing?.deliveryFee || apiOrder.deliveryFee || 0,
             gst: apiOrder.pricing?.gst || apiOrder.gst || 0,
-            paymentMethod: apiOrder.paymentMethod || null
+            paymentMethod: apiOrder.paymentMethod || null,
+            eta: apiOrder.eta || null,
+            estimatedDeliveryTime: apiOrder.estimatedDeliveryTime ?? null
           }
 
           setOrder(transformedOrder)
@@ -591,13 +617,50 @@ export default function OrderTracking() {
     }
   }, [confirmed])
 
-  // Countdown timer
+  // Sync ETA updates emitted from the tracking socket
   useEffect(() => {
-    const timer = setInterval(() => {
-      setEstimatedTime((prev) => Math.max(0, prev - 1))
-    }, 60000)
-    return () => clearInterval(timer)
-  }, [])
+    const handleEtaUpdated = (event) => {
+      const data = event?.detail
+      if (!data) return
+      const idMatches = [data.orderId, data.orderMongoId]
+        .filter(Boolean)
+        .some((id) => {
+          const idStr = String(id)
+          return [
+            orderId,
+            order?.orderId,
+            order?.mongoId,
+            order?._id,
+            order?.id
+          ].filter(Boolean).some((candidate) => String(candidate) === idStr)
+        })
+
+      if (!idMatches) return
+
+      const minEta = Number(data?.eta?.min)
+      const maxEta = Number(data?.eta?.max)
+      const hasEta = Number.isFinite(minEta) && Number.isFinite(maxEta)
+
+      setOrder((prev) => {
+        if (!prev) return prev
+        const nextEta = {
+          ...prev.eta,
+          ...(hasEta ? { min: minEta, max: maxEta } : {}),
+          lastUpdated: data?.eta?.lastUpdated || data?.timestamp || prev?.eta?.lastUpdated
+        }
+        return {
+          ...prev,
+          eta: nextEta,
+          estimatedDeliveryTime: hasEta ? Math.round((minEta + maxEta) / 2) : prev.estimatedDeliveryTime
+        }
+      })
+    }
+
+    window.addEventListener('etaUpdated', handleEtaUpdated)
+    return () => {
+      window.removeEventListener('etaUpdated', handleEtaUpdated)
+    }
+  }, [orderId, order?.orderId, order?.mongoId, order?._id, order?.id])
 
   // Listen for order status updates from socket (e.g., "Delivery partner on the way")
   useEffect(() => {
@@ -867,7 +930,9 @@ export default function OrderTracking() {
             phone: apiOrder.deliveryPartnerId.phone || '',
             avatar: null
           } : null,
-          tracking: apiOrder.tracking || {}
+          tracking: apiOrder.tracking || {},
+          eta: apiOrder.eta || null,
+          estimatedDeliveryTime: apiOrder.estimatedDeliveryTime ?? null
         }
         setOrder(transformedOrder)
 
@@ -918,6 +983,8 @@ export default function OrderTracking() {
     )
   }
 
+  const etaSubtitle = etaLabel ? `Arriving in ${etaLabel}` : "Arriving soon"
+
   const statusConfig = {
     placed: {
       title: "Order placed",
@@ -926,12 +993,12 @@ export default function OrderTracking() {
     },
     preparing: {
       title: "Preparing your order",
-      subtitle: `Arriving in ${estimatedTime} mins`,
+      subtitle: etaSubtitle,
       color: "bg-[#EB590E]"
     },
     pickup: {
       title: "Order picked up",
-      subtitle: `Arriving in ${estimatedTime} mins`,
+      subtitle: etaSubtitle,
       color: "bg-[#EB590E]"
     },
     delivered: {

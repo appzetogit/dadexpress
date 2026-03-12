@@ -38,6 +38,21 @@ export default function OrderDetailsPage() {
         const response = await import('@/lib/api').then(m => m.orderAPI.getOrderDetails(orderId))
         if (response.data.success) {
           const apiOrder = response.data.data.order
+          const minEta = Number(apiOrder?.eta?.min)
+          const maxEta = Number(apiOrder?.eta?.max)
+          let etaLabel = ""
+          if (Number.isFinite(minEta) && Number.isFinite(maxEta)) {
+            etaLabel = `${Math.round(minEta)}-${Math.round(maxEta)} mins`
+          } else {
+            const estimated = Number(apiOrder?.estimatedDeliveryTime)
+            if (Number.isFinite(estimated)) {
+              etaLabel = `${Math.round(estimated)} mins`
+            } else if (apiOrder?.restaurantId?.estimatedDeliveryTime) {
+              etaLabel = String(apiOrder.restaurantId.estimatedDeliveryTime)
+            } else {
+              etaLabel = "30-40 min"
+            }
+          }
           // Map backend order to frontend structure
           setOrder({
             id: apiOrder.orderId || apiOrder._id,
@@ -53,7 +68,7 @@ export default function OrderDetailsPage() {
               deliveryFee: apiOrder.pricing?.deliveryFee || 0,
               discount: apiOrder.pricing?.discount || 0,
               deliveryAddress: apiOrder.address?.formattedAddress || "Delivery Address",
-              estimatedTime: apiOrder.restaurantId?.estimatedDeliveryTime || "30-40 min"
+              estimatedTime: etaLabel
             },
             paymentMethod: apiOrder.payment?.method || "cash",
             timestamp: apiOrder.createdAt

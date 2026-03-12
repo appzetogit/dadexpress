@@ -14,6 +14,11 @@ import {
 } from '../services/locationProcessingService.js';
 import Order from '../../order/models/Order.js';
 import { syncActiveOrderRealtime, syncDeliveryPartnerRealtime } from '../services/firebaseTrackingService.js';
+import etaCalculationService from '../../order/services/etaCalculationService.js';
+import etaWebSocketService from '../../order/services/etaWebSocketService.js';
+
+const ETA_EMIT_THROTTLE_MS = 15000;
+const lastEtaEmitByOrder = new Map();
 
 /**
  * Receive GPS update from delivery app
@@ -100,6 +105,21 @@ export const receiveLocationUpdate = asyncHandler(async (req, res) => {
     }).catch((syncError) => {
       console.warn(`Firebase delivery_boys sync failed: ${syncError.message}`);
     });
+
+    // Emit ETA updates (throttled) based on latest order ETA + elapsed time
+    if (order?._id) {
+      const lastEmit = lastEtaEmitByOrder.get(orderId) || 0;
+      const now = Date.now();
+      if (now - lastEmit >= ETA_EMIT_THROTTLE_MS) {
+        lastEtaEmitByOrder.set(orderId, now);
+        try {
+          const liveETA = await etaCalculationService.getLiveETA(order._id.toString());
+          await etaWebSocketService.emitETAUpdate(order._id.toString(), liveETA, order);
+        } catch (etaError) {
+          console.error('Error emitting ETA update:', etaError);
+        }
+      }
+    }
     
     // Broadcast via WebSocket (handled by socket.io in server.js)
     const io = req.app.get('io');
