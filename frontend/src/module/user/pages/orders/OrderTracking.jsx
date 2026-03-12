@@ -230,6 +230,34 @@ export default function OrderTracking() {
 
   const defaultAddress = getDefaultAddress()
 
+  const deliveryPartnerName =
+    order?.deliveryPartner?.name ||
+    order?.deliveryPartnerName ||
+    order?.deliveryPartnerId?.name ||
+    ''
+
+  const deliveryPartnerPhoneRaw =
+    order?.deliveryPartner?.phone ||
+    order?.deliveryPartnerPhone ||
+    order?.deliveryPartnerId?.phone ||
+    ''
+
+  const deliveryPartnerPhone =
+    typeof deliveryPartnerPhoneRaw === 'string' ? deliveryPartnerPhoneRaw.trim() : deliveryPartnerPhoneRaw || ''
+
+  const hasDeliveryPartner = Boolean(
+    order?.deliveryPartnerId ||
+    order?.assignmentInfo?.deliveryPartnerId ||
+    deliveryPartnerName ||
+    deliveryPartnerPhone
+  )
+
+  const handleCallDeliveryPartner = () => {
+    if (!deliveryPartnerPhone) return
+    const phone = String(deliveryPartnerPhone).replace(/\s+/g, '')
+    window.location.href = `tel:${phone}`
+  }
+
   const isAdminAccepted = useMemo(() => {
     const status = order?.status
     return ['confirmed', 'preparing', 'ready'].includes(status)
@@ -343,6 +371,11 @@ export default function OrderTracking() {
               restaurantLocation: restaurantCoords ? {
                 coordinates: restaurantCoords
               } : order.restaurantLocation,
+              deliveryPartner: apiOrder.deliveryPartnerId ? {
+                name: apiOrder.deliveryPartnerId.name || 'Delivery Partner',
+                phone: apiOrder.deliveryPartnerId.phone || '',
+                avatar: null
+              } : null,
               deliveryPartnerId: apiOrder.deliveryPartnerId?._id || apiOrder.deliveryPartnerId || apiOrder.assignmentInfo?.deliveryPartnerId || null,
               assignmentInfo: apiOrder.assignmentInfo || null,
               deliveryState: apiOrder.deliveryState || null,
@@ -488,6 +521,7 @@ export default function OrderTracking() {
             status: apiOrder.status || 'pending',
             deliveryPartner: apiOrder.deliveryPartnerId ? {
               name: apiOrder.deliveryPartnerId.name || 'Delivery Partner',
+              phone: apiOrder.deliveryPartnerId.phone || '',
               avatar: null
             } : null,
             deliveryPartnerId: apiOrder.deliveryPartnerId?._id || apiOrder.deliveryPartnerId || apiOrder.assignmentInfo?.deliveryPartnerId || null,
@@ -746,6 +780,7 @@ export default function OrderTracking() {
           status: apiOrder.status || 'pending',
           deliveryPartner: apiOrder.deliveryPartnerId ? {
             name: apiOrder.deliveryPartnerId.name || 'Delivery Partner',
+            phone: apiOrder.deliveryPartnerId.phone || '',
             avatar: null
           } : null,
           tracking: apiOrder.tracking || {}
@@ -1054,19 +1089,25 @@ export default function OrderTracking() {
           <SectionItem
             icon={Phone}
             title={
-              order?.userName ||
-              order?.userId?.fullName ||
-              order?.userId?.name ||
-              profile?.fullName ||
-              profile?.name ||
-              'Customer'
+              hasDeliveryPartner
+                ? (deliveryPartnerName || 'Delivery Partner')
+                : 'Delivery boy will be assigned soon'
             }
             subtitle={
-              order?.userPhone ||
-              order?.userId?.phone ||
-              profile?.phone ||
-              defaultAddress?.phone ||
-              'Phone number not available'
+              hasDeliveryPartner
+                ? (deliveryPartnerPhone || 'Phone number not available')
+                : ''
+            }
+            onClick={deliveryPartnerPhone ? handleCallDeliveryPartner : undefined}
+            showArrow={false}
+            rightContent={
+              hasDeliveryPartner ? (
+                <span
+                  className={`ml-auto inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${deliveryPartnerPhone ? 'bg-orange-50 text-[#EB590E]' : 'bg-gray-100 text-gray-400'}`}
+                >
+                  Call
+                </span>
+              ) : null
             }
           />
           <SectionItem
