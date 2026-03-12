@@ -2,6 +2,8 @@ import jwtService from '../../auth/services/jwtService.js';
 import Restaurant from '../models/Restaurant.js';
 import { errorResponse } from '../../../shared/utils/response.js';
 
+const isDev = process.env.NODE_ENV !== 'production';
+
 /**
  * Restaurant Authentication Middleware
  * Verifies JWT access token and attaches restaurant to request
@@ -76,22 +78,24 @@ export const authenticate = async (req, res, next) => {
 
     // Debug logging for inactive/unapproved restaurants
     if (!restaurant.isActive || !isApproved) {
-      console.log('🔍 Inactive restaurant route check:', {
-        restaurantId: restaurant._id,
-        restaurantName: restaurant.name,
-        isActive: restaurant.isActive,
-        isApproved,
-        requestPath,
-        reqPath,
-        baseUrl,
-        originalUrl: req.originalUrl,
-        url: req.url,
-        isOnboardingRoute,
-        isProfileRoute,
-        isMenuRoute,
-        isInventoryRoute,
-        willAllow: isOnboardingRoute || isProfileRoute || isMenuRoute || isInventoryRoute
-      });
+      if (isDev) {
+        console.log('🔍 Inactive restaurant route check:', {
+          restaurantId: restaurant._id,
+          restaurantName: restaurant.name,
+          isActive: restaurant.isActive,
+          isApproved,
+          requestPath,
+          reqPath,
+          baseUrl,
+          originalUrl: req.originalUrl,
+          url: req.url,
+          isOnboardingRoute,
+          isProfileRoute,
+          isMenuRoute,
+          isInventoryRoute,
+          willAllow: isOnboardingRoute || isProfileRoute || isMenuRoute || isInventoryRoute
+        });
+      }
     }
     
     // Allow access to onboarding, profile, menu, and inventory routes even if inactive/unapproved.
@@ -132,4 +136,3 @@ export const authenticate = async (req, res, next) => {
 };
 
 export default { authenticate };
-

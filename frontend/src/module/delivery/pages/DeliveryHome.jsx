@@ -69,6 +69,7 @@ const console = {
   warn: () => { },
   error: () => { },
 }
+const isPageVisible = () => typeof document !== "undefined" && document.visibilityState === "visible"
 
 // Ola Maps API Key removed
 
@@ -408,6 +409,8 @@ export default function DeliveryHome() {
     transactions: [],
     joiningBonusClaimed: false
   })
+  const walletFetchInFlightRef = useRef(false)
+  const assignedOrdersInFlightRef = useRef(false)
   const [activeOrder, setActiveOrder] = useState(() => {
     const stored = localStorage.getItem('activeOrder')
     return stored ? JSON.parse(stored) : null
@@ -4856,6 +4859,10 @@ export default function DeliveryHome() {
   // Fetch wallet data from API
   useEffect(() => {
     const fetchWalletData = async () => {
+      if (!isPageVisible()) return
+      if (walletFetchInFlightRef.current) return
+      walletFetchInFlightRef.current = true
+
       // Skip wallet fetch if status is pending
       if (deliveryStatus === 'pending') {
         setWalletState({
@@ -4866,6 +4873,7 @@ export default function DeliveryHome() {
           transactions: [],
           joiningBonusClaimed: false
         })
+        walletFetchInFlightRef.current = false
         return
       }
 
@@ -4886,6 +4894,8 @@ export default function DeliveryHome() {
           transactions: [],
           joiningBonusClaimed: false
         })
+      } finally {
+        walletFetchInFlightRef.current = false
       }
     }
 
@@ -4913,12 +4923,15 @@ export default function DeliveryHome() {
       false && console.log('⚠️ Delivery person is offline, skipping order fetch')
       return
     }
+    if (!isPageVisible()) return
+    if (assignedOrdersInFlightRef.current) return
     if (hasAssignedZones && detectedZone && isOutOfZone) {
       false && console.log('Out of zone, skipping order fetch')
       return
     }
 
     try {
+      assignedOrdersInFlightRef.current = true
       false && console.log('📦 Fetching assigned orders from API...')
       const response = await deliveryAPI.getOrders({
         limit: 50, // Get up to 50 pending orders
@@ -5074,6 +5087,8 @@ export default function DeliveryHome() {
     } catch (error) {
       console.error('❌ Error fetching assigned orders:', error)
       // Don't show error to user, just log it
+    } finally {
+      assignedOrdersInFlightRef.current = false
     }
   }, [isOnline, calculateTimeAway, hasAssignedZones, detectedZone, isOutOfZone])
 
@@ -11461,7 +11476,4 @@ export default function DeliveryHome() {
     </div>
   )
 }
-
-
-
 

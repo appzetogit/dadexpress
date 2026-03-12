@@ -55,6 +55,14 @@ const formatFullAddress = (address) => {
   return ""
 }
 
+const isDev = import.meta.env?.DEV === true
+const debugLog = (...args) => {
+  if (isDev) console.log(...args)
+}
+const debugWarn = (...args) => {
+  if (isDev) console.warn(...args)
+}
+
 export default function Cart() {
   const navigate = useNavigate()
 
@@ -122,6 +130,9 @@ export default function Cart() {
   // Coupons state - fetched from backend
   const [availableCoupons, setAvailableCoupons] = useState([])
   const [loadingCoupons, setLoadingCoupons] = useState(false)
+  const couponsCacheRef = useRef(new Map())
+  const couponsRequestKeyRef = useRef("")
+  const couponsInFlightRef = useRef(false)
 
   // Fee settings from database (used as fallback if pricing not available)
   const [feeSettings, setFeeSettings] = useState({
@@ -171,6 +182,13 @@ export default function Cart() {
     return null
   }, [restaurantData])
 
+  const cartCouponsKey = useMemo(() => {
+    if (!cart.length) return ""
+    return cart
+      .map((item) => `${item.id || "noid"}:${item.quantity || 1}`)
+      .sort()
+      .join("|")
+  }, [cart])
 
 
   // Lock body scroll and scroll to top when any full-screen modal opens
@@ -432,13 +450,13 @@ export default function Cart() {
 
       // Wait for restaurantData to be loaded (including fallback search)
       if (loadingRestaurant) {
-        console.log("⏳ Waiting for restaurantData to load (including fallback search)...")
+        debugLog("⏳ Waiting for restaurantData to load (including fallback search)...")
         return
       }
 
       // Must have restaurantData to fetch addons
       if (!restaurantData) {
-        console.warn("⚠️ No restaurantData available for addons fetch")
+        debugWarn("⚠️ No restaurantData available for addons fetch")
         setAddons([])
         return
       }
@@ -446,12 +464,12 @@ export default function Cart() {
       // Use restaurantData ID (most reliable)
       const idToUse = restaurantData._id || restaurantData.restaurantId
       if (!idToUse) {
-        console.warn("⚠️ No valid restaurant ID in restaurantData")
+        debugWarn("⚠️ No valid restaurant ID in restaurantData")
         setAddons([])
         return
       }
 
-      console.log("✅ Using restaurantData ID for addons:", idToUse)
+      debugLog("✅ Using restaurantData ID for addons:", idToUse)
       fetchAddonsWithId(idToUse)
     }
 
@@ -466,58 +484,97 @@ export default function Cart() {
         return
       }
 
-      console.log(`[CART-COUPONS] Fetching coupons for ${cart.length} items in cart`)
+      const requestKey = `${restaurantId}|${cartCouponsKey}`
+      if (requestKey === couponsRequestKeyRef.current && availableCoupons.length > 0) {
+        return
+      }
+      if (couponsInFlightRef.current) return
+
+      couponsRequestKeyRef.current = requestKey
+      couponsInFlightRef.current = true
+
+      debugLog(`[CART-COUPONS] Fetching coupons for ${cart.length} items in cart`)
       setLoadingCoupons(true)
 
       const allCoupons = []
       const uniqueCouponCodes = new Set()
+      const cache = couponsCacheRef.current
+      const itemsNeedingFetch = []
 
-      // Fetch coupons for each item in cart
+      // Fetch coupons for each item in cart (dedupe + cache)
       for (const cartItem of cart) {
         if (!cartItem.id) {
-          console.log(`[CART-COUPONS] Skipping item without id:`, cartItem)
+          debugLog(`[CART-COUPONS] Skipping item without id:`, cartItem)
           continue
         }
 
-        try {
-          console.log(`[CART-COUPONS] Fetching coupons for itemId: ${cartItem.id}, name: ${cartItem.name}`)
-          const response = await restaurantAPI.getCouponsByItemIdPublic(restaurantId, cartItem.id)
-
-          if (response?.data?.success && response?.data?.data?.coupons) {
-            const coupons = response.data.data.coupons
-            console.log(`[CART-COUPONS] Found ${coupons.length} coupons for item ${cartItem.id}`)
-
-            // Add coupons, avoiding duplicates
-            coupons.forEach(coupon => {
-              if (!uniqueCouponCodes.has(coupon.couponCode)) {
-                uniqueCouponCodes.add(coupon.couponCode)
-                // Convert backend coupon format to frontend format
-                allCoupons.push({
-                  code: coupon.couponCode,
-                  discount: coupon.originalPrice - coupon.discountedPrice,
-                  discountPercentage: coupon.discountPercentage,
-                  minOrder: coupon.minOrderValue || 0,
-                  description: `Save ₹${coupon.originalPrice - coupon.discountedPrice} with '${coupon.couponCode}'`,
-                  originalPrice: coupon.originalPrice,
-                  discountedPrice: coupon.discountedPrice,
-                  itemId: cartItem.id,
-                  itemName: cartItem.name,
-                })
-              }
-            })
-          }
-        } catch (error) {
-          console.error(`[CART-COUPONS] Error fetching coupons for item ${cartItem.id}:`, error)
+        const cachedCoupons = cache.get(cartItem.id)
+        if (cachedCoupons) {
+          cachedCoupons.forEach((coupon) => {
+            if (!uniqueCouponCodes.has(coupon.code)) {
+              uniqueCouponCodes.add(coupon.code)
+              allCoupons.push(coupon)
+            }
+          })
+        } else {
+          itemsNeedingFetch.push(cartItem)
         }
       }
 
-      console.log(`[CART-COUPONS] Total unique coupons found: ${allCoupons.length}`, allCoupons)
+      if (itemsNeedingFetch.length > 0) {
+        const results = await Promise.allSettled(
+          itemsNeedingFetch.map(async (cartItem) => {
+            debugLog(`[CART-COUPONS] Fetching coupons for itemId: ${cartItem.id}, name: ${cartItem.name}`)
+            const response = await restaurantAPI.getCouponsByItemIdPublic(restaurantId, cartItem.id)
+            const coupons = response?.data?.success && response?.data?.data?.coupons
+              ? response.data.data.coupons
+              : []
+
+            const mappedCoupons = coupons.map((coupon) => ({
+              code: coupon.couponCode,
+              discount: coupon.originalPrice - coupon.discountedPrice,
+              discountPercentage: coupon.discountPercentage,
+              minOrder: coupon.minOrderValue || 0,
+              description: `Save ₹${coupon.originalPrice - coupon.discountedPrice} with '${coupon.couponCode}'`,
+              originalPrice: coupon.originalPrice,
+              discountedPrice: coupon.discountedPrice,
+              itemId: cartItem.id,
+              itemName: cartItem.name,
+            }))
+
+            return { itemId: cartItem.id, coupons: mappedCoupons }
+          })
+        )
+
+        results.forEach((result, idx) => {
+          const cartItem = itemsNeedingFetch[idx]
+          if (result.status === "fulfilled") {
+            const { itemId, coupons } = result.value
+            debugLog(`[CART-COUPONS] Found ${coupons.length} coupons for item ${itemId}`)
+            cache.set(itemId, coupons)
+            coupons.forEach((coupon) => {
+              if (!uniqueCouponCodes.has(coupon.code)) {
+                uniqueCouponCodes.add(coupon.code)
+                allCoupons.push(coupon)
+              }
+            })
+          } else {
+            console.error(`[CART-COUPONS] Error fetching coupons for item ${cartItem?.id}:`, result.reason)
+          }
+        })
+      }
+
+      debugLog(`[CART-COUPONS] Total unique coupons found: ${allCoupons.length}`, allCoupons)
       setAvailableCoupons(allCoupons)
       setLoadingCoupons(false)
+      couponsInFlightRef.current = false
     }
 
     fetchCouponsForCartItems()
-  }, [cart, restaurantId])
+    return () => {
+      couponsInFlightRef.current = false
+    }
+  }, [cartCouponsKey, restaurantId])
 
   // Calculate pricing from backend whenever cart, address, or coupon changes
   useEffect(() => {
@@ -594,7 +651,19 @@ export default function Cart() {
 
   // Fetch fee settings on mount
   useEffect(() => {
+    let isMounted = true
+    const inFlightRef = { current: false }
+    const lastFetchRef = { current: 0 }
+
     const fetchFeeSettings = async () => {
+      if (!isMounted) return
+      if (document.visibilityState === "hidden") return
+      if (inFlightRef.current) return
+
+      const now = Date.now()
+      if (now - lastFetchRef.current < 15000) return
+      inFlightRef.current = true
+
       try {
         const response = await adminAPI.getPublicFeeSettings()
         if (response.data.success && response.data.data.feeSettings) {
@@ -605,23 +674,34 @@ export default function Cart() {
             platformFee: response.data.data.feeSettings.platformFee || 5,
             gstRate: response.data.data.feeSettings.gstRate || 5,
           })
+          lastFetchRef.current = Date.now()
         }
       } catch (error) {
         console.error('Error fetching fee settings:', error)
         // Keep default values on error
+      } finally {
+        inFlightRef.current = false
       }
     }
 
     const handleFocus = () => {
       fetchFeeSettings()
     }
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        fetchFeeSettings()
+      }
+    }
 
     fetchFeeSettings()
     window.addEventListener("focus", handleFocus)
+    document.addEventListener("visibilitychange", handleVisibilityChange)
     const intervalId = setInterval(fetchFeeSettings, 30000)
 
     return () => {
+      isMounted = false
       window.removeEventListener("focus", handleFocus)
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
       clearInterval(intervalId)
     }
   }, [])
@@ -2253,4 +2333,3 @@ export default function Cart() {
     </div>
   )
 }
-
