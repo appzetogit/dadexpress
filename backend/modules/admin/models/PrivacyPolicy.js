@@ -30,5 +30,5 @@ const privacyPolicySchema = new mongoose.Schema(
 // Indexes
 privacyPolicySchema.index({ isActive: 1 });
 
-export default mongoose.model('PrivacyPolicy', privacyPolicySchema);
+export default mongoose.models.PrivacyPolicy || mongoose.model('PrivacyPolicy', privacyPolicySchema);
 

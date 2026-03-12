@@ -34,4 +34,4 @@ const diningOfferBannerSchema = new mongoose.Schema({
     timestamps: true
 });
 
-export default mongoose.model('DiningOfferBanner', diningOfferBannerSchema);
+export default mongoose.models.DiningOfferBanner || mongoose.model('DiningOfferBanner', diningOfferBannerSchema);

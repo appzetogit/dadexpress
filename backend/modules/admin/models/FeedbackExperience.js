@@ -85,5 +85,5 @@ feedbackExperienceSchema.index({ experience: 1 });
 feedbackExperienceSchema.index({ module: 1 });
 feedbackExperienceSchema.index({ createdAt: -1 });
 
-export default mongoose.model('FeedbackExperience', feedbackExperienceSchema);
+export default mongoose.models.FeedbackExperience || mongoose.model('FeedbackExperience', feedbackExperienceSchema);
 

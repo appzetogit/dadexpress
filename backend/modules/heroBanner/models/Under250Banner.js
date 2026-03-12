@@ -34,5 +34,5 @@ const under250BannerSchema = new mongoose.Schema({
 // Index for ordering
 under250BannerSchema.index({ order: 1, isActive: 1 });
 
-export default mongoose.model('Under250Banner', under250BannerSchema);
+export default mongoose.models.Under250Banner || mongoose.model('Under250Banner', under250BannerSchema);
 

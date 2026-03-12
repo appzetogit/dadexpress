@@ -81,5 +81,5 @@ const etaLogSchema = new mongoose.Schema({
 etaLogSchema.index({ orderId: 1, calculatedAt: -1 });
 etaLogSchema.index({ reason: 1, calculatedAt: -1 });
 
-export default mongoose.model('ETALog', etaLogSchema);
+export default mongoose.models.ETALog || mongoose.model('ETALog', etaLogSchema);
 

@@ -30,5 +30,5 @@ const refundPolicySchema = new mongoose.Schema(
 // Indexes
 refundPolicySchema.index({ isActive: 1 });
 
-export default mongoose.model('RefundPolicy', refundPolicySchema);
+export default mongoose.models.RefundPolicy || mongoose.model('RefundPolicy', refundPolicySchema);
 

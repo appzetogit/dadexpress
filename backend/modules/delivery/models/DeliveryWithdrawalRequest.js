@@ -60,4 +60,4 @@ deliveryWithdrawalRequestSchema.index({ deliveryId: 1, status: 1 });
 deliveryWithdrawalRequestSchema.index({ status: 1, createdAt: -1 });
 deliveryWithdrawalRequestSchema.index({ createdAt: -1 });
 
-export default mongoose.model('DeliveryWithdrawalRequest', deliveryWithdrawalRequestSchema);
+export default mongoose.models.DeliveryWithdrawalRequest || mongoose.model('DeliveryWithdrawalRequest', deliveryWithdrawalRequestSchema);

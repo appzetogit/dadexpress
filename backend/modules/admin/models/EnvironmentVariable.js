@@ -252,7 +252,7 @@ environmentVariableSchema.pre('save', function(next) {
   next();
 });
 
-const EnvironmentVariable = mongoose.model('EnvironmentVariable', environmentVariableSchema);
+const EnvironmentVariable = mongoose.models.EnvironmentVariable || mongoose.model('EnvironmentVariable', environmentVariableSchema);
 
 export default EnvironmentVariable;
 

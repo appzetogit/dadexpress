@@ -30,5 +30,5 @@ const termsAndConditionSchema = new mongoose.Schema(
 // Indexes
 termsAndConditionSchema.index({ isActive: 1 });
 
-export default mongoose.model('TermsAndCondition', termsAndConditionSchema);
+export default mongoose.models.TermsAndCondition || mongoose.model('TermsAndCondition', termsAndConditionSchema);
 

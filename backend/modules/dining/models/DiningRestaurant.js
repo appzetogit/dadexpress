@@ -23,7 +23,7 @@ const diningRestaurantSchema = new mongoose.Schema({
         type: String, // "Continental", "Multi-cuisine"
     },
     price: {
-        type: String, // "₹1500 for two"
+        type: String, // "â‚¹1500 for two"
     },
     image: {
         type: String, // URL
@@ -65,5 +65,5 @@ diningRestaurantSchema.pre('save', function (next) {
     next();
 });
 
-const DiningRestaurant = mongoose.model('DiningRestaurant', diningRestaurantSchema);
+const DiningRestaurant = mongoose.models.DiningRestaurant || mongoose.model('DiningRestaurant', diningRestaurantSchema);
 export default DiningRestaurant;

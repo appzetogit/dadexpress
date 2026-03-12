@@ -156,5 +156,5 @@ zoneSchema.methods.containsPoint = function(latitude, longitude) {
   return inside;
 };
 
-export default mongoose.model('Zone', zoneSchema);
+export default mongoose.models.Zone || mongoose.model('Zone', zoneSchema);
 

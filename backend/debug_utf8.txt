@@ -1,0 +1,173 @@
+﻿UserWallet indexes: [
+  [ { userId: 1 }, { unique: true, background: true } ],
+  [
+    { 'transactions.paymentMethod': 1 },
+    { sparse: true, background: true }
+  ],
+  [
+    { 'transactions.paymentGateway': 1 },
+    { sparse: true, background: true }
+  ],
+  [
+    { 'transactions.paymentId': 1 },
+    { sparse: true, background: true }
+  ],
+  [ { 'transactions.orderId': 1 }, { background: true } ],
+  [ { 'transactions.status': 1 }, { background: true } ],
+  [ { 'transactions.type': 1 }, { background: true } ],
+  [ { 'transactions.createdAt': -1 }, { background: true } ],
+  [ { lastTransactionAt: -1 }, { background: true } ]
+]
+Restaurant indexes: [
+  [ { restaurantId: 1 }, { unique: true, background: true } ],
+  [ { email: 1 }, { unique: true, sparse: true, background: true } ],
+  [ { phone: 1 }, { unique: true, sparse: true, background: true } ],
+  [ { googleId: 1 }, { unique: true, sparse: true, background: true } ],
+  [ { googleEmail: 1 }, { sparse: true, background: true } ],
+  [ { slug: 1 }, { unique: true, sparse: true, background: true } ],
+  [
+    { referralCode: 1 },
+    { unique: true, sparse: true, background: true }
+  ]
+]
+RestaurantWallet indexes: [
+  [ { restaurantId: 1 }, { unique: true, background: true } ],
+  [
+    { 'withdrawalRequests.processedBy': 1 },
+    { sparse: true, background: true }
+  ],
+  [
+    { 'withdrawalRequests.transactionId': 1 },
+    { sparse: true, background: true }
+  ],
+  [ { 'transactions.orderId': 1 }, { background: true } ],
+  [ { 'transactions.status': 1 }, { background: true } ],
+  [ { 'transactions.type': 1 }, { background: true } ],
+  [ { lastTransactionAt: -1 }, { background: true } ]
+]
+DeliveryWallet indexes: [
+  [ { deliveryId: 1 }, { unique: true, background: true } ],
+  [
+    { 'transactions.paymentMethod': 1 },
+    { sparse: true, background: true }
+  ],
+  [
+    { 'transactions.processedBy': 1 },
+    { sparse: true, background: true }
+  ],
+  [
+    { 'withdrawalRequests.processedBy': 1 },
+    { sparse: true, background: true }
+  ],
+  [
+    { 'withdrawalRequests.transactionId': 1 },
+    { sparse: true, background: true }
+  ],
+  [ { 'transactions.orderId': 1 }, { background: true } ],
+  [ { 'transactions.status': 1 }, { background: true } ],
+  [ { 'transactions.type': 1 }, { background: true } ],
+  [ { 'transactions.createdAt': -1 }, { background: true } ],
+  [ { lastTransactionAt: -1 }, { background: true } ]
+]
+AdminWallet indexes: [
+  [ { 'transactions.orderId': 1 }, { background: true } ],
+  [ { 'transactions.restaurantId': 1 }, { background: true } ],
+  [ { 'transactions.type': 1 }, { background: true } ],
+  [ { 'transactions.createdAt': -1 }, { background: true } ],
+  [ { lastTransactionAt: -1 }, { background: true } ]
+]
+AuditLog indexes: [
+  [ { entityType: 1 }, { background: true } ],
+  [ { entityId: 1 }, { background: true } ],
+  [ { action: 1 }, { background: true } ],
+  [ { actionType: 1 }, { background: true } ],
+  [ { 'performedBy.userId': 1 }, { sparse: true, background: true } ],
+  [
+    { entityType: 1, entityId: 1, createdAt: -1 },
+    { background: true }
+  ],
+  [ { actionType: 1, createdAt: -1 }, { background: true } ],
+  [
+    { 'performedBy.type': 1, 'performedBy.userId': 1 },
+    { background: true }
+  ],
+  [ { 'transactionDetails.orderId': 1 }, { background: true } ],
+  [ { createdAt: -1 }, { background: true } ],
+  [ { 'commissionChange.restaurantId': 1 }, { background: true } ]
+]
+≡ƒôª Loading adminRoutes.js - All routes will be registered
+≡ƒöº [ROUTE REGISTRATION] Registering POST /orders/refund/:orderId route...
+Γ£à [ROUTE REGISTRATION] POST /orders/refund/:orderId route registered
+≡ƒöº [ROUTE REGISTRATION] Registering /refund-requests routes...
+≡ƒöº [ROUTE REGISTRATION] Route pattern: POST /refund-requests/:orderId/process
+≡ƒöº [ROUTE REGISTRATION] Full path will be: /api/admin/refund-requests/:orderId/process
+Γ£à [ROUTE REGISTRATION] POST /refund-requests/:orderId/process route registered
+Γ£à [ROUTE REGISTRATION] GET /refund-requests route registered
+Γ£à [ROUTE REGISTRATION] Full path: /api/admin/refund-requests/:orderId/process
+node : ΓÜá∩╕Å Firebase 
+Realtime Database 
+disabled via FIREBASE_R
+EALTIME_ENABLED env 
+flag.
+At line:1 char:1
++ node server.js > 
+debug_output.txt 2>&1
++ ~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~
+    + CategoryInfo     
+         : NotSpecifi  
+  ed: (ΓÜá∩╕Å Fireba   
+ se...ABLED env fla    
+g.:String) [], Rem    
+oteException
+    + FullyQualifiedEr 
+   rorId : NativeComm  
+  andError
+ 
+info: Redis is disabled. Set REDIS_ENABLED=true in .env to enable.
+Rate limiting disabled (development mode)
+node:events:486
+      throw er; // 
+Unhandled 'error' event
+      ^
+
+Error: listen 
+EADDRINUSE: address 
+already in use :::5000
+    at Server.setupList
+enHandle [as _listen2] 
+(node:net:1948:16)
+    at listenInCluster 
+(node:net:2005:12)
+    at Server.listen 
+(node:net:2110:7)
+    at file:///D:/dadex
+press/backend/server.js
+:682:12
+    at ModuleJob.run (n
+ode:internal/modules/es
+m/module_job:430:25)
+    at async onImport.t
+racePromise.__proto__ (
+node:internal/modules/e
+sm/loader:661:26)
+    at async asyncRunEn
+tryPointWithESMLoader (
+node:internal/modules/r
+un_main:101:5)
+Emitted 'error' event 
+on Server instance at:
+    at emitErrorNT 
+(node:net:1984:8)
+    at process.processT
+icksAndRejections (node
+:internal/process/task_
+queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 5000
+}
+
+Node.js v24.14.0

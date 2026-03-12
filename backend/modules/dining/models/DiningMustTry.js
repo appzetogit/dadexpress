@@ -25,5 +25,5 @@ const diningMustTrySchema = new mongoose.Schema({
     timestamps: true
 });
 
-const DiningMustTry = mongoose.model('DiningMustTry', diningMustTrySchema);
+const DiningMustTry = mongoose.models.DiningMustTry || mongoose.model('DiningMustTry', diningMustTrySchema);
 export default DiningMustTry;

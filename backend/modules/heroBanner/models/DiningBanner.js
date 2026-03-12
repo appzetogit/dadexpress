@@ -34,4 +34,4 @@ const diningBannerSchema = new mongoose.Schema({
 // Index for ordering
 diningBannerSchema.index({ order: 1, isActive: 1 });
 
-export default mongoose.model('DiningBanner', diningBannerSchema);
+export default mongoose.models.DiningBanner || mongoose.model('DiningBanner', diningBannerSchema);

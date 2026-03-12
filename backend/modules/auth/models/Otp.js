@@ -51,7 +51,7 @@ otpSchema.index({ email: 1, purpose: 1, verified: 1 });
 // Compound index for either phone or email
 otpSchema.index({ phone: 1, email: 1, purpose: 1, verified: 1 });
 
-const Otp = mongoose.model('Otp', otpSchema);
+const Otp = mongoose.models.Otp || mongoose.model('Otp', otpSchema);
 
 export default Otp;
 

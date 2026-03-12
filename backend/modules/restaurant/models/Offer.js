@@ -104,5 +104,5 @@ offerSchema.index({ restaurant: 1, status: 1 });
 offerSchema.index({ restaurant: 1, goalId: 1 });
 offerSchema.index({ status: 1, startDate: 1, endDate: 1 });
 
-export default mongoose.model('Offer', offerSchema);
+export default mongoose.models.Offer || mongoose.model('Offer', offerSchema);
 

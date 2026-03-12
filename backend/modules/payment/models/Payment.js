@@ -169,5 +169,5 @@ paymentSchema.pre('save', function(next) {
   next();
 });
 
-export default mongoose.model('Payment', paymentSchema);
+export default mongoose.models.Payment || mongoose.model('Payment', paymentSchema);
 

@@ -81,7 +81,6 @@ deliverySupportTicketSchema.index({ deliveryId: 1 });
 deliverySupportTicketSchema.index({ status: 1 });
 deliverySupportTicketSchema.index({ priority: 1 });
 deliverySupportTicketSchema.index({ createdAt: -1 });
-deliverySupportTicketSchema.index({ ticketId: 1 });
 
 // Generate unique ticket ID before saving
 deliverySupportTicketSchema.pre('save', async function(next) {
@@ -133,7 +132,6 @@ deliverySupportTicketSchema.post('save', function(doc, next) {
   next();
 });
 
-const DeliverySupportTicket = mongoose.model('DeliverySupportTicket', deliverySupportTicketSchema);
+const DeliverySupportTicket = mongoose.models.DeliverySupportTicket || mongoose.model('DeliverySupportTicket', deliverySupportTicketSchema);
 
 export default DeliverySupportTicket;
-

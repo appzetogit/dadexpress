@@ -59,5 +59,5 @@ tableBookingSchema.pre("save", async function (next) {
   next();
 });
 
-const TableBooking = mongoose.model("TableBooking", tableBookingSchema);
+const TableBooking = mongoose.models.TableBooking || mongoose.model("TableBooking", tableBookingSchema);
 export default TableBooking;

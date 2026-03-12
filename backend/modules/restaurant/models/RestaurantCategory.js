@@ -91,7 +91,7 @@ restaurantCategorySchema.methods.updateItemCount = async function() {
   }
 };
 
-const RestaurantCategory = mongoose.model('RestaurantCategory', restaurantCategorySchema);
+const RestaurantCategory = mongoose.models.RestaurantCategory || mongoose.model('RestaurantCategory', restaurantCategorySchema);
 
 export default RestaurantCategory;
 

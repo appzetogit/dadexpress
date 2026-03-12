@@ -44,5 +44,5 @@ const landingPageCategorySchema = new mongoose.Schema({
 // Index for ordering
 landingPageCategorySchema.index({ order: 1, isActive: 1 });
 
-export default mongoose.model('LandingPageCategory', landingPageCategorySchema);
+export default mongoose.models.LandingPageCategory || mongoose.model('LandingPageCategory', landingPageCategorySchema);
 

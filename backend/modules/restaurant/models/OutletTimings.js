@@ -99,7 +99,7 @@ outletTimingsSchema.pre('save', function(next) {
   next();
 });
 
-const OutletTimings = mongoose.model('OutletTimings', outletTimingsSchema);
+const OutletTimings = mongoose.models.OutletTimings || mongoose.model('OutletTimings', outletTimingsSchema);
 
 export default OutletTimings;
 

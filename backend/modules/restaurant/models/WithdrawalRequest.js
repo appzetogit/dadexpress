@@ -62,5 +62,5 @@ withdrawalRequestSchema.index({ restaurantId: 1, status: 1 });
 withdrawalRequestSchema.index({ status: 1, createdAt: -1 });
 withdrawalRequestSchema.index({ createdAt: -1 });
 
-export default mongoose.model('WithdrawalRequest', withdrawalRequestSchema);
+export default mongoose.models.WithdrawalRequest || mongoose.model('WithdrawalRequest', withdrawalRequestSchema);
 

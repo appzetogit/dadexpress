@@ -24,8 +24,7 @@ const transactionSchema = new mongoose.Schema({
   },
   orderId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Order',
-    sparse: true // Optional field
+    ref: 'Order'
   },
   paymentMethod: {
     type: String,
@@ -107,8 +106,7 @@ const deliveryWalletSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Delivery',
     required: true,
-    unique: true,
-    index: true
+    unique: true
   },
   // Balance fields
   totalBalance: {
@@ -156,7 +154,6 @@ const deliveryWalletSchema = new mongoose.Schema({
 });
 
 // Indexes
-deliveryWalletSchema.index({ deliveryId: 1 }, { unique: true });
 deliveryWalletSchema.index({ 'transactions.orderId': 1 });
 deliveryWalletSchema.index({ 'transactions.status': 1 });
 deliveryWalletSchema.index({ 'transactions.type': 1 });
@@ -193,7 +190,7 @@ deliveryWalletSchema.methods.addTransaction = function(transactionData) {
       
       // Log bonus/earning_addon transaction for debugging
       if (transaction.type === 'bonus' || transaction.type === 'earning_addon') {
-        console.log(`💰 ${transaction.type.toUpperCase()} TRANSACTION ADDED:`, {
+        console.log(`ðŸ’° ${transaction.type.toUpperCase()} TRANSACTION ADDED:`, {
           amount: transaction.amount,
           oldBalance: oldBalance,
           newBalance: this.totalBalance,
@@ -323,5 +320,4 @@ deliveryWalletSchema.statics.findOrCreateByDeliveryId = async function(deliveryI
   return wallet;
 };
 
-export default mongoose.model('DeliveryWallet', deliveryWalletSchema);
-
+export default mongoose.models.DeliveryWallet || mongoose.model('DeliveryWallet', deliveryWalletSchema);

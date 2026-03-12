@@ -24,4 +24,4 @@ const diningStorySchema = new mongoose.Schema({
     timestamps: true
 });
 
-export default mongoose.model('DiningStory', diningStorySchema);
+export default mongoose.models.DiningStory || mongoose.model('DiningStory', diningStorySchema);

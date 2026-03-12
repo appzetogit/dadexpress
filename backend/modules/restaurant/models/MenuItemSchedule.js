@@ -54,5 +54,5 @@ const menuItemScheduleSchema = new mongoose.Schema(
 menuItemScheduleSchema.index({ restaurant: 1, status: 1, scheduledDateTime: 1 });
 menuItemScheduleSchema.index({ menuId: 1, sectionId: 1, itemId: 1, status: 1 });
 
-export default mongoose.model('MenuItemSchedule', menuItemScheduleSchema);
+export default mongoose.models.MenuItemSchedule || mongoose.model('MenuItemSchedule', menuItemScheduleSchema);
 

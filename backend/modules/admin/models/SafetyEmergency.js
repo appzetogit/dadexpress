@@ -62,5 +62,5 @@ safetyEmergencySchema.index({ status: 1 });
 safetyEmergencySchema.index({ priority: 1 });
 safetyEmergencySchema.index({ createdAt: -1 });
 
-export default mongoose.model('SafetyEmergency', safetyEmergencySchema);
+export default mongoose.models.SafetyEmergency || mongoose.model('SafetyEmergency', safetyEmergencySchema);
 

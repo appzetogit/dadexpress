@@ -71,8 +71,7 @@ const auditLogSchema = new mongoose.Schema({
   commissionChange: {
     restaurantId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Restaurant',
-      sparse: true
+      ref: 'Restaurant'
     },
     oldValue: Number,
     newValue: Number,
@@ -120,7 +119,7 @@ auditLogSchema.statics.createLog = async function(logData) {
   });
 };
 
-const AuditLog = mongoose.model('AuditLog', auditLogSchema);
+const AuditLog = mongoose.models.AuditLog || mongoose.model('AuditLog', auditLogSchema);
 
 export default AuditLog;
 
