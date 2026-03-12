@@ -50,21 +50,11 @@ const auditLogSchema = new mongoose.Schema({
   },
   
   // Transaction Details (for financial transactions)
+  // NOTE: Use Mixed so we can store flexible objects without cast errors
+  // This avoids issues if older deployments defined this field as String.
   transactionDetails: {
-    amount: Number,
-    currency: { type: String, default: 'INR' },
-    type: String,
-    status: String,
-    orderId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Order',
-      sparse: true
-    },
-    walletType: {
-      type: String,
-      enum: ['user', 'restaurant', 'delivery', 'admin'],
-      sparse: true
-    }
+    type: mongoose.Schema.Types.Mixed,
+    default: null
   },
   
   // Commission Change Details
