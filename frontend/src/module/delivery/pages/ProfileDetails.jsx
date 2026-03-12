@@ -166,7 +166,7 @@ export default function ProfileDetails() {
               <div className="flex-1">
                 <p className="text-base font-medium text-gray-900">Aadhar Card</p>
                 <p className="text-xs text-gray-500 mt-1">
-                  {profile?.documents?.aadhar?.verified ? "Verified" : profile?.documents?.aadhar?.document ? "Not verified" : "Not uploaded"}
+                  {(profile?.documents?.aadhar?.verified || ((profile?.status === 'approved' || profile?.status === 'active') && profile?.documents?.aadhar?.document)) ? "Verified" : profile?.documents?.aadhar?.document ? "Not verified" : "Not uploaded"}
                 </p>
               </div>
               {profile?.documents?.aadhar?.document && (
@@ -190,7 +190,7 @@ export default function ProfileDetails() {
               <div className="flex-1">
                 <p className="text-base font-medium text-gray-900">PAN Card</p>
                 <p className="text-xs text-gray-500 mt-1">
-                  {profile?.documents?.pan?.verified ? "Verified" : profile?.documents?.pan?.document ? "Not verified" : "Not uploaded"}
+                  {(profile?.documents?.pan?.verified || ((profile?.status === 'approved' || profile?.status === 'active') && profile?.documents?.pan?.document)) ? "Verified" : profile?.documents?.pan?.document ? "Not verified" : "Not uploaded"}
                 </p>
               </div>
               {profile?.documents?.pan?.document && (
@@ -214,7 +214,7 @@ export default function ProfileDetails() {
               <div className="flex-1">
                 <p className="text-base font-medium text-gray-900">Driving License</p>
                 <p className="text-xs text-gray-500 mt-1">
-                  {profile?.documents?.drivingLicense?.verified ? "Verified" : profile?.documents?.drivingLicense?.document ? "Not verified" : "Not uploaded"}
+                  {(profile?.documents?.drivingLicense?.verified || ((profile?.status === 'approved' || profile?.status === 'active') && profile?.documents?.drivingLicense?.document)) ? "Verified" : profile?.documents?.drivingLicense?.document ? "Not verified" : "Not uploaded"}
                 </p>
               </div>
               {profile?.documents?.drivingLicense?.document && (

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Menu,
@@ -34,6 +34,7 @@ import quickSpicyLogo from "@/assets/quicky-spicy-logo.png";
 import { adminAPI } from "@/lib/api";
 import { clearModuleAuth } from "@/lib/utils/auth";
 import { getCachedSettings, loadBusinessSettings } from "@/lib/utils/businessSettings";
+import { sidebarMenuData } from "../data/sidebarMenu";
 
 export default function AdminNavbar({ onMenuClick }) {
   const navigate = useNavigate();
@@ -127,17 +128,46 @@ export default function AdminNavbar({ onMenuClick }) {
     }
   }, [searchOpen]);
 
-  // Mock search results - replace with actual search logic
-  const searchResults = [
-    { type: "Order", title: "Order #12345", description: "Pending delivery", icon: Package },
-    { type: "User", title: "Sumit Jaiswal", description: "Customer profile", icon: Users },
-    { type: "Product", title: "Chicken Biryani", description: "Food item", icon: UtensilsCrossed },
-    { type: "Report", title: "Sales Report", description: "Monthly analytics", icon: FileText },
-  ].filter((item) =>
-    searchQuery.trim() === "" ||
-    item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    item.description.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const searchResults = useMemo(() => {
+    const flattenMenu = (menu, sectionLabel = "") => {
+      const results = [];
+      menu.forEach((item) => {
+        if (item.type === "section" && Array.isArray(item.items)) {
+          results.push(...flattenMenu(item.items, item.label || sectionLabel));
+        } else if (item.type === "expandable" && Array.isArray(item.subItems)) {
+          item.subItems.forEach((sub) => {
+            results.push({
+              label: sub.label,
+              path: sub.path,
+              section: sectionLabel || item.label || "",
+              parent: item.label || "",
+            });
+          });
+        } else if (item.type === "link") {
+          results.push({
+            label: item.label,
+            path: item.path,
+            section: sectionLabel || "",
+            parent: "",
+          });
+        }
+      });
+      return results;
+    };
+
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return [];
+
+    const allItems = flattenMenu(sidebarMenuData);
+    return allItems.filter((item) => {
+      return (
+        item.label?.toLowerCase().includes(query) ||
+        item.section?.toLowerCase().includes(query) ||
+        item.parent?.toLowerCase().includes(query) ||
+        item.path?.toLowerCase().includes(query)
+      );
+    });
+  }, [searchQuery]);
 
 
   // Handle logout
@@ -370,41 +400,7 @@ export default function AdminNavbar({ onMenuClick }) {
             </div>
 
             {searchQuery.trim() === "" ? (
-              <div className="space-y-4">
-                <div className="text-sm text-neutral-500 mb-4">Quick Actions</div>
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { icon: Package, label: "Orders" },
-                    { icon: Users, label: "Users" },
-                    { icon: UtensilsCrossed, label: "Products" },
-                    { icon: FileText, label: "Reports" },
-                  ].map((action, idx) => (
-                    <button
-                      key={idx}
-                      className="flex items-center gap-3 p-4 rounded-lg border border-neutral-200 bg-white hover:border-neutral-300 hover:bg-neutral-50 transition-all"
-                    >
-                      <div className="p-2 rounded-md bg-black text-white">
-                        <action.icon className="w-5 h-5" />
-                      </div>
-                      <span className="text-sm font-medium text-neutral-900">{action.label}</span>
-                    </button>
-                  ))}
-                </div>
-                <div className="mt-6 pt-4 border-t border-neutral-200">
-                  <p className="text-xs text-neutral-500 mb-2">Recent Searches</p>
-                  <div className="flex flex-wrap gap-2">
-                    {["Order #12345", "Sumit Jaiswal", "Chicken Biryani"].map((term, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => setSearchQuery(term)}
-                        className="px-3 py-1 text-xs bg-neutral-100 hover:bg-neutral-200 rounded-full text-neutral-700 transition-colors"
-                      >
-                        {term}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
+              <div className="text-sm text-neutral-500">Type to search</div>
             ) : (
               <div className="space-y-2 max-h-96 overflow-y-auto">
                 {searchResults.length === 0 ? (
@@ -419,17 +415,23 @@ export default function AdminNavbar({ onMenuClick }) {
                     </div>
                     {searchResults.map((result, idx) => (
                       <button
-                        key={idx}
+                        key={`${result.path}-${idx}`}
                         className="w-full flex items-center gap-4 p-4 rounded-lg border border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 transition-all text-left"
+                        onClick={() => {
+                          setSearchOpen(false);
+                          navigate(result.path);
+                        }}
                       >
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
-                            <p className="text-sm font-semibold text-neutral-900">{result.title}</p>
-                            <span className="text-xs px-2 py-0.5 bg-neutral-100 text-neutral-700 rounded">
-                              {result.type}
-                            </span>
+                            <p className="text-sm font-semibold text-neutral-900">{result.label}</p>
+                            {result.section && (
+                              <span className="text-xs px-2 py-0.5 bg-neutral-100 text-neutral-700 rounded">
+                                {result.section}
+                              </span>
+                            )}
                           </div>
-                          <p className="text-xs text-neutral-600 mt-1">{result.description}</p>
+                          <p className="text-xs text-neutral-600 mt-1">{result.path}</p>
                         </div>
                         <ArrowRight className="w-4 h-4 text-neutral-400" />
                       </button>

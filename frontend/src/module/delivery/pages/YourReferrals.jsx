@@ -78,10 +78,7 @@ export default function YourReferrals() {
           <ArrowLeft className="w-5 h-5" />
         </button>
         <h1 className="text-lg font-bold">Your referrals</h1>
-        <div className="flex items-center gap-2">
-          <Headphones className="w-5 h-5" />
-          <span className="text-sm">Help</span>
-        </div>
+        <div className="w-5" />
       </div>
 
       {/* Earnings Card */}

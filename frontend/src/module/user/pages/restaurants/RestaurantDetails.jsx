@@ -899,16 +899,46 @@ export default function RestaurantDetails() {
         sectionTitle = section.title.trim()
       }
 
+      const isVegOnly =
+        vegMode === true ||
+        filters.vegNonVeg === "veg" ||
+        filters.vegNonVeg === "pure-veg"
+
+      const isVegItem = (item) => item?.foodType === "Veg" || item?.isVeg === true
+
       const itemCount = section?.items?.length || 0
-      const subsectionCount = section?.subsections?.reduce((sum, sub) => sum + (sub?.items?.length || 0), 0) || 0
+      const subsectionCount =
+        section?.subsections?.reduce((sum, sub) => sum + (sub?.items?.length || 0), 0) || 0
       const totalCount = itemCount + subsectionCount
+
+      const vegItemCount = (() => {
+        if (!isVegOnly) return totalCount
+        let count = 0
+        if (section?.items?.length) {
+          count += section.items.filter(isVegItem).length
+        }
+        if (section?.subsections?.length) {
+          section.subsections.forEach((sub) => {
+            if (sub?.items?.length) {
+              count += sub.items.filter(isVegItem).length
+            }
+          })
+        }
+        return count
+      })()
 
       return {
         name: sectionTitle,
-        count: totalCount,
+        count: isVegOnly ? vegItemCount : totalCount,
         sectionIndex: index,
       }
     })
+      .filter((category) => {
+        if (vegMode === true || filters.vegNonVeg === "veg" || filters.vegNonVeg === "pure-veg") {
+          return category.count > 0
+        }
+        return true
+      })
     : []
 
   // Count active filters
@@ -1276,13 +1306,39 @@ export default function RestaurantDetails() {
   // Returns array of { section, originalIndex } to preserve original index for expanded sections
   const getFilteredSections = () => {
     if (!restaurant?.menuSections) return [];
-    if (!showOnlyUnder250) {
-      return restaurant.menuSections.map((section, index) => ({ section, originalIndex: index }));
+    const isVegOnly =
+      vegMode === true ||
+      filters.vegNonVeg === "veg" ||
+      filters.vegNonVeg === "pure-veg"
+
+    const sectionHasVegItems = (section) => {
+      if (!isVegOnly) return true
+      const isVegItem = (item) => item?.foodType === "Veg" || item?.isVeg === true
+
+      if (section.items && section.items.length > 0) {
+        if (section.items.some(isVegItem)) return true
+      }
+
+      if (section.subsections && section.subsections.length > 0) {
+        for (const subsection of section.subsections) {
+          if (subsection.items && subsection.items.length > 0) {
+            if (subsection.items.some(isVegItem)) return true
+          }
+        }
+      }
+
+      return false
     }
 
-    return restaurant.menuSections
-      .map((section, index) => ({ section, originalIndex: index }))
-      .filter(({ section }) => sectionHasItemsUnder250(section));
+    const baseSections = restaurant.menuSections.map((section, index) => ({ section, originalIndex: index }))
+
+    if (!showOnlyUnder250) {
+      return baseSections.filter(({ section }) => sectionHasVegItems(section))
+    }
+
+    return baseSections
+      .filter(({ section }) => sectionHasItemsUnder250(section))
+      .filter(({ section }) => sectionHasVegItems(section))
   }
 
   // Highlight offers/texts for the blue offer line

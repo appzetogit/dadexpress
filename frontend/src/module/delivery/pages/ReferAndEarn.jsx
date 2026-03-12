@@ -70,9 +70,19 @@ export default function ReferAndEarn() {
     }
   }
 
+  const getDeliveryAppLink = () => {
+    return (
+      import.meta.env.VITE_DELIVERY_APP_DOWNLOAD_URL ||
+      import.meta.env.VITE_DELIVERY_APP_LINK ||
+      import.meta.env.VITE_APP_DOWNLOAD_URL ||
+      `${window.location.origin}/delivery`
+    )
+  }
+
   const handleWhatsAppShare = async () => {
     const companyName = await getCompanyNameAsync()
-    const message = `Hey ${friendName}! Join ${companyName} as a delivery partner and earn together!`
+    const appLink = getDeliveryAppLink()
+    const message = `Hey ${friendName}! Join ${companyName} as a delivery partner and earn together!\nDownload app: ${appLink}`
     const whatsappUrl = `https://wa.me/${mobileNumber}?text=${encodeURIComponent(message)}`
     window.open(whatsappUrl, '_blank')
   }

@@ -206,6 +206,22 @@ export const approveDeliveryPartner = asyncHandler(async (req, res) => {
     delivery.verifiedBy = adminId;
     delivery.isActive = true;
 
+    // Mark uploaded documents as verified on approval
+    if (delivery.documents) {
+      if (delivery.documents.aadhar?.document) {
+        delivery.documents.aadhar.verified = true;
+      }
+      if (delivery.documents.pan?.document) {
+        delivery.documents.pan.verified = true;
+      }
+      if (delivery.documents.drivingLicense?.document) {
+        delivery.documents.drivingLicense.verified = true;
+      }
+      if (delivery.documents.vehicleRC?.document) {
+        delivery.documents.vehicleRC.verified = true;
+      }
+    }
+
     await delivery.save();
 
     logger.info(`Delivery partner approved: ${id}`, {
