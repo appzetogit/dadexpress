@@ -1447,62 +1447,17 @@ export function useLocation() {
                 coordinates: `${latitude.toFixed(8)}, ${longitude.toFixed(8)}`
               })
 
-              // Validate coordinates are in India range BEFORE attempting geocoding
-              // India: Latitude 6.5° to 37.1° N, Longitude 68.7° to 97.4° E
-              const isInIndiaRange = latitude >= 6.5 && latitude <= 37.1 && longitude >= 68.7 && longitude <= 97.4 && longitude > 0
-
-              // Get address from Google Maps API
-              let addr
-              if (!isInIndiaRange || longitude < 0) {
-                // Coordinates are outside India - skip geocoding and use placeholder
-                false && console.warn("⚠️ Coordinates outside India range, skipping geocoding:", { latitude, longitude })
-                addr = {
-                  city: "Current Location",
-                  state: "",
-                  country: "",
-                  area: "",
-                  address: "Select location",
-                  formattedAddress: "Select location",
-                }
-              } else {
-                false && console.log("🔍 Calling reverse geocode with coordinates:", { latitude, longitude })
-                try {
-                  // Try Google Maps first
-                  addr = await reverseGeocodeWithGoogleMaps(latitude, longitude)
-                  false && console.log("✅ Google Maps geocoding successful:", addr)
-                } catch (geocodeErr) {
-                  false && console.warn("⚠️ Google Maps geocoding failed, trying fallback:", geocodeErr.message)
-                  try {
-                    // Fallback to direct reverse geocode (BigDataCloud)
-                    addr = await reverseGeocodeDirect(latitude, longitude)
-                    false && console.log("✅ Fallback geocoding successful:", addr)
-
-                    // Validate fallback result - if it still has placeholder values, don't use it
-                    if (addr.city === "Current Location" || addr.address.includes(latitude.toFixed(4))) {
-                      false && console.warn("⚠️ Fallback geocoding returned placeholder, will not save")
-                      addr = {
-                        city: "Current Location",
-                        state: "",
-                        country: "",
-                        area: "",
-                        address: "Select location",
-                        formattedAddress: "Select location",
-                      }
-                    }
-                  } catch (fallbackErr) {
-                    console.error("❌ All geocoding methods failed:", fallbackErr.message)
-                    addr = {
-                      city: "Current Location",
-                      state: "",
-                      country: "",
-                      area: "",
-                      address: "Select location",
-                      formattedAddress: "Select location",
-                    }
-                  }
-                }
+              // SKIP REVERSE GEOCODING - Save only lat/long to reduce Google Maps API costs
+              // Address fields will be empty - only coordinates saved
+              const addr = {
+                city: "",
+                state: "",
+                country: "",
+                area: "",
+                address: "",
+                formattedAddress: "",
               }
-              false && console.log("✅ Reverse geocode result:", addr)
+              false && console.log("📍 Skipping reverse geocoding - saving coordinates only:", { latitude, longitude })
 
               // Ensure we don't use coordinates as address if we have area/city
               // Keep the complete formattedAddress from Google Maps (it has all details)
@@ -1742,55 +1697,17 @@ export function useLocation() {
             // Reset retry count on success
             retryCount = 0
 
-            // Validate coordinates are in India range BEFORE attempting geocoding
-            // India: Latitude 6.5° to 37.1° N, Longitude 68.7° to 97.4° E
-            const isInIndiaRange = latitude >= 6.5 && latitude <= 37.1 && longitude >= 68.7 && longitude <= 97.4 && longitude > 0
-
-            // Get address from Google Maps API with error handling
-            let addr
-            if (!isInIndiaRange || longitude < 0) {
-              // Coordinates are outside India - skip geocoding and use placeholder
-              false && console.warn("⚠️ Coordinates outside India range, skipping geocoding:", { latitude, longitude })
-              addr = {
-                city: "Current Location",
-                state: "",
-                country: "",
-                area: "",
-                address: "Select location",
-                formattedAddress: "Select location",
-              }
-            } else {
-              try {
-                addr = await reverseGeocodeWithGoogleMaps(latitude, longitude)
-                false && console.log("✅ Reverse geocoding successful:", {
-                  city: addr.city,
-                  area: addr.area,
-                  formattedAddress: addr.formattedAddress
-                })
-              } catch (geocodeErr) {
-                console.error("❌ Google Maps reverse geocoding failed:", geocodeErr.message)
-                // Try fallback geocoding
-                try {
-                  false && console.log("🔄 Trying fallback geocoding...")
-                  addr = await reverseGeocodeDirect(latitude, longitude)
-                  false && console.log("✅ Fallback geocoding successful:", {
-                    city: addr.city,
-                    area: addr.area
-                  })
-                } catch (fallbackErr) {
-                  console.error("❌ Fallback geocoding also failed:", fallbackErr.message)
-                  // Don't use coordinates - use placeholder instead
-                  addr = {
-                    city: "Current Location",
-                    state: "",
-                    country: "",
-                    area: "",
-                    address: "Select location", // Don't show coordinates
-                    formattedAddress: "Select location", // Don't show coordinates
-                  }
-                }
-              }
+            // SKIP REVERSE GEOCODING - Save only lat/long to reduce Google Maps API costs
+            // Address fields will be empty - only coordinates saved
+            const addr = {
+              city: "",
+              state: "",
+              country: "",
+              area: "",
+              address: "",
+              formattedAddress: "",
             }
+            false && console.log("📍 Skipping reverse geocoding - saving coordinates only:", { latitude, longitude })
 
             // CRITICAL: Ensure formattedAddress is NEVER coordinates
             // Check if reverse geocoding returned proper address or just coordinates

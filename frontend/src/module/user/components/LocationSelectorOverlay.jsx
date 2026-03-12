@@ -1506,13 +1506,10 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
 
       setLoadingAddress(true)
       try {
-        console.log("🔍 Reverse geocoding for coordinates:", { lat: roundedLat, lng: roundedLng })
-        console.log("🔍 Coordinates precision:", {
-          lat: roundedLat.toFixed(8),
-          lng: roundedLng.toFixed(8)
-        })
-
-        // Use Google Maps Geocoding API + Places API for complete address details
+        // SKIP REVERSE GEOCODING - Save only lat/long to reduce Google Maps API costs
+        console.log("📍 Skipping reverse geocoding - coordinates only:", { lat: roundedLat, lng: roundedLng })
+        
+        // Set empty address fields - only coordinates will be saved
         let formattedAddress = ""
         let city = ""
         let state = ""
@@ -1523,180 +1520,13 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
         let pointOfInterest = ""
         let premise = ""
 
-        if (GOOGLE_MAPS_API_KEY) {
-          try {
-            // Step 1: Use Google Geocoding API for address components
-            // Get API key dynamically from backend
-            const { getGoogleMapsApiKey } = await import('@/lib/utils/googleMapsApiKey.js');
-            const apiKey = await getGoogleMapsApiKey() || GOOGLE_MAPS_API_KEY;
-            const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${roundedLat},${roundedLng}&key=${apiKey}&language=en&region=in&result_type=street_address|premise|point_of_interest|establishment`
-            const geocodeResponse = await fetch(geocodeUrl).then(res => res.json())
-
-            if (geocodeResponse.status === "OK" && geocodeResponse.results && geocodeResponse.results.length > 0) {
-              // Find result with POI/premise for most accurate address
-              let bestResult = geocodeResponse.results[0]
-              for (const result of geocodeResponse.results.slice(0, 5)) {
-                const hasPOI = result.address_components?.some(c => c.types.includes("point_of_interest"))
-                const hasPremise = result.address_components?.some(c => c.types.includes("premise"))
-                if (hasPOI || hasPremise) {
-                  bestResult = result
-                  break
-                }
-              }
-
-              formattedAddress = bestResult.formatted_address || ""
-              const addressComponents = bestResult.address_components || []
-
-              // Extract all address components
-              for (const component of addressComponents) {
-                const types = component.types || []
-                if (types.includes("point_of_interest") && !pointOfInterest) {
-                  pointOfInterest = component.long_name
-                }
-                if (types.includes("premise") && !premise) {
-                  premise = component.long_name
-                }
-                if (types.includes("street_number") && !streetNumber) {
-                  streetNumber = component.long_name
-                }
-                if (types.includes("route") && !street) {
-                  street = component.long_name
-                }
-                if (types.includes("sublocality_level_1") && !area) {
-                  area = component.long_name
-                }
-                if (types.includes("locality") && !city) {
-                  city = component.long_name
-                }
-                if (types.includes("administrative_area_level_1") && !state) {
-                  state = component.long_name
-                }
-                if (types.includes("postal_code") && !postalCode) {
-                  postalCode = component.long_name
-                }
-              }
-
-              // Step 2: Use Places API for even more detailed information
-              try {
-                const nearbyUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${roundedLat},${roundedLng}&radius=50&key=${apiKey}&language=en`
-                const nearbyResponse = await fetch(nearbyUrl).then(res => res.json())
-
-                if (nearbyResponse.status === "OK" && nearbyResponse.results && nearbyResponse.results.length > 0) {
-                  const placeId = nearbyResponse.results[0].place_id
-                  const placeName = nearbyResponse.results[0].name
-
-                  // Use place name if available (more accurate)
-                  if (placeName && !pointOfInterest) {
-                    pointOfInterest = placeName
-                  }
-
-                  // Get place details for complete address
-                  if (placeId) {
-                    const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=formatted_address,address_components&key=${apiKey}&language=en`
-                    const detailsResponse = await fetch(detailsUrl).then(res => res.json())
-
-                    if (detailsResponse.status === "OK" && detailsResponse.result) {
-                      // Use Places API formatted address if it's more complete
-                      const placesAddress = detailsResponse.result.formatted_address || ""
-                      if (placesAddress && placesAddress.split(',').length > formattedAddress.split(',').length) {
-                        formattedAddress = placesAddress
-                      }
-                    }
-                  }
-                }
-              } catch (placesError) {
-                console.warn("⚠️ Places API error (non-critical):", placesError.message)
-              }
-
-              console.log("✅✅✅ Google Maps - Complete Address Details:", {
-                formattedAddress,
-                pointOfInterest,
-                premise,
-                street,
-                streetNumber,
-                area,
-                city,
-                state,
-                postalCode
-              })
-            }
-          } catch (googleError) {
-            console.warn("⚠️ Google Maps API error, trying backend fallback:", googleError.message)
-            // Fallback to backend API
-            try {
-              const response = await locationAPI.reverseGeocode(roundedLat, roundedLng)
-              const backendData = response?.data?.data
-              const result = backendData?.results?.[0] || backendData?.result?.[0] || null
-
-              if (result) {
-                formattedAddress = result.formatted_address || result.formattedAddress || ""
-                const addressComponents = result.address_components || {}
-                city = addressComponents.city || ""
-                state = addressComponents.state || ""
-                area = addressComponents.area || ""
-              }
-            } catch (backendError) {
-              console.error("❌ Backend fallback also failed:", backendError)
-            }
-          }
-        } else {
-          // No Google API key, use backend
-          const response = await locationAPI.reverseGeocode(roundedLat, roundedLng)
-          const backendData = response?.data?.data
-          const result = backendData?.results?.[0] || backendData?.result?.[0] || null
-
-          if (result) {
-            formattedAddress = result.formatted_address || result.formattedAddress || ""
-            const addressComponents = result.address_components || {}
-            city = addressComponents.city || ""
-            state = addressComponents.state || ""
-            area = addressComponents.area || ""
-          }
-        }
-
-        if (formattedAddress || city || state) {
-          // Build complete address if we have components
-          if (!formattedAddress || formattedAddress.split(',').length < 3) {
-            // Build from components
-            const addressParts = []
-            if (pointOfInterest) addressParts.push(pointOfInterest)
-            if (premise && premise !== pointOfInterest) addressParts.push(premise)
-            if (streetNumber && street) addressParts.push(`${streetNumber} ${street}`)
-            else if (street) addressParts.push(street)
-            else if (area) addressParts.push(area)
-            if (city) addressParts.push(city)
-            if (state) {
-              if (postalCode) addressParts.push(`${state} ${postalCode}`)
-              else addressParts.push(state)
-            }
-            formattedAddress = addressParts.join(', ')
-          }
-
-          // Set street from formatted address if not set
-          if (!street && formattedAddress) {
-            const parts = formattedAddress.split(',').map(p => p.trim()).filter(p => p.length > 0)
-            if (parts.length > 0) {
-              street = parts[0]
-            }
-          }
-
-          // Set area if not set
-          if (!area) {
-            area = pointOfInterest || premise || street || ""
-          }
-
-          // Remove "India" from formatted address if present
-          if (formattedAddress && formattedAddress.endsWith(', India')) {
-            formattedAddress = formattedAddress.replace(', India', '').trim()
-          }
-
-          console.log("✅ Final extracted address components:", {
-            formattedAddress,
-            street,
-            city,
-            state,
-            area,
-            postalCode,
+        console.log("✅ Address fields cleared - coordinates only:", {
+          formattedAddress,
+          street,
+          city,
+          state,
+          area,
+          postalCode,
             pointOfInterest,
             premise
           })

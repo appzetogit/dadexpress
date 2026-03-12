@@ -403,6 +403,23 @@ export const addUserAddress = asyncHandler(async (req, res) => {
       id: addedAddress._id.toString()
     };
 
+    // Sync lat/long to Firebase Realtime Database (non-blocking)
+    if (latitude && longitude) {
+      const { syncUserRealtime } = await import('../../delivery/services/firebaseTrackingService.js');
+      syncUserRealtime({
+        userId: user._id.toString(),
+        lat: parseFloat(latitude),
+        lng: parseFloat(longitude),
+        address: street || '',
+        area: additionalDetails || '',
+        city: city || '',
+        state: state || '',
+        formattedAddress: `${street || ''}, ${city || ''}, ${state || ''}`.trim()
+      }).catch((syncError) => {
+        logger.warn(`Firebase user location sync failed: ${syncError.message}`);
+      });
+    }
+
     logger.info(`Address added for user: ${user._id}`, {
       addressId: addressResponse.id
     });
