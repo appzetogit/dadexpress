@@ -311,10 +311,26 @@ apiClient.interceptors.response.use(
     return response;
   },
   async (error) => {
-    const originalRequest = error.config;
+    const originalRequest = error.config || {};
 
-    // If error is 401 and we haven't tried to refresh yet
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // Determine request URL for refresh logic
+    const requestUrl = originalRequest.url || "";
+
+    // Some endpoints are explicitly public (no auth/refresh should be attempted)
+    const isPublicEndpoint =
+      requestUrl.includes("/business-settings/public") ||
+      requestUrl.includes("/env/public") ||
+      requestUrl.includes("/categories/public") ||
+      requestUrl.includes("/fee-settings/public") ||
+      requestUrl.includes("/about/public") ||
+      requestUrl.includes("/terms/public") ||
+      requestUrl.includes("/privacy/public") ||
+      requestUrl.includes("/refund/public") ||
+      requestUrl.includes("/shipping/public") ||
+      requestUrl.includes("/cancellation/public");
+
+    // If error is 401 and we haven't tried to refresh yet, and this is NOT a public endpoint
+    if (error.response?.status === 401 && !originalRequest._retry && !isPublicEndpoint) {
       originalRequest._retry = true;
 
       try {
@@ -685,7 +701,11 @@ apiClient.interceptors.response.use(
           msg.includes("out of zone") ||
           msg.includes("out of your zone") ||
           msg.includes("not assigned") ||
-          msg.includes("order not found")
+          msg.includes("order not found") ||
+          // Common unauthenticated messages when user is simply not logged in
+          msg.includes("no token provided") ||
+          msg.includes("authentication required") ||
+          msg.includes("unauthorized")
         );
       };
 

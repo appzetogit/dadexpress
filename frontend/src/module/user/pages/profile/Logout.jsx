@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { useState } from "react"
 import { authAPI } from "@/lib/api"
 import { firebaseAuth } from "@/lib/firebase"
+import { clearModuleAuth } from "@/lib/utils/auth"
 
 export default function Logout() {
   const navigate = useNavigate()
@@ -37,13 +38,14 @@ export default function Logout() {
         console.warn("Firebase logout failed, continuing with local cleanup:", firebaseError)
       }
 
-      // Clear all authentication data from localStorage
+      // Clear all authentication data for user module (new keys)
+      clearModuleAuth("user")
+
+      // Backward-compatibility: clear any legacy keys as well
       localStorage.removeItem("accessToken")
       localStorage.removeItem("user_authenticated")
       localStorage.removeItem("user_user")
       localStorage.removeItem("cart")
-
-      // Clear sessionStorage
       sessionStorage.removeItem("userAuthData")
 
       // Dispatch auth change event to notify other components
@@ -58,6 +60,7 @@ export default function Logout() {
       console.error("Error during logout:", err)
       
       // Clear local data anyway
+      clearModuleAuth("user")
       localStorage.removeItem("accessToken")
       localStorage.removeItem("user_authenticated")
       localStorage.removeItem("user_user")
