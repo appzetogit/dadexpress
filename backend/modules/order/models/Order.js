@@ -180,6 +180,11 @@ const orderSchema = new mongoose.Schema({
   note: {
     type: String
   },
+  deliveryInstruction: {
+    type: String,
+    default: '',
+    maxlength: 200
+  },
   sendCutlery: {
     type: Boolean,
     default: true
@@ -367,4 +372,3 @@ orderSchema.pre('save', function(next) {
 });
 
 export default mongoose.models.Order || mongoose.model('Order', orderSchema);
-

@@ -215,6 +215,7 @@ export default function OrderTracking() {
   const [isCancelling, setIsCancelling] = useState(false)
   const [timerNow, setTimerNow] = useState(Date.now())
   const [showLocationDialog, setShowLocationDialog] = useState(false)
+  const [showDeliveryInstructionModal, setShowDeliveryInstructionModal] = useState(false)
   const [isUpdatingLocation, setIsUpdatingLocation] = useState(false)
   const [locationForm, setLocationForm] = useState({
     formattedAddress: "",
@@ -573,7 +574,8 @@ export default function OrderTracking() {
             gst: apiOrder.pricing?.gst || apiOrder.gst || 0,
             paymentMethod: apiOrder.paymentMethod || null,
             eta: apiOrder.eta || null,
-            estimatedDeliveryTime: apiOrder.estimatedDeliveryTime ?? null
+            estimatedDeliveryTime: apiOrder.estimatedDeliveryTime ?? null,
+            deliveryInstruction: apiOrder.deliveryInstruction || ''
           }
 
           setOrder(transformedOrder)
@@ -932,7 +934,8 @@ export default function OrderTracking() {
           } : null,
           tracking: apiOrder.tracking || {},
           eta: apiOrder.eta || null,
-          estimatedDeliveryTime: apiOrder.estimatedDeliveryTime ?? null
+          estimatedDeliveryTime: apiOrder.estimatedDeliveryTime ?? null,
+          deliveryInstruction: apiOrder.deliveryInstruction || ''
         }
         setOrder(transformedOrder)
 
@@ -1323,6 +1326,7 @@ export default function OrderTracking() {
             icon={MessageSquare}
             title="Add delivery instructions"
             subtitle=""
+            onClick={() => setShowDeliveryInstructionModal(true)}
           />
         </motion.div>
 
@@ -1536,6 +1540,39 @@ export default function OrderTracking() {
         </DialogContent>
       </Dialog>
 
+      {/* Delivery Instructions Dialog */}
+      <Dialog open={showDeliveryInstructionModal} onOpenChange={setShowDeliveryInstructionModal}>
+        <DialogContent className="sm:max-w-md w-[95%] max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-gray-900">
+              Delivery Instructions
+            </DialogTitle>
+          </DialogHeader>
+          <div className="pt-2">
+            {order?.deliveryInstruction ? (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <p className="text-sm text-amber-900">{order.deliveryInstruction}</p>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-600">
+                No delivery instructions were added for this order.
+              </p>
+            )}
+            <p className="text-xs text-gray-500 mt-3">
+              Delivery instructions can be added during checkout for new orders.
+            </p>
+          </div>
+          <div className="pt-6">
+            <Button
+              onClick={() => setShowDeliveryInstructionModal(false)}
+              className="w-full bg-gray-900 text-white font-bold h-11 rounded-xl"
+            >
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Order Details Dialog */}
       <Dialog open={showOrderDetails} onOpenChange={setShowOrderDetails}>
         <DialogContent className="max-w-[calc(100vw-32px)] sm:max-w-md bg-white rounded-2xl p-0 overflow-hidden border-none outline-none">
@@ -1643,6 +1680,3 @@ export default function OrderTracking() {
     </div>
   )
 }
-
-
-

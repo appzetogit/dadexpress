@@ -107,6 +107,9 @@ export default function Cart() {
   const [showFleetOptions, setShowFleetOptions] = useState(false)
   const [note, setNote] = useState("")
   const [showNoteInput, setShowNoteInput] = useState(false)
+  const [deliveryInstruction, setDeliveryInstruction] = useState("")
+  const [showDeliveryInstructionModal, setShowDeliveryInstructionModal] = useState(false)
+  const [deliveryInstructionDraft, setDeliveryInstructionDraft] = useState("")
 
   const [sendCutlery, setSendCutlery] = useState(true)
   const [isPlacingOrder, setIsPlacingOrder] = useState(false)
@@ -1103,6 +1106,7 @@ export default function Cart() {
         pricing: orderPricing,
         deliveryFleet: deliveryFleet || 'standard',
         note: note || "",
+        deliveryInstruction: deliveryInstruction || "",
         sendCutlery: sendCutlery !== false,
         paymentMethod: selectedPaymentMethod,
         zoneId: zoneId // CRITICAL: Pass zoneId for strict zone validation
@@ -1492,6 +1496,25 @@ export default function Cart() {
                     <span className="whitespace-nowrap">{sendCutlery ? "Don't send cutlery" : "No cutlery"}</span>
                   </button>
                 </div>
+              </div>
+
+              {/* Delivery Instructions */}
+              <div className="bg-white dark:bg-[#1a1a1a] px-4 md:px-6 py-3 md:py-4 rounded-lg md:rounded-xl">
+                <button
+                  onClick={() => {
+                    setDeliveryInstructionDraft(deliveryInstruction || "")
+                    setShowDeliveryInstructionModal(true)
+                  }}
+                  className="w-full flex items-center gap-2 px-3 md:px-4 py-2 md:py-3 border border-gray-200 dark:border-gray-700 rounded-lg md:rounded-xl text-sm md:text-base text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                >
+                  <FileText className="h-4 w-4 md:h-5 md:w-5" />
+                  <span className="truncate">{deliveryInstruction || "Add delivery instructions"}</span>
+                </button>
+                {deliveryInstruction && (
+                  <p className="mt-2 text-xs md:text-sm text-gray-500 dark:text-gray-400">
+                    Delivery Instruction: {deliveryInstruction}
+                  </p>
+                )}
               </div>
 
               {/* Complete your meal section - Approved Addons */}
@@ -1937,6 +1960,83 @@ export default function Cart() {
           </div>
         </div>
       </div>
+
+      {/* Delivery Instructions Modal */}
+      <AnimatePresence>
+        {showDeliveryInstructionModal && (
+          <motion.div
+            className="fixed inset-0 z-[65] flex items-end md:items-center justify-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => {
+              setShowDeliveryInstructionModal(false)
+              setDeliveryInstructionDraft(deliveryInstruction || "")
+            }}
+          >
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+            <motion.div
+              className="relative w-full md:max-w-lg bg-white dark:bg-[#1a1a1a] rounded-t-2xl md:rounded-2xl p-5 md:p-6 shadow-2xl"
+              initial={{ y: 80, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 80, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-base md:text-lg font-semibold text-gray-900 dark:text-gray-100">
+                  Delivery Instructions
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowDeliveryInstructionModal(false)
+                    setDeliveryInstructionDraft(deliveryInstruction || "")
+                  }}
+                  className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+                  aria-label="Close"
+                >
+                  <X className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+                </button>
+              </div>
+
+              <textarea
+                value={deliveryInstructionDraft}
+                onChange={(e) => setDeliveryInstructionDraft(e.target.value.slice(0, 200))}
+                placeholder="E.g. Call before arrival, leave at the gate, don't ring bell."
+                maxLength={200}
+                className="w-full border border-gray-200 dark:border-gray-700 rounded-lg p-3 md:p-4 text-sm md:text-base resize-none h-28 md:h-32 focus:outline-none focus:border-[#EB590E] dark:focus:border-[#EB590E] bg-white dark:bg-[#0a0a0a] text-gray-900 dark:text-gray-100"
+              />
+
+              <div className="flex items-center justify-between mt-2 text-xs text-gray-500 dark:text-gray-400">
+                <span>Max 200 characters</span>
+                <span>{deliveryInstructionDraft.length}/200</span>
+              </div>
+
+              <div className="flex gap-3 mt-4">
+                <button
+                  onClick={() => {
+                    setShowDeliveryInstructionModal(false)
+                    setDeliveryInstructionDraft(deliveryInstruction || "")
+                  }}
+                  className="flex-1 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    const trimmed = deliveryInstructionDraft.trim()
+                    setDeliveryInstruction(trimmed)
+                    setShowDeliveryInstructionModal(false)
+                  }}
+                  className="flex-1 py-2.5 rounded-lg bg-[#EB590E] hover:bg-[#D94F0C] text-white text-sm font-semibold"
+                >
+                  Save
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Placing Order Modal */}
       {showPlacingOrder && (

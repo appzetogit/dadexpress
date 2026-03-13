@@ -64,6 +64,7 @@ export const createOrder = async (req, res) => {
       pricing,
       deliveryFleet,
       note,
+      deliveryInstruction,
       sendCutlery,
       paymentMethod: bodyPaymentMethod
     } = req.body;
@@ -101,6 +102,13 @@ export const createOrder = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Order total is required'
+      });
+    }
+
+    if (deliveryInstruction && String(deliveryInstruction).length > 200) {
+      return res.status(400).json({
+        success: false,
+        message: 'Delivery instruction is too long (max 200 characters)'
       });
     }
 
@@ -350,6 +358,7 @@ export const createOrder = async (req, res) => {
       pricing: finalPricing,
       deliveryFleet: deliveryFleet || 'standard',
       note: note || '',
+      deliveryInstruction: typeof deliveryInstruction === 'string' ? deliveryInstruction.trim() : '',
       sendCutlery: sendCutlery !== false,
       status: 'pending',
       payment: {

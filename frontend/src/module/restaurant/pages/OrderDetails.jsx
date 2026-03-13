@@ -57,6 +57,7 @@ export default function OrderDetails() {
               location: `${order.address?.city || ''}, ${order.address?.state || ''}`.trim(),
               distance: 'N/A'
             },
+            deliveryInstruction: order.deliveryInstruction || '',
             items: order.items?.map(item => ({
               name: item.name,
               quantity: item.quantity,
@@ -559,6 +560,16 @@ export default function OrderDetails() {
 
         </div>
 
+        {/* Delivery Instruction Section */}
+        {orderData.deliveryInstruction && (
+          <div>
+            <h2 className="text-base font-bold text-gray-900 mb-3">Delivery instruction</h2>
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <p className="text-sm text-yellow-900">{orderData.deliveryInstruction}</p>
+            </div>
+          </div>
+        )}
+
         {/* Item Details Section */}
         <div>
           <h2 className="text-base font-bold text-gray-900 mb-3">Item details</h2>
@@ -682,4 +693,3 @@ export default function OrderDetails() {
     </div>
   )
 }
-

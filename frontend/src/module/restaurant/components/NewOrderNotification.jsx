@@ -114,6 +114,14 @@ export default function NewOrderNotification({ order, onClose, onViewOrder }) {
                   <p className="text-sm text-yellow-900">{order.note}</p>
                 </div>
               )}
+
+              {/* Delivery Instruction */}
+              {order.deliveryInstruction && (
+                <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
+                  <p className="text-xs text-amber-800 font-medium mb-1">Delivery instruction:</p>
+                  <p className="text-sm text-amber-900">{order.deliveryInstruction}</p>
+                </div>
+              )}
             </div>
 
             {/* Action Buttons */}
@@ -138,4 +146,3 @@ export default function NewOrderNotification({ order, onClose, onViewOrder }) {
     </AnimatePresence>
   );
 }
-

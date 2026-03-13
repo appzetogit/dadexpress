@@ -66,6 +66,7 @@ function CompletedOrders({ onSelectOrder }) {
             timePlaced: new Date(order.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
             deliveredAt: order.deliveredAt || order.updatedAt || order.createdAt,
             itemsSummary: order.items?.map(item => `${item.quantity}x ${item.name}`).join(', ') || 'No items',
+            deliveryInstruction: order.deliveryInstruction || '',
             photoUrl: order.items?.[0]?.image || null,
             photoAlt: order.items?.[0]?.name || 'Order',
             amount: order.pricing?.total || order.total || 0
@@ -168,6 +169,7 @@ function CompletedOrders({ onSelectOrder }) {
                       tableOrToken: order.tableOrToken,
                       timePlaced: deliveredDate,
                       itemsSummary: order.itemsSummary,
+                      deliveryInstruction: order.deliveryInstruction,
                     })
                   }
                   className="w-full text-left flex gap-3 items-stretch"
@@ -278,6 +280,7 @@ function CancelledOrders({ onSelectOrder }) {
             cancelledBy: order.cancelledBy || 'unknown',
             cancellationReason: order.cancellationReason || 'No reason provided',
             itemsSummary: order.items?.map(item => `${item.quantity}x ${item.name}`).join(', ') || 'No items',
+            deliveryInstruction: order.deliveryInstruction || '',
             photoUrl: order.items?.[0]?.image || null,
             photoAlt: order.items?.[0]?.name || 'Order',
             amount: order.pricing?.total || order.total || 0
@@ -386,6 +389,7 @@ function CancelledOrders({ onSelectOrder }) {
                       tableOrToken: order.tableOrToken,
                       timePlaced: cancelledDate,
                       itemsSummary: order.itemsSummary,
+                      deliveryInstruction: order.deliveryInstruction,
                     })
                   }
                   className="w-full text-left flex gap-3 items-stretch"
@@ -829,6 +833,7 @@ export default function OrdersMain() {
               createdAt: latestConfirmedOrder.createdAt,
               estimatedDeliveryTime: latestConfirmedOrder.estimatedDeliveryTime || 30,
               note: latestConfirmedOrder.note || '',
+              deliveryInstruction: latestConfirmedOrder.deliveryInstruction || '',
               sendCutlery: latestConfirmedOrder.sendCutlery,
               paymentMethod: latestConfirmedOrder.paymentMethod ?? latestConfirmedOrder.payment?.method,
               payment: latestConfirmedOrder.payment
@@ -2078,6 +2083,13 @@ export default function OrdersMain() {
                 <span>Payment: <span className="font-medium text-black">Paid online</span></span>
               </div>
 
+              {selectedOrder.deliveryInstruction && (
+                <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <p className="text-[11px] font-medium text-amber-800 mb-1">Delivery instruction</p>
+                  <p className="text-xs text-amber-900">{selectedOrder.deliveryInstruction}</p>
+                </div>
+              )}
+
               <button
                 className="w-full bg-black text-white py-2.5 rounded-xl text-sm font-medium"
                 onClick={() => setIsSheetOpen(false)}
@@ -2162,6 +2174,7 @@ function OrderCard({
   timePlaced,
   eta,
   itemsSummary,
+  deliveryInstruction,
   photoUrl,
   photoAlt,
   deliveryPartnerId,
@@ -2199,6 +2212,7 @@ function OrderCard({
             timePlaced,
             eta,
             itemsSummary,
+            deliveryInstruction,
           })
         }
         className="w-full text-left flex gap-3 items-stretch cursor-pointer"
@@ -2362,6 +2376,7 @@ function PreparingOrders({ onSelectOrder, onCancel }) {
               initialETA, // Store initial ETA in minutes
               preparingTimestamp, // Store when order started preparing
               itemsSummary: order.items?.map(item => `${item.quantity}x ${item.name}`).join(', ') || 'No items',
+              deliveryInstruction: order.deliveryInstruction || '',
               photoUrl: order.items?.[0]?.image || null,
               photoAlt: order.items?.[0]?.name || 'Order',
               deliveryPartnerId: order.deliveryPartnerId || null // Track if delivery partner is assigned
@@ -2633,6 +2648,7 @@ function ReadyOrders({ onSelectOrder }) {
             timePlaced: new Date(order.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
             eta: null, // Don't show ETA for ready orders
             itemsSummary: order.items?.map(item => `${item.quantity}x ${item.name}`).join(', ') || 'No items',
+            deliveryInstruction: order.deliveryInstruction || '',
             photoUrl: order.items?.[0]?.image || null,
             photoAlt: order.items?.[0]?.name || 'Order'
           }))
@@ -2757,6 +2773,7 @@ const OutForDeliveryOrders = ({ onSelectOrder }) => {
             timePlaced: new Date(order.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
             eta: null,
             itemsSummary: order.items?.map(item => `${item.quantity}x ${item.name}`).join(', ') || 'No items',
+            deliveryInstruction: order.deliveryInstruction || '',
             photoUrl: order.items?.[0]?.image || null,
             photoAlt: order.items?.[0]?.name || 'Order'
           }))
