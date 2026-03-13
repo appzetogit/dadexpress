@@ -4,10 +4,7 @@ import { authenticate } from '../../auth/middleware/auth.js';
 
 const router = express.Router();
 
-// All routes require authentication
-router.use(authenticate);
-
 // Update delivery location
-router.patch('/orders/:orderId/location', updateOrderLocation);
+router.patch('/orders/:orderId/location', authenticate, updateOrderLocation);
 
 export default router;
