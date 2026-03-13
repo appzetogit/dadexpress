@@ -329,8 +329,26 @@ apiClient.interceptors.response.use(
       requestUrl.includes("/shipping/public") ||
       requestUrl.includes("/cancellation/public");
 
-    // If error is 401 and we haven't tried to refresh yet, and this is NOT a public endpoint
-    if (error.response?.status === 401 && !originalRequest._retry && !isPublicEndpoint) {
+    // Auth endpoints should never trigger refresh-on-401.
+    // Example: invalid login credentials must stay as "Invalid email/password",
+    // not be replaced by a refresh-token failure like "No token provided".
+    const isAuthEndpoint =
+      requestUrl.includes("/auth/login") ||
+      requestUrl.includes("/auth/signup") ||
+      requestUrl.includes("/auth/signup/otp") ||
+      requestUrl.includes("/auth/register") ||
+      requestUrl.includes("/auth/send-otp") ||
+      requestUrl.includes("/auth/verify-otp") ||
+      requestUrl.includes("/auth/reset-password") ||
+      requestUrl.includes("/auth/firebase/google-login");
+
+    // If error is 401 and we haven't tried to refresh yet, and this is NOT a public/auth endpoint
+    if (
+      error.response?.status === 401 &&
+      !originalRequest._retry &&
+      !isPublicEndpoint &&
+      !isAuthEndpoint
+    ) {
       originalRequest._retry = true;
 
       try {

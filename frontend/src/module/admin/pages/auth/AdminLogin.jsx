@@ -77,11 +77,22 @@ export default function AdminLogin() {
         throw new Error("Login failed. Please try again.")
       }
     } catch (err) {
-      const message =
+      let message =
         err?.response?.data?.message ||
         err?.response?.data?.error ||
         err?.message ||
         "Login failed. Please check your credentials."
+
+      // Clean up misleading auth messages for admin login UI
+      // If backend returns generic "No token provided" (from some 401),
+      // show a user-friendly login error instead.
+      if (typeof message === "string") {
+        const lower = message.toLowerCase()
+        if (lower.includes("no token provided") || lower.includes("authentication required")) {
+          message = "Invalid email or password. Please try again."
+        }
+      }
+
       setError(message)
     } finally {
       setIsLoading(false)
