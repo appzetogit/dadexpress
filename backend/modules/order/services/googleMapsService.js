@@ -1,6 +1,8 @@
 import axios from 'axios';
 import { getGoogleMapsApiKey } from '../../../shared/utils/envService.js';
 
+const GOOGLE_MAPS_API_DISABLED = true;
+
 /**
  * Google Maps Distance Matrix API Service
  * Calculates travel time and distance between two points
@@ -15,6 +17,10 @@ class GoogleMapsService {
    * Get API key from database (lazy loading)
    */
   async getApiKey() {
+    if (GOOGLE_MAPS_API_DISABLED) {
+      return null;
+    }
+
     if (!this.apiKey) {
       this.apiKey = await getGoogleMapsApiKey();
       if (!this.apiKey) {
@@ -33,6 +39,10 @@ class GoogleMapsService {
    * @returns {Promise<Object>} - { distance (km), duration (minutes), trafficLevel }
    */
   async getTravelTime(origin, destination, mode = 'driving', trafficModel = 'best_guess') {
+    if (GOOGLE_MAPS_API_DISABLED) {
+      return this.calculateHaversineDistance(origin, destination);
+    }
+
     const apiKey = await this.getApiKey();
     if (!apiKey) {
       // Fallback to haversine distance calculation if API key not available

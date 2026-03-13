@@ -151,29 +151,11 @@ export default function EditRestaurantAddress() {
         return
       } else {
         // Minor correction - update location coordinates
-        // Fetch live address from coordinates using Google Maps API
+        // Use coordinates-only address (no paid reverse geocoding)
         try {
-          // Get Google Maps API key
-          const { getGoogleMapsApiKey } = await import('@/lib/utils/googleMapsApiKey.js')
-          const GOOGLE_MAPS_API_KEY = await getGoogleMapsApiKey()
-          
           let formattedAddress = location?.formattedAddress || ""
-          
-          // Fetch formattedAddress from coordinates if API key available
-          if (GOOGLE_MAPS_API_KEY && lat && lng) {
-            try {
-              const response = await fetch(
-                `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${GOOGLE_MAPS_API_KEY}&language=en&region=in&result_type=street_address|premise|point_of_interest|establishment`
-              )
-              const data = await response.json()
-              
-              if (data.status === 'OK' && data.results && data.results.length > 0) {
-                formattedAddress = data.results[0].formatted_address
-                console.log("✅ Fetched formattedAddress from coordinates:", formattedAddress)
-              }
-            } catch (error) {
-              console.warn("⚠️ Failed to fetch formattedAddress, using existing:", error)
-            }
+          if (!formattedAddress && lat && lng) {
+            formattedAddress = `${Number(lat).toFixed(6)}, ${Number(lng).toFixed(6)}`
           }
           
           // Update location with coordinates array and formattedAddress

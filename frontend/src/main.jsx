@@ -20,6 +20,11 @@ window.__googleMapsLoaded = window.__googleMapsLoaded || false;
 // Load Google Maps API dynamically from backend database
 // Only load if not already loaded to prevent multiple loads
 (async () => {
+  // Google Maps script loading disabled to avoid paid API usage.
+  window.__googleMapsLoading = false;
+  window.__googleMapsLoaded = false;
+  return;
+
   // Check if Google Maps is already loaded
   if (window.google && window.google.maps) {
     // console.log('✅ Google Maps already loaded');

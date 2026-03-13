@@ -224,25 +224,13 @@ export default function ZoneSetup() {
       map.addListener('click', (event) => {
         const lat = event.latLng.lat()
         const lng = event.latLng.lng()
-        
-        // Reverse geocode to get address
-        const geocoder = new google.maps.Geocoder()
-        geocoder.geocode({ location: { lat, lng } }, (results, status) => {
-          if (status === 'OK' && results && results.length > 0) {
-            const address = results[0].formatted_address
-            setLocationSearch(address)
-            setSelectedAddress(address)
-            setSelectedLocation({ lat, lng, address })
-            updateMarker(lat, lng, address)
-          } else {
-            // If geocoding fails, still allow pinning
-            const address = `${lat.toFixed(6)}, ${lng.toFixed(6)}`
-            setLocationSearch(address)
-            setSelectedAddress(address)
-            setSelectedLocation({ lat, lng, address })
-            updateMarker(lat, lng, address)
-          }
-        })
+
+        // Use GPS coordinates text directly (no paid reverse geocoding)
+        const address = `${lat.toFixed(6)}, ${lng.toFixed(6)}`
+        setLocationSearch(address)
+        setSelectedAddress(address)
+        setSelectedLocation({ lat, lng, address })
+        updateMarker(lat, lng, address)
       })
 
       setMapLoading(false)
@@ -289,22 +277,12 @@ export default function ZoneSetup() {
     marker.addListener('dragend', (event) => {
       const newLat = event.latLng.lat()
       const newLng = event.latLng.lng()
-      
-      // Reverse geocode new position
-      const geocoder = new window.google.maps.Geocoder()
-      geocoder.geocode({ location: { lat: newLat, lng: newLng } }, (results, status) => {
-        if (status === 'OK' && results && results.length > 0) {
-          const newAddress = results[0].formatted_address
-          setLocationSearch(newAddress)
-          setSelectedAddress(newAddress)
-          setSelectedLocation({ lat: newLat, lng: newLng, address: newAddress })
-        } else {
-          const newAddress = `${newLat.toFixed(6)}, ${newLng.toFixed(6)}`
-          setLocationSearch(newAddress)
-          setSelectedAddress(newAddress)
-          setSelectedLocation({ lat: newLat, lng: newLng, address: newAddress })
-        }
-      })
+
+      // Use GPS coordinates text directly (no paid reverse geocoding)
+      const newAddress = `${newLat.toFixed(6)}, ${newLng.toFixed(6)}`
+      setLocationSearch(newAddress)
+      setSelectedAddress(newAddress)
+      setSelectedLocation({ lat: newLat, lng: newLng, address: newAddress })
     })
 
     markerRef.current = marker

@@ -125,6 +125,9 @@ export function useLocation() {
   /* ===================== GOOGLE MAPS REVERSE GEOCODE ===================== */
   const reverseGeocodeWithGoogleMaps = async (latitude, longitude) => {
     try {
+      // Google paid geocoding disabled: use free direct reverse geocode only.
+      return await reverseGeocodeDirect(latitude, longitude)
+
       // Get Google Maps API key from backend database
       const { getGoogleMapsApiKey } = await import('@/lib/utils/googleMapsApiKey.js');
       const GOOGLE_MAPS_API_KEY = await getGoogleMapsApiKey();
