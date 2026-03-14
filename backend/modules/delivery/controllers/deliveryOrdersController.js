@@ -471,103 +471,57 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       }
 
       // Proceed with assignment (first come first serve)
+      const validStatusesForAssignment = ['pending', 'confirmed', 'preparing', 'ready'];
+      const assignmentTimestamp = new Date();
 
-      // Reload order as document (not lean) to update it
-      let orderDoc;
-      try {
-        // Reuse the same cleaned variants logic used earlier so we never fail
-        // to find a valid order document just because of minor formatting differences.
-        const reloadQuery = {
-          $or: [
-            { orderId: { $in: orderIdVariants } }
+      // ATOMIC LOCK: only one rider can win this update when deliveryPartnerId is still empty.
+      const assignedOrder = await Order.findOneAndUpdate(
+        {
+          $and: [
+            orderSearchQuery,
+            { status: { $in: validStatusesForAssignment } },
+            {
+              $or: [
+                { deliveryPartnerId: { $exists: false } },
+                { deliveryPartnerId: null }
+              ]
+            }
           ]
-        };
-        if (validObjectId) {
-          reloadQuery.$or.push({ _id: validObjectId });
-        }
+        },
+        {
+          $set: {
+            deliveryPartnerId: delivery._id,
+            'assignmentInfo.deliveryPartnerId': currentDeliveryId,
+            'assignmentInfo.assignedAt': assignmentTimestamp,
+            'assignmentInfo.assignedBy': 'delivery_accept',
+            'assignmentInfo.acceptedFromNotification': true
+          }
+        },
+        { new: true }
+      )
+        .populate('restaurantId', 'name location address phone ownerPhone')
+        .populate('userId', 'name phone')
+        .lean();
 
-        orderDoc = await Order.findOne(reloadQuery);
+      if (!assignedOrder) {
+        const latestOrder = await Order.findOne(orderSearchQuery).lean();
+        const latestAssignedId = latestOrder?.deliveryPartnerId?.toString();
 
-        if (!orderDoc) {
-          console.error(`❌ Order document not found for ID: ${orderId}`);
-          return errorResponse(res, 404, 'Order not found');
-        }
-      } catch (findError) {
-        console.error(`❌ Error finding order document: ${findError.message}`);
-        console.error(`❌ Error stack: ${findError.stack}`);
-        return errorResponse(res, 500, 'Error finding order. Please try again.');
-      }
-
-      // Check again if order was assigned in the meantime (race condition)
-      if (orderDoc.deliveryPartnerId) {
-        const assignedId = orderDoc.deliveryPartnerId.toString();
-        if (assignedId !== currentDeliveryId) {
-          console.error(`❌ Order ${order.orderId} was just assigned to another delivery partner ${assignedId}`);
+        if (latestAssignedId && latestAssignedId !== currentDeliveryId) {
+          console.error(`❌ Order ${order.orderId} was just assigned to another delivery partner ${latestAssignedId}`);
           return errorResponse(res, 403, 'Order was just assigned to another delivery partner. Please try another order.');
         }
-      }
 
-      // Assign order to this delivery partner
-      try {
-        orderDoc.deliveryPartnerId = delivery._id;
-        orderDoc.assignmentInfo = {
-          ...(orderDoc.assignmentInfo || {}),
-          deliveryPartnerId: currentDeliveryId,
-          assignedAt: new Date(),
-          assignedBy: 'delivery_accept',
-          acceptedFromNotification: true
-        };
-        await orderDoc.save();
-        console.log(`✅ Order ${order.orderId} assigned to delivery partner ${currentDeliveryId} upon acceptance`);
-      } catch (saveError) {
-        console.error(`❌ Error saving order assignment: ${saveError.message}`);
-        console.error(`❌ Error stack: ${saveError.stack}`);
-        // Log validation errors if present
-        if (saveError.errors) {
-          console.error(`❌ Validation errors:`, JSON.stringify(saveError.errors, null, 2));
-        }
-        if (saveError.name === 'ValidationError') {
-          const validationMessages = Object.values(saveError.errors || {}).map(err => err.message).join(', ');
-          return errorResponse(res, 400, `Validation error: ${validationMessages || saveError.message}`);
-        }
-        return errorResponse(res, 500, 'Failed to assign order. Please try again.');
-      }
-
-      // Reload order with populated data (use orderDoc._id to ensure we get the updated order)
-      const updatedOrderId = orderDoc._id || orderId;
-      try {
-        const reloadQueryAfterAssign = {
-          $or: [
-            { orderId: { $in: orderIdVariants } }
-          ]
-        };
-        if (validObjectId) {
-          reloadQueryAfterAssign.$or.push({ _id: validObjectId });
-        } else if (updatedOrderId) {
-          reloadQueryAfterAssign.$or.push({ _id: updatedOrderId });
+        if (latestOrder && !validStatusesForAssignment.includes(latestOrder.status)) {
+          console.warn(`⚠️ Order ${order.orderId} cannot be accepted now. Current status: ${latestOrder.status}`);
+          return errorResponse(res, 400, `Order cannot be accepted. Current status: ${latestOrder.status}. Order must be in 'preparing' or 'ready' status.`);
         }
 
-        order = await Order.findOne(reloadQueryAfterAssign)
-          .populate('restaurantId', 'name location address phone ownerPhone')
-          .populate('userId', 'name phone')
-          .lean();
-
-        if (!order) {
-          console.error(`❌ Order not found after assignment: ${updatedOrderId}`);
-          return errorResponse(res, 500, 'Order not found after assignment. Please try again.');
-        }
-      } catch (reloadError) {
-        console.error(`❌ Error reloading order after assignment: ${reloadError.message}`);
-        console.error(`❌ Error stack: ${reloadError.stack}`);
-        return errorResponse(res, 500, 'Error reloading order. Please try again.');
+        return errorResponse(res, 409, 'Order is no longer available for acceptance.');
       }
 
-      // Update orderDeliveryPartnerId after assignment
-      const updatedOrderDeliveryPartnerId = order.deliveryPartnerId?.toString();
-      if (updatedOrderDeliveryPartnerId !== currentDeliveryId) {
-        console.error(`❌ Order assignment failed - order still not assigned to ${currentDeliveryId}, got ${updatedOrderDeliveryPartnerId}`);
-        return errorResponse(res, 500, 'Failed to assign order. Please try again.');
-      }
+      order = assignedOrder;
+      console.log(`✅ Order ${order.orderId} assigned to delivery partner ${currentDeliveryId} upon acceptance`);
     } else if (orderDeliveryPartnerId !== currentDeliveryId) {
       console.error(`❌ Order ${order.orderId} is assigned to ${orderDeliveryPartnerId}, but current delivery partner is ${currentDeliveryId}`);
       return errorResponse(res, 403, 'Order is assigned to another delivery partner');

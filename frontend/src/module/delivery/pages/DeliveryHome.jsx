@@ -683,10 +683,18 @@ export default function DeliveryHome() {
   const [pickupImageUploaded, setPickupImageUploaded] = useState(false)
   const [showPickupOtpOption, setShowPickupOtpOption] = useState(false)
   const [pickupOtp, setPickupOtp] = useState("")
-  const canConfirmPickup = pickupImageUploaded || pickupOtp.length === 4
+  const expectedPickupOtp = useMemo(() => {
+    const orderIdValue = selectedRestaurant?.orderId || selectedRestaurant?.id || newOrder?.orderId || newOrder?.orderMongoId || ''
+    const digitsOnly = String(orderIdValue).replace(/\D/g, '')
+    if (digitsOnly.length < 4) return ''
+    return digitsOnly.slice(-4)
+  }, [selectedRestaurant?.orderId, selectedRestaurant?.id, newOrder?.orderId, newOrder?.orderMongoId])
+  const isPickupOtpVerified = pickupOtp.length === 4 && expectedPickupOtp.length === 4 && pickupOtp === expectedPickupOtp
+  const canConfirmPickup = pickupImageUploaded || isPickupOtpVerified
   const [dropImageUrl, setDropImageUrl] = useState(null)
   const [isUploadingDrop, setIsUploadingDrop] = useState(false)
   const [dropImageUploaded, setDropImageUploaded] = useState(false)
+  const activeMediaOrderKeyRef = useRef(null)
   const fileInputRef = useRef(null)
   const cameraInputRef = useRef(null)
   const [orderDeliveredButtonProgress, setOrderDeliveredButtonProgress] = useState(0)
@@ -761,6 +769,88 @@ export default function DeliveryHome() {
     slider.last = clamped
     setter(clamped)
   }, [])
+
+  const setWorkflowStage = useCallback((stage) => {
+    setShowreachedPickupPopup(stage === 'pickup')
+    setShowOrderIdConfirmationPopup(stage === 'orderId')
+    setShowReachedDropPopup(stage === 'drop')
+    setShowOrderDeliveredAnimation(stage === 'delivered')
+    setShowCustomerReviewPopup(stage === 'review')
+    setShowPaymentPage(stage === 'payment')
+  }, [])
+
+  const getOrderIdentity = (orderLike) => ({
+    orderId: orderLike?.orderId || orderLike?.id || null,
+    orderMongoId: orderLike?.orderMongoId || orderLike?.id || null
+  })
+
+  const inferActiveOrderUiStage = (restaurantInfo = {}, savedUiStage = null) => {
+    const validSavedStages = ['pickup', 'orderId', 'drop', 'delivered', 'review', 'payment', 'none']
+    if (savedUiStage && validSavedStages.includes(savedUiStage)) return savedUiStage
+
+    const deliveryPhase = restaurantInfo?.deliveryPhase || restaurantInfo?.deliveryState?.currentPhase || ''
+    const orderStatus = restaurantInfo?.orderStatus || restaurantInfo?.status || ''
+    const deliveryStateStatus = restaurantInfo?.deliveryState?.status || ''
+
+    const isDelivered = orderStatus === 'delivered' ||
+      orderStatus === 'completed' ||
+      deliveryPhase === 'completed' ||
+      deliveryPhase === 'delivered' ||
+      deliveryStateStatus === 'delivered'
+    if (isDelivered) return 'delivered'
+
+    const isDropStage = deliveryPhase === 'en_route_to_delivery' ||
+      deliveryPhase === 'picked_up' ||
+      deliveryPhase === 'en_route_to_drop' ||
+      deliveryPhase === 'at_delivery' ||
+      orderStatus === 'out_for_delivery' ||
+      deliveryStateStatus === 'order_confirmed'
+    if (isDropStage) return 'drop'
+
+    const isOrderIdStage = deliveryPhase === 'at_pickup' || deliveryStateStatus === 'reached_pickup'
+    if (isOrderIdStage) return 'orderId'
+
+    return 'pickup'
+  }
+
+  useEffect(() => {
+    const activeOrderKey =
+      selectedRestaurant?.orderMongoId ||
+      selectedRestaurant?.id ||
+      selectedRestaurant?.orderId ||
+      null
+
+    if (!activeOrderKey) {
+      activeMediaOrderKeyRef.current = null
+      setPickupImageUrl(null)
+      setPickupImageUploaded(false)
+      setIsUploadingPickup(false)
+      setPickupOtp("")
+      setShowPickupOtpOption(false)
+      setDropImageUrl(null)
+      setDropImageUploaded(false)
+      setIsUploadingDrop(false)
+      return
+    }
+
+    if (activeMediaOrderKeyRef.current && activeMediaOrderKeyRef.current === activeOrderKey) {
+      return
+    }
+
+    activeMediaOrderKeyRef.current = activeOrderKey
+    setPickupImageUrl(null)
+    setPickupImageUploaded(false)
+    setIsUploadingPickup(false)
+    setPickupOtp("")
+    setShowPickupOtpOption(false)
+    setDropImageUrl(null)
+    setDropImageUploaded(false)
+    setIsUploadingDrop(false)
+  }, [
+    selectedRestaurant?.orderMongoId,
+    selectedRestaurant?.id,
+    selectedRestaurant?.orderId
+  ])
 
   useEffect(() => {
     return () => {
@@ -2294,7 +2384,7 @@ export default function DeliveryHome() {
           currentPhase === 'picked_up' || currentPhase === 'at_delivery'
         if (!isAlreadyPastPickup) {
           false && console.log('[NewOrder] ✅ Showing Reached Pickup popup immediately after accept swipe')
-          setShowreachedPickupPopup(true)
+          setWorkflowStage('pickup')
           setShowDirectionsMap(false)
         }
       }, 400) // Short delay for popup close animation
@@ -2636,6 +2726,7 @@ export default function DeliveryHome() {
                 customerAddress: order.address?.formattedAddress ||
                   (order.address?.street ? `${order.address.street}, ${order.address.city || ''}, ${order.address.state || ''}`.trim() : '') ||
                   selectedRestaurant?.customerAddress,
+                customerPhone: order.userId?.phone || selectedRestaurant?.customerPhone || null,
                 customerLat: order.address?.location?.coordinates?.[1],
                 customerLng: order.address?.location?.coordinates?.[0],
                 items: order.items || [],
@@ -2825,7 +2916,7 @@ export default function DeliveryHome() {
               // Only show if not already visible (we show it immediately on swipe)
               if (!isAlreadyPastPickup && !showreachedPickupPopup) {
                 false && console.log('✅ Order accepted (API) — Reached Pickup popup (backup show)');
-                setShowreachedPickupPopup(true);
+                setWorkflowStage('pickup');
                 setShowDirectionsMap(false);
               } else {
                 false && console.log('ℹ️ Reached Pickup popup already showing or order past pickup phase');
@@ -2984,7 +3075,12 @@ export default function DeliveryHome() {
                   // Route will be recalculated on restore using Directions API
                   routeCoordinates: routeCoordinates, // Save coordinates for fallback polyline
                   acceptedAt: new Date().toISOString(),
-                  hasDirectionsAPI: !!directionsResultForMap // Flag to indicate we should recalculate with Directions API
+                  hasDirectionsAPI: !!directionsResultForMap, // Flag to indicate we should recalculate with Directions API
+                  uiStage: 'pickup',
+                  tripMetrics: {
+                    distance: tripDistance,
+                    time: tripTime
+                  }
                 };
                 localStorage.setItem('deliveryActiveOrder', JSON.stringify(activeOrderData));
                 false && console.log('💾 Saved active order to localStorage for refresh handling');
@@ -3273,7 +3369,7 @@ export default function DeliveryHome() {
         if (isDelivered) {
           false && console.warn('⚠️ Order is already delivered, skipping reached pickup confirmation')
           toast.error('Order is already delivered. Cannot confirm reached pickup.')
-          setShowreachedPickupPopup(false)
+          setWorkflowStage('none')
           return
         }
 
@@ -3293,10 +3389,8 @@ export default function DeliveryHome() {
           })
           // If already at pickup or order ID confirmed, just show order ID popup after delay
           if (deliveryPhase === 'at_pickup' || deliveryStateStatus === 'reached_pickup') {
-            // Ensure reached pickup popup is closed first
-            setShowreachedPickupPopup(false)
             setTimeout(() => {
-              setShowOrderIdConfirmationPopup(true)
+              setWorkflowStage('orderId')
             }, 300) // Delay to ensure reached pickup popup closes first
             toast.info('Order is already at pickup. Showing order ID confirmation.')
           } else {
@@ -3345,10 +3439,9 @@ export default function DeliveryHome() {
               }
 
               // Ensure reached pickup popup is closed first
-              setShowreachedPickupPopup(false)
               // Wait for reached pickup popup to close, then show order ID confirmation popup
               setTimeout(() => {
-                setShowOrderIdConfirmationPopup(true)
+                setWorkflowStage('orderId')
                 false && console.log('✅ Showing Order ID confirmation popup')
               }, 300) // 300ms delay for smooth transition
             } else {
@@ -3357,11 +3450,9 @@ export default function DeliveryHome() {
               if (!shouldSuppressDeliveryToast(serverMessage, response.status)) {
                 toast.error(serverMessage || 'Failed to confirm reached pickup. Please try again.')
               }
-              // Ensure reached pickup popup is closed
-              setShowreachedPickupPopup(false)
               // Still show order ID popup even if API call fails, after delay
               setTimeout(() => {
-                setShowOrderIdConfirmationPopup(true)
+                setWorkflowStage('orderId')
                 false && console.log('⚠️ Showing Order ID confirmation popup despite API failure')
               }, 300)
             }
@@ -3383,22 +3474,18 @@ export default function DeliveryHome() {
               toast.error(errorMessage)
             }
 
-            // Ensure reached pickup popup is closed
-            setShowreachedPickupPopup(false)
             // Still show order ID popup even if API call fails, after delay
             setTimeout(() => {
-              setShowOrderIdConfirmationPopup(true)
+              setWorkflowStage('orderId')
               false && console.log('⚠️ Showing Order ID confirmation popup despite error')
             }, 300)
           }
         } else {
           console.error('❌ No order ID found for reached pickup confirmation')
           toast.error('Order ID not found. Please refresh and try again.')
-          // Ensure reached pickup popup is closed
-          setShowreachedPickupPopup(false)
           // Show order ID popup even if no order ID (fallback), after delay
           setTimeout(() => {
-            setShowOrderIdConfirmationPopup(true)
+            setWorkflowStage('orderId')
             false && console.log('⚠️ Showing Order ID confirmation popup without order ID (fallback)')
           }, 300)
         }
@@ -3489,12 +3576,9 @@ export default function DeliveryHome() {
       setSliderProgressImmediate('reachedDrop', 1, setReachedDropButtonProgress)
 
       // Close popup, confirm reached drop, and show order delivered animation instantly (no delay)
-      // Close reached drop popup first
-      setShowReachedDropPopup(false)
-
       // Show Order Delivered popup instantly after Reached Drop is confirmed
       false && console.log('✅ Showing Order Delivered popup instantly after Reached Drop confirmation')
-      setShowOrderDeliveredAnimation(true)
+      setWorkflowStage('delivered')
 
         // API call in background (async, doesn't block popup)
         ; (async () => {
@@ -3806,6 +3890,12 @@ export default function DeliveryHome() {
   }
 
   const handleOrderIdConfirmTouchEnd = (e) => {
+    if (!pickupImageUploaded && pickupOtp.length === 4 && !isPickupOtpVerified) {
+      toast.error('Please enter the last 4 digits of Order ID')
+      setSliderProgressImmediate('orderIdConfirm', 0, setOrderIdConfirmButtonProgress)
+      return
+    }
+
     // Disable swipe if pickup photo or OTP is not provided
     if (!canConfirmPickup) {
       toast.error('Please upload pickup photo or enter OTP first')
@@ -3837,7 +3927,7 @@ export default function DeliveryHome() {
 
       // Close popup after animation, then confirm order ID and show polyline to customer
       setTimeout(async () => {
-        setShowOrderIdConfirmationPopup(false)
+        setWorkflowStage('none')
 
         // Get order ID from selectedRestaurant
         const orderId = selectedRestaurant?.id || selectedRestaurant?.orderId
@@ -3856,7 +3946,7 @@ export default function DeliveryHome() {
         if (isDelivered) {
           false && console.warn('⚠️ Order is already delivered, skipping order ID confirmation')
           toast.error('Order is already delivered. Cannot confirm order ID.')
-          setShowOrderIdConfirmationPopup(false)
+          setWorkflowStage('none')
           return
         }
 
@@ -3874,7 +3964,7 @@ export default function DeliveryHome() {
             deliveryStateStatus,
             orderIdConfirmedAt: selectedRestaurant?.deliveryState?.orderIdConfirmedAt
           })
-          // Don't show error, just update the UI state and close popup
+          // Don't show error, just update the UI state and move straight to drop flow
           setSelectedRestaurant(prev => ({
             ...prev,
             orderStatus: 'out_for_delivery',
@@ -3886,7 +3976,7 @@ export default function DeliveryHome() {
               status: 'order_confirmed'
             }
           }))
-          setShowOrderIdConfirmationPopup(false)
+          setWorkflowStage('drop')
           toast.info('Order ID is already confirmed. Order is out for delivery.')
           return
         }
@@ -3896,6 +3986,21 @@ export default function DeliveryHome() {
           toast.error('Order ID not found. Please try again.')
           return
         }
+
+        // CRITICAL: Move to drop flow immediately on swipe so Reached Pickup cannot re-render
+        // while order confirmation API is still running in the background.
+        setSelectedRestaurant(prev => prev ? ({
+          ...prev,
+          orderStatus: 'out_for_delivery',
+          status: 'out_for_delivery',
+          deliveryPhase: 'en_route_to_delivery',
+          deliveryState: {
+            ...prev.deliveryState,
+            currentPhase: 'en_route_to_delivery',
+            status: 'order_confirmed'
+          }
+        }) : prev)
+        setWorkflowStage('drop')
 
         // Get current LIVE location
         let currentLocation = riderLocation
@@ -4012,6 +4117,11 @@ export default function DeliveryHome() {
                     const totalTime = pickupRouteTimeRef.current + deliveryDuration;
                     setTripDistance(totalDistance);
                     setTripTime(totalTime);
+                    setSelectedRestaurant(prev => prev ? {
+                      ...prev,
+                      tripDistance: totalDistance,
+                      tripTime: totalTime
+                    } : prev)
                     false && console.log('📊 Total trip calculated:', {
                       totalDistance: totalDistance,
                       totalTime: totalTime,
@@ -4100,21 +4210,13 @@ export default function DeliveryHome() {
               }
             }))
 
-            // CRITICAL: Close Reached Pickup popup if it's still showing (shouldn't happen, but defensive)
-            setShowreachedPickupPopup(false)
-
-            // Close Order ID confirmation popup
-            setShowOrderIdConfirmationPopup(false)
+            // Keep drop flow active after confirmation succeeds
+            setWorkflowStage('drop')
 
             toast.success('Order is out for delivery. Route to customer is on the map.', { duration: 4000 })
 
-            // Show Reached Drop popup instantly after Order Picked Up is confirmed
-            // Use setTimeout to ensure state updates are processed and useEffect doesn't block it
-            false && console.log('✅ Showing Reached Drop popup instantly after Order Picked Up confirmation')
-            setTimeout(() => {
-              setShowReachedDropPopup(true)
-              false && console.log('✅ Reached Drop popup state set to true')
-            }, 100) // Small delay to ensure showOrderIdConfirmationPopup state is updated
+            // Keep Reached Drop popup visible after background confirmation succeeds.
+            false && console.log('✅ Reached Drop popup remains active after Order Picked Up confirmation')
 
           } else {
             console.error('❌ Failed to confirm order ID:', response.data)
@@ -4143,66 +4245,120 @@ export default function DeliveryHome() {
     orderIdConfirmIsSwiping.current = false
   }
 
-  // Handle Start Navigation Button - Opens Google Maps app in navigation mode
-  const handleStartNavigation = () => {
-    // Get customer location from selectedRestaurant
-    const customerLat = selectedRestaurant?.customerLat;
-    const customerLng = selectedRestaurant?.customerLng;
+  const normalizePhoneNumber = (value) => {
+    if (value === null || value === undefined) return ''
+    const text = String(value).trim()
+    if (!text) return ''
+    return text.replace(/[^\d+]/g, '')
+  }
 
-    if (!customerLat || !customerLng) {
-      console.error('❌ Customer location not available');
-      toast.error('Customer location not found');
-      return;
+  const resolveCustomerPhone = (orderLike) => {
+    const candidates = [
+      orderLike?.customerPhone,
+      orderLike?.customer?.phone,
+      orderLike?.customerContact?.phone,
+      orderLike?.customerDetails?.phone,
+      orderLike?.userId?.phone,
+      orderLike?.user?.phone,
+      orderLike?.phoneNumber,
+      orderLike?.deliveryAddress?.phone
+    ]
+
+    for (const candidate of candidates) {
+      const phone = normalizePhoneNumber(candidate)
+      if (phone) return phone
+    }
+    return ''
+  }
+
+  const toValidCoord = (value) => {
+    const coord = Number(value)
+    return Number.isFinite(coord) ? coord : null
+  }
+
+  const extractCoordsFromText = (text) => {
+    if (!text || typeof text !== 'string') return null
+    const match = text.match(/(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/)
+    if (!match) return null
+
+    const first = toValidCoord(match[1])
+    const second = toValidCoord(match[2])
+    if (first === null || second === null) return null
+
+    if (Math.abs(first) <= 90 && Math.abs(second) <= 180) {
+      return { lat: first, lng: second }
+    }
+    if (Math.abs(first) <= 180 && Math.abs(second) <= 90) {
+      return { lat: second, lng: first }
+    }
+    return null
+  }
+
+  const resolveCustomerCoordinates = (orderLike) => {
+    const explicitLat = toValidCoord(
+      orderLike?.customerLat ??
+      orderLike?.customerLocation?.lat ??
+      orderLike?.customerLocation?.latitude ??
+      orderLike?.address?.location?.coordinates?.[1]
+    )
+    const explicitLng = toValidCoord(
+      orderLike?.customerLng ??
+      orderLike?.customerLocation?.lng ??
+      orderLike?.customerLocation?.longitude ??
+      orderLike?.address?.location?.coordinates?.[0]
+    )
+
+    if (explicitLat !== null && explicitLng !== null) {
+      return { lat: explicitLat, lng: explicitLng }
     }
 
-    false && console.log('🗺️ Opening Google Maps navigation to customer:', { lat: customerLat, lng: customerLng });
+    return extractCoordsFromText(orderLike?.customerAddress || orderLike?.address?.formattedAddress || '')
+  }
 
-    // Get current rider location for origin (optional, Google Maps will use current location if not provided)
-    const originLat = riderLocation?.[0];
-    const originLng = riderLocation?.[1];
+  const openGoogleNavigation = ({ lat, lng }) => {
+    const safeLat = toValidCoord(lat)
+    const safeLng = toValidCoord(lng)
+    if (safeLat === null || safeLng === null) {
+      return false
+    }
 
-    // Detect platform (Android or iOS)
-    const userAgent = navigator.userAgent || navigator.vendor || window.opera;
-    const isAndroid = /android/i.test(userAgent);
-    const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream;
-
-    let mapsUrl = '';
+    const userAgent = navigator.userAgent || navigator.vendor || window.opera
+    const isAndroid = /android/i.test(userAgent)
+    const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream
 
     if (isAndroid) {
-      // Android: Use google.navigation: scheme (opens directly in navigation mode)
-      // Fallback to web URL if app not installed
-      mapsUrl = `google.navigation:q=${customerLat},${customerLng}&mode=b`;
-
-      // Try to open Google Maps app first
-      window.location.href = mapsUrl;
-
-      // Fallback to web URL after a short delay (in case app is not installed)
+      window.location.href = `google.navigation:q=${safeLat},${safeLng}&mode=b`
       setTimeout(() => {
-        const webUrl = `https://www.google.com/maps/dir/?api=1&destination=${customerLat},${customerLng}&travelmode=bicycling`;
-        window.open(webUrl, '_blank');
-      }, 500);
+        const webUrl = `https://www.google.com/maps/dir/?api=1&destination=${safeLat},${safeLng}&travelmode=bicycling`
+        window.open(webUrl, '_blank')
+      }, 500)
     } else if (isIOS) {
-      // iOS: Use comgooglemaps:// scheme (opens Google Maps app)
-      mapsUrl = `comgooglemaps://?daddr=${customerLat},${customerLng}&directionsmode=bicycling`;
-
-      // Try to open Google Maps app first
-      window.location.href = mapsUrl;
-
-      // Fallback to web URL after a short delay (in case app is not installed)
+      window.location.href = `comgooglemaps://?daddr=${safeLat},${safeLng}&directionsmode=bicycling`
       setTimeout(() => {
-        const webUrl = `https://maps.google.com/?daddr=${customerLat},${customerLng}&directionsmode=bicycling`;
-        window.open(webUrl, '_blank');
-      }, 500);
+        const webUrl = `https://maps.google.com/?daddr=${safeLat},${safeLng}&directionsmode=bicycling`
+        window.open(webUrl, '_blank')
+      }, 500)
     } else {
-      // Web/Desktop: Use web URL
-      mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${customerLat},${customerLng}&travelmode=bicycling`;
-      window.open(mapsUrl, '_blank');
+      const webUrl = `https://www.google.com/maps/dir/?api=1&destination=${safeLat},${safeLng}&travelmode=bicycling`
+      window.open(webUrl, '_blank')
     }
 
-    // Show success message
     toast.success('Opening Google Maps navigation 🗺️', {
       duration: 2000
-    });
+    })
+    return true
+  }
+
+  // Handle Start Navigation Button - Opens Google Maps app in navigation mode
+  const handleStartNavigation = () => {
+    const customerCoords = resolveCustomerCoordinates(selectedRestaurant)
+    if (!customerCoords) {
+      console.error('❌ Customer location not available')
+      toast.error('Customer location not found')
+      return
+    }
+
+    openGoogleNavigation(customerCoords)
   }
 
   // Handle Order Delivered button swipe
@@ -4267,18 +4423,10 @@ export default function DeliveryHome() {
 
       // Close popup after animation and show customer review (delivery will be completed when review is submitted)
       setTimeout(() => {
-        setShowOrderDeliveredAnimation(false)
-
-        // CRITICAL: Clear all pickup/delivery related popups
-        setShowReachedDropPopup(false)
-        setShowreachedPickupPopup(false)
-        setShowOrderIdConfirmationPopup(false)
+        setWorkflowStage('review')
 
         // 🔔 Real-time notification: Order Delivered
         toast.success('🎉 Order Delivered! Great job!', { duration: 4000 })
-
-        // Show customer review popup instantly
-        setShowCustomerReviewPopup(true)
 
         // Reset after animation
         setTimeout(() => {
@@ -4601,6 +4749,7 @@ export default function DeliveryHome() {
         amount: earnedValue > 0 ? earnedValue : (deliveryFee > 0 ? deliveryFee : 0),
         customerName: newOrder.customerName,
         customerAddress: newOrder.customerLocation?.address || 'Customer address',
+        customerPhone: newOrder.customerPhone || newOrder.customer?.phone || newOrder.user?.phone || null,
         customerLat: newOrder.customerLocation?.latitude,
         customerLng: newOrder.customerLocation?.longitude,
         items: newOrder.items || [],
@@ -5073,6 +5222,7 @@ export default function DeliveryHome() {
               (firstOrder.address?.street
                 ? `${firstOrder.address.street}, ${firstOrder.address.city || ''}, ${firstOrder.address.state || ''}`.trim()
                 : 'Customer address'),
+            customerPhone: firstOrder.userId?.phone || null,
             customerLat: firstOrder.address?.location?.coordinates?.[1],
             customerLng: firstOrder.address?.location?.coordinates?.[0],
             items: firstOrder.items || [],
@@ -6882,6 +7032,18 @@ export default function DeliveryHome() {
         if (activeOrderData.restaurantInfo) {
           setSelectedRestaurant(activeOrderData.restaurantInfo);
           false && console.log('✅ Restored selectedRestaurant from localStorage');
+
+          const restoredDistance = activeOrderData?.tripMetrics?.distance ?? activeOrderData?.restaurantInfo?.tripDistance ?? null
+          const restoredTime = activeOrderData?.tripMetrics?.time ?? activeOrderData?.restaurantInfo?.tripTime ?? null
+          setTripDistance(Number.isFinite(Number(restoredDistance)) ? Number(restoredDistance) : null)
+          setTripTime(Number.isFinite(Number(restoredTime)) ? Number(restoredTime) : null)
+
+          // Restore same flow stage on refresh (pickup/order-id/drop/delivered/review/payment)
+          const restoredUiStage = inferActiveOrderUiStage(
+            activeOrderData.restaurantInfo,
+            activeOrderData.uiStage || null
+          )
+          setWorkflowStage(restoredUiStage)
         }
 
         // Wait for map to be ready
@@ -6945,16 +7107,80 @@ export default function DeliveryHome() {
         // Clear localStorage and state if there's an error
         localStorage.removeItem('deliveryActiveOrder');
         setSelectedRestaurant(null);
-        setShowReachedDropPopup(false);
-        setShowOrderDeliveredAnimation(false);
-        setShowCustomerReviewPopup(false);
-        setShowPaymentPage(false);
+        setWorkflowStage('none');
       }
     };
 
     restoreActiveOrder();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // Run only on mount - calculateRouteWithDirectionsAPI is stable
+
+  // Keep deliveryActiveOrder synced with latest phase + visible popup stage
+  // so browser refresh opens the same page state.
+  useEffect(() => {
+    if (!selectedRestaurant) return
+
+    const { orderId: currentOrderId, orderMongoId: currentOrderMongoId } = getOrderIdentity(selectedRestaurant)
+    if (!currentOrderId && !currentOrderMongoId) return
+
+    try {
+      const raw = localStorage.getItem('deliveryActiveOrder')
+      if (!raw) return
+
+      const parsed = JSON.parse(raw)
+      const savedOrderInfo = parsed?.restaurantInfo || {}
+      const { orderId: savedOrderId, orderMongoId: savedOrderMongoId } = getOrderIdentity(savedOrderInfo)
+
+      const isSameOrder =
+        (savedOrderId && currentOrderId && String(savedOrderId) === String(currentOrderId)) ||
+        (savedOrderMongoId && currentOrderMongoId && String(savedOrderMongoId) === String(currentOrderMongoId))
+
+      if (!isSameOrder) return
+
+      const uiStage = showPaymentPage
+        ? 'payment'
+        : showCustomerReviewPopup
+          ? 'review'
+          : showOrderDeliveredAnimation
+            ? 'delivered'
+            : showReachedDropPopup
+              ? 'drop'
+              : showOrderIdConfirmationPopup
+                ? 'orderId'
+                : showreachedPickupPopup
+                  ? 'pickup'
+                  : inferActiveOrderUiStage(selectedRestaurant, null)
+
+      const updated = {
+        ...parsed,
+        orderId: currentOrderId || parsed.orderId,
+        orderMongoId: currentOrderMongoId || parsed.orderMongoId || null,
+        restaurantInfo: {
+          ...savedOrderInfo,
+          ...selectedRestaurant
+        },
+        uiStage,
+        tripMetrics: {
+          distance: tripDistance,
+          time: tripTime
+        }
+      }
+
+      localStorage.setItem('deliveryActiveOrder', JSON.stringify(updated))
+    } catch (error) {
+      console.error('❌ Error syncing deliveryActiveOrder for refresh restore:', error)
+    }
+  }, [
+    selectedRestaurant,
+    showreachedPickupPopup,
+    showOrderIdConfirmationPopup,
+    showReachedDropPopup,
+    showOrderDeliveredAnimation,
+    showCustomerReviewPopup,
+    showPaymentPage,
+    tripDistance,
+    tripTime
+  ])
 
   // Ensure polyline is displayed when map becomes ready and there's an active route
   useEffect(() => {
@@ -6987,6 +7213,55 @@ export default function DeliveryHome() {
       }
     }
   }, [selectedRestaurant, riderLocation, updateLiveTrackingPolyline]);
+
+  // Delivery complete popup: prefer DB-backed route metrics (routeToDelivery)
+  // so trip distance/time stay dynamic and accurate after refreshes.
+  useEffect(() => {
+    if (!showOrderDeliveredAnimation) return
+
+    const orderId = selectedRestaurant?.orderId || selectedRestaurant?.id
+    if (!orderId) return
+
+    let isCancelled = false
+
+    const fetchTripMetricsFromDb = async () => {
+      try {
+        const response = await deliveryAPI.getOrderDetails(orderId)
+        const payload = response?.data?.data
+        const order = payload?.order || payload
+        const routeToDelivery = payload?.route || order?.deliveryState?.routeToDelivery
+
+        const distanceKm = Number(routeToDelivery?.distance)
+        const durationMin = Number(routeToDelivery?.duration)
+
+        if (!Number.isFinite(distanceKm) || !Number.isFinite(durationMin)) {
+          return
+        }
+
+        const distanceMeters = Math.max(0, Math.round(distanceKm * 1000))
+        const durationSeconds = Math.max(0, Math.round(durationMin * 60))
+
+        if (isCancelled) return
+
+        setTripDistance(distanceMeters)
+        setTripTime(durationSeconds)
+        setSelectedRestaurant(prev => prev ? {
+          ...prev,
+          tripDistance: distanceMeters,
+          tripTime: durationSeconds
+        } : prev)
+      } catch (error) {
+        // Keep existing in-memory values as fallback; no UX break.
+        false && console.warn('⚠️ Could not fetch DB trip metrics for delivered popup:', error?.message)
+      }
+    }
+
+    fetchTripMetricsFromDb()
+
+    return () => {
+      isCancelled = true
+    }
+  }, [showOrderDeliveredAnimation, selectedRestaurant?.orderId, selectedRestaurant?.id])
 
   // Clear any default/mock routes on mount if there's no active order
   useEffect(() => {
@@ -7056,13 +7331,8 @@ export default function DeliveryHome() {
     false && console.log('🧹 Clearing order data...');
     localStorage.removeItem('deliveryActiveOrder');
     setSelectedRestaurant(null);
-    setShowReachedDropPopup(false);
-    setShowOrderDeliveredAnimation(false);
-    setShowCustomerReviewPopup(false);
-    setShowPaymentPage(false);
+    setWorkflowStage('none');
     setShowNewOrderPopup(false);
-    setShowreachedPickupPopup(false);
-    setShowOrderIdConfirmationPopup(false);
     clearNewOrder();
     clearOrderReady();
     // Clear accepted orders list when going offline
@@ -7078,7 +7348,7 @@ export default function DeliveryHome() {
     directionsResponseRef.current = null;
     setRoutePolyline([]);
     setShowRoutePath(false);
-  }, [clearNewOrder, clearOrderReady])
+  }, [clearNewOrder, clearOrderReady, setWorkflowStage])
 
   // Periodically verify order still exists (every 30 seconds) to catch deletions
   useEffect(() => {
@@ -7182,6 +7452,27 @@ export default function DeliveryHome() {
     if (!orderReady) return
     false && console.log('✅ Order ready event received:', orderReady)
 
+    const existingOrderStatus = selectedRestaurant?.orderStatus || selectedRestaurant?.status || ''
+    const existingDeliveryPhase = selectedRestaurant?.deliveryPhase || selectedRestaurant?.deliveryState?.currentPhase || ''
+    const existingDeliveryStateStatus = selectedRestaurant?.deliveryState?.status || ''
+    const isAlreadyPastPickup =
+      existingOrderStatus === 'out_for_delivery' ||
+      existingDeliveryPhase === 'en_route_to_delivery' ||
+      existingDeliveryPhase === 'en_route_to_drop' ||
+      existingDeliveryPhase === 'picked_up' ||
+      existingDeliveryPhase === 'at_delivery' ||
+      existingDeliveryStateStatus === 'order_confirmed' ||
+      showReachedDropPopup ||
+      showOrderDeliveredAnimation ||
+      showCustomerReviewPopup ||
+      showPaymentPage
+
+    if (isAlreadyPastPickup) {
+      false && console.log('ℹ️ Ignoring stale orderReady event: order already moved past pickup phase')
+      clearOrderReady()
+      return
+    }
+
     let restaurantInfo = selectedRestaurant
     const order = orderReady.order || orderReady
 
@@ -7252,7 +7543,21 @@ export default function DeliveryHome() {
       false && console.log('🏪 Updated restaurant info from orderReady event:', restaurantInfo)
     } else if (selectedRestaurant) {
       // Always set orderStatus to 'ready' so location monitor shows Reached Pickup when rider is within 500m
-      setSelectedRestaurant(prev => ({ ...prev, orderStatus: 'ready' }))
+      setSelectedRestaurant(prev => {
+        if (!prev) return prev
+        const phase = prev.deliveryPhase || prev.deliveryState?.currentPhase || ''
+        const stateStatus = prev.deliveryState?.status || ''
+        const status = prev.orderStatus || prev.status || ''
+        const pastPickupNow =
+          status === 'out_for_delivery' ||
+          phase === 'en_route_to_delivery' ||
+          phase === 'en_route_to_drop' ||
+          phase === 'picked_up' ||
+          phase === 'at_delivery' ||
+          stateStatus === 'order_confirmed'
+        if (pastPickupNow) return prev
+        return { ...prev, orderStatus: 'ready' }
+      })
     }
 
     setShowDirectionsMap(false)
@@ -7274,12 +7579,34 @@ export default function DeliveryHome() {
       return
     }
 
+    const isPastPickupInCurrentInfo =
+      orderStatus === 'out_for_delivery' ||
+      deliveryPhase === 'en_route_to_delivery' ||
+      deliveryPhase === 'en_route_to_drop' ||
+      deliveryPhase === 'picked_up' ||
+      deliveryPhase === 'at_delivery' ||
+      currentRestaurantInfo?.deliveryState?.status === 'order_confirmed'
+
+    if (isPastPickupInCurrentInfo) {
+      false && console.log('ℹ️ Skipping Reached Pickup popup: order is already in drop/delivery phase')
+      clearOrderReady()
+      return
+    }
+
     // Order is ready: show Reached Pickup popup immediately (no 500m check)
     false && console.log('✅ Order ready – showing Reached Pickup popup')
-    setShowreachedPickupPopup(true)
+    setWorkflowStage('pickup')
 
     clearOrderReady()
-  }, [orderReady, selectedRestaurant])
+  }, [
+    orderReady,
+    selectedRestaurant,
+    showReachedDropPopup,
+    showOrderDeliveredAnimation,
+    showCustomerReviewPopup,
+    showPaymentPage,
+    clearOrderReady
+  ])
 
   // Fetch order details when Reached Pickup popup is shown to ensure we have restaurant address
   useEffect(() => {
@@ -7528,6 +7855,15 @@ export default function DeliveryHome() {
       return
     }
 
+    // CRITICAL: Don't show Reached Pickup if Reached Drop popup is already showing or about to show
+    // This prevents Reached Pickup from appearing after Order ID confirmation
+    if (showReachedDropPopup) {
+      if (showreachedPickupPopup) {
+        setShowreachedPickupPopup(false)
+      }
+      return
+    }
+
     // Only show for orders that are in pickup phase (en_route_to_pickup or at_pickup)
     const deliveryPhase = selectedRestaurant?.deliveryPhase || selectedRestaurant?.deliveryState?.currentPhase || ''
     const orderStatus = selectedRestaurant?.orderStatus || selectedRestaurant?.status || ''
@@ -7577,7 +7913,7 @@ export default function DeliveryHome() {
     // Show "Reached Pickup" popup immediately when order is in pickup phase (no distance check)
     if (!showreachedPickupPopup) {
       false && console.log('✅ Order is in pickup phase, showing Reached Pickup popup immediately')
-      setShowreachedPickupPopup(true)
+      setWorkflowStage('pickup')
 
       // Close directions map if open
       setShowDirectionsMap(false)
@@ -9875,7 +10211,15 @@ export default function DeliveryHome() {
 
       {/* New Order Popup with Countdown Timer - Custom Implementation */}
       <AnimatePresence>
-        {showNewOrderPopup && (newOrder || selectedRestaurant) && isOnline && (
+        {showNewOrderPopup &&
+          (newOrder || selectedRestaurant) &&
+          isOnline &&
+          !showreachedPickupPopup &&
+          !showOrderIdConfirmationPopup &&
+          !showReachedDropPopup &&
+          !showOrderDeliveredAnimation &&
+          !showCustomerReviewPopup &&
+          !showPaymentPage && (
           <>
             {/* Backdrop */}
             {!isNewOrderPopupMinimized && (
@@ -11000,30 +11344,30 @@ export default function DeliveryHome() {
           {/* Action Buttons */}
           <div className="flex gap-3 mb-6">
             <button
-              onClick={() => {
-                // Prefer customer phone if available, otherwise fallback to restaurant phone
-                const rawPhone =
-                  selectedRestaurant?.customerPhone ||
-                  selectedRestaurant?.phone ||
-                  selectedRestaurant?.ownerPhone ||
-                  selectedRestaurant?.userId?.phone ||
-                  ''
+              onClick={async () => {
+                let customerPhone = resolveCustomerPhone(selectedRestaurant)
 
-                const cleanPhone = rawPhone.replace(/[^\d+]/g, '')
+                if (!customerPhone && selectedRestaurant?.orderId) {
+                  try {
+                    const orderId = selectedRestaurant.orderId || selectedRestaurant.id
+                    const response = await deliveryAPI.getOrderDetails(orderId)
+                    const order = response?.data?.data?.order || response?.data?.order || response?.data?.data
+                    customerPhone = resolveCustomerPhone(order)
 
-                if (!cleanPhone) {
-                  toast.error('Phone number not available')
-                  console.error('❌ [CALL] Customer phone not found for selectedRestaurant:', {
-                    selectedRestaurant,
-                    hasCustomerPhone: !!selectedRestaurant?.customerPhone,
-                    hasPhone: !!selectedRestaurant?.phone,
-                    hasOwnerPhone: !!selectedRestaurant?.ownerPhone,
-                    hasUserPhone: !!selectedRestaurant?.userId?.phone
-                  })
+                    if (customerPhone) {
+                      setSelectedRestaurant(prev => prev ? { ...prev, customerPhone } : prev)
+                    }
+                  } catch (error) {
+                    console.error('❌ [CALL] Error fetching order details for customer phone:', error)
+                  }
+                }
+
+                if (!customerPhone) {
+                  toast.error('Customer phone number not available')
                   return
                 }
 
-                window.location.href = `tel:${cleanPhone}`
+                window.location.href = `tel:${customerPhone}`
               }}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
             >
@@ -11031,49 +11375,32 @@ export default function DeliveryHome() {
               <span className="text-gray-700 font-medium">Call</span>
             </button>
             <button
-              onClick={() => {
-                // Use customer coordinates for navigation
-                const customerLat = selectedRestaurant?.customerLat
-                const customerLng = selectedRestaurant?.customerLng
+              onClick={async () => {
+                let customerCoords = resolveCustomerCoordinates(selectedRestaurant)
 
-                if (!customerLat || !customerLng) {
+                if (!customerCoords && selectedRestaurant?.orderId) {
+                  try {
+                    const orderId = selectedRestaurant.orderId || selectedRestaurant.id
+                    const response = await deliveryAPI.getOrderDetails(orderId)
+                    const order = response?.data?.data?.order || response?.data?.order || response?.data?.data
+                    customerCoords = resolveCustomerCoordinates(order)
+
+                    if (customerCoords) {
+                      setSelectedRestaurant(prev =>
+                        prev ? { ...prev, customerLat: customerCoords.lat, customerLng: customerCoords.lng } : prev
+                      )
+                    }
+                  } catch (error) {
+                    console.error('❌ [MAP] Error fetching order details for customer location:', error)
+                  }
+                }
+
+                if (!customerCoords) {
                   toast.error('Customer location not available')
-                  console.error('❌ [MAP] Customer coordinates not found for selectedRestaurant:', {
-                    customerLat,
-                    customerLng,
-                    selectedRestaurant
-                  })
                   return
                 }
 
-                const userAgent = navigator.userAgent || navigator.vendor || window.opera
-                const isAndroid = /android/i.test(userAgent)
-                const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream
-
-                let mapsUrl = ''
-
-                if (isAndroid) {
-                  mapsUrl = `google.navigation:q=${customerLat},${customerLng}&mode=b`
-                  window.location.href = mapsUrl
-                  setTimeout(() => {
-                    const webUrl = `https://www.google.com/maps/dir/?api=1&destination=${customerLat},${customerLng}&travelmode=bicycling`
-                    window.open(webUrl, '_blank')
-                  }, 500)
-                } else if (isIOS) {
-                  mapsUrl = `comgooglemaps://?daddr=${customerLat},${customerLng}&directionsmode=bicycling`
-                  window.location.href = mapsUrl
-                  setTimeout(() => {
-                    const webUrl = `https://maps.google.com/?daddr=${customerLat},${customerLng}&directionsmode=bicycling`
-                    window.open(webUrl, '_blank')
-                  }, 500)
-                } else {
-                  mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${customerLat},${customerLng}&travelmode=bicycling`
-                  window.open(mapsUrl, '_blank')
-                }
-
-                toast.success('Opening Google Maps navigation 🗺️', {
-                  duration: 2000
-                })
+                openGoogleNavigation(customerCoords)
               }}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
             >
@@ -11206,8 +11533,7 @@ export default function DeliveryHome() {
       <BottomPopup
         isOpen={showOrderDeliveredAnimation}
         onClose={() => {
-          setShowOrderDeliveredAnimation(false)
-          setShowCustomerReviewPopup(true)
+          setWorkflowStage('review')
         }}
         showCloseButton={false}
         closeOnBackdropClick={false}
@@ -11238,11 +11564,15 @@ export default function DeliveryHome() {
                   <span className="text-gray-600 text-sm">Trip distance</span>
                 </div>
                 <span className="text-gray-900 font-semibold">
-                  {tripDistance !== null
-                    ? (tripDistance >= 1000
-                      ? `${(tripDistance / 1000).toFixed(1)} kms`
-                      : `${tripDistance.toFixed(0)} m`)
-                    : (selectedRestaurant?.tripDistance || 'Calculating...')}
+                  {(() => {
+                    const value = tripDistance ?? selectedRestaurant?.tripDistance ?? null
+                    if (value === null || value === undefined || value === '') return 'Calculating...'
+                    const numeric = Number(value)
+                    if (Number.isFinite(numeric)) {
+                      return numeric >= 1000 ? `${(numeric / 1000).toFixed(1)} kms` : `${numeric.toFixed(0)} m`
+                    }
+                    return value
+                  })()}
                 </span>
               </div>
               <div className="flex items-center justify-between">
@@ -11251,11 +11581,15 @@ export default function DeliveryHome() {
                   <span className="text-gray-600 text-sm">Trip time</span>
                 </div>
                 <span className="text-gray-900 font-semibold">
-                  {tripTime !== null
-                    ? (tripTime >= 60
-                      ? `${Math.round(tripTime / 60)} mins`
-                      : `${tripTime} secs`)
-                    : (selectedRestaurant?.tripTime || 'Calculating...')}
+                  {(() => {
+                    const value = tripTime ?? selectedRestaurant?.tripTime ?? null
+                    if (value === null || value === undefined || value === '') return 'Calculating...'
+                    const numeric = Number(value)
+                    if (Number.isFinite(numeric)) {
+                      return numeric >= 60 ? `${Math.round(numeric / 60)} mins` : `${Math.round(numeric)} secs`
+                    }
+                    return value
+                  })()}
                 </span>
               </div>
             </div>
@@ -11444,8 +11778,7 @@ export default function DeliveryHome() {
                       }
 
                       // Close review popup and show payment page
-                      setShowCustomerReviewPopup(false)
-                      setShowPaymentPage(true)
+                      setWorkflowStage('payment')
                     } else {
                       console.error('❌ Failed to submit review:', response.data)
                       toast.error(response.data?.message || 'Failed to submit review. Please try again.')
@@ -11454,13 +11787,12 @@ export default function DeliveryHome() {
                     console.error('❌ Error submitting review:', error)
                     toast.error('Failed to submit review. Please try again.')
                     // Still show payment page even if review fails
-                    setShowCustomerReviewPopup(false)
-                    setShowPaymentPage(true)
+                    setWorkflowStage('payment')
                   }
                 } else {
                   // If no order ID, just show payment page
-                  setShowCustomerReviewPopup(false)
-                  setShowPaymentPage(true)
+                    setWorkflowStage('payment')
+                  setWorkflowStage('payment')
                 }
               }}
               className="w-full bg-green-600 text-white py-4 rounded-xl font-semibold text-lg hover:bg-green-700 transition-colors shadow-lg"
@@ -11556,13 +11888,7 @@ export default function DeliveryHome() {
               {/* Complete Button */}
               <button
                 onClick={() => {
-                  setShowPaymentPage(false)
-                  // CRITICAL: Clear all order-related popups and states when completing
-                  setShowreachedPickupPopup(false)
-                  setShowOrderIdConfirmationPopup(false)
-                  setShowReachedDropPopup(false)
-                  setShowOrderDeliveredAnimation(false)
-                  setShowCustomerReviewPopup(false)
+                  setWorkflowStage('none')
 
                   // Clear selected restaurant/order to prevent showing popups for delivered order
                   setSelectedRestaurant(null)

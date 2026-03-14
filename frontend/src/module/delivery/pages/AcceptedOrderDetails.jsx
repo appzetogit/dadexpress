@@ -77,6 +77,35 @@ export default function AcceptedOrderDetails() {
 
   const statusMessage = getDeliveryStatusMessage(orderStatus)
 
+  const normalizePhoneNumber = (value) => {
+    if (value === null || value === undefined) return ""
+    const text = String(value).trim()
+    if (!text) return ""
+    return text.replace(/[^\d+]/g, "")
+  }
+
+  const toValidCoord = (value) => {
+    const coord = Number(value)
+    return Number.isFinite(coord) ? coord : null
+  }
+
+  const openNavigationMap = ({ lat, lng, address }) => {
+    const safeLat = toValidCoord(lat)
+    const safeLng = toValidCoord(lng)
+
+    if (safeLat !== null && safeLng !== null) {
+      window.open(`https://www.google.com/maps/dir/?api=1&destination=${safeLat},${safeLng}&travelmode=bicycling`, "_blank")
+      return true
+    }
+
+    if (address) {
+      window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`, "_blank")
+      return true
+    }
+
+    return false
+  }
+
   // Helper to safely map items coming from backend into UI-friendly shape
   const normalizedItems = (() => {
     const rawItems = activeOrderInfo?.items
@@ -266,7 +295,18 @@ export default function AcceptedOrderDetails() {
                 </button>
                 <button 
                   onClick={() => {
-                    window.open(`tel:+8801700000000`, '_self')
+                    const customerPhone = normalizePhoneNumber(
+                      activeOrderInfo?.customerPhone ||
+                      activeOrderInfo?.userId?.phone ||
+                      activeOrderInfo?.phone
+                    )
+
+                    if (!customerPhone) {
+                      window.alert("Customer phone number not available")
+                      return
+                    }
+
+                    window.location.href = `tel:${customerPhone}`
                   }}
                   className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-green-500 flex items-center justify-center hover:bg-green-600 transition-colors flex-shrink-0"
                 >
@@ -274,8 +314,15 @@ export default function AcceptedOrderDetails() {
                 </button>
                 <button 
                   onClick={() => {
-                    const address = encodeURIComponent(orderData.restaurant.address)
-                    window.open(`https://www.google.com/maps/search/?api=1&query=${address}`, '_blank')
+                    const opened = openNavigationMap({
+                      lat: activeOrderInfo?.customerLat,
+                      lng: activeOrderInfo?.customerLng,
+                      address: orderData.customer.address
+                    })
+
+                    if (!opened) {
+                      window.alert("Customer location not available")
+                    }
                   }}
                   className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-gray-300 flex items-center justify-center hover:bg-gray-400 transition-colors flex-shrink-0"
                 >
@@ -315,7 +362,18 @@ export default function AcceptedOrderDetails() {
                 </button>
                 <button 
                   onClick={() => {
-                    window.open(`tel:+8801700000000`, '_self')
+                    const restaurantPhone = normalizePhoneNumber(
+                      activeOrderInfo?.phone ||
+                      activeOrderInfo?.ownerPhone ||
+                      activeOrderInfo?.restaurantPhone
+                    )
+
+                    if (!restaurantPhone) {
+                      window.alert("Restaurant phone number not available")
+                      return
+                    }
+
+                    window.location.href = `tel:${restaurantPhone}`
                   }}
                   className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-green-500 flex items-center justify-center hover:bg-green-600 transition-colors flex-shrink-0"
                 >
@@ -323,8 +381,15 @@ export default function AcceptedOrderDetails() {
                 </button>
                 <button 
                   onClick={() => {
-                    const address = encodeURIComponent(orderData.restaurant.address)
-                    window.open(`https://www.google.com/maps/search/?api=1&query=${address}`, '_blank')
+                    const opened = openNavigationMap({
+                      lat: activeOrderInfo?.lat,
+                      lng: activeOrderInfo?.lng,
+                      address: orderData.restaurant.address
+                    })
+
+                    if (!opened) {
+                      window.alert("Restaurant location not available")
+                    }
                   }}
                   className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-gray-300 flex items-center justify-center hover:bg-gray-400 transition-colors flex-shrink-0"
                 >
