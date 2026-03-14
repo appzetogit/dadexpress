@@ -4,7 +4,7 @@ import { ArrowLeft, Loader2, Send, Trash2 } from "lucide-react"
 import io from "socket.io-client"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { API_BASE_URL } from "@/lib/api/config"
+import { BACKEND_BASE_URL } from "@/lib/api/config"
 import { authAPI, orderAPI } from "@/lib/api"
 import { toast } from "sonner"
 
@@ -24,7 +24,7 @@ export default function OrderLiveChat() {
   const messagesEndRef = useRef(null)
   const roomRef = useRef("")
 
-  const backendUrl = useMemo(() => API_BASE_URL.replace("/api", ""), [])
+  const backendUrl = useMemo(() => BACKEND_BASE_URL, [])
 
   useEffect(() => {
     const fetchParticipants = async () => {

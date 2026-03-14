@@ -3,54 +3,52 @@
  * Centralized configuration for API base URL and endpoints
  */
 
-// Get API base URL from environment variable or use default
-// IMPORTANT: Backend runs on port 5000, frontend on port 5173
-let rawApiBaseUrl =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
+const DEFAULT_API_BASE_URL = "http://localhost:5000/api";
 
-// Normalize URL - fix common issues like double slashes, missing protocols
-if (rawApiBaseUrl && typeof rawApiBaseUrl === "string") {
-  // Remove leading/trailing whitespace
-  rawApiBaseUrl = rawApiBaseUrl.trim();
-
-  // Fix duplicate protocols (https://https:// becomes https://)
-  rawApiBaseUrl = rawApiBaseUrl.replace(
-    /^(https?:\/\/)+(https?:\/\/)+/gi,
-    (match) => {
-      const protocol = match.match(/^(https?):\/\//i)?.[1] || "https";
-      return `${protocol}://`;
-    },
-  );
-
-  // Fix malformed protocol patterns:
-  // - https:/ becomes https://
-  // - https: becomes https://
-  // - https://https becomes https://
-  rawApiBaseUrl = rawApiBaseUrl.replace(
-    /^(https?):\/?(?=\/|$)/i,
-    (match, protocol) => {
-      return `${protocol}://`;
-    },
-  );
-
-  // Fix patterns like https://https:// or http://http://
-  rawApiBaseUrl = rawApiBaseUrl.replace(/^(https?:\/\/)(https?:\/\/)/i, "$1");
-
-  // Fix multiple slashes after protocol (https:/// becomes https://)
-  rawApiBaseUrl = rawApiBaseUrl.replace(/(https?:\/\/)\/+/g, "$1");
-
-  // Ensure it ends with /api if not already
-  if (!rawApiBaseUrl.endsWith("/api")) {
-    // Remove trailing slash if exists
-    rawApiBaseUrl = rawApiBaseUrl.replace(/\/$/, "");
-    // Add /api if not present
-    if (!rawApiBaseUrl.endsWith("/api")) {
-      rawApiBaseUrl = rawApiBaseUrl + "/api";
-    }
+const getSameOriginApiFallback = () => {
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return `${window.location.origin}/api`;
   }
-}
+  return DEFAULT_API_BASE_URL;
+};
 
-export const API_BASE_URL = rawApiBaseUrl;
+const normalizeApiBaseUrl = (inputUrl) => {
+  if (!inputUrl || typeof inputUrl !== "string") {
+    return DEFAULT_API_BASE_URL;
+  }
+
+  let candidate = inputUrl.trim();
+
+  // Fix malformed protocols and repeated protocol prefixes.
+  candidate = candidate.replace(/^(https?):\/(?!\/)/i, "$1://");
+  candidate = candidate.replace(/^(https?):\/{3,}/i, "$1://");
+  candidate = candidate.replace(/^(https?:\/\/)(https?:\/\/)/i, "$1");
+  candidate = candidate.replace(/^(https?:\/\/)(https?)(?=\/|$)/i, "$1");
+
+  // If protocol is missing, assume https in production-style URLs.
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(candidate)) {
+    candidate = `https://${candidate}`;
+  }
+
+  try {
+    const parsed = new URL(candidate);
+    const invalidHost = !parsed.hostname || ["http", "https"].includes(parsed.hostname);
+    if (invalidHost) {
+      throw new Error("Invalid hostname in API base URL");
+    }
+
+    // Keep origin + non-/api path and enforce a single /api suffix.
+    const cleanPath = parsed.pathname.replace(/\/+$/, "").replace(/\/api$/i, "");
+    return `${parsed.origin}${cleanPath}/api`;
+  } catch (_error) {
+    return getSameOriginApiFallback();
+  }
+};
+
+export const API_BASE_URL = normalizeApiBaseUrl(
+  import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL,
+);
+export const BACKEND_BASE_URL = API_BASE_URL.replace(/\/api\/?$/i, "");
 
 // Validate URL format - catch malformed URLs like "https:/" or "https://https://"
 try {
@@ -72,22 +70,11 @@ try {
     "💡 Expected format: https://your-domain.com/api or http://localhost:5000/api",
   );
 
-  // Try to auto-fix common malformed patterns
-  let fixedUrl = API_BASE_URL;
-  // Fix patterns like "https:/" or "https://https://"
-  if (fixedUrl.includes("://https://") || fixedUrl.includes("://http://")) {
-    const parts = fixedUrl.split("://");
-    fixedUrl = parts[0] + "://" + parts[parts.length - 1]; // Take first protocol and last part
-    false && console.warn("⚠️ Auto-fixing malformed URL pattern, new URL:", fixedUrl);
-  }
-
-  // If still invalid, warn but don't change it
-  try {
-    new URL(fixedUrl);
-    false && console.warn("⚠️ Consider using fixed URL:", fixedUrl);
-  } catch (e) {
-    // Still invalid, keep original
-  }
+  false &&
+    console.warn(
+      "⚠️ Falling back to same-origin API URL:",
+      getSameOriginApiFallback(),
+    );
 }
 
 // Validate API base URL

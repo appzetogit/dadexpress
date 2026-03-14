@@ -5,7 +5,7 @@ import { ArrowLeft, Send, Loader2, Trash2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import io from 'socket.io-client'
-import { API_BASE_URL } from "@/lib/api/config"
+import { BACKEND_BASE_URL } from "@/lib/api/config"
 import { deliveryAPI } from "@/lib/api"
 import { toast } from "sonner"
 
@@ -73,7 +73,7 @@ export default function ChatDetailPage() {
       return
     }
 
-    const backendUrl = API_BASE_URL.replace('/api', '')
+    const backendUrl = BACKEND_BASE_URL
     
     // Create chat room name based on type
     let roomName = ''
