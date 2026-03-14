@@ -1109,8 +1109,9 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
         profileImage: picture ? { url: picture } : null,
         ownerName: name.trim(),
         ownerEmail: email.toLowerCase().trim(),
-        // Restaurants must remain inactive until admin approval
-        isActive: false,
+        // Auto-activate restaurants created via Google sign-in
+        isActive: true,
+        approvedAt: new Date(), // Set approval timestamp for Google sign-in restaurants
         fcmToken: req.body.fcmToken || null,
         platform: req.body.platform || 'web'
       };
@@ -1209,12 +1210,19 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
       }
     }
 
-    // Do not auto-activate unapproved restaurants.
-    // They must complete onboarding and then wait for admin approval.
-    if (!restaurant.isActive && restaurant.approvedAt) {
+    // Auto-activate on Google sign-in (new or existing account).
+    // Keep this scoped to Firebase Google flow only.
+    if (!restaurant.isActive || !restaurant.approvedAt) {
       restaurant.isActive = true;
+      if (!restaurant.approvedAt) {
+        restaurant.approvedAt = new Date();
+      }
       await restaurant.save();
-      logger.info('Auto-activated restaurant account upon Google login', { restaurantId: restaurant._id });
+      logger.info('Auto-activated restaurant account upon Google login', { 
+        restaurantId: restaurant._id,
+        isActive: restaurant.isActive,
+        approvedAt: restaurant.approvedAt
+      });
     }
 
     // Generate JWT tokens for our app (email may be null for phone signups)

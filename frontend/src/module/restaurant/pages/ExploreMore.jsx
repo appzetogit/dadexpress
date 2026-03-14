@@ -531,9 +531,9 @@ export default function ExploreMore() {
       window.dispatchEvent(new Event("deliveryAuthChanged"))
       window.dispatchEvent(new Event("userAuthChanged"))
 
-      // Small delay for UX, then navigate to welcome page
+      // Small delay for UX, then navigate to login page
       setTimeout(() => {
-        navigate("/restaurant/welcome", { replace: true })
+        navigate("/restaurant/login", { replace: true })
       }, 300)
     } catch (error) {
       // Even if there's an error, we should still clear local data and logout
@@ -545,7 +545,7 @@ export default function ExploreMore() {
       sessionStorage.removeItem("deliveryAuthData")
       sessionStorage.removeItem("userAuthData")
       window.dispatchEvent(new Event("restaurantAuthChanged"))
-      navigate("/restaurant/welcome", { replace: true })
+      navigate("/restaurant/login", { replace: true })
     } finally {
       setIsLoggingOut(false)
     }
@@ -1131,24 +1131,14 @@ export default function ExploreMore() {
                 </div>
               </div>
 
-              {/* Logout Buttons */}
-              <div className="px-6 pb-6 space-y-3">
-                {/* Logout Button */}
+              {/* Logout Button */}
+              <div className="px-6 pb-6">
                 <button
-                  onClick={handleLogout}
+                  onClick={handleLogoutAllDevices}
                   disabled={isLoggingOut}
                   className="w-full bg-red-600 hover:bg-red-700 disabled:bg-red-400 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 rounded-lg transition-colors"
                 >
                   {isLoggingOut ? "Logging out..." : "Logout"}
-                </button>
-
-                {/* Logout from all devices Button */}
-                <button
-                  onClick={handleLogoutAllDevices}
-                  disabled={isLoggingOut}
-                  className="w-full bg-white border-2 border-red-600 text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed font-semibold py-3 px-4 rounded-lg transition-colors"
-                >
-                  {isLoggingOut ? "Logging out..." : "Logout from all devices"}
                 </button>
               </div>
 

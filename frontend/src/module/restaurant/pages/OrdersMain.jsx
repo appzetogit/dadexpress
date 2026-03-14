@@ -1,6 +1,4 @@
 import { useState, useEffect, useRef } from "react"
-import { useNavigate } from "react-router-dom"
-import { checkOnboardingStatus } from "../utils/onboardingUtils"
 import { motion, AnimatePresence } from "framer-motion"
 import Lenis from "lenis"
 import { Printer, Volume2, VolumeX, ChevronDown, ChevronUp, Minus, Plus, X, AlertCircle, Loader2, Calendar, Clock, Users, MessageSquare, Gift, CheckCircle2 } from "lucide-react"
@@ -576,7 +574,6 @@ function TableBookings() {
 
 
 export default function OrdersMain() {
-  const navigate = useNavigate()
   const [activeFilter, setActiveFilter] = useState("preparing")
   const [isTransitioning, setIsTransitioning] = useState(false)
   const [selectedOrder, setSelectedOrder] = useState(null)
@@ -659,15 +656,6 @@ export default function OrdersMain() {
             setShowReferredCard(true)
           }
 
-          const completedSteps = restaurant.onboarding?.completedSteps || 0
-          if (!restaurant.isActive && completedSteps < 4) {
-            // Onboarding is incomplete, redirect to onboarding page
-            const incompleteStep = await checkOnboardingStatus()
-            if (incompleteStep) {
-              navigate(`/restaurant/onboarding?step=${incompleteStep}`, { replace: true })
-              return
-            }
-          }
         }
       } catch (error) {
         // Only log error if it's not a network/timeout error (backend might be down/slow)
@@ -691,7 +679,7 @@ export default function OrdersMain() {
     return () => {
       window.removeEventListener('restaurantProfileRefresh', handleProfileRefresh)
     }
-  }, [navigate])
+  }, [])
 
   // Handle reverify (resubmit for approval)
   const handleReverify = async () => {
@@ -800,6 +788,10 @@ export default function OrdersMain() {
   // Check for confirmed orders that haven't been shown in popup yet (fallback if Socket.IO fails)
   useEffect(() => {
     const checkConfirmedOrders = async () => {
+      // Do not poll orders until restaurant status is loaded and active.
+      // Inactive/unapproved accounts are blocked by backend on orders APIs (401).
+      if (restaurantStatus.isLoading || !restaurantStatus.isActive) return
+
       // Skip if popup is already showing or Socket.IO order exists
       if (showNewOrderPopupRef.current || newOrderRef.current) return
       if (!isPageVisible()) return
@@ -864,7 +856,7 @@ export default function OrdersMain() {
     checkConfirmedOrders()
 
     return () => clearInterval(interval)
-  }, []) // Empty dependency array - check runs independently
+  }, [restaurantStatus.isLoading, restaurantStatus.isActive])
 
   // Play audio when popup opens
   useEffect(() => {
@@ -1293,6 +1285,12 @@ export default function OrdersMain() {
   }
 
   const renderContent = () => {
+    // For inactive/unapproved restaurants, keep the home screen visible
+    // but avoid mounting order-list components that continuously hit blocked APIs.
+    if (!restaurantStatus.isLoading && !restaurantStatus.isActive) {
+      return <EmptyState message="Your account is under review. Orders will be available after approval." />
+    }
+
     switch (activeFilter) {
       case "preparing":
         return <PreparingOrders onSelectOrder={handleSelectOrder} onCancel={handleCancelClick} />
