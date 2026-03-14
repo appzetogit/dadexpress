@@ -363,7 +363,10 @@ app.use(mongoSanitize());
 if (process.env.NODE_ENV === 'production') {
   // Trust proxy is required if the app is behind a reverse proxy (Nginx, Cloudflare, etc.)
   // Without this, all users might be seen as having the same IP adress
-  app.set('trust proxy', true);
+  // Set trust proxy to 1 (trust first proxy) for better security
+  // If behind multiple proxies (e.g., Cloudflare + Nginx), set to the number of proxies
+  const proxyCount = parseInt(process.env.TRUST_PROXY_COUNT) || 1;
+  app.set('trust proxy', proxyCount);
 
   const limiter = rateLimit({
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
@@ -371,13 +374,13 @@ if (process.env.NODE_ENV === 'production') {
     message: 'Too many requests from this IP, please try again later.',
     standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
     legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-    // For rate limiting, DO NOT trust proxy headers to avoid spoofed IPs.
-    // This keeps IP-based limiting safe even though Express trusts the proxy.
-    trustProxy: false,
+    // Trust proxy must match Express trust proxy setting for security
+    // If Express trusts proxy, rate limiter should also trust proxy
+    trustProxy: true,
   });
 
   app.use('/api/', limiter);
-  console.log('Rate limiting enabled (production mode) with limit: 5000 requests/15min');
+  console.log(`Rate limiting enabled (production mode) with limit: 5000 requests/15min, trust proxy: ${proxyCount}`);
 } else {
   console.log('Rate limiting disabled (development mode)');
 }
