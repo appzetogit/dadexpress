@@ -10999,11 +10999,84 @@ export default function DeliveryHome() {
 
           {/* Action Buttons */}
           <div className="flex gap-3 mb-6">
-            <button className="flex-1 flex items-center justify-center gap-2 px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+            <button
+              onClick={() => {
+                // Prefer customer phone if available, otherwise fallback to restaurant phone
+                const rawPhone =
+                  selectedRestaurant?.customerPhone ||
+                  selectedRestaurant?.phone ||
+                  selectedRestaurant?.ownerPhone ||
+                  selectedRestaurant?.userId?.phone ||
+                  ''
+
+                const cleanPhone = rawPhone.replace(/[^\d+]/g, '')
+
+                if (!cleanPhone) {
+                  toast.error('Phone number not available')
+                  console.error('❌ [CALL] Customer phone not found for selectedRestaurant:', {
+                    selectedRestaurant,
+                    hasCustomerPhone: !!selectedRestaurant?.customerPhone,
+                    hasPhone: !!selectedRestaurant?.phone,
+                    hasOwnerPhone: !!selectedRestaurant?.ownerPhone,
+                    hasUserPhone: !!selectedRestaurant?.userId?.phone
+                  })
+                  return
+                }
+
+                window.location.href = `tel:${cleanPhone}`
+              }}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
               <Phone className="w-5 h-5 text-gray-700" />
               <span className="text-gray-700 font-medium">Call</span>
             </button>
-            <button className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors">
+            <button
+              onClick={() => {
+                // Use customer coordinates for navigation
+                const customerLat = selectedRestaurant?.customerLat
+                const customerLng = selectedRestaurant?.customerLng
+
+                if (!customerLat || !customerLng) {
+                  toast.error('Customer location not available')
+                  console.error('❌ [MAP] Customer coordinates not found for selectedRestaurant:', {
+                    customerLat,
+                    customerLng,
+                    selectedRestaurant
+                  })
+                  return
+                }
+
+                const userAgent = navigator.userAgent || navigator.vendor || window.opera
+                const isAndroid = /android/i.test(userAgent)
+                const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream
+
+                let mapsUrl = ''
+
+                if (isAndroid) {
+                  mapsUrl = `google.navigation:q=${customerLat},${customerLng}&mode=b`
+                  window.location.href = mapsUrl
+                  setTimeout(() => {
+                    const webUrl = `https://www.google.com/maps/dir/?api=1&destination=${customerLat},${customerLng}&travelmode=bicycling`
+                    window.open(webUrl, '_blank')
+                  }, 500)
+                } else if (isIOS) {
+                  mapsUrl = `comgooglemaps://?daddr=${customerLat},${customerLng}&directionsmode=bicycling`
+                  window.location.href = mapsUrl
+                  setTimeout(() => {
+                    const webUrl = `https://maps.google.com/?daddr=${customerLat},${customerLng}&directionsmode=bicycling`
+                    window.open(webUrl, '_blank')
+                  }, 500)
+                } else {
+                  mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${customerLat},${customerLng}&travelmode=bicycling`
+                  window.open(mapsUrl, '_blank')
+                }
+
+                toast.success('Opening Google Maps navigation 🗺️', {
+                  duration: 2000
+                })
+              }}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
+            >
               <MapPin className="w-5 h-5 text-white" />
               <span className="text-white font-medium">Map</span>
             </button>
