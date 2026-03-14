@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import { restaurantAPI } from "@/lib/api"
 import { setAuthData } from "@/lib/utils/auth"
@@ -7,10 +7,15 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
+import { firebaseAuth, googleProvider, ensureFirebaseInitialized, requestFcmToken } from "@/lib/firebase"
 import loginBg from "@/assets/loginbanner.png"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
 
 export default function RestaurantSignIn() {
+  const isDev = import.meta.env?.DEV === true
+  const debugLog = (...args) => {
+    if (isDev) console.log(...args)
+  }
   const navigate = useNavigate()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -18,6 +23,7 @@ export default function RestaurantSignIn() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
+  const redirectHandledRef = useRef(false)
   const companyName = useCompanyName()
 
   // Redirect to restaurant home if already authenticated
@@ -25,6 +31,118 @@ export default function RestaurantSignIn() {
     const isAuthenticated = localStorage.getItem("restaurant_authenticated") === "true"
     if (isAuthenticated) {
       navigate("/restaurant", { replace: true })
+    }
+  }, [navigate])
+
+  useEffect(() => {
+    redirectHandledRef.current = true
+  }, [])
+
+  const processSignedInUser = async (user, source = "unknown") => {
+    if (redirectHandledRef.current) {
+      debugLog(`ℹ️ User already being processed, skipping (source: ${source})`)
+      return
+    }
+
+    debugLog(`✅ Processing signed-in user from ${source}:`, {
+      email: user.email,
+      uid: user.uid,
+      displayName: user.displayName
+    })
+
+    redirectHandledRef.current = true
+    setIsLoading(true)
+    setError("")
+
+    try {
+      const idToken = await user.getIdToken()
+      debugLog(`✅ Got ID token from ${source}, calling backend...`)
+
+      const fcmToken = await requestFcmToken()
+      if (fcmToken) {
+        debugLog("[PUSH-NOTIFICATION] Sending FCM token for restaurant Google login from " + source + ":", fcmToken)
+      }
+
+      const response = await restaurantAPI.firebaseGoogleLogin(idToken, fcmToken, "web")
+      const data = response?.data?.data || {}
+
+      debugLog(`✅ Backend response from ${source}:`, {
+        hasAccessToken: !!data.accessToken,
+        hasRestaurant: !!data.restaurant,
+        restaurantEmail: data.restaurant?.email
+      })
+
+      const accessToken = data.accessToken
+      const restaurant = data.restaurant
+
+      if (accessToken && restaurant) {
+        setAuthData("restaurant", accessToken, restaurant)
+        window.dispatchEvent(new Event("restaurantAuthChanged"))
+
+        const hasHash = window.location.hash.length > 0
+        const hasQueryParams = window.location.search.length > 0
+        if (hasHash || hasQueryParams) {
+          window.history.replaceState({}, document.title, window.location.pathname)
+        }
+
+        debugLog(`✅ Navigating to restaurant dashboard from ${source}...`)
+        navigate("/restaurant", { replace: true })
+      } else {
+        console.error(`❌ Invalid backend response from ${source}`)
+        redirectHandledRef.current = false
+        setIsLoading(false)
+        setError("Invalid response from server. Please try again.")
+      }
+    } catch (err) {
+      console.error(`❌ Error processing user from ${source}:`, err)
+      console.error("Error details:", {
+        code: err?.code,
+        message: err?.message,
+        response: err?.response?.data
+      })
+      redirectHandledRef.current = false
+      setIsLoading(false)
+
+      let errorMessage = "Failed to complete sign-in. Please try again."
+      if (err?.response?.data?.message) {
+        errorMessage = err.response.data.message
+      } else if (err?.message) {
+        errorMessage = err.message
+      }
+      setError(errorMessage)
+    }
+  }
+
+  useEffect(() => {
+    let unsubscribe = null
+
+    const setupAuthListener = async () => {
+      try {
+        const { onAuthStateChanged } = await import("firebase/auth")
+        ensureFirebaseInitialized()
+
+        debugLog("🔔 Setting up auth state listener...")
+
+        unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
+          debugLog("🔔 Auth state changed:", {
+            hasUser: !!user,
+            userEmail: user?.email,
+            redirectHandled: redirectHandledRef.current
+          })
+
+          if (user && !redirectHandledRef.current) {
+            await processSignedInUser(user, "auth-state-listener")
+          }
+        })
+      } catch (err) {
+        console.error("❌ Error setting up auth state listener:", err)
+      }
+    }
+
+    setupAuthListener()
+
+    return () => {
+      if (unsubscribe) unsubscribe()
     }
   }, [navigate])
 
@@ -58,6 +176,84 @@ export default function RestaurantSignIn() {
       setError(message)
     } finally {
     setIsLoading(false)
+    }
+  }
+
+  const handleGoogleSignIn = async () => {
+    setError("")
+    setIsLoading(true)
+    redirectHandledRef.current = false
+
+    try {
+      ensureFirebaseInitialized()
+
+      if (!firebaseAuth) {
+        throw new Error("Firebase Auth is not initialized. Please check your Firebase configuration.")
+      }
+
+      const { signInWithPopup, GoogleAuthProvider, signInWithCredential } = await import("firebase/auth")
+
+      let user = null
+
+      if (window.flutter_inappwebview && typeof window.flutter_inappwebview.callHandler === "function") {
+        debugLog("📱 Starting Google sign-in via Flutter native bridge...")
+        try {
+          const result = await window.flutter_inappwebview.callHandler("nativeGoogleSignIn")
+
+          if (result && result.success && result.idToken) {
+            const idToken = result.idToken
+            const credential = GoogleAuthProvider.credential(idToken)
+            const userCredential = await signInWithCredential(firebaseAuth, credential)
+            user = userCredential.user
+            debugLog("✅ Website login successful via Flutter App!")
+          } else {
+            debugLog("ℹ️ User cancelled native sign in. Staying on login page (no web popup fallback).")
+            redirectHandledRef.current = true
+            setIsLoading(false)
+            return
+          }
+        } catch (err) {
+          console.error("❌ Flutter Bridge Error during Google sign-in:", err)
+          redirectHandledRef.current = true
+          setIsLoading(false)
+          return
+        }
+      } else {
+        debugLog("🚀 Starting Google sign-in popup (web browser)...")
+        const result = await signInWithPopup(firebaseAuth, googleProvider)
+        user = result?.user || null
+      }
+
+      if (user) {
+        debugLog("✅ Google sign-in successful, processing user...")
+        await processSignedInUser(user, window.flutter_inappwebview ? "flutter-bridge" : "popup-result")
+      } else {
+        debugLog("ℹ️ No user returned from Google sign-in (might have been closed)")
+        setIsLoading(false)
+      }
+    } catch (err) {
+      console.error("❌ Google sign-in popup error:", err)
+      setIsLoading(false)
+      redirectHandledRef.current = true
+
+      const errorCode = err?.code || ""
+      const errorMessage = err?.message || ""
+
+      let message = "Google sign-in failed. Please try again."
+
+      if (errorCode === "auth/popup-closed-by-user") {
+        message = "Sign-in was cancelled. Please try again."
+      } else if (errorCode === "auth/popup-blocked") {
+        message = "Popup was blocked. Please allow popups and try again."
+      } else if (errorCode === "auth/configuration-not-found") {
+        message = "Firebase configuration error. Please ensure your domain is authorized in Firebase Console."
+      } else if (errorCode === "auth/network-request-failed") {
+        message = "Network error. Please check your connection and try again."
+      } else if (errorMessage) {
+        message = errorMessage
+      }
+
+      setError(message)
     }
   }
 
@@ -215,6 +411,44 @@ export default function RestaurantSignIn() {
             >
               {isLoading ? "Signing in..." : "Sign in"}
             </Button>
+
+            <div className="relative py-1">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-gray-200" />
+              </div>
+              <div className="relative flex justify-center">
+                <span className="bg-white px-2 text-xs text-gray-500">or</span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleGoogleSignIn}
+              className="h-11 w-full rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-70"
+              disabled={isLoading}
+            >
+              <span className="flex items-center justify-center gap-3">
+                <svg className="h-5 w-5" viewBox="0 0 24 24">
+                  <path
+                    fill="#4285F4"
+                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                  />
+                </svg>
+                <span>Continue with Google</span>
+              </span>
+            </button>
           </form>
 
           {/* Sign up link */}
