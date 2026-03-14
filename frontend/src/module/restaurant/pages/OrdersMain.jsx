@@ -2175,6 +2175,7 @@ function OrderCard({
   timePlaced,
   eta,
   itemsSummary,
+  note,
   deliveryInstruction,
   photoUrl,
   photoAlt,
@@ -2214,6 +2215,7 @@ function OrderCard({
             timePlaced,
             eta,
             itemsSummary,
+            note,
             deliveryInstruction,
             deliveryPartnerId,
             paymentMethod,
@@ -2275,6 +2277,11 @@ function OrderCard({
             <p className="text-xs text-gray-600 line-clamp-1">
               {itemsSummary}
             </p>
+            {note && (
+              <p className="text-[11px] text-gray-500 line-clamp-1 mt-1">
+                Note: {note}
+              </p>
+            )}
           </div>
 
           {/* Bottom row */}
@@ -2371,6 +2378,7 @@ function PreparingOrders({ onSelectOrder, onCancel }) {
               initialETA, // Store initial ETA in minutes
               preparingTimestamp, // Store when order started preparing
               itemsSummary: order.items?.map(item => `${item.quantity}x ${item.name}`).join(', ') || 'No items',
+              note: order.note || '',
               deliveryInstruction: order.deliveryInstruction || '',
               photoUrl: order.items?.[0]?.image || null,
               photoAlt: order.items?.[0]?.name || 'Order',

@@ -203,6 +203,7 @@ export default function OrderTracking() {
 
   // State for order data
   const [order, setOrder] = useState(null)
+  const [restaurantDetails, setRestaurantDetails] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -245,6 +246,45 @@ export default function OrderTracking() {
   const deliveryPartnerPhone =
     typeof deliveryPartnerPhoneRaw === 'string' ? deliveryPartnerPhoneRaw.trim() : deliveryPartnerPhoneRaw || ''
 
+  const restaurantPhoneRaw =
+    restaurantDetails?.primaryContactNumber ||
+    restaurantDetails?.phone ||
+    restaurantDetails?.contactNumber ||
+    restaurantDetails?.ownerPhone ||
+    order?.restaurantId?.phone ||
+    order?.restaurantId?.ownerPhone ||
+    order?.restaurant?.phone ||
+    order?.restaurant?.ownerPhone ||
+    order?.restaurantInfo?.phone ||
+    order?.restaurantInfo?.ownerPhone ||
+    order?.restaurantDetails?.phone ||
+    order?.restaurantDetails?.ownerPhone ||
+    order?.restaurantPhone ||
+    ''
+
+  const restaurantPhone =
+    typeof restaurantPhoneRaw === 'string' ? restaurantPhoneRaw.trim() : restaurantPhoneRaw || ''
+
+  useEffect(() => {
+    const fetchRestaurantDetails = async () => {
+      const restaurantId = order?.restaurantId?._id || order?.restaurantId
+      if (!restaurantId || typeof restaurantId !== 'string' || restaurantPhone) return
+
+      try {
+        const response = await restaurantAPI.getRestaurantById(restaurantId)
+        if (response?.data?.success && response.data.data?.restaurant) {
+          setRestaurantDetails(response.data.data.restaurant)
+        } else if (response?.data?.restaurant) {
+          setRestaurantDetails(response.data.restaurant)
+        }
+      } catch (err) {
+        console.warn('Failed to fetch restaurant details:', err)
+      }
+    }
+
+    fetchRestaurantDetails()
+  }, [order?.restaurantId, restaurantPhone])
+
   const hasDeliveryPartner = Boolean(
     order?.deliveryPartnerId ||
     order?.assignmentInfo?.deliveryPartnerId ||
@@ -255,6 +295,12 @@ export default function OrderTracking() {
   const handleCallDeliveryPartner = () => {
     if (!deliveryPartnerPhone) return
     const phone = String(deliveryPartnerPhone).replace(/\s+/g, '')
+    window.location.href = `tel:${phone}`
+  }
+
+  const handleCallRestaurant = () => {
+    if (!restaurantPhone) return
+    const phone = String(restaurantPhone).replace(/\s+/g, '')
     window.location.href = `tel:${phone}`
   }
 
@@ -423,6 +469,7 @@ export default function OrderTracking() {
               mongoId: apiOrder?._id || null,
               orderId: apiOrder?.orderId || apiOrder?._id || null,
               id: apiOrder?.orderId || apiOrder?._id || null,
+              restaurantPhone: apiOrder?.restaurantId?.phone || apiOrder?.restaurantId?.ownerPhone || apiOrder?.restaurantPhone || '',
               restaurantLocation: restaurantCoords ? {
                 coordinates: restaurantCoords
               } : order.restaurantLocation,
@@ -534,6 +581,7 @@ export default function OrderTracking() {
             orderId: apiOrder.orderId || apiOrder._id,
             restaurant: apiOrder.restaurantName || 'Restaurant',
             restaurantId: apiOrder.restaurantId || null, // Include restaurantId for location access
+            restaurantPhone: apiOrder?.restaurantId?.phone || apiOrder?.restaurantId?.ownerPhone || apiOrder?.restaurantPhone || '',
             userId: apiOrder.userId || null, // Include user data for phone number
             userName: apiOrder.userName || apiOrder.userId?.name || apiOrder.userId?.fullName || '',
             userPhone: apiOrder.userPhone || apiOrder.userId?.phone || '',
@@ -902,6 +950,7 @@ export default function OrderTracking() {
           orderId: apiOrder.orderId || apiOrder._id,
           restaurant: apiOrder.restaurantName || 'Restaurant',
           restaurantId: apiOrder.restaurantId || null, // Include restaurantId for location access
+          restaurantPhone: apiOrder?.restaurantId?.phone || apiOrder?.restaurantId?.ownerPhone || apiOrder?.restaurantPhone || '',
           userId: apiOrder.userId || null, // Include user data for phone number
           userName: apiOrder.userName || apiOrder.userId?.name || apiOrder.userId?.fullName || '',
           userPhone: apiOrder.userPhone || apiOrder.userId?.phone || '',
@@ -1344,12 +1393,17 @@ export default function OrderTracking() {
             <div className="flex-1">
               <p className="font-semibold text-gray-900">{order.restaurant}</p>
               <p className="text-sm text-gray-500">{order.address?.city || 'Local Area'}</p>
+              {restaurantPhone && (
+                <p className="text-sm text-gray-500">{restaurantPhone}</p>
+              )}
             </div>
             <motion.button
-              className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center"
+              type="button"
+              onClick={restaurantPhone ? handleCallRestaurant : undefined}
+              className={`w-10 h-10 rounded-full flex items-center justify-center ${restaurantPhone ? 'bg-orange-50' : 'bg-gray-100'}`}
               whileTap={{ scale: 0.9 }}
             >
-              <Phone className="w-5 h-5 text-[#EB590E]" />
+              <Phone className={`w-5 h-5 ${restaurantPhone ? 'text-[#EB590E]' : 'text-gray-400'}`} />
             </motion.button>
           </div>
 
