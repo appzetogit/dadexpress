@@ -1693,7 +1693,7 @@ export const completeDelivery = asyncHandler(async (req, res) => {
       let earnings = null;
       try {
         // Check if earnings were already calculated
-        const wallet = await DeliveryWallet.findOne({ deliveryPartnerId: delivery._id });
+        const wallet = await DeliveryWallet.findOrCreateByDeliveryId(delivery._id);
         const orderIdForTransaction = order._id?.toString ? order._id.toString() : order._id;
         const existingTransaction = wallet?.transactions?.find(
           t => t.orderId && t.orderId.toString() === orderIdForTransaction && t.type === 'payment'
@@ -1705,7 +1705,8 @@ export const completeDelivery = asyncHandler(async (req, res) => {
             transactionId: existingTransaction._id?.toString() || existingTransaction.id
           };
         } else {
-          // Calculate earnings even if order is already delivered (for consistency)
+          // Idempotent recovery: if order is delivered but payment transaction is missing,
+          // credit wallet once so earnings screen never stays at zero for completed orders.
           let deliveryDistance = 0;
           if (order.deliveryState?.routeToDelivery?.distance) {
             deliveryDistance = order.deliveryState.routeToDelivery.distance;
@@ -1713,12 +1714,30 @@ export const completeDelivery = asyncHandler(async (req, res) => {
             deliveryDistance = order.assignmentInfo.distance;
           }
 
+          let recoveredEarning = 0;
           if (deliveryDistance > 0) {
             const commissionResult = await DeliveryBoyCommission.calculateCommission(deliveryDistance);
+            recoveredEarning = commissionResult.commission || 0;
             earnings = {
-              amount: commissionResult.commission,
+              amount: recoveredEarning,
               breakdown: commissionResult.breakdown
             };
+          } else {
+            recoveredEarning = Number(order?.pricing?.deliveryFee) || 0;
+            earnings = { amount: recoveredEarning };
+          }
+
+          if (recoveredEarning > 0) {
+            const recoveredTransaction = wallet.addTransaction({
+              amount: recoveredEarning,
+              type: 'payment',
+              status: 'Completed',
+              description: `Delivery earnings recovery for Order #${order.orderId || orderIdForTransaction}`,
+              orderId: order._id,
+              paymentCollected: false
+            });
+            await wallet.save();
+            earnings.transactionId = recoveredTransaction?._id?.toString() || recoveredTransaction?.id;
           }
         }
       } catch (earningsError) {
@@ -2061,6 +2080,7 @@ export const completeDelivery = asyncHandler(async (req, res) => {
     // Calculate restaurant commission and update restaurant wallet
     let restaurantWalletTransaction = null;
     let adminCommissionRecord = null;
+    let referralRewardTransaction = null;
     try {
       // Get order total amount (subtotal, excluding delivery fee and tax for commission calculation)
       const orderTotal = order.pricing?.subtotal || order.pricing?.total || 0;
@@ -2170,6 +2190,101 @@ export const completeDelivery = asyncHandler(async (req, res) => {
       // But log it for investigation
     }
 
+    // Process restaurant referral reward (single-time, policy-driven)
+    try {
+      const restaurantMongoId =
+        order?.restaurantId?._id ||
+        order?.restaurantId ||
+        updatedOrder?.restaurantId?._id ||
+        updatedOrder?.restaurantId ||
+        null;
+
+      if (restaurantMongoId && mongoose.Types.ObjectId.isValid(restaurantMongoId)) {
+        const servedRestaurant = await Restaurant.findById(restaurantMongoId)
+          .select('name referredBy referralStatus referralCommission')
+          .lean();
+
+        if (servedRestaurant?.referredBy) {
+          let commissionPercentage = Number(servedRestaurant.referralCommission);
+          let applyOn = 'First Order Only';
+
+          try {
+            const BusinessSettings = (await import('../../admin/models/BusinessSettings.js')).default;
+            const settings = await BusinessSettings.getSettings();
+            const configuredCommission = Number(settings?.restaurantReferral?.commissionPercentage);
+            if ((!Number.isFinite(commissionPercentage) || commissionPercentage <= 0) && Number.isFinite(configuredCommission) && configuredCommission > 0) {
+              commissionPercentage = configuredCommission;
+            }
+            applyOn = settings?.restaurantReferral?.applyOn || applyOn;
+          } catch (settingsError) {
+            console.warn(`⚠️ Could not read restaurant referral settings: ${settingsError.message}`);
+          }
+
+          if (Number.isFinite(commissionPercentage) && commissionPercentage > 0) {
+            const deliveredCount = await Order.countDocuments({
+              restaurantId: restaurantMongoId,
+              status: 'delivered'
+            });
+
+            const firstOrderOnly = String(applyOn).toLowerCase().includes('first');
+            const shouldReward =
+              servedRestaurant.referralStatus !== 'completed' &&
+              (!firstOrderOnly || deliveredCount === 1);
+
+            if (shouldReward) {
+              const baseAmount = Number(order?.pricing?.subtotal ?? order?.pricing?.total ?? 0);
+              const rewardAmount = Math.round(((baseAmount * commissionPercentage) / 100) * 100) / 100;
+
+              if (rewardAmount > 0) {
+                const referrerWallet = await RestaurantWallet.findOrCreateByRestaurantId(servedRestaurant.referredBy);
+                const orderIdForTransaction = orderMongoId?.toString ? orderMongoId.toString() : orderMongoId;
+                const existingReward = referrerWallet.transactions?.find(
+                  (t) =>
+                    t.type === 'bonus' &&
+                    t.orderId &&
+                    t.orderId.toString() === orderIdForTransaction
+                );
+
+                if (!existingReward) {
+                  referralRewardTransaction = referrerWallet.addTransaction({
+                    amount: rewardAmount,
+                    type: 'bonus',
+                    status: 'Completed',
+                    description: `Restaurant referral reward from ${servedRestaurant.name || 'referred restaurant'} (${commissionPercentage}% of first order)`,
+                    orderId: orderMongoId || order._id
+                  });
+                  await referrerWallet.save();
+                }
+
+                await Restaurant.updateOne(
+                  { _id: restaurantMongoId, referralStatus: { $ne: 'completed' } },
+                  {
+                    $set: {
+                      referralStatus: 'completed',
+                      referralCommission: commissionPercentage
+                    }
+                  }
+                );
+
+                logger.info(`🎁 Restaurant referral reward credited`, {
+                  referredRestaurantId: restaurantMongoId?.toString?.() || restaurantMongoId,
+                  referrerRestaurantId: servedRestaurant.referredBy?.toString?.() || servedRestaurant.referredBy,
+                  orderId: orderIdForLog,
+                  rewardAmount,
+                  commissionPercentage,
+                  applyOn
+                });
+              }
+            }
+          }
+        }
+      }
+    } catch (referralRewardError) {
+      logger.error('❌ Error processing restaurant referral reward:', referralRewardError);
+      console.error('❌ Error processing restaurant referral reward:', referralRewardError);
+      // Do not fail delivery completion if referral reward processing fails
+    }
+
     // Send response first, then handle notifications asynchronously
     // This prevents timeouts if notifications take too long
     const responseData = {
@@ -2195,6 +2310,10 @@ export const completeDelivery = asyncHandler(async (req, res) => {
         amount: earningAddonBonus.amount,
         ordersCompleted: earningAddonBonus.ordersCompleted,
         ordersRequired: earningAddonBonus.ordersRequired
+      } : null,
+      referralReward: referralRewardTransaction ? {
+        transactionId: referralRewardTransaction._id,
+        amount: referralRewardTransaction.amount
       } : null,
       message: 'Delivery completed successfully'
     };

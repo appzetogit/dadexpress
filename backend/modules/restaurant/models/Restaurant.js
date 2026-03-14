@@ -344,6 +344,25 @@ restaurantSchema.pre("save", async function (next) {
     this.restaurantId = `REST-${timestamp}-${random}`;
   }
 
+  // Ensure every restaurant has a unique referral code for refer-and-earn.
+  if (!this.referralCode) {
+    const RestaurantModel = this.constructor;
+    const baseFromId = (this.restaurantId || "").replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 8) || "REST";
+    let candidate = "";
+    let attempts = 0;
+
+    do {
+      const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+      candidate = `${baseFromId}${suffix}`;
+      // eslint-disable-next-line no-await-in-loop
+      const exists = await RestaurantModel.findOne({ referralCode: candidate }).select("_id").lean();
+      if (!exists) break;
+      attempts += 1;
+    } while (attempts < 10);
+
+    this.referralCode = candidate;
+  }
+
   // Normalize phone number if it exists and is modified
   if (this.isModified("phone") && this.phone) {
     const normalized = normalizePhoneNumber(this.phone);

@@ -325,8 +325,16 @@ export default function ToHub() {
     { hour: "12am", orders: 0, sales: 0 },
   ])
 
-  const [totalSales, setTotalSales] = useState("₹ 0")
-  const [totalOrders, setTotalOrders] = useState("0")
+  const [totalSales, setTotalSales] = useState(0)
+  const [totalOrders, setTotalOrders] = useState(0)
+  const [salesSummary, setSalesSummary] = useState({
+    netSales: 0,
+    totalOrders: 0,
+    avgOrderValue: 0,
+    salesChangePct: 0,
+    ordersChangePct: 0,
+    aovChangePct: 0,
+  })
   const [lastUpdated, setLastUpdated] = useState(null)
   const [mealtimeMetrics, setMealtimeMetrics] = useState([
     { title: "Breakfast", window: "7:00 am - 11:00 am", value: "0", change: "- 0%", color: "#111827" },
@@ -334,6 +342,17 @@ export default function ToHub() {
     { title: "Evening snacks", window: "4:00 pm - 7:00 pm", value: "0", change: "- 0%", color: "#2563eb" },
     { title: "Dinner", window: "7:00 pm - 11:00 pm", value: "0", change: "- 0%", color: "#f59e0b" },
     { title: "Late night", window: "11:00 pm - 7:00 am", value: "0", change: "- 0%", color: "#10b981" },
+  ])
+  const [customerCardMetrics, setCustomerCardMetrics] = useState([
+    { title: "New customers", sub: "No orders in last 365 days", value: "0", change: "- 0%", color: "#111827" },
+    { title: "Repeat customers", sub: "Ordered in last 60 days", value: "0", change: "- 0%", color: "#ef4444" },
+    { title: "Lapsed customers", sub: "Last order 60 to 365 days ago", value: "0", change: "- 0%", color: "#2563eb" },
+  ])
+  const [offerCardMetrics, setOfferCardMetrics] = useState([
+    { title: "Offer clicks", value: "0", change: "- 0%", sub: "Clicks on offers" },
+    { title: "Offer redemptions", value: "0", change: "- 0%", sub: "Total redeemed" },
+    { title: "Conversion rate", value: "0%", change: "- 0%", sub: "Redemptions / clicks" },
+    { title: "Cost per redemption", value: "₹0", change: "- 0%", sub: "Est. cost" },
   ])
   const [impressionsCustomerView, setImpressionsCustomerView] = useState("affinity")
   const [menuOpensCustomerView, setMenuOpensCustomerView] = useState("affinity")
@@ -534,175 +553,7 @@ export default function ToHub() {
     }
   }
   
-  // Calculate chart data from real orders
-  const calculateChartDataFromOrders = (orders, startDate, endDate) => {
-    // Initialize hour buckets
-    const hourBuckets = {
-      "12am": { orders: 0, sales: 0 },
-      "4am": { orders: 0, sales: 0 },
-      "8am": { orders: 0, sales: 0 },
-      "12pm": { orders: 0, sales: 0 },
-      "4pm": { orders: 0, sales: 0 },
-      "8pm": { orders: 0, sales: 0 },
-    }
-    
-    // Filter orders by date range
-    const start = new Date(startDate)
-    start.setHours(0, 0, 0, 0)
-    const end = new Date(endDate)
-    end.setHours(23, 59, 59, 999)
-    
-    const filteredOrders = orders.filter(order => {
-      if (!order.createdAt) return false
-      const orderDate = new Date(order.createdAt)
-      return orderDate >= start && orderDate <= end
-    })
-    
-    // Calculate total sales and orders
-    let totalSalesAmount = 0
-    let totalOrdersCount = 0
-    
-    // Group orders by hour
-    filteredOrders.forEach(order => {
-      const orderDate = new Date(order.createdAt)
-      const hour = orderDate.getHours()
-      
-      // Determine hour bucket
-      let hourLabel
-      if (hour >= 0 && hour < 4) hourLabel = "12am"
-      else if (hour >= 4 && hour < 8) hourLabel = "4am"
-      else if (hour >= 8 && hour < 12) hourLabel = "8am"
-      else if (hour >= 12 && hour < 16) hourLabel = "12pm"
-      else if (hour >= 16 && hour < 20) hourLabel = "4pm"
-      else hourLabel = "8pm" // 20-23
-      
-      const orderAmount = order.pricing?.total || 0
-      
-      hourBuckets[hourLabel].orders += 1
-      hourBuckets[hourLabel].sales += orderAmount
-      totalSalesAmount += orderAmount
-      totalOrdersCount += 1
-    })
-    
-    // Convert to chart data format
-    const chartData = [
-      { hour: "12am", orders: hourBuckets["12am"].orders, sales: Math.round(hourBuckets["12am"].sales) },
-      { hour: "4am", orders: hourBuckets["4am"].orders, sales: Math.round(hourBuckets["4am"].sales) },
-      { hour: "8am", orders: hourBuckets["8am"].orders, sales: Math.round(hourBuckets["8am"].sales) },
-      { hour: "12pm", orders: hourBuckets["12pm"].orders, sales: Math.round(hourBuckets["12pm"].sales) },
-      { hour: "4pm", orders: hourBuckets["4pm"].orders, sales: Math.round(hourBuckets["4pm"].sales) },
-      { hour: "8pm", orders: hourBuckets["8pm"].orders, sales: Math.round(hourBuckets["8pm"].sales) },
-      { hour: "12am", orders: 0, sales: 0 }, // Next day marker
-    ]
-    
-    return {
-      chartData,
-      totalSales: Math.round(totalSalesAmount),
-      totalOrders: totalOrdersCount
-    }
-  }
-  
-  // Calculate mealtime data from orders
-  const calculateMealtimeData = (orders, startDate, endDate) => {
-    // Initialize mealtime buckets
-    const mealtimeBuckets = {
-      breakfast: { count: 0, color: "#111827" },
-      lunch: { count: 0, color: "#ef4444" },
-      eveningSnacks: { count: 0, color: "#2563eb" },
-      dinner: { count: 0, color: "#f59e0b" },
-      lateNight: { count: 0, color: "#10b981" },
-    }
-    
-    // Filter orders by date range
-    const start = new Date(startDate)
-    start.setHours(0, 0, 0, 0)
-    const end = new Date(endDate)
-    end.setHours(23, 59, 59, 999)
-    
-    const filteredOrders = orders.filter(order => {
-      if (!order.createdAt) return false
-      const orderDate = new Date(order.createdAt)
-      return orderDate >= start && orderDate <= end
-    })
-    
-    // Group orders by mealtime
-    filteredOrders.forEach(order => {
-      const orderDate = new Date(order.createdAt)
-      const hour = orderDate.getHours()
-      const minute = orderDate.getMinutes()
-      const timeInMinutes = hour * 60 + minute
-      
-      // Breakfast: 7:00 am - 11:00 am (420 - 660 minutes)
-      if (timeInMinutes >= 420 && timeInMinutes < 660) {
-        mealtimeBuckets.breakfast.count++
-      }
-      // Lunch: 11:00 am - 4:00 pm (660 - 960 minutes)
-      else if (timeInMinutes >= 660 && timeInMinutes < 960) {
-        mealtimeBuckets.lunch.count++
-      }
-      // Evening snacks: 4:00 pm - 7:00 pm (960 - 1140 minutes)
-      else if (timeInMinutes >= 960 && timeInMinutes < 1140) {
-        mealtimeBuckets.eveningSnacks.count++
-      }
-      // Dinner: 7:00 pm - 11:00 pm (1140 - 1380 minutes, or 1140 - 1440)
-      else if (timeInMinutes >= 1140 && timeInMinutes < 1380) {
-        mealtimeBuckets.dinner.count++
-      }
-      // Late night: 11:00 pm - 7:00 am (1380 - 1440 and 0 - 420 minutes)
-      else if (timeInMinutes >= 1380 || timeInMinutes < 420) {
-        mealtimeBuckets.lateNight.count++
-      }
-    })
-    
-    const totalOrdersCount = filteredOrders.length
-    
-    // Calculate percentages and format data
-    const calculatePercentage = (count, total) => {
-      if (total === 0) return "- 0%"
-      const percentage = ((count / total) * 100).toFixed(1)
-      return `${percentage}%`
-    }
-    
-    return [
-      { 
-        title: "Breakfast", 
-        window: "7:00 am - 11:00 am", 
-        value: mealtimeBuckets.breakfast.count.toString(), 
-        change: calculatePercentage(mealtimeBuckets.breakfast.count, totalOrdersCount), 
-        color: mealtimeBuckets.breakfast.color 
-      },
-      { 
-        title: "Lunch", 
-        window: "11:00 am - 4:00 pm", 
-        value: mealtimeBuckets.lunch.count.toString(), 
-        change: calculatePercentage(mealtimeBuckets.lunch.count, totalOrdersCount), 
-        color: mealtimeBuckets.lunch.color 
-      },
-      { 
-        title: "Evening snacks", 
-        window: "4:00 pm - 7:00 pm", 
-        value: mealtimeBuckets.eveningSnacks.count.toString(), 
-        change: calculatePercentage(mealtimeBuckets.eveningSnacks.count, totalOrdersCount), 
-        color: mealtimeBuckets.eveningSnacks.color 
-      },
-      { 
-        title: "Dinner", 
-        window: "7:00 pm - 11:00 pm", 
-        value: mealtimeBuckets.dinner.count.toString(), 
-        change: calculatePercentage(mealtimeBuckets.dinner.count, totalOrdersCount), 
-        color: mealtimeBuckets.dinner.color 
-      },
-      { 
-        title: "Late night", 
-        window: "11:00 pm - 7:00 am", 
-        value: mealtimeBuckets.lateNight.count.toString(), 
-        change: calculatePercentage(mealtimeBuckets.lateNight.count, totalOrdersCount), 
-        color: mealtimeBuckets.lateNight.color 
-      },
-    ]
-  }
-  
-  // Fetch orders and update chart data
+  // Fetch DB-driven analytics for hub charts/cards
   const fetchOrdersAndUpdateChart = useCallback(async (rangeId) => {
     try {
       setIsDateLoading(true)
@@ -754,77 +605,48 @@ export default function ToHub() {
           endDate = ranges.yesterday
       }
       
-      // Format dates for API (ISO format)
-      const startDateISO = new Date(startDate)
-      startDateISO.setHours(0, 0, 0, 0)
-      const endDateISO = new Date(endDate)
-      endDateISO.setHours(23, 59, 59, 999)
-      
-      // Fetch all orders with pagination to get all orders
-      let allOrders = []
-      let page = 1
-      let hasMore = true
-      const limit = 1000 // Fetch in batches
-      const maxPages = 50 // Safety limit to prevent infinite loops
-      
-      while (hasMore && page <= maxPages) {
-        try {
-          const response = await restaurantAPI.getOrders({ 
-            page, 
-            limit
-          })
-          
-          if (response.data?.success && response.data.data?.orders) {
-            const orders = response.data.data.orders
-            allOrders = [...allOrders, ...orders]
-            
-            // Check if there are more pages
-            const totalPages = response.data.data.totalPages || response.data.data.pagination?.totalPages || 1
-            const totalCount = response.data.data.total || response.data.data.pagination?.total || 0
-            
-            // Stop if we got fewer orders than the limit (last page) or if we've reached total pages
-            if (orders.length < limit || (totalPages > 0 && page >= totalPages)) {
-              hasMore = false
-            } else {
-              page++
-            }
-          } else {
-            hasMore = false
-          }
-        } catch (pageError) {
-          console.error(`Error fetching orders page ${page}:`, pageError)
-          hasMore = false
-        }
-      }
-      
-      console.log(`📊 Fetched ${allOrders.length} orders for date range:`, {
-        startDate: startDateISO.toISOString(),
-        endDate: endDateISO.toISOString(),
-        rangeId
+      const response = await restaurantAPI.getAnalytics({
+        range: rangeId,
+        startDate: new Date(startDate).toISOString().split("T")[0],
+        endDate: new Date(endDate).toISOString().split("T")[0],
       })
-      
-      if (allOrders.length > 0) {
-        const { chartData: newChartData, totalSales: newTotalSales, totalOrders: newTotalOrders } = 
-          calculateChartDataFromOrders(allOrders, startDate, endDate)
-        
-        // Calculate mealtime data
-        const mealtimeData = calculateMealtimeData(allOrders, startDate, endDate)
-        
-        console.log('📈 Chart data calculated:', {
-          totalSales: newTotalSales,
-          totalOrders: newTotalOrders,
-          chartDataPoints: newChartData.length,
-          mealtimeData
+
+      const analytics = response?.data?.data
+
+      if (response?.data?.success && analytics) {
+        setChartData(Array.isArray(analytics.chartData) && analytics.chartData.length > 0 ? analytics.chartData : [
+          { hour: "12am", orders: 0, sales: 0 },
+          { hour: "4am", orders: 0, sales: 0 },
+          { hour: "8am", orders: 0, sales: 0 },
+          { hour: "12pm", orders: 0, sales: 0 },
+          { hour: "4pm", orders: 0, sales: 0 },
+          { hour: "8pm", orders: 0, sales: 0 },
+          { hour: "12am", orders: 0, sales: 0 },
+        ])
+        setSalesSummary(analytics.summary || {
+          netSales: 0,
+          totalOrders: 0,
+          avgOrderValue: 0,
+          salesChangePct: 0,
+          ordersChangePct: 0,
+          aovChangePct: 0,
         })
-        
-        setChartData(newChartData)
-        setTotalSales(`₹ ${newTotalSales.toLocaleString("en-IN")}`)
-        setTotalOrders(newTotalOrders.toString())
-        setMealtimeMetrics(mealtimeData)
-        setLastUpdated(new Date())
+        setTotalSales(Number(analytics.summary?.netSales) || 0)
+        setTotalOrders(Number(analytics.summary?.totalOrders) || 0)
+        setMealtimeMetrics(Array.isArray(analytics.mealtimeMetrics) ? analytics.mealtimeMetrics : [])
+        setCustomerCardMetrics(Array.isArray(analytics.customers?.metrics) && analytics.customers.metrics.length > 0 ? analytics.customers.metrics : [
+          { title: "New customers", sub: "No orders in last 365 days", value: "0", change: "- 0%", color: "#111827" },
+          { title: "Repeat customers", sub: "Ordered in last 60 days", value: "0", change: "- 0%", color: "#ef4444" },
+          { title: "Lapsed customers", sub: "Last order 60 to 365 days ago", value: "0", change: "- 0%", color: "#2563eb" },
+        ])
+        setOfferCardMetrics(Array.isArray(analytics.offers?.metrics) && analytics.offers.metrics.length > 0 ? analytics.offers.metrics : [
+          { title: "Offer clicks", value: "0", change: "- 0%", sub: "Clicks on offers" },
+          { title: "Offer redemptions", value: "0", change: "- 0%", sub: "Total redeemed" },
+          { title: "Conversion rate", value: "0%", change: "- 0%", sub: "Redemptions / clicks" },
+          { title: "Cost per redemption", value: "₹0", change: "- 0%", sub: "Est. cost" },
+        ])
+        setLastUpdated(analytics.summary?.lastUpdatedAt ? new Date(analytics.summary.lastUpdatedAt) : new Date())
       } else {
-        // No orders found
-        console.log('⚠️ No orders found for the selected date range')
         setChartData([
           { hour: "12am", orders: 0, sales: 0 },
           { hour: "4am", orders: 0, sales: 0 },
@@ -834,15 +656,33 @@ export default function ToHub() {
           { hour: "8pm", orders: 0, sales: 0 },
           { hour: "12am", orders: 0, sales: 0 },
         ])
-        setTotalSales("₹ 0")
-        setTotalOrders("0")
-        // Reset mealtime metrics to zero
+        setSalesSummary({
+          netSales: 0,
+          totalOrders: 0,
+          avgOrderValue: 0,
+          salesChangePct: 0,
+          ordersChangePct: 0,
+          aovChangePct: 0,
+        })
+        setTotalSales(0)
+        setTotalOrders(0)
         setMealtimeMetrics([
           { title: "Breakfast", window: "7:00 am - 11:00 am", value: "0", change: "- 0%", color: "#111827" },
           { title: "Lunch", window: "11:00 am - 4:00 pm", value: "0", change: "- 0%", color: "#ef4444" },
           { title: "Evening snacks", window: "4:00 pm - 7:00 pm", value: "0", change: "- 0%", color: "#2563eb" },
           { title: "Dinner", window: "7:00 pm - 11:00 pm", value: "0", change: "- 0%", color: "#f59e0b" },
           { title: "Late night", window: "11:00 pm - 7:00 am", value: "0", change: "- 0%", color: "#10b981" },
+        ])
+        setCustomerCardMetrics([
+          { title: "New customers", sub: "No orders in last 365 days", value: "0", change: "- 0%", color: "#111827" },
+          { title: "Repeat customers", sub: "Ordered in last 60 days", value: "0", change: "- 0%", color: "#ef4444" },
+          { title: "Lapsed customers", sub: "Last order 60 to 365 days ago", value: "0", change: "- 0%", color: "#2563eb" },
+        ])
+        setOfferCardMetrics([
+          { title: "Offer clicks", value: "0", change: "- 0%", sub: "Clicks on offers" },
+          { title: "Offer redemptions", value: "0", change: "- 0%", sub: "Total redeemed" },
+          { title: "Conversion rate", value: "0%", change: "- 0%", sub: "Redemptions / clicks" },
+          { title: "Cost per redemption", value: "₹0", change: "- 0%", sub: "Est. cost" },
         ])
       }
     } catch (error) {
@@ -902,6 +742,19 @@ export default function ToHub() {
       const days = Math.floor(diffInSeconds / 86400)
       return `${days} day${days > 1 ? 's' : ''} ago`
     }
+  }
+
+  const formatCurrencyValue = (value) =>
+    `₹${(Number(value) || 0).toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+
+  const formatPercentValue = (value) => {
+    const num = Number(value) || 0
+    return `${num >= 0 ? "" : "-"}${Math.abs(num)}%`
+  }
+
+  const formatMetricWithChange = (value, change, isCurrency = false) => {
+    const formattedValue = isCurrency ? formatCurrencyValue(value) : `${Number(value) || 0}`
+    return `${formattedValue} • ${formatPercentValue(change)}`
   }
 
   const selectedRangeLabel = useMemo(() => {
@@ -1007,12 +860,6 @@ export default function ToHub() {
     { title: "Outlet closed", color: "#2563eb", value: "0", change: "- 0%" },
     { title: "Others", color: "#f59e0b", value: "0", change: "- 0%" },
   ]
-  const offersMetrics = [
-    { title: "Offer clicks", value: "0", change: "- 0%", sub: "Clicks on offers" },
-    { title: "Offer redemptions", value: "0", change: "- 0%", sub: "Total redeemed" },
-    { title: "Conversion rate", value: "0%", change: "- 0%", sub: "Redemptions / clicks" },
-    { title: "Cost per redemption", value: "₹0", change: "- 0%", sub: "Est. cost" },
-  ]
   const offersCardSummary = {
     grossSales: "₹0",
     grossPct: "0%",
@@ -1032,11 +879,6 @@ export default function ToHub() {
     { title: "Ad clicks", value: "0", change: "- 0%", sub: "Total clicks" },
     { title: "CTR", value: "0%", change: "- 0%", sub: "Click-through rate" },
     { title: "Spend", value: "₹0", change: "- 0%", sub: "Total spend" },
-  ]
-  const customersMetrics = [
-    { title: "New customers", sub: "No orders in last 365 days", value: "0", change: "- 0%", color: "#111827" },
-    { title: "Repeat customers", sub: "Ordered in last 60 days", value: "0", change: "- 0%", color: "#ef4444" },
-    { title: "Lapsed customers", sub: "Last order 60 to 365 days ago", value: "0", change: "- 0%", color: "#2563eb" },
   ]
   const customerAffinityBreakup = [
     { title: "New customers", sub: "No orders in last 365 days", value: "0", change: "- 0%", color: "#111827" },
@@ -1101,7 +943,7 @@ export default function ToHub() {
             <span className="text-xs text-green-700 bg-green-100 px-3 rounded-full">Live</span>
           </div>
           <div className="px-4 flex items-center justify-between text-md font-semibold text-gray-700">
-            <span>{totalSales}</span>
+                    <span>{formatCurrencyValue(totalSales)}</span>
             <span>Total orders {totalOrders}</span>
           </div>
           <div className="h-48 chart-shell">
@@ -1190,7 +1032,9 @@ export default function ToHub() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-base font-bold text-gray-900">Sales</p>
-              <p className="text-xs text-gray-500">Last updated: few seconds ago</p>
+              <p className="text-xs text-gray-500">
+                Last updated: {lastUpdated ? formatTimeAgo(lastUpdated) : "few seconds ago"}
+              </p>
             </div>
             <div className="relative">
               <button 
@@ -1218,9 +1062,9 @@ export default function ToHub() {
           </div>
 
           {[
-            { title: "Net sales", value: "₹0 • 0%", dataKey: "sales", color: "#f97316" },
-            { title: "Orders delivered", value: "0 • 0%", dataKey: "orders", color: "#f97316" },
-            { title: "Avg. order value", value: "₹0 • 0%", dataKey: "sales", color: "#f97316" },
+            { title: "Net sales", value: formatMetricWithChange(salesSummary.netSales, salesSummary.salesChangePct, true), dataKey: "sales", color: "#f97316" },
+            { title: "Orders delivered", value: formatMetricWithChange(salesSummary.totalOrders, salesSummary.ordersChangePct, false), dataKey: "orders", color: "#f97316" },
+            { title: "Avg. order value", value: formatMetricWithChange(salesSummary.avgOrderValue, salesSummary.aovChangePct, true), dataKey: "sales", color: "#f97316" },
           ].map((section, idx) => (
             <div key={section.title} className={idx < 2 ? "pb-3 border-b border-dashed border-gray-200 space-y-2" : "space-y-2"}>
               <div className="flex items-center justify-between text-sm font-semibold text-gray-900">
@@ -1295,7 +1139,7 @@ export default function ToHub() {
           </div>
 
           <div className="space-y-4">
-            {customersMetrics.map((metric) => (
+            {customerCardMetrics.map((metric) => (
               <div key={metric.title} className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <span
@@ -1417,7 +1261,7 @@ export default function ToHub() {
 
           <div className="divide-y divide-dashed divide-gray-200">
             <div className="grid grid-cols-2 gap-y-4 py-3">
-              {offersMetrics.slice(0, 2).map((metric) => (
+              {offerCardMetrics.slice(0, 2).map((metric) => (
                 <div key={metric.title} className="flex flex-col gap-1">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold text-gray-900">{metric.title}</span>
@@ -1430,7 +1274,7 @@ export default function ToHub() {
               ))}
             </div>
             <div className="grid grid-cols-2 gap-y-4 py-3">
-              {offersMetrics.slice(2).map((metric) => (
+              {offerCardMetrics.slice(2).map((metric) => (
                 <div key={metric.title} className="flex flex-col gap-1">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold text-gray-900">{metric.title}</span>
@@ -1524,7 +1368,9 @@ export default function ToHub() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-base font-bold text-gray-900">Sales</p>
-                <p className="text-xs text-gray-500">Last updated: few seconds ago</p>
+                <p className="text-xs text-gray-500">
+                  Last updated: {lastUpdated ? formatTimeAgo(lastUpdated) : "few seconds ago"}
+                </p>
               </div>
               <div className="relative">
                 <button 
@@ -1551,9 +1397,9 @@ export default function ToHub() {
             </div>
 
             {[
-              { title: "Net sales", value: "₹0 • 0%", dataKey: "sales", color: "#f97316" },
-              { title: "Orders delivered", value: "0 • 0%", dataKey: "orders", color: "#f97316" },
-              { title: "Avg. order value", value: "₹0 • 0%", dataKey: "sales", color: "#f97316" },
+              { title: "Net sales", value: formatMetricWithChange(salesSummary.netSales, salesSummary.salesChangePct, true), dataKey: "sales", color: "#f97316" },
+              { title: "Orders delivered", value: formatMetricWithChange(salesSummary.totalOrders, salesSummary.ordersChangePct, false), dataKey: "orders", color: "#f97316" },
+              { title: "Avg. order value", value: formatMetricWithChange(salesSummary.avgOrderValue, salesSummary.aovChangePct, true), dataKey: "sales", color: "#f97316" },
             ].map((section, idx) => (
               <div key={section.title} className={idx < 2 ? "pb-3 border-b border-dashed border-gray-200 space-y-2" : "space-y-2"}>
                 <div className="flex items-center justify-between text-sm font-semibold text-gray-900">
@@ -1595,7 +1441,9 @@ export default function ToHub() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-base font-bold text-gray-900">Sales & orders</p>
-                <p className="text-xs text-gray-500">Last updated: few seconds ago</p>
+                <p className="text-xs text-gray-500">
+                  Last updated: {lastUpdated ? formatTimeAgo(lastUpdated) : "few seconds ago"}
+                </p>
               </div>
               <div className="relative">
                 <button 
@@ -1624,13 +1472,13 @@ export default function ToHub() {
             <div className="grid grid-cols-2 gap-4 text-sm font-semibold text-gray-900 text-center items-center">
               <div className="space-y-1 flex flex-col items-center">
                 <p className="text-xs text-gray-500">Net sales</p>
-                <p className="text-lg font-bold text-gray-900">{totalSales || "₹0"}</p>
-                <p className="text-xs text-gray-500">- 0%</p>
+                <p className="text-lg font-bold text-gray-900">{formatCurrencyValue(salesSummary.netSales)}</p>
+                <p className="text-xs text-gray-500">{formatPercentValue(salesSummary.salesChangePct)}</p>
               </div>
               <div className="space-y-1 flex flex-col items-center">
                 <p className="text-xs text-gray-500">Orders delivered</p>
-                <p className="text-lg font-bold text-gray-900">{totalOrders || "0"}</p>
-                <p className="text-xs text-gray-500">- 0%</p>
+                <p className="text-lg font-bold text-gray-900">{salesSummary.totalOrders}</p>
+                <p className="text-xs text-gray-500">{formatPercentValue(salesSummary.ordersChangePct)}</p>
               </div>
             </div>
 
@@ -1714,7 +1562,9 @@ export default function ToHub() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-base font-bold text-gray-900">Average order value</p>
-                <p className="text-xs text-gray-500">Last updated: few seconds ago</p>
+                <p className="text-xs text-gray-500">
+                  Last updated: {lastUpdated ? formatTimeAgo(lastUpdated) : "few seconds ago"}
+                </p>
               </div>
               <div className="relative">
                 <button 
@@ -1743,7 +1593,7 @@ export default function ToHub() {
             <div className="space-y-1">
               <p className="text-xs text-gray-500">AOV</p>
               <p className="text-lg font-bold text-gray-900">
-                ₹0 <span className="text-xs font-normal text-gray-500">- 0%</span>
+                {formatCurrencyValue(salesSummary.avgOrderValue)} <span className="text-xs font-normal text-gray-500">{formatPercentValue(salesSummary.aovChangePct)}</span>
               </p>
             </div>
 

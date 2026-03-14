@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useNavigate } from "react-router-dom"
 import Lenis from "lenis"
@@ -357,29 +357,50 @@ export default function ExploreMore() {
   const [restaurantData, setRestaurantData] = useState(null)
   const [loadingRestaurant, setLoadingRestaurant] = useState(true)
 
+  const fetchRestaurantData = useCallback(async () => {
+    try {
+      setLoadingRestaurant(true)
+      const response = await restaurantAPI.getCurrentRestaurant()
+      const data = response?.data?.data?.restaurant || response?.data?.restaurant
+      if (data) {
+        setRestaurantData(data)
+      }
+    } catch (error) {
+      // Only log error if it's not a network/timeout error (backend might be down/slow)
+      if (error.code !== 'ERR_NETWORK' && error.code !== 'ECONNABORTED' && !error.message?.includes('timeout')) {
+        console.error("Error fetching restaurant data:", error)
+      }
+    } finally {
+      setLoadingRestaurant(false)
+    }
+  }, [])
+
   // Fetch restaurant data on mount
   useEffect(() => {
-    const fetchRestaurantData = async () => {
-      try {
-        setLoadingRestaurant(true)
-        const response = await restaurantAPI.getCurrentRestaurant()
-        const data = response?.data?.data?.restaurant || response?.data?.restaurant
-        if (data) {
-          setRestaurantData(data)
-        }
-      } catch (error) {
-        // Only log error if it's not a network/timeout error (backend might be down/slow)
-        if (error.code !== 'ERR_NETWORK' && error.code !== 'ECONNABORTED' && !error.message?.includes('timeout')) {
-          console.error("Error fetching restaurant data:", error)
-        }
-        // Continue with default values if fetch fails
-      } finally {
-        setLoadingRestaurant(false)
-      }
+    fetchRestaurantData()
+
+    const handleProfileRefresh = () => {
+      fetchRestaurantData()
     }
 
-    fetchRestaurantData()
-  }, [])
+    window.addEventListener("ownerDataUpdated", handleProfileRefresh)
+    window.addEventListener("addressUpdated", handleProfileRefresh)
+    window.addEventListener("restaurantProfileRefresh", handleProfileRefresh)
+    window.addEventListener("restaurantDataUpdated", handleProfileRefresh)
+
+    return () => {
+      window.removeEventListener("ownerDataUpdated", handleProfileRefresh)
+      window.removeEventListener("addressUpdated", handleProfileRefresh)
+      window.removeEventListener("restaurantProfileRefresh", handleProfileRefresh)
+      window.removeEventListener("restaurantDataUpdated", handleProfileRefresh)
+    }
+  }, [fetchRestaurantData])
+
+  useEffect(() => {
+    if (profileOpen) {
+      fetchRestaurantData()
+    }
+  }, [profileOpen, fetchRestaurantData])
 
   // Format address from location object
   const formatAddress = (location) => {

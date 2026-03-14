@@ -47,6 +47,47 @@ const logger = winston.createLogger({
   ]
 });
 
+const normalizeReferralCode = (value) => {
+  if (!value) return null;
+  const normalized = String(value).trim().toUpperCase();
+  return normalized || null;
+};
+
+const resolveRestaurantReferral = async (rawReferralCode) => {
+  const referralCode = normalizeReferralCode(rawReferralCode);
+  if (!referralCode) {
+    return {
+      referrer: null,
+      commissionPercentage: null
+    };
+  }
+
+  const referrer = await Restaurant.findOne({ referralCode })
+    .select('_id name referralCode')
+    .lean();
+
+  if (!referrer) {
+    throw new Error('Invalid referral code');
+  }
+
+  let commissionPercentage = 5;
+  try {
+    const BusinessSettings = (await import('../../admin/models/BusinessSettings.js')).default;
+    const settings = await BusinessSettings.getSettings();
+    const configured = Number(settings?.restaurantReferral?.commissionPercentage);
+    if (Number.isFinite(configured) && configured >= 0) {
+      commissionPercentage = configured;
+    }
+  } catch (error) {
+    logger.warn(`Failed to read restaurant referral policy: ${error.message}`);
+  }
+
+  return {
+    referrer,
+    commissionPercentage
+  };
+};
+
 /**
  * Send OTP for restaurant phone number or email
  * POST /api/restaurant/auth/send-otp
@@ -103,7 +144,7 @@ export const sendOTP = asyncHandler(async (req, res) => {
  * POST /api/restaurant/auth/verify-otp
  */
 export const verifyOTP = asyncHandler(async (req, res) => {
-  const { phone, email, otp, purpose = 'login', name, password } = req.body;
+  const { phone, email, otp, purpose = 'login', name, password, referralCode } = req.body;
 
   // Validate that either phone or email is provided
   if ((!phone && !email) || !otp) {
@@ -153,6 +194,14 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         fcmToken: fcmToken || null,
         platform: platform || 'web'
       };
+
+      const referralMeta = await resolveRestaurantReferral(referralCode);
+      if (referralMeta.referrer) {
+        restaurantData.referredBy = referralMeta.referrer._id;
+        restaurantData.referredByName = referralMeta.referrer.name || null;
+        restaurantData.referralCommission = referralMeta.commissionPercentage;
+        restaurantData.referralStatus = 'pending';
+      }
 
       if (normalizedPhone) {
         restaurantData.phone = normalizedPhone;
@@ -649,7 +698,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
  * POST /api/restaurant/auth/register
  */
 export const register = asyncHandler(async (req, res) => {
-  const { name, email, password, phone, ownerName, ownerEmail, ownerPhone } = req.body;
+  const { name, email, password, phone, ownerName, ownerEmail, ownerPhone, referralCode } = req.body;
 
   if (!name || !email || !password) {
     return errorResponse(res, 400, 'Restaurant name, email, and password are required');
@@ -700,6 +749,14 @@ export const register = asyncHandler(async (req, res) => {
   if (normalizedPhone) {
     restaurantData.phone = normalizedPhone;
     restaurantData.ownerPhone = ownerPhone ? normalizePhoneNumber(ownerPhone) : normalizedPhone;
+  }
+
+  const referralMeta = await resolveRestaurantReferral(referralCode);
+  if (referralMeta.referrer) {
+    restaurantData.referredBy = referralMeta.referrer._id;
+    restaurantData.referredByName = referralMeta.referrer.name || null;
+    restaurantData.referralCommission = referralMeta.commissionPercentage;
+    restaurantData.referralStatus = 'pending';
   }
 
   const restaurant = await Restaurant.create(restaurantData);
@@ -936,6 +993,12 @@ export const logout = asyncHandler(async (req, res) => {
  * GET /api/restaurant/auth/me
  */
 export const getCurrentRestaurant = asyncHandler(async (req, res) => {
+  // Backfill referral code for old records that were created before referral support.
+  if (!req.restaurant.referralCode) {
+    req.restaurant.markModified('referralCode');
+    await req.restaurant.save();
+  }
+
   // Get BusinessSettings for global referral settings
   let businessSettings = null;
   try {
@@ -1300,14 +1363,17 @@ export const updateFcmToken = asyncHandler(async (req, res) => {
  */
 export const getReferralHistory = asyncHandler(async (req, res) => {
   const referrals = await Restaurant.find({ referredBy: req.restaurant._id })
-    .select('name isActive createdAt approvedAt')
+    .select('name isActive createdAt approvedAt referralStatus referralCommission')
     .sort({ createdAt: -1 });
 
   return successResponse(res, 200, 'Referral history retrieved successfully', {
     referrals: referrals.map(ref => ({
       id: ref._id,
       name: ref.name,
-      status: ref.isActive ? 'Completed' : 'Pending',
+      status: ref.referralStatus === 'completed' ? 'Completed' : 'Pending',
+      joined: !!ref.isActive,
+      rewardStatus: ref.referralStatus === 'completed' ? 'Credited' : 'Locked',
+      commissionPercentage: Number(ref.referralCommission) || null,
       joinedAt: ref.createdAt,
       approvedAt: ref.approvedAt
     }))

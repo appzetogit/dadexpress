@@ -67,7 +67,7 @@ export const getBusinessSettings = asyncHandler(async (req, res) => {
  */
 export const updateBusinessSettings = asyncHandler(async (req, res) => {
   try {
-    const {
+    let {
       companyName,
       email,
       phoneCountryCode,
@@ -79,6 +79,14 @@ export const updateBusinessSettings = asyncHandler(async (req, res) => {
       maintenanceMode,
       restaurantReferral,
     } = req.body;
+
+    if (typeof restaurantReferral === "string") {
+      try {
+        restaurantReferral = JSON.parse(restaurantReferral);
+      } catch (error) {
+        return errorResponse(res, 400, "Invalid restaurant referral settings payload");
+      }
+    }
 
     // Get existing settings
     let settings = await BusinessSettings.findOne();

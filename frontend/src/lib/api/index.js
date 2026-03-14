@@ -304,6 +304,7 @@ export const restaurantAPI = {
     password = null,
     fcmToken = null,
     platform = "web",
+    referralCode = null,
   ) => {
     const payload = {
       otp,
@@ -315,6 +316,9 @@ export const restaurantAPI = {
     if (email != null) payload.email = email;
     if (name != null) payload.name = name;
     if (password != null) payload.password = password;
+    if (referralCode != null && String(referralCode).trim() !== "") {
+      payload.referralCode = String(referralCode).trim().toUpperCase();
+    }
     return apiClient.post(API_ENDPOINTS.RESTAURANT.AUTH.VERIFY_OTP, payload);
   },
 
@@ -326,6 +330,7 @@ export const restaurantAPI = {
     ownerName = null,
     ownerEmail = null,
     ownerPhone = null,
+    referralCode = null,
     fcmToken = null,
     platform = "web",
   ) => {
@@ -337,6 +342,7 @@ export const restaurantAPI = {
       ownerName,
       ownerEmail,
       ownerPhone,
+      referralCode,
       fcmToken,
       platform,
     });
@@ -1499,7 +1505,13 @@ export const adminAPI = {
     // Add text fields
     Object.keys(data).forEach((key) => {
       if (key !== "logo" && key !== "favicon") {
-        formData.append(key, data[key]);
+        const value = data[key];
+        if (value !== undefined && value !== null) {
+          formData.append(
+            key,
+            typeof value === "object" ? JSON.stringify(value) : value,
+          );
+        }
       }
     });
 
@@ -1895,23 +1907,56 @@ export const adminAPI = {
 
 // Upload / media helper functions
 export const uploadAPI = {
+  isRetriableUploadError: (error) => {
+    const status = error?.response?.status;
+    return (
+      error?.code === "ERR_NETWORK" ||
+      error?.code === "ECONNABORTED" ||
+      !error?.response ||
+      status === 408 ||
+      status === 425 ||
+      status === 429 ||
+      (typeof status === "number" && status >= 500)
+    );
+  },
   /**
    * Upload a single image/video file to Cloudinary via backend
    * @param {File} file - Browser File object
    * @param {Object} options - Optional { folder }
    */
-  uploadMedia: (file, options = {}) => {
+  uploadMedia: async (file, options = {}) => {
     const formData = new FormData();
     formData.append("file", file);
     if (options.folder) {
       formData.append("folder", options.folder);
     }
 
-    return apiClient.post(API_ENDPOINTS.UPLOAD.MEDIA, formData, {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-    });
+    const maxAttempts = 3;
+    let attempt = 0;
+    let lastError = null;
+
+    while (attempt < maxAttempts) {
+      try {
+        return await apiClient.post(API_ENDPOINTS.UPLOAD.MEDIA, formData, {
+          timeout: 180000, // Uploads on mobile networks can be slower than regular API calls.
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        });
+      } catch (error) {
+        lastError = error;
+        attempt += 1;
+        if (
+          attempt >= maxAttempts ||
+          !uploadAPI.isRetriableUploadError(error)
+        ) {
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+      }
+    }
+
+    throw lastError;
   },
 };
 

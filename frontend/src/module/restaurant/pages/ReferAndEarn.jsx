@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import {
@@ -21,6 +21,7 @@ import { restaurantAPI } from "@/lib/api";
 
 export default function ReferAndEarn() {
   const navigate = useNavigate();
+  const referralHistoryRef = useRef(null);
 
   const [referralCode, setReferralCode] = useState("REST---");
   const [referralHistory, setReferralHistory] = useState([]);
@@ -99,6 +100,20 @@ export default function ReferAndEarn() {
     }
   };
 
+  const scrollToReferralHistory = () => {
+    referralHistoryRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const handleTheyJoinClick = () => {
+    scrollToReferralHistory();
+    toast.success("Referral history opened");
+  };
+
+  const handleGetRewardClick = () => {
+    scrollToReferralHistory();
+    toast.success("Track rewards in referral history");
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 overflow-x-hidden font-sans pb-10">
       {/* Header */}
@@ -163,16 +178,43 @@ export default function ReferAndEarn() {
 
           <div className="grid grid-cols-1 gap-3">
             {[
-              { icon: Share, title: "Share Code", desc: "Send your referral code to fellow restaurant owners.", color: "bg-blue-50 text-blue-600" },
-              { icon: Users, title: "They Join", desc: "When they signup using your code, the reward is locked.", color: "bg-purple-50 text-purple-600" },
-              { icon: Trophy, title: "Get Reward", desc: `Receive ${referralPolicy.commissionPercentage}% commission benefit on your next order.`, color: "bg-orange-50 text-orange-600" }
+              {
+                icon: Share,
+                title: "Share Code",
+                desc: "Send your referral code to fellow restaurant owners.",
+                color: "bg-blue-50 text-blue-600",
+                onClick: handleShare
+              },
+              {
+                icon: Users,
+                title: "They Join",
+                desc: "When they signup using your code, the reward is locked.",
+                color: "bg-purple-50 text-purple-600",
+                onClick: handleTheyJoinClick
+              },
+              {
+                icon: Trophy,
+                title: "Get Reward",
+                desc: `Receive ${referralPolicy.commissionPercentage}% commission benefit on your next order.`,
+                color: "bg-orange-50 text-orange-600",
+                onClick: handleGetRewardClick
+              }
             ].map((step, i) => (
               <motion.div
                 key={i}
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 * i }}
-                className="bg-white p-4 rounded-2xl border border-slate-100 flex items-center gap-4 shadow-sm"
+                onClick={step.onClick}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    step.onClick();
+                  }
+                }}
+                className="bg-white p-4 rounded-2xl border border-slate-100 flex items-center gap-4 shadow-sm cursor-pointer hover:border-slate-200 active:scale-[0.99] transition-all"
               >
                 <div className={`w-12 h-12 ${step.color} rounded-2xl flex items-center justify-center shrink-0`}>
                   <step.icon className="w-6 h-6" />
@@ -187,7 +229,7 @@ export default function ReferAndEarn() {
         </div>
 
         {/* Referral Stats Summary */}
-        <Card className="rounded-3xl border-none shadow-sm bg-white overflow-hidden">
+        <Card ref={referralHistoryRef} className="rounded-3xl border-none shadow-sm bg-white overflow-hidden">
           <CardContent className="p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Referral History</h3>

@@ -7,6 +7,7 @@ import { getOnboarding, upsertOnboarding, createRestaurantFromOnboardingManual }
 import { updateFcmToken } from './controllers/restaurantAuthController.js';
 import { getRestaurants, getRestaurantById, getRestaurantByOwner, updateRestaurantProfile, uploadProfileImage, uploadMenuImage, deleteRestaurantAccount, updateDeliveryStatus, getRestaurantsWithDishesUnder250 } from './controllers/restaurantController.js';
 import { getRestaurantFinance } from './controllers/restaurantFinanceController.js';
+import { getRestaurantAnalytics } from './controllers/restaurantAnalyticsController.js';
 import { getWallet, getWalletTransactions, getWalletStats } from './controllers/restaurantWalletController.js';
 import { createWithdrawalRequest, getRestaurantWithdrawalRequests } from './controllers/withdrawalController.js';
 import { getMenu, updateMenu, getMenuByRestaurantId, addSection, addItemToSection, addSubsectionToSection, addItemToSubsection, addAddon, getAddons, getAddonsByRestaurantId, updateAddon, deleteAddon } from './controllers/menuController.js';
@@ -90,6 +91,7 @@ router.use('/complaints', complaintRoutes);
 // Finance routes (authenticated - for restaurant module)
 // Must come BEFORE /:id route to avoid route conflicts (/:id would match /finance)
 router.get('/finance', authenticate, getRestaurantFinance);
+router.get('/analytics', authenticate, getRestaurantAnalytics);
 
 // Wallet routes (authenticated - for restaurant module)
 // Must come BEFORE /:id route to avoid route conflicts (/:id would match /wallet)

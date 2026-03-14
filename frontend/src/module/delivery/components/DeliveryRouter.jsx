@@ -19,6 +19,7 @@ const TransactionHistory = lazy(() => import("../pages/TransactionHistory"))
 const EditProfile = lazy(() => import("../pages/EditProfile"))
 const Settings = lazy(() => import("../pages/Settings"))
 const Conversation = lazy(() => import("../pages/Conversation"))
+const ChatDetailPage = lazy(() => import("../pages/ChatDetailPage"))
 const TermsAndConditions = lazy(() => import("../pages/TermsAndConditions"))
 const PrivacyPolicy = lazy(() => import("../pages/PrivacyPolicy"))
 const Payout = lazy(() => import("../pages/Payout"))
@@ -346,6 +347,14 @@ export default function DeliveryRouter() {
             </ProtectedRoute>
           }
           path="/profile/conversation"
+        />
+        <Route
+          element={
+            <ProtectedRoute>
+              <ChatDetailPage />
+            </ProtectedRoute>
+          }
+          path="/profile/conversation/chat"
         />
         <Route
           element={

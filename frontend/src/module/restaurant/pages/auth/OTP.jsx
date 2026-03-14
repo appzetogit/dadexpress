@@ -177,7 +177,17 @@ export default function RestaurantOTP() {
         console.log('[PUSH-NOTIFICATION] Sending FCM token for restaurant verification:', fcmToken);
       }
 
-      const response = await restaurantAPI.verifyOTP(phone, code, purpose, nameToSend, email, null, fcmToken, "web")
+      const response = await restaurantAPI.verifyOTP(
+        phone,
+        code,
+        purpose,
+        nameToSend,
+        email,
+        null,
+        fcmToken,
+        "web",
+        authData?.referralCode || null,
+      )
 
       // Extract restaurant and token or special flags (like needsName) from backend response
       const data = response?.data?.data || response?.data

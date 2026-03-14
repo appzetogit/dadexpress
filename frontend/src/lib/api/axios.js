@@ -13,6 +13,37 @@ const networkErrorState = {
   TOAST_COOLDOWN_PERIOD: 60000, // 60 seconds cooldown for toast notifications
 };
 
+const BACKEND_DOWN_TOAST_KEY = "backend_connection_toast_shown";
+
+const hasShownBackendDownToast = () => {
+  try {
+    return sessionStorage.getItem(BACKEND_DOWN_TOAST_KEY) === "true";
+  } catch {
+    return networkErrorState.toastShown;
+  }
+};
+
+const markBackendDownToastShown = () => {
+  networkErrorState.toastShown = true;
+  try {
+    sessionStorage.setItem(BACKEND_DOWN_TOAST_KEY, "true");
+  } catch {
+    // Ignore storage access failures and rely on in-memory fallback.
+  }
+};
+
+const clearBackendDownToastState = () => {
+  networkErrorState.errorCount = 0;
+  networkErrorState.lastErrorTime = 0;
+  networkErrorState.lastToastTime = 0;
+  networkErrorState.toastShown = false;
+  try {
+    sessionStorage.removeItem(BACKEND_DOWN_TOAST_KEY);
+  } catch {
+    // Ignore storage access failures and rely on in-memory fallback.
+  }
+};
+
 // Validate API base URL on import
 if (import.meta.env.DEV) {
   const backendUrl = API_BASE_URL.replace("/api", "");
@@ -268,10 +299,9 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => {
     // Reset network error state on successful response (backend is back online)
-    if (networkErrorState.errorCount > 0) {
-      networkErrorState.errorCount = 0;
-      networkErrorState.lastErrorTime = 0;
-      networkErrorState.toastShown = false;
+    if (networkErrorState.errorCount > 0 || hasShownBackendDownToast()) {
+      clearBackendDownToastState();
+      toast.dismiss("network-error-toast");
       if (import.meta.env.DEV) {
         false && console.log("✅ Backend connection restored");
       }
@@ -529,14 +559,14 @@ apiClient.interceptors.response.use(
           }
         }
 
-        // Only show toast if cooldown period has passed
-        if (timeSinceLastToast >= networkErrorState.TOAST_COOLDOWN_PERIOD) {
+        // Show only once while backend remains disconnected.
+        if (!hasShownBackendDownToast() && timeSinceLastToast >= networkErrorState.TOAST_COOLDOWN_PERIOD) {
           networkErrorState.lastToastTime = now;
-          networkErrorState.toastShown = true;
+          markBackendDownToastShown();
 
-          // Show helpful error message (only once per minute)
+          // Show helpful error message only once until the backend responds again.
           toast.error(
-            `Backend not connected! Start server: cd appzetofood/backend && npm run dev`,
+            `Backend not connected. Start the backend server and refresh once it is running.`,
             {
               duration: 10000,
               id: "network-error-toast", // Use ID to prevent duplicate toasts

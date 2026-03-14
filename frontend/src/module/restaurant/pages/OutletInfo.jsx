@@ -246,9 +246,11 @@ export default function OutletInfo() {
             // Fallback to uploaded image URL
             setThumbnailImage(uploadedImage.url)
           }
+          window.dispatchEvent(new Event("restaurantProfileRefresh"))
         } else if (uploadedImage.url) {
           // Fallback if refresh fails
           setThumbnailImage(uploadedImage.url)
+          window.dispatchEvent(new Event("restaurantProfileRefresh"))
         }
       }
     } catch (error) {
@@ -568,6 +570,7 @@ export default function OutletInfo() {
           setRestaurantData(data)
           setRestaurantName(data.name || newName)
         }
+        window.dispatchEvent(new Event("restaurantProfileRefresh"))
       } else {
         throw new Error("Invalid response from server")
       }

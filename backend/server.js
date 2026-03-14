@@ -158,6 +158,30 @@ const io = new Server(httpServer, {
   pingInterval: 25000
 });
 
+// In-memory room-wise chat store for real-time chat history and delete operations.
+// Keeps current behavior simple without affecting existing order/auth flows.
+const chatRoomMessages = new Map();
+
+function getChatRoomMessages(room) {
+  return chatRoomMessages.get(room) || [];
+}
+
+function appendChatRoomMessage(room, message) {
+  const existing = chatRoomMessages.get(room) || [];
+  existing.push(message);
+  chatRoomMessages.set(room, existing);
+}
+
+function clearChatRoomMessages(room) {
+  chatRoomMessages.delete(room);
+}
+
+function removeChatRoomMessage(room, messageId) {
+  const existing = chatRoomMessages.get(room) || [];
+  const filtered = existing.filter((m) => String(m?._id) !== String(messageId));
+  chatRoomMessages.set(room, filtered);
+}
+
 // Export getIO function for use in other modules
 export function getIO() {
   return io;
@@ -287,6 +311,103 @@ deliveryNamespace.on('connection', (socket) => {
       });
     } else {
       console.warn('⚠️ Delivery partner tried to join without deliveryId');
+    }
+  });
+
+  // Chat functionality
+  socket.on('join-chat-room', async (data) => {
+    try {
+      const { room, orderId, deliveryPartnerId, recipientId, chatType } = data;
+      if (room) {
+        socket.join(room);
+        console.log(`💬 Delivery partner joined chat room: ${room}`);
+        socket.emit('chat-room-joined', { room, orderId });
+      }
+    } catch (error) {
+      console.error('❌ Error joining chat room:', error);
+    }
+  });
+
+  socket.on('leave-chat-room', (data) => {
+    try {
+      const { room } = data;
+      if (room) {
+        socket.leave(room);
+        console.log(`💬 Delivery partner left chat room: ${room}`);
+      }
+    } catch (error) {
+      console.error('❌ Error leaving chat room:', error);
+    }
+  });
+
+  socket.on('get-chat-messages', async (data) => {
+    try {
+      const { room, orderId } = data;
+      // For now, return empty array - can be extended to fetch from database
+      socket.emit('chat-messages', { room, orderId, messages: [] });
+    } catch (error) {
+      console.error('❌ Error getting chat messages:', error);
+      socket.emit('chat-messages', { room: data.room, orderId: data.orderId, messages: [] });
+    }
+  });
+
+  socket.on('send-message', async (data) => {
+    try {
+      const { room, orderId, senderId, senderType, recipientId, recipientType, text, timestamp } = data;
+      
+      if (!room || !text || !senderId) {
+        socket.emit('message-sent', { success: false, error: 'Invalid message data' });
+        return;
+      }
+
+      const message = {
+        _id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        text,
+        senderId,
+        senderType: senderType || 'delivery',
+        recipientId,
+        recipientType: recipientType || 'customer',
+        orderId,
+        timestamp: timestamp || new Date().toISOString(),
+        room
+      };
+
+      // Broadcast message to all clients in the room
+      deliveryNamespace.to(room).emit('new-message', { room, message });
+
+      // Also emit to user/restaurant namespaces if needed
+      const userRoom = `user:${recipientId}`;
+      const restaurantRoom = `restaurant:${recipientId}`;
+      
+      if (recipientType === 'customer') {
+        io.to(userRoom).emit('new-message', { room, message });
+      } else if (recipientType === 'restaurant') {
+        const restaurantNamespace = io.of('/restaurant');
+        restaurantNamespace.to(restaurantRoom).emit('new-message', { room, message });
+      }
+
+      socket.emit('message-sent', { success: true, message });
+    } catch (error) {
+      console.error('❌ Error sending message:', error);
+      socket.emit('message-sent', { success: false, error: error.message });
+    }
+  });
+
+  socket.on('delete-chat-message', async (data = {}) => {
+    try {
+      const room = data.room ? String(data.room) : '';
+      const messageId = data.messageId ? String(data.messageId) : '';
+      if (!room || !messageId) {
+        socket.emit('chat-delete-result', { success: false, error: 'Room and messageId are required' });
+        return;
+      }
+
+      removeChatRoomMessage(room, messageId);
+      deliveryNamespace.to(room).emit('message-deleted', { room, messageId });
+      socket.emit('chat-delete-result', { success: true, room, messageId });
+    } catch (error) {
+      console.error('❌ Error deleting chat message:', error);
+      socket.emit('chat-delete-result', { success: false, error: error.message });
     }
   });
 
@@ -708,6 +829,111 @@ io.on('connection', (socket) => {
     if (deliveryId) {
       socket.join(`delivery:${deliveryId}`);
       console.log(`Delivery boy joined: ${deliveryId}`);
+    }
+  });
+
+  // Generic chat room support for user <-> delivery real-time chat
+  socket.on('join-chat-room', (data = {}) => {
+    try {
+      const room = data.room ? String(data.room) : '';
+      if (!room) return;
+      socket.join(room);
+      socket.emit('chat-room-joined', { room, orderId: data.orderId || null });
+      console.log(`💬 Socket joined chat room: ${room}`);
+    } catch (error) {
+      console.error('❌ Error joining chat room:', error);
+    }
+  });
+
+  socket.on('leave-chat-room', (data = {}) => {
+    try {
+      const room = data.room ? String(data.room) : '';
+      if (!room) return;
+      socket.leave(room);
+      console.log(`💬 Socket left chat room: ${room}`);
+    } catch (error) {
+      console.error('❌ Error leaving chat room:', error);
+    }
+  });
+
+  socket.on('get-chat-messages', (data = {}) => {
+    try {
+      const room = data.room ? String(data.room) : '';
+      const messages = room ? getChatRoomMessages(room) : [];
+      socket.emit('chat-messages', {
+        room,
+        orderId: data.orderId || null,
+        messages
+      });
+    } catch (error) {
+      console.error('❌ Error getting chat messages:', error);
+      socket.emit('chat-messages', { room: '', orderId: null, messages: [] });
+    }
+  });
+
+  socket.on('send-message', (data = {}) => {
+    try {
+      const room = data.room ? String(data.room) : '';
+      const text = data.text ? String(data.text).trim() : '';
+      if (!room || !text) return;
+
+      const message = {
+        _id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        text,
+        senderId: data.senderId || null,
+        senderType: data.senderType || 'user',
+        recipientId: data.recipientId || null,
+        recipientType: data.recipientType || null,
+        orderId: data.orderId || null,
+        timestamp: data.timestamp || new Date().toISOString(),
+      };
+
+      appendChatRoomMessage(room, message);
+      io.to(room).emit('new-message', { room, message });
+      socket.emit('message-sent', { success: true, message });
+    } catch (error) {
+      console.error('❌ Error sending message:', error);
+      socket.emit('message-sent', { success: false, error: error.message });
+    }
+  });
+
+  socket.on('delete-chat-message', (data = {}) => {
+    try {
+      const room = data.room ? String(data.room) : '';
+      const messageId = data.messageId ? String(data.messageId) : '';
+      if (!room || !messageId) {
+        socket.emit('chat-delete-result', { success: false, error: 'Room and messageId are required' });
+        return;
+      }
+
+      removeChatRoomMessage(room, messageId);
+      io.to(room).emit('message-deleted', { room, messageId });
+      socket.emit('chat-delete-result', { success: true, room, messageId });
+    } catch (error) {
+      console.error('❌ Error deleting chat message:', error);
+      socket.emit('chat-delete-result', { success: false, error: error.message });
+    }
+  });
+
+  socket.on('delete-chat-room', (data = {}) => {
+    try {
+      const room = data.room ? String(data.room) : '';
+      if (!room) {
+        socket.emit('chat-delete-result', { success: false, error: 'Room is required' });
+        return;
+      }
+
+      clearChatRoomMessages(room);
+      io.to(room).emit('chat-deleted', {
+        room,
+        orderId: data.orderId || null,
+        deletedBy: data.deletedBy || null,
+        timestamp: new Date().toISOString()
+      });
+      socket.emit('chat-delete-result', { success: true, room });
+    } catch (error) {
+      console.error('❌ Error deleting chat room:', error);
+      socket.emit('chat-delete-result', { success: false, error: error.message });
     }
   });
 

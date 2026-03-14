@@ -48,6 +48,7 @@ export default function RestaurantReferralCommission() {
         }
       };
       await adminAPI.updateBusinessSettings(dataToSend);
+      await fetchSettings();
       toast.success("Restaurant Referral Commission settings updated successfully!");
     } catch (error) {
       console.error("Error saving settings:", error);

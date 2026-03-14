@@ -39,6 +39,7 @@ const verifyOTPSchema = Joi.object({
     .default('login'),
   name: Joi.string().optional(),
   password: Joi.string().min(6).max(100).optional(),
+  referralCode: Joi.string().trim().max(40).optional().allow(null, ''),
   fcmToken: Joi.string().optional().allow(null, ''),
   platform: Joi.string().valid('web', 'ios', 'android', 'app').optional().default('web')
 }).or('phone', 'email');
@@ -51,6 +52,7 @@ const registerSchema = Joi.object({
   ownerName: Joi.string().optional(),
   ownerEmail: Joi.string().email().optional(),
   ownerPhone: Joi.string().optional(),
+  referralCode: Joi.string().trim().max(40).optional().allow(null, ''),
   fcmToken: Joi.string().optional().allow(null, ''),
   platform: Joi.string().valid('web', 'ios', 'android', 'app').optional().default('web')
 });

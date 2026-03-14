@@ -1,12 +1,15 @@
 import WithdrawalRequest from "../models/WithdrawalRequest.js";
 import RestaurantWallet from "../models/RestaurantWallet.js";
 import Restaurant from "../models/Restaurant.js";
+import Order from "../../order/models/Order.js";
+import RestaurantCommission from "../../admin/models/RestaurantCommission.js";
 import {
   successResponse,
   errorResponse,
 } from "../../../shared/utils/response.js";
 import asyncHandler from "../../../shared/middleware/asyncHandler.js";
 import winston from "winston";
+import mongoose from "mongoose";
 
 const logger = winston.createLogger({
   level: "info",
@@ -18,6 +21,104 @@ const logger = winston.createLogger({
   ],
 });
 
+const getCurrentCycleAvailablePayout = async (restaurantId) => {
+  const now = new Date();
+  const currentDay = now.getDay(); // 0 = Sunday
+  const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1;
+
+  const cycleStart = new Date(now);
+  cycleStart.setDate(now.getDate() - daysFromMonday);
+  cycleStart.setHours(0, 0, 0, 0);
+
+  const cycleEnd = new Date(cycleStart);
+  cycleEnd.setDate(cycleStart.getDate() + 6);
+  cycleEnd.setHours(23, 59, 59, 999);
+
+  const restaurantIdStr = restaurantId?.toString?.() || String(restaurantId);
+  const restaurantIdVariations = [restaurantIdStr];
+  if (mongoose.Types.ObjectId.isValid(restaurantIdStr)) {
+    const objectIdString = new mongoose.Types.ObjectId(restaurantIdStr).toString();
+    if (!restaurantIdVariations.includes(objectIdString)) {
+      restaurantIdVariations.push(objectIdString);
+    }
+  }
+
+  const restaurantIdQuery = {
+    $or: [
+      { restaurantId: { $in: restaurantIdVariations } },
+      { restaurantId: restaurantIdStr }
+    ]
+  };
+
+  const commissionSetup = await RestaurantCommission.findOne({
+    restaurant: restaurantId,
+    status: true
+  }).lean();
+
+  const calculateCommissionForOrder = (foodPrice) => {
+    if (!commissionSetup || !commissionSetup.status) {
+      return (foodPrice * 10) / 100;
+    }
+
+    const sortedRules = [...(commissionSetup.commissionRules || [])]
+      .filter((rule) => rule.isActive)
+      .sort((a, b) => (b.priority !== a.priority ? b.priority - a.priority : a.minOrderAmount - b.minOrderAmount));
+
+    const matchingRule = sortedRules.find((rule) => {
+      if (foodPrice < rule.minOrderAmount) return false;
+      if (rule.maxOrderAmount === null || rule.maxOrderAmount === undefined) return true;
+      return foodPrice <= rule.maxOrderAmount;
+    });
+
+    if (matchingRule) {
+      return matchingRule.type === "percentage"
+        ? (foodPrice * matchingRule.value) / 100
+        : matchingRule.value;
+    }
+
+    const fallbackType = commissionSetup.defaultCommission?.type || "percentage";
+    const fallbackValue = commissionSetup.defaultCommission?.value ?? 10;
+    return fallbackType === "percentage" ? (foodPrice * fallbackValue) / 100 : fallbackValue;
+  };
+
+  let deliveredOrders = await Order.find({
+    ...restaurantIdQuery,
+    status: "delivered",
+    $or: [
+      { deliveredAt: { $gte: cycleStart, $lte: cycleEnd } },
+      { "tracking.delivered.timestamp": { $gte: cycleStart, $lte: cycleEnd } }
+    ]
+  })
+    .select("pricing")
+    .lean();
+
+  if (deliveredOrders.length === 0) {
+    deliveredOrders = await Order.find({
+      ...restaurantIdQuery,
+      status: "delivered",
+      createdAt: { $gte: cycleStart, $lte: cycleEnd }
+    })
+      .select("pricing")
+      .lean();
+  }
+
+  const cyclePayout = deliveredOrders.reduce((sum, order) => {
+    const foodPrice = (order?.pricing?.subtotal || 0) - (order?.pricing?.discount || 0);
+    const commission = calculateCommissionForOrder(foodPrice);
+    return sum + (foodPrice - commission);
+  }, 0);
+
+  const pendingApprovedRequests = await WithdrawalRequest.find({
+    restaurantId,
+    status: { $in: ["Pending", "Approved"] }
+  })
+    .select("amount")
+    .lean();
+
+  const lockedAmount = pendingApprovedRequests.reduce((sum, req) => sum + (Number(req.amount) || 0), 0);
+  return Math.max(0, Math.round((cyclePayout - lockedAmount) * 100) / 100);
+};
+
 /**
  * Create Withdrawal Request
  * POST /api/restaurant/withdrawal/request
@@ -25,7 +126,8 @@ const logger = winston.createLogger({
 export const createWithdrawalRequest = asyncHandler(async (req, res) => {
   try {
     const restaurant = req.restaurant;
-    const { amount } = req.body;
+    const rawAmount = Number(req.body?.amount);
+    const amount = Number.isFinite(rawAmount) ? Math.round(rawAmount * 100) / 100 : 0;
 
     if (!restaurant || !restaurant._id) {
       return errorResponse(res, 401, "Restaurant authentication required");
@@ -40,8 +142,26 @@ export const createWithdrawalRequest = asyncHandler(async (req, res) => {
       restaurant._id,
     );
 
+    // Dynamic DB reconciliation: finance page shows current-cycle available payout.
+    // Use the same DB-derived payout for validation and keep wallet aligned.
+    const availableFromFinance = await getCurrentCycleAvailablePayout(restaurant._id);
+    const availableFromWallet = Number(wallet.totalBalance) || 0;
+    const effectiveAvailableBalance = Math.max(availableFromWallet, availableFromFinance);
+
+    if (effectiveAvailableBalance > availableFromWallet) {
+      const delta = Math.round((effectiveAvailableBalance - availableFromWallet) * 100) / 100;
+      if (delta > 0) {
+        wallet.addTransaction({
+          amount: delta,
+          type: "payment",
+          status: "Completed",
+          description: "Finance balance sync from delivered orders"
+        });
+      }
+    }
+
     // Check if sufficient balance
-    const availableBalance = wallet.totalBalance || 0;
+    const availableBalance = effectiveAvailableBalance;
     if (amount > availableBalance) {
       return errorResponse(
         res,
@@ -51,19 +171,7 @@ export const createWithdrawalRequest = asyncHandler(async (req, res) => {
       );
     }
 
-    // Check for pending requests
-    const pendingRequest = await WithdrawalRequest.findOne({
-      restaurantId: restaurant._id,
-      status: "Pending",
-    });
-
-    if (pendingRequest) {
-      return errorResponse(
-        res,
-        400,
-        "You already have a pending withdrawal request",
-      );
-    }
+    // Multiple pending requests are allowed as long as available balance is sufficient.
 
     // Get restaurant details
     const restaurantDetails = await Restaurant.findById(restaurant._id).select(

@@ -132,6 +132,14 @@ export default function AdminHome() {
   }
   const transactionTime = transactionTimeMap[selectedPeriod] || "All Time"
   const transactionReportPath = `/admin/transaction-report?time=${encodeURIComponent(transactionTime)}`
+  const periodLabelMap = {
+    overall: "All time",
+    today: "Today",
+    week: "This week",
+    month: "This month",
+    year: "This year",
+  }
+  const selectedPeriodLabel = periodLabelMap[selectedPeriod] || "All time"
 
   const pieData = orderStats.map((item) => ({
     name: item.label,
@@ -174,7 +182,7 @@ export default function AdminHome() {
             <MetricCard
               title="Gross revenue"
               value={`₹${revenueTotal.toLocaleString("en-IN")}`}
-              helper="Rolling 12 months"
+              helper={selectedPeriodLabel}
               icon={<ShoppingBag className="h-5 w-5 text-emerald-600" />}
               accent="bg-emerald-200/40"
               path={transactionReportPath}
@@ -322,7 +330,7 @@ export default function AdminHome() {
               <CardHeader className="flex flex-col gap-2 border-b border-neutral-200 pb-4">
                 <CardTitle className="text-lg text-neutral-900">Revenue trajectory</CardTitle>
                 <p className="text-sm text-neutral-500">
-                  Commission and gross revenue with monthly order volume
+                  Commission and gross revenue with order volume for {selectedPeriodLabel.toLowerCase()}
                 </p>
               </CardHeader>
               <CardContent className="pt-4">

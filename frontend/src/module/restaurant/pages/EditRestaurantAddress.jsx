@@ -174,6 +174,7 @@ export default function EditRestaurantAddress() {
             setLocation(updatedLocation)
             // Dispatch event to notify other components
             window.dispatchEvent(new Event("addressUpdated"))
+            window.dispatchEvent(new Event("restaurantProfileRefresh"))
             setShowSelectOptionDialog(false)
             navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : "/restaurant")
           } else {

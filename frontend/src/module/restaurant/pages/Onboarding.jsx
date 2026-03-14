@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Image as ImageIcon, Upload, Clock, Calendar as CalendarIcon, Sparkles, X, Camera } from "lucide-react"
+import { Image as ImageIcon, Upload, Clock, Calendar as CalendarIcon, Sparkles, X, Camera, MapPin } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import {
@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { uploadAPI, api } from "@/lib/api"
+import { uploadAPI, api, locationAPI } from "@/lib/api"
 import { MobileTimePicker } from "@mui/x-date-pickers/MobileTimePicker"
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider"
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns"
@@ -221,6 +221,7 @@ export default function RestaurantOnboarding() {
   const [verifiedPhoneNumber, setVerifiedPhoneNumber] = useState("")
   const [keyboardInset, setKeyboardInset] = useState(0)
   const [isFssaiCalendarOpen, setIsFssaiCalendarOpen] = useState(false)
+  const [locating, setLocating] = useState(false)
 
   const [step1, setStep1] = useState({
     restaurantName: "",
@@ -234,6 +235,8 @@ export default function RestaurantOnboarding() {
       area: "",
       city: "",
       landmark: "",
+      latitude: null,
+      longitude: null,
     },
   })
 
@@ -333,6 +336,91 @@ export default function RestaurantOnboarding() {
     }
   }
 
+  const handleGetCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      toast.error("Geolocation is not supported by your browser")
+      return
+    }
+
+    setLocating(true)
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const { latitude, longitude } = position.coords
+          const response = await locationAPI.reverseGeocode(latitude, longitude)
+          
+          if (response?.data?.success) {
+            const data = response.data.data
+            const results = data.results || []
+            if (results.length > 0) {
+              const result = results[0]
+              const addressComponents = result.address_components || {}
+              
+              let extractedArea = ""
+              let extractedCity = ""
+              
+              if (Array.isArray(addressComponents)) {
+                const sublocality = addressComponents.find(c => 
+                  c.types?.includes('sublocality') || 
+                  c.types?.includes('sublocality_level_1') || 
+                  c.types?.includes('neighborhood')
+                )
+                extractedArea = sublocality?.long_name || ""
+                
+                const cityComp = addressComponents.find(c => c.types?.includes('locality'))
+                extractedCity = cityComp?.long_name || ""
+              } else {
+                extractedArea = addressComponents.area || ""
+                extractedCity = addressComponents.city || ""
+              }
+
+              setStep1(prev => ({
+                ...prev,
+                location: {
+                  ...prev.location,
+                  area: extractedArea || prev.location.area,
+                  city: extractedCity || prev.location.city,
+                  latitude,
+                  longitude
+                }
+              }))
+              toast.success("Location updated successfully")
+            }
+          } else {
+            setStep1(prev => ({
+              ...prev,
+              location: {
+                ...prev.location,
+                latitude,
+                longitude
+              }
+            }))
+            toast.success("Location coordinates updated")
+          }
+        } catch (err) {
+          console.error("Error getting location address:", err)
+          toast.error("Failed to get address. Coordinates saved.")
+          setStep1(prev => ({
+            ...prev,
+            location: {
+              ...prev.location,
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude
+            }
+          }))
+        } finally {
+          setLocating(false)
+        }
+      },
+      (error) => {
+        setLocating(false)
+        console.error("Geolocation error:", error)
+        toast.error("Failed to get your current location")
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    )
+  }
+
   const getImageLabel = (imageValue, fallbackLabel) => {
     if (!imageValue) return null
     if (imageValue instanceof File) return imageValue.name
@@ -376,6 +464,8 @@ export default function RestaurantOnboarding() {
             area: localData.step1.location?.area || "",
             city: localData.step1.location?.city || "",
             landmark: localData.step1.location?.landmark || "",
+            latitude: localData.step1.location?.latitude || null,
+            longitude: localData.step1.location?.longitude || null,
           },
         })
       }
@@ -477,6 +567,8 @@ export default function RestaurantOnboarding() {
                 area: data.step1.location?.area || "",
                 city: data.step1.location?.city || "",
                 landmark: data.step1.location?.landmark || "",
+                latitude: data.step1.location?.latitude || null,
+                longitude: data.step1.location?.longitude || null,
               },
             }))
           }
@@ -1253,6 +1345,15 @@ export default function RestaurantOnboarding() {
           <p className="text-sm text-gray-700">
             Add your restaurant's location for order pick-up.
           </p>
+          <button
+            type="button"
+            onClick={handleGetCurrentLocation}
+            disabled={locating}
+            className="flex items-center gap-1.5 text-xs font-medium text-black hover:opacity-80 transition-opacity border border-gray-200 px-3 py-1.5 rounded-sm bg-gray-50/50"
+          >
+            <MapPin className="w-3.5 h-3.5" />
+            {locating ? "Fetching location..." : "Use current location"}
+          </button>
           <Input
             value={step1.location?.addressLine1 || ""}
             onChange={(e) =>

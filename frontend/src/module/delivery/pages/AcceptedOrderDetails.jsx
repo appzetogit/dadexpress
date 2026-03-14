@@ -11,7 +11,8 @@ import {
   Home,
   FileText,
   UtensilsCrossed,
-  User
+  User,
+  Loader2
 } from "lucide-react"
 import { 
   getDeliveryOrderStatus, 
@@ -23,6 +24,8 @@ import {
 import { 
   getDeliveryOrderPaymentStatus 
 } from "../utils/deliveryWalletState"
+import { deliveryAPI } from "@/lib/api"
+import { toast } from "sonner"
 
 export default function AcceptedOrderDetails() {
   const navigate = useNavigate()
@@ -30,29 +33,111 @@ export default function AcceptedOrderDetails() {
   const [orderStatus, setOrderStatus] = useState(() => getDeliveryOrderStatus(orderId))
   const [paymentStatus, setPaymentStatus] = useState(() => getDeliveryOrderPaymentStatus(orderId))
   const [activeOrderInfo, setActiveOrderInfo] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [orderData, setOrderData] = useState(null)
+  const [statusUpdating, setStatusUpdating] = useState(false)
 
-  // Try to hydrate order details from localStorage (saved when order was accepted)
+  const mapBackendStatusToUiStatus = (status) => {
+    if (!status) return null
+    const normalized = String(status).toLowerCase().trim()
+    if (normalized === "accepted" || normalized === "confirmed") return DELIVERY_ORDER_STATUS.ACCEPTED
+    if (normalized === "picked_up" || normalized === "picked up" || normalized === "preparing" || normalized === "ready") return DELIVERY_ORDER_STATUS.PICKED_UP
+    if (normalized === "on_the_way" || normalized === "out_for_delivery" || normalized === "on the way") return DELIVERY_ORDER_STATUS.ON_THE_WAY
+    if (normalized === "delivered" || normalized === "completed") return DELIVERY_ORDER_STATUS.DELIVERED
+    if (normalized === "cancelled" || normalized === "canceled") return DELIVERY_ORDER_STATUS.CANCELLED
+    return null
+  }
+
+  // Fetch order details from database
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("deliveryActiveOrder")
-      if (!saved) {
+    const fetchOrderDetails = async () => {
+      if (!orderId) {
+        setLoading(false)
         return
       }
 
-      const parsed = JSON.parse(saved)
-      const storedOrderId =
-        parsed.orderId ||
-        parsed.restaurantInfo?.orderMongoId ||
-        parsed.restaurantInfo?.orderId ||
-        parsed.restaurantInfo?.id
+      try {
+        setLoading(true)
+        const response = await deliveryAPI.getOrderDetails(orderId)
+        
+        if (response?.data?.success && response.data.data?.order) {
+          const order = response.data.data.order
+          setOrderData(order)
+          const backendStatus = mapBackendStatusToUiStatus(order.status || order.deliveryState?.currentPhase)
+          if (backendStatus) {
+            setOrderStatus(backendStatus)
+            saveDeliveryOrderStatus(orderId, backendStatus)
+          }
+          
+          // Also update activeOrderInfo for backward compatibility
+          setActiveOrderInfo({
+            orderId: order.orderId || order._id,
+            _id: order._id,
+            customerName: order.userId?.name || order.userId?.fullName || "Customer",
+            customerAddress: order.address?.formattedAddress || order.address?.address || "Customer address",
+            customerPhone: order.userId?.phone,
+            customerLat: order.address?.location?.coordinates?.[1] || order.address?.location?.lat,
+            customerLng: order.address?.location?.coordinates?.[0] || order.address?.location?.lng,
+            name: order.restaurantId?.name || "Restaurant",
+            address: order.restaurantId?.address || order.restaurantId?.location?.formattedAddress || "Restaurant address",
+            lat: order.restaurantId?.location?.coordinates?.[1] || order.restaurantId?.location?.lat,
+            lng: order.restaurantId?.location?.coordinates?.[0] || order.restaurantId?.location?.lng,
+            phone: order.restaurantId?.phone || order.restaurantId?.ownerPhone,
+            ownerPhone: order.restaurantId?.ownerPhone,
+            restaurantPhone: order.restaurantId?.phone,
+            items: order.items || [],
+            total: order.pricing?.total || order.total || 0,
+            paymentMethod: order.paymentMethod || order.payment?.method || "cash",
+            status: order.status
+          })
+        } else {
+          // Fallback to localStorage if API fails
+          try {
+            const saved = localStorage.getItem("deliveryActiveOrder")
+            if (saved) {
+              const parsed = JSON.parse(saved)
+              const storedOrderId =
+                parsed.orderId ||
+                parsed.restaurantInfo?.orderMongoId ||
+                parsed.restaurantInfo?.orderId ||
+                parsed.restaurantInfo?.id
 
-      if (storedOrderId && orderId && storedOrderId === orderId) {
-        setActiveOrderInfo(parsed.restaurantInfo || null)
+              if (storedOrderId && storedOrderId === orderId) {
+                setActiveOrderInfo(parsed.restaurantInfo || null)
+              }
+            }
+          } catch (e) {
+            console.error("Failed to parse deliveryActiveOrder from localStorage", e)
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching order details:", error)
+        toast.error("Failed to load order details")
+        
+        // Fallback to localStorage
+        try {
+          const saved = localStorage.getItem("deliveryActiveOrder")
+          if (saved) {
+            const parsed = JSON.parse(saved)
+            const storedOrderId =
+              parsed.orderId ||
+              parsed.restaurantInfo?.orderMongoId ||
+              parsed.restaurantInfo?.orderId ||
+              parsed.restaurantInfo?.id
+
+            if (storedOrderId && storedOrderId === orderId) {
+              setActiveOrderInfo(parsed.restaurantInfo || null)
+            }
+          }
+        } catch (e) {
+          console.error("Failed to parse deliveryActiveOrder from localStorage", e)
+        }
+      } finally {
+        setLoading(false)
       }
-    } catch (e) {
-      // Don't break UI if parsing fails – just fall back to demo data
-      console.error("Failed to parse deliveryActiveOrder from localStorage", e)
     }
+
+    fetchOrderDetails()
   }, [orderId])
 
   // Listen for order status updates
@@ -76,6 +161,72 @@ export default function AcceptedOrderDetails() {
   }, [orderId])
 
   const statusMessage = getDeliveryStatusMessage(orderStatus)
+
+  const getOrderIdForApi = () => {
+    return orderData?._id || orderData?.orderId || activeOrderInfo?._id || activeOrderInfo?.orderId || orderId
+  }
+
+  const handleMarkPickedUp = async () => {
+    const apiOrderId = getOrderIdForApi()
+    if (!apiOrderId || statusUpdating) return
+    try {
+      setStatusUpdating(true)
+      await deliveryAPI.confirmReachedPickup(apiOrderId)
+      saveDeliveryOrderStatus(orderId, DELIVERY_ORDER_STATUS.PICKED_UP)
+      setOrderStatus(DELIVERY_ORDER_STATUS.PICKED_UP)
+      toast.success("Order marked as picked up")
+    } catch (error) {
+      console.error("Error marking order as picked up:", error)
+      toast.error("Failed to update order status")
+    } finally {
+      setStatusUpdating(false)
+    }
+  }
+
+  const handleMarkOnTheWay = async () => {
+    const apiOrderId = getOrderIdForApi()
+    if (!apiOrderId || statusUpdating) return
+    try {
+      setStatusUpdating(true)
+      await deliveryAPI.confirmReachedDrop(apiOrderId)
+      saveDeliveryOrderStatus(orderId, DELIVERY_ORDER_STATUS.ON_THE_WAY)
+      setOrderStatus(DELIVERY_ORDER_STATUS.ON_THE_WAY)
+      toast.success("Order marked as on the way")
+    } catch (error) {
+      console.error("Error marking order as on the way:", error)
+      toast.error("Failed to update order status")
+    } finally {
+      setStatusUpdating(false)
+    }
+  }
+
+  const handleMarkDelivered = async () => {
+    const apiOrderId = getOrderIdForApi()
+    if (!apiOrderId || statusUpdating) return
+    try {
+      setStatusUpdating(true)
+      await deliveryAPI.completeDelivery(apiOrderId)
+      saveDeliveryOrderStatus(orderId, DELIVERY_ORDER_STATUS.DELIVERED)
+      setOrderStatus(DELIVERY_ORDER_STATUS.DELIVERED)
+      // Notify wallet listeners so earnings/pocket cards refresh immediately.
+      window.dispatchEvent(new Event("deliveryWalletStateUpdated"))
+      // Remove from activeOrder when delivered
+      const activeOrder = localStorage.getItem('activeOrder')
+      if (activeOrder) {
+        const activeOrderData = JSON.parse(activeOrder)
+        if (activeOrderData.orderId === orderId) {
+          localStorage.removeItem('activeOrder')
+          window.dispatchEvent(new CustomEvent('activeOrderUpdated'))
+        }
+      }
+      toast.success("Order marked as delivered")
+    } catch (error) {
+      console.error("Error marking order as delivered:", error)
+      toast.error("Failed to update order status")
+    } finally {
+      setStatusUpdating(false)
+    }
+  }
 
   const normalizePhoneNumber = (value) => {
     if (value === null || value === undefined) return ""
@@ -158,77 +309,104 @@ export default function AcceptedOrderDetails() {
   })()
 
   // Build order data – prefer real backend data, fall back to design/demo values
-  const orderData = {
-    id:
-      orderId ||
-      activeOrderInfo?.orderId ||
-      activeOrderInfo?._id ||
-      "100102",
-    status: orderStatus,
-    deliveryTime: "1 - 5 Min",
-    customer: {
-      name:
-        activeOrderInfo?.customerName ||
-        "Customer",
-      address:
-        activeOrderInfo?.customerAddress ||
-        "Customer address",
-      image:
-        "https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=100&h=100&fit=crop&q=80"
-    },
-    restaurant: {
-      name: activeOrderInfo?.name || "Hungry Puppets",
-      address: activeOrderInfo?.address || "House: 00, Road: 00, Tes..",
-      rating: 3.3
-    },
-    items:
-      normalizedItems ||
-      [
-        {
-          id: 1,
-          name: "Medu Vada",
-          price: 95.0,
-          variation: "Capacity (1 Person)",
-          quantity: 1,
-          type: "Non Veg",
-          image:
-            "https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=100&h=100&fit=crop&q=80"
+  const buildOrderData = () => {
+    if (!orderData && !activeOrderInfo) {
+      return {
+        id: orderId || "100102",
+        status: orderStatus,
+        deliveryTime: "1 - 5 Min",
+        customer: {
+          name: "Customer",
+          address: "Customer address",
+          image: "https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=100&h=100&fit=crop&q=80"
         },
-        {
-          id: 2,
-          name: "grilled lemon herb mediterrane...",
-          price: 540.0,
-          variation: "Size (Small)",
-          quantity: 1,
-          type: "Non Veg",
-          image:
-            "https://images.unsplash.com/photo-1544025162-d76694265947?w=100&h=100&fit=crop&q=80"
-        }
-      ],
-    cutlery: "No",
-    paymentMethod: {
-      status: paymentStatus,
-      method:
-        activeOrderInfo?.paymentMethod === "cod" ||
-        activeOrderInfo?.paymentMethod === "cash_on_delivery"
-          ? "Cash"
-          : activeOrderInfo?.paymentMethod
-          ? activeOrderInfo.paymentMethod.toString()
-          : "Cash"
-    },
-    billing: {
-      subtotal:
-        typeof activeOrderInfo?.total === "number"
-          ? activeOrderInfo.total
-          : 697.35,
-      deliverymanTips: 0.0,
-      total:
-        typeof activeOrderInfo?.total === "number"
-          ? activeOrderInfo.total
-          : 697.35
-    },
-    statusMessage: statusMessage.message,
-    statusDescription: statusMessage.description
+        restaurant: {
+          name: "Hungry Puppets",
+          address: "House: 00, Road: 00, Tes..",
+          rating: 3.3
+        },
+        items: [],
+        cutlery: "No",
+        paymentMethod: {
+          status: paymentStatus,
+          method: "Cash"
+        },
+        billing: {
+          subtotal: 0,
+          deliverymanTips: 0.0,
+          total: 0
+        },
+        statusMessage: statusMessage.message,
+        statusDescription: statusMessage.description
+      }
+    }
+
+    const order = orderData || {}
+    const info = activeOrderInfo || {}
+    
+    // Calculate delivery time estimate
+    const eta = order.eta || {}
+    const minEta = eta.min || eta.minETA || 1
+    const maxEta = eta.max || eta.maxETA || 5
+    const deliveryTime = `${minEta} - ${maxEta} Min`
+
+    return {
+      id: order.orderId || order._id || orderId || info.orderId || info._id || "100102",
+      status: orderStatus,
+      deliveryTime,
+      customer: {
+        name: order.userId?.name || order.userId?.fullName || info.customerName || "Customer",
+        address: order.address?.formattedAddress || order.address?.address || info.customerAddress || "Customer address",
+        phone: order.userId?.phone || info.customerPhone,
+        lat: order.address?.location?.coordinates?.[1] || order.address?.location?.lat || info.customerLat,
+        lng: order.address?.location?.coordinates?.[0] || order.address?.location?.lng || info.customerLng,
+        image: "https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=100&h=100&fit=crop&q=80"
+      },
+      restaurant: {
+        name: order.restaurantId?.name || info.name || "Restaurant",
+        address: order.restaurantId?.address || order.restaurantId?.location?.formattedAddress || info.address || "Restaurant address",
+        phone: order.restaurantId?.phone || order.restaurantId?.ownerPhone || info.phone || info.ownerPhone || info.restaurantPhone,
+        lat: order.restaurantId?.location?.coordinates?.[1] || order.restaurantId?.location?.lat || info.lat,
+        lng: order.restaurantId?.location?.coordinates?.[0] || order.restaurantId?.location?.lng || info.lng,
+        rating: order.restaurantId?.rating || 3.3
+      },
+      items: normalizedItems || [],
+      cutlery: order.cutlery || "No",
+      paymentMethod: {
+        status: paymentStatus,
+        method: 
+          order.paymentMethod === "cod" || 
+          order.paymentMethod === "cash_on_delivery" ||
+          order.payment?.method === "cod" ||
+          order.payment?.method === "cash_on_delivery" ||
+          info.paymentMethod === "cod" ||
+          info.paymentMethod === "cash_on_delivery"
+            ? "Cash"
+            : order.paymentMethod || order.payment?.method || info.paymentMethod || "Cash"
+      },
+      billing: {
+        subtotal: order.pricing?.subtotal || order.subtotal || (typeof info.total === "number" ? info.total : 0),
+        deliveryFee: order.pricing?.deliveryFee || order.deliveryFee || 0,
+        discount: order.pricing?.discount || order.discount || 0,
+        deliverymanTips: order.pricing?.deliverymanTips || 0.0,
+        total: order.pricing?.total || order.total || (typeof info.total === "number" ? info.total : 0)
+      },
+      statusMessage: statusMessage.message,
+      statusDescription: statusMessage.description
+    }
+  }
+
+  const displayOrderData = buildOrderData()
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#f6e9dc] flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 text-[#ff8100] animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">Loading order details...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -242,8 +420,8 @@ export default function AcceptedOrderDetails() {
           <ArrowLeft className="w-6 h-6 text-gray-900" />
         </button>
         <div className="flex-1 text-center">
-          <p className="text-gray-900 font-medium">Order #{orderData.id}</p>
-          <p className="text-[#ff8100] text-sm font-medium">{orderData.status}</p>
+          <p className="text-gray-900 font-medium">Order #{displayOrderData.id}</p>
+          <p className="text-[#ff8100] text-sm font-medium">{displayOrderData.status}</p>
         </div>
         <div className="w-10"></div>
       </div>
@@ -263,7 +441,7 @@ export default function AcceptedOrderDetails() {
           </div>
           <div>
             <p className="text-gray-500 text-sm">Food need to deliver within</p>
-            <p className="text-[#ff8100] font-bold text-lg">{orderData.deliveryTime}</p>
+            <p className="text-[#ff8100] font-bold text-lg">{displayOrderData.deliveryTime}</p>
           </div>
         </div>
       </div>
@@ -276,18 +454,19 @@ export default function AcceptedOrderDetails() {
           <div className="bg-gray-50 rounded-lg p-4">
             <div className="flex items-start gap-4">
               <img 
-                src={orderData.customer.image}
-                alt="Food"
+                src={displayOrderData.customer.image}
+                alt="Customer"
                 className="w-12 h-12 rounded-lg object-cover"
               />
               <div className="flex-1 min-w-0">
-                <p className="text-gray-900 font-medium mb-1">{orderData.customer.name}</p>
-                <p className="text-gray-600 text-sm whitespace-nowrap overflow-hidden text-ellipsis">{orderData.customer.address}</p>
+                <p className="text-gray-900 font-medium mb-1">{displayOrderData.customer.name}</p>
+                <p className="text-gray-600 text-sm whitespace-nowrap overflow-hidden text-ellipsis">{displayOrderData.customer.address}</p>
               </div>
               <div className="flex items-center gap-1.5 flex-shrink-0">
                 <button 
                   onClick={() => {
-                    navigate("/delivery/profile/conversation")
+                    const userId = orderData?.userId?._id || orderData?.userId || displayOrderData.customer.phone
+                    navigate(`/delivery/profile/conversation/chat?orderId=${orderId}&type=customer&userId=${userId}`)
                   }}
                   className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-[#ff8100] flex items-center justify-center hover:bg-[#e67300] transition-colors flex-shrink-0"
                 >
@@ -296,13 +475,14 @@ export default function AcceptedOrderDetails() {
                 <button 
                   onClick={() => {
                     const customerPhone = normalizePhoneNumber(
+                      displayOrderData.customer.phone ||
+                      orderData?.userId?.phone ||
                       activeOrderInfo?.customerPhone ||
-                      activeOrderInfo?.userId?.phone ||
-                      activeOrderInfo?.phone
+                      activeOrderInfo?.userId?.phone
                     )
 
                     if (!customerPhone) {
-                      window.alert("Customer phone number not available")
+                      toast.error("Customer phone number not available")
                       return
                     }
 
@@ -315,13 +495,13 @@ export default function AcceptedOrderDetails() {
                 <button 
                   onClick={() => {
                     const opened = openNavigationMap({
-                      lat: activeOrderInfo?.customerLat,
-                      lng: activeOrderInfo?.customerLng,
-                      address: orderData.customer.address
+                      lat: displayOrderData.customer.lat || orderData?.address?.location?.coordinates?.[1] || orderData?.address?.location?.lat,
+                      lng: displayOrderData.customer.lng || orderData?.address?.location?.coordinates?.[0] || orderData?.address?.location?.lng,
+                      address: displayOrderData.customer.address
                     })
 
                     if (!opened) {
-                      window.alert("Customer location not available")
+                      toast.error("Customer location not available")
                     }
                   }}
                   className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-gray-300 flex items-center justify-center hover:bg-gray-400 transition-colors flex-shrink-0"
@@ -342,19 +522,20 @@ export default function AcceptedOrderDetails() {
                 <ChefHat className="w-6 h-6 text-white" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-gray-900 font-medium mb-1">{orderData.restaurant.name}</p>
-                <p className="text-gray-600 text-sm mb-1 whitespace-nowrap overflow-hidden text-ellipsis">{orderData.restaurant.address}</p>
+                <p className="text-gray-900 font-medium mb-1">{displayOrderData.restaurant.name}</p>
+                <p className="text-gray-600 text-sm mb-1 whitespace-nowrap overflow-hidden text-ellipsis">{displayOrderData.restaurant.address}</p>
                 <div className="flex items-center gap-1">
                   <div className="w-4 h-4 bg-[#ff8100] rounded-full flex items-center justify-center">
                     <span className="text-white text-[8px]">★</span>
                   </div>
-                  <span className="text-gray-600 text-sm">({orderData.restaurant.rating})</span>
+                  <span className="text-gray-600 text-sm">({displayOrderData.restaurant.rating})</span>
                 </div>
               </div>
               <div className="flex items-center gap-1.5 flex-shrink-0">
                 <button 
                   onClick={() => {
-                    navigate("/delivery/profile/conversation")
+                    const restaurantId = orderData?.restaurantId?._id || orderData?.restaurantId || displayOrderData.restaurant.phone
+                    navigate(`/delivery/profile/conversation/chat?orderId=${orderId}&type=restaurant&restaurantId=${restaurantId}`)
                   }}
                   className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-[#ff8100] flex items-center justify-center hover:bg-[#e67300] transition-colors flex-shrink-0"
                 >
@@ -363,13 +544,16 @@ export default function AcceptedOrderDetails() {
                 <button 
                   onClick={() => {
                     const restaurantPhone = normalizePhoneNumber(
+                      displayOrderData.restaurant.phone ||
+                      orderData?.restaurantId?.phone ||
+                      orderData?.restaurantId?.ownerPhone ||
                       activeOrderInfo?.phone ||
                       activeOrderInfo?.ownerPhone ||
                       activeOrderInfo?.restaurantPhone
                     )
 
                     if (!restaurantPhone) {
-                      window.alert("Restaurant phone number not available")
+                      toast.error("Restaurant phone number not available")
                       return
                     }
 
@@ -382,13 +566,13 @@ export default function AcceptedOrderDetails() {
                 <button 
                   onClick={() => {
                     const opened = openNavigationMap({
-                      lat: activeOrderInfo?.lat,
-                      lng: activeOrderInfo?.lng,
-                      address: orderData.restaurant.address
+                      lat: displayOrderData.restaurant.lat || orderData?.restaurantId?.location?.coordinates?.[1] || orderData?.restaurantId?.location?.lat,
+                      lng: displayOrderData.restaurant.lng || orderData?.restaurantId?.location?.coordinates?.[0] || orderData?.restaurantId?.location?.lng,
+                      address: displayOrderData.restaurant.address
                     })
 
                     if (!opened) {
-                      window.alert("Restaurant location not available")
+                      toast.error("Restaurant location not available")
                     }
                   }}
                   className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-gray-300 flex items-center justify-center hover:bg-gray-400 transition-colors flex-shrink-0"
@@ -402,50 +586,56 @@ export default function AcceptedOrderDetails() {
 
         {/* Item Info */}
         <div>
-          <h3 className="text-gray-900 font-semibold mb-3">Item Info ({orderData.items.length})</h3>
+          <h3 className="text-gray-900 font-semibold mb-3">Item Info ({displayOrderData.items.length})</h3>
           <div className="space-y-4">
-            {orderData.items.map((item) => (
-              <div key={item.id} className="bg-gray-50 rounded-lg p-4">
-                <div className="flex items-start gap-4">
-                  <img 
-                    src={item.image}
-                    alt={item.name}
-                    className="w-16 h-16 rounded-lg object-cover"
-                  />
-                  <div className="flex-1">
-                    <p className="text-gray-900 font-medium mb-1">{item.name}</p>
-                    <p className="text-gray-900 font-semibold mb-1">₹ {item.price.toFixed(2)}</p>
-                    <p className="text-gray-600 text-sm">Variations: {item.variation}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-gray-900 font-medium mb-2">Quantity: {item.quantity}</p>
-                    <span className="inline-block bg-[#ff8100] text-white text-xs font-medium px-3 py-1 rounded">
-                      {item.type}
-                    </span>
+            {displayOrderData.items.length > 0 ? (
+              displayOrderData.items.map((item) => (
+                <div key={item.id} className="bg-gray-50 rounded-lg p-4">
+                  <div className="flex items-start gap-4">
+                    <img 
+                      src={item.image}
+                      alt={item.name}
+                      className="w-16 h-16 rounded-lg object-cover"
+                    />
+                    <div className="flex-1">
+                      <p className="text-gray-900 font-medium mb-1">{item.name}</p>
+                      <p className="text-gray-900 font-semibold mb-1">₹ {item.price.toFixed(2)}</p>
+                      <p className="text-gray-600 text-sm">Variations: {item.variation}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-gray-900 font-medium mb-2">Quantity: {item.quantity}</p>
+                      <span className="inline-block bg-[#ff8100] text-white text-xs font-medium px-3 py-1 rounded">
+                        {item.type}
+                      </span>
+                    </div>
                   </div>
                 </div>
+              ))
+            ) : (
+              <div className="bg-gray-50 rounded-lg p-4 text-center">
+                <p className="text-gray-500">No items found</p>
               </div>
-            ))}
+            )}
           </div>
         </div>
 
         {/* Cutlery */}
         <div className="flex items-center justify-between py-2">
           <span className="text-gray-900 font-medium">Cutlery:</span>
-          <span className="text-gray-900 font-medium">{orderData.cutlery}</span>
+          <span className="text-gray-900 font-medium">{displayOrderData.cutlery}</span>
         </div>
 
         {/* Payment Method */}
         <div className="bg-gray-50 rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
             <span className="text-gray-900 font-medium">Payment Method</span>
-            <span className="text-red-600 font-medium">{orderData.paymentMethod.status}</span>
+            <span className="text-red-600 font-medium">{displayOrderData.paymentMethod.status}</span>
           </div>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center">
               <DollarSign className="w-5 h-5 text-white" />
             </div>
-            <span className="text-gray-900 font-medium">{orderData.paymentMethod.method}</span>
+            <span className="text-gray-900 font-medium">{displayOrderData.paymentMethod.method}</span>
           </div>
         </div>
 
@@ -455,15 +645,15 @@ export default function AcceptedOrderDetails() {
           <div className="bg-gray-50 rounded-lg p-4 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-gray-600">Subtotal</span>
-              <span className="text-gray-900 font-medium">₹ {orderData.billing.subtotal.toFixed(2)}</span>
+              <span className="text-gray-900 font-medium">₹ {displayOrderData.billing.subtotal.toFixed(2)}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-gray-600">Deliveryman Tips</span>
-              <span className="text-gray-900 font-medium">(+) ₹ {orderData.billing.deliverymanTips.toFixed(2)}</span>
+              <span className="text-gray-900 font-medium">(+) ₹ {displayOrderData.billing.deliverymanTips.toFixed(2)}</span>
             </div>
             <div className="flex items-center justify-between pt-3 border-t border-gray-300">
               <span className="text-[#ff8100] font-semibold">Total Amount</span>
-              <span className="text-[#ff8100] font-bold text-lg">₹ {orderData.billing.total.toFixed(2)}</span>
+              <span className="text-[#ff8100] font-bold text-lg">₹ {displayOrderData.billing.total.toFixed(2)}</span>
             </div>
           </div>
         </div>
@@ -522,46 +712,31 @@ export default function AcceptedOrderDetails() {
             <div className="bg-white rounded-lg shadow-lg p-3 space-y-2">
               {normalizedStatus === DELIVERY_ORDER_STATUS.ACCEPTED && (
                 <button
-                  onClick={() => {
-                    saveDeliveryOrderStatus(orderId, DELIVERY_ORDER_STATUS.PICKED_UP)
-                    setOrderStatus(DELIVERY_ORDER_STATUS.PICKED_UP)
-                  }}
-                  className="w-full bg-[#ff8100] hover:bg-[#e67300] text-white font-semibold py-3 rounded-lg transition-colors"
+                  onClick={handleMarkPickedUp}
+                  disabled={statusUpdating}
+                  className="w-full bg-[#ff8100] hover:bg-[#e67300] disabled:opacity-60 text-white font-semibold py-3 rounded-lg transition-colors"
                 >
-                  Mark as Picked Up
+                  {statusUpdating ? "Updating..." : "Mark as Picked Up"}
                 </button>
               )}
               
               {normalizedStatus === DELIVERY_ORDER_STATUS.PICKED_UP && (
                 <button
-                  onClick={() => {
-                    saveDeliveryOrderStatus(orderId, DELIVERY_ORDER_STATUS.ON_THE_WAY)
-                    setOrderStatus(DELIVERY_ORDER_STATUS.ON_THE_WAY)
-                  }}
-                  className="w-full bg-[#ff8100] hover:bg-[#e67300] text-white font-semibold py-3 rounded-lg transition-colors"
+                  onClick={handleMarkOnTheWay}
+                  disabled={statusUpdating}
+                  className="w-full bg-[#ff8100] hover:bg-[#e67300] disabled:opacity-60 text-white font-semibold py-3 rounded-lg transition-colors"
                 >
-                  Mark as On the Way
+                  {statusUpdating ? "Updating..." : "Mark as On the Way"}
                 </button>
               )}
               
               {normalizedStatus === DELIVERY_ORDER_STATUS.ON_THE_WAY && (
                 <button
-                  onClick={() => {
-                    saveDeliveryOrderStatus(orderId, DELIVERY_ORDER_STATUS.DELIVERED)
-                    setOrderStatus(DELIVERY_ORDER_STATUS.DELIVERED)
-                    // Remove from activeOrder when delivered
-                    const activeOrder = localStorage.getItem('activeOrder')
-                    if (activeOrder) {
-                      const activeOrderData = JSON.parse(activeOrder)
-                      if (activeOrderData.orderId === orderId) {
-                        localStorage.removeItem('activeOrder')
-                        window.dispatchEvent(new CustomEvent('activeOrderUpdated'))
-                      }
-                    }
-                  }}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-lg transition-colors"
+                  onClick={handleMarkDelivered}
+                  disabled={statusUpdating}
+                  className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-semibold py-3 rounded-lg transition-colors"
                 >
-                  Mark as Delivered
+                  {statusUpdating ? "Updating..." : "Mark as Delivered"}
                 </button>
               )}
             </div>
@@ -569,11 +744,6 @@ export default function AcceptedOrderDetails() {
         )
       })()}
 
-      {/* Bottom Status Bar - Above Navigation */}
-      <div className="fixed bottom-16 md:bottom-0 left-0 right-0 bg-[#ff8100]/80 backdrop-blur-md px-4 py-4 z-[60] shadow-lg md:pb-4">
-        <p className="text-gray-900 font-bold text-center mb-1">{orderData.statusMessage}</p>
-        <p className="text-gray-600 text-sm text-center">{orderData.statusDescription}</p>
-      </div>
     </div>
   )
 }

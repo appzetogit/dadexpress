@@ -187,6 +187,7 @@ export default function EditOwner() {
         
         // Dispatch event to notify parent page
         window.dispatchEvent(new Event("ownerDataUpdated"))
+        window.dispatchEvent(new Event("restaurantProfileRefresh"))
         
         // Update local state
         setOwnerData({ ...formData })

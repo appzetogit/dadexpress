@@ -26,6 +26,88 @@ const logger = winston.createLogger({
   ],
 });
 
+const toValidDate = (value) => {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const isBetweenDates = (value, start, end) => {
+  const date = toValidDate(value);
+  if (!date) return false;
+  if (start && date < start) return false;
+  if (end && date > end) return false;
+  return true;
+};
+
+const getDashboardOrderEventDate = (order) => {
+  switch (order?.status) {
+    case "confirmed":
+      return order?.tracking?.confirmed?.timestamp || order?.createdAt || null;
+    case "preparing":
+      return order?.tracking?.preparing?.timestamp || order?.tracking?.confirmed?.timestamp || order?.createdAt || null;
+    case "ready":
+      return order?.tracking?.ready?.timestamp || order?.tracking?.preparing?.timestamp || order?.createdAt || null;
+    case "out_for_delivery":
+      return order?.tracking?.outForDelivery?.timestamp || order?.tracking?.ready?.timestamp || order?.createdAt || null;
+    case "delivered":
+      return order?.deliveredAt || order?.tracking?.delivered?.timestamp || order?.createdAt || null;
+    case "cancelled":
+      return order?.cancelledAt || order?.createdAt || null;
+    case "pending":
+    default:
+      return order?.createdAt || null;
+  }
+};
+
+const getDashboardChartBuckets = (period, now) => {
+  if (period === "today") {
+    return Array.from({ length: 12 }, (_, index) => {
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), index * 2, 0, 0, 0);
+      const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), index * 2 + 1, 59, 59, 999);
+      const labelHour = start.getHours().toString().padStart(2, "0");
+      return { label: `${labelHour}:00`, start, end };
+    });
+  }
+
+  if (period === "week") {
+    return Array.from({ length: 7 }, (_, index) => {
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (6 - index), 0, 0, 0, 0);
+      const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (6 - index), 23, 59, 59, 999);
+      return {
+        label: start.toLocaleDateString("en-US", { weekday: "short" }),
+        start,
+        end,
+      };
+    });
+  }
+
+  if (period === "month") {
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    return Array.from({ length: daysInMonth }, (_, index) => {
+      const start = new Date(now.getFullYear(), now.getMonth(), index + 1, 0, 0, 0, 0);
+      const end = new Date(now.getFullYear(), now.getMonth(), index + 1, 23, 59, 59, 999);
+      return {
+        label: `${index + 1}`,
+        start,
+        end,
+      };
+    });
+  }
+
+  const monthCount = period === "year" ? 12 : 12;
+  return Array.from({ length: monthCount }, (_, index) => {
+    const monthOffset = monthCount - 1 - index;
+    const start = new Date(now.getFullYear(), now.getMonth() - monthOffset, 1, 0, 0, 0, 0);
+    const end = new Date(now.getFullYear(), now.getMonth() - monthOffset + 1, 0, 23, 59, 59, 999);
+    return {
+      label: start.toLocaleDateString("en-US", { month: "short" }),
+      start,
+      end,
+    };
+  });
+};
+
 /**
  * Get Admin Dashboard Statistics
  * GET /api/admin/dashboard/stats
@@ -164,23 +246,40 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       0,
     );
 
-    // Get order statistics
-    const orderStats = await Order.aggregate([
-      {
-        $group: {
-          _id: "$status",
-          count: { $sum: 1 },
-        },
-      },
-    ]);
+    // Get order statistics aligned with the selected period using each status event timestamp.
+    const orderFlowQuery = periodStart
+      ? {
+          $or: [
+            { createdAt: { $gte: periodStart, $lte: now } },
+            { deliveredAt: { $gte: periodStart, $lte: now } },
+            { cancelledAt: { $gte: periodStart, $lte: now } },
+            { "tracking.confirmed.timestamp": { $gte: periodStart, $lte: now } },
+            { "tracking.preparing.timestamp": { $gte: periodStart, $lte: now } },
+            { "tracking.ready.timestamp": { $gte: periodStart, $lte: now } },
+            { "tracking.outForDelivery.timestamp": { $gte: periodStart, $lte: now } },
+            { "tracking.delivered.timestamp": { $gte: periodStart, $lte: now } },
+          ],
+        }
+      : {};
 
-    const orderStatusMap = {};
-    orderStats.forEach((stat) => {
-      orderStatusMap[stat._id] = stat.count;
-    });
+    const orderFlowCandidates = await Order.find(orderFlowQuery)
+      .select("status createdAt deliveredAt cancelledAt tracking")
+      .lean();
+
+    const filteredOrderFlowOrders = periodStart
+      ? orderFlowCandidates.filter((order) =>
+          isBetweenDates(getDashboardOrderEventDate(order), periodStart, now),
+        )
+      : orderFlowCandidates;
+
+    const orderStatusMap = filteredOrderFlowOrders.reduce((acc, order) => {
+      const key = order?.status || "pending";
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
 
     // Get total orders processed (delivered) filtered by period
-    const totalOrders = await Order.countDocuments(deliveredOrderQuery);
+    const totalOrders = orderStatusMap.delivered || 0;
 
     // Get active partners count
     const activeRestaurants = await Restaurant.countDocuments({
@@ -329,85 +428,57 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       isActive: true,
     });
 
-    // Get monthly data for last 12 months
-    // Use aggregation to match orders with settlements by orderId and use order's deliveredAt
-    const monthlyData = [];
-    const monthNames = [
-      "Jan",
-      "Feb",
-      "Mar",
-      "Apr",
-      "May",
-      "Jun",
-      "Jul",
-      "Aug",
-      "Sep",
-      "Oct",
-      "Nov",
-      "Dec",
-    ];
+    // Build period-aware cash-flow chart data.
+    const chartBuckets = getDashboardChartBuckets(period, now);
+    const chartRangeStart = chartBuckets[0]?.start || new Date(now.getFullYear(), now.getMonth() - 11, 1);
+    const chartRangeEnd = chartBuckets[chartBuckets.length - 1]?.end || now;
+    const chartOrders = await Order.find({
+      status: "delivered",
+      deliveredAt: { $gte: chartRangeStart, $lte: chartRangeEnd },
+    })
+      .select("_id pricing deliveredAt tracking createdAt")
+      .lean();
 
-    for (let i = 11; i >= 0; i--) {
-      const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const monthEnd = new Date(
-        now.getFullYear(),
-        now.getMonth() - i + 1,
-        0,
-        23,
-        59,
-        59,
-        999,
-      );
+    const chartOrderIds = chartOrders.map((order) => order._id);
+    const chartSettlements = await OrderSettlement.find({
+      orderId: { $in: chartOrderIds },
+    })
+      .select("orderId adminEarning")
+      .lean();
 
-      // Get orders delivered in this month
-      const monthOrders = await Order.find({
-        status: "delivered",
-        deliveredAt: { $gte: monthStart, $lte: monthEnd },
-      })
-        .select("_id pricing deliveredAt")
-        .lean();
+    const chartSettlementMap = new Map();
+    chartSettlements.forEach((settlement) => {
+      chartSettlementMap.set(String(settlement.orderId), settlement);
+    });
 
-      // Get order IDs for this month
-      const monthOrderIds = monthOrders.map((o) => o._id);
+    const monthlyData = chartBuckets.map((bucket) => {
+      let bucketRevenue = 0;
+      let bucketCommission = 0;
+      let bucketOrders = 0;
 
-      // Get settlements for these orders (match by orderId, not by createdAt)
-      const monthSettlements = await OrderSettlement.find({
-        orderId: { $in: monthOrderIds },
-      })
-        .select("orderId adminEarning")
-        .lean();
+      chartOrders.forEach((order) => {
+        const deliveredDate =
+          order?.deliveredAt || order?.tracking?.delivered?.timestamp || order?.createdAt;
+        if (!isBetweenDates(deliveredDate, bucket.start, bucket.end)) {
+          return;
+        }
 
-      // Create a map of orderId to settlement for quick lookup
-      const settlementMap = new Map();
-      monthSettlements.forEach((s) => {
-        settlementMap.set(s.orderId.toString(), s);
-      });
+        bucketOrders += 1;
+        bucketRevenue += Number(order?.pricing?.total) || 0;
 
-      // Calculate revenue and commission from orders and their settlements
-      let monthRevenue = 0;
-      let monthCommission = 0;
-
-      monthOrders.forEach((order) => {
-        // Add revenue from order
-        monthRevenue += order.pricing?.total || 0;
-
-        // Get commission from matching settlement
-        const settlement = settlementMap.get(order._id.toString());
-        if (settlement && settlement.adminEarning) {
-          // Only add commission (restaurant commission), not totalEarning
-          monthCommission += settlement.adminEarning.commission || 0;
+        const settlement = chartSettlementMap.get(String(order._id));
+        if (settlement?.adminEarning) {
+          bucketCommission += Number(settlement.adminEarning.commission) || 0;
         }
       });
 
-      const monthOrdersCount = monthOrders.length;
-
-      monthlyData.push({
-        month: monthNames[monthStart.getMonth()],
-        revenue: Math.round(monthRevenue * 100) / 100,
-        commission: Math.round(monthCommission * 100) / 100,
-        orders: monthOrdersCount,
-      });
-    }
+      return {
+        month: bucket.label,
+        revenue: Math.round(bucketRevenue * 100) / 100,
+        commission: Math.round(bucketCommission * 100) / 100,
+        orders: bucketOrders,
+      };
+    });
 
     return successResponse(res, 200, "Dashboard stats retrieved successfully", {
       revenue: {

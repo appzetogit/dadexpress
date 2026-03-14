@@ -445,7 +445,7 @@ export default function OrderHelp() {
               <div className="pt-4 border-t">
                 <Button
                   className="w-full bg-primary-orange hover:opacity-90"
-                  onClick={() => alert("Live chat would open here with order context")}
+                  onClick={() => navigate(`/user/help/orders/${orderId}/chat`)}
                 >
                   <MessageCircle className="h-4 w-4 mr-2" />
                   Start Live Chat
