@@ -109,6 +109,12 @@ export default function RestaurantSignIn() {
       } else if (err?.message) {
         errorMessage = err.message
       }
+      
+      // Sanitize database error messages
+      if (errorMessage.includes("E11000") || errorMessage.includes("duplicate key") || errorMessage.includes("index:")) {
+        errorMessage = "An account with this information already exists. Please try logging in instead."
+      }
+      
       setError(errorMessage)
     }
   }

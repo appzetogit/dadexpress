@@ -380,7 +380,26 @@ restaurantSchema.pre("save", async function (next) {
       baseSlug = `restaurant-${this.restaurantId}`;
     }
 
-    this.slug = baseSlug;
+    // Check for duplicate slug and generate unique one if needed
+    let uniqueSlug = baseSlug;
+    let counter = 1;
+    const RestaurantModel = this.constructor;
+    
+    // Check if slug already exists (excluding current document if updating)
+    const existingDoc = await RestaurantModel.findOne({ slug: uniqueSlug });
+    if (existingDoc && (!this._id || existingDoc._id.toString() !== this._id.toString())) {
+      // Slug exists, generate unique one
+      while (true) {
+        uniqueSlug = `${baseSlug}-${counter}`;
+        const checkDoc = await RestaurantModel.findOne({ slug: uniqueSlug });
+        if (!checkDoc || (this._id && checkDoc._id.toString() === this._id.toString())) {
+          break; // Found unique slug
+        }
+        counter++;
+      }
+    }
+
+    this.slug = uniqueSlug;
   }
 
   // CRITICAL: For phone signups, ensure email field is completely unset (not null/undefined)

@@ -1131,27 +1131,80 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
       } catch (createError) {
         // Handle duplicate key error
         if (createError.code === 11000) {
-          logger.warn('Duplicate key error during restaurant creation, retrying find', { email });
-          restaurant = await Restaurant.findOne({ email });
-          if (!restaurant) {
-            logger.error('Restaurant not found after duplicate key error', { email });
-            throw createError;
-          }
-          // Link Google ID if not already linked
-          if (!restaurant.googleId) {
-            restaurant.googleId = firebaseUid;
-            restaurant.googleEmail = email;
-            if (!restaurant.profileImage && picture) {
-              restaurant.profileImage = { url: picture };
+          // Check if it's a slug duplicate error
+          if (createError.keyPattern && createError.keyPattern.slug) {
+            logger.warn('Slug duplicate key error during restaurant creation, retrying with unique slug', { 
+              email, 
+              slug: createError.keyValue?.slug 
+            });
+            // Retry with unique slug
+            const baseSlug = restaurantData.name
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, '-')
+              .replace(/(^-|-$)/g, '');
+            let counter = 1;
+            let uniqueSlug = `${baseSlug}-${counter}`;
+            while (await Restaurant.findOne({ slug: uniqueSlug })) {
+              counter++;
+              uniqueSlug = `${baseSlug}-${counter}`;
             }
-            if (!restaurant.signupMethod) {
-              restaurant.signupMethod = 'google';
+            restaurantData.slug = uniqueSlug;
+            try {
+              restaurant = await Restaurant.create(restaurantData);
+              logger.info('New restaurant registered via Firebase Google login with unique slug', {
+                firebaseUid,
+                email,
+                restaurantId: restaurant._id,
+                name: restaurant.name,
+                slug: uniqueSlug
+              });
+            } catch (retryError) {
+              // If still fails, check if restaurant exists by email
+              restaurant = await Restaurant.findOne({ email });
+              if (!restaurant) {
+                logger.error('Restaurant not found after slug retry', { email });
+                throw new Error('Failed to create restaurant. Please try again.');
+              }
+              // Link Google ID if not already linked
+              if (!restaurant.googleId) {
+                restaurant.googleId = firebaseUid;
+                restaurant.googleEmail = email;
+                if (!restaurant.profileImage && picture) {
+                  restaurant.profileImage = { url: picture };
+                }
+                if (!restaurant.signupMethod) {
+                  restaurant.signupMethod = 'google';
+                }
+                await restaurant.save();
+              }
             }
-            await restaurant.save();
+          } else {
+            // Other duplicate key errors (email, googleId, etc.)
+            logger.warn('Duplicate key error during restaurant creation, retrying find', { 
+              email,
+              keyPattern: createError.keyPattern 
+            });
+            restaurant = await Restaurant.findOne({ email });
+            if (!restaurant) {
+              logger.error('Restaurant not found after duplicate key error', { email });
+              throw new Error('Failed to create restaurant. Please try again.');
+            }
+            // Link Google ID if not already linked
+            if (!restaurant.googleId) {
+              restaurant.googleId = firebaseUid;
+              restaurant.googleEmail = email;
+              if (!restaurant.profileImage && picture) {
+                restaurant.profileImage = { url: picture };
+              }
+              if (!restaurant.signupMethod) {
+                restaurant.signupMethod = 'google';
+              }
+              await restaurant.save();
+            }
           }
         } else {
           logger.error('Error creating restaurant via Firebase Google login', { error: createError.message, email });
-          throw createError;
+          throw new Error('Failed to create restaurant. Please try again.');
         }
       }
     }
