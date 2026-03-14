@@ -681,6 +681,9 @@ export default function DeliveryHome() {
   const [pickupImageUrl, setPickupImageUrl] = useState(null)
   const [isUploadingPickup, setIsUploadingPickup] = useState(false)
   const [pickupImageUploaded, setPickupImageUploaded] = useState(false)
+  const [showPickupOtpOption, setShowPickupOtpOption] = useState(false)
+  const [pickupOtp, setPickupOtp] = useState("")
+  const canConfirmPickup = pickupImageUploaded || pickupOtp.length === 4
   const [dropImageUrl, setDropImageUrl] = useState(null)
   const [isUploadingDrop, setIsUploadingDrop] = useState(false)
   const [dropImageUploaded, setDropImageUploaded] = useState(false)
@@ -1649,7 +1652,9 @@ export default function DeliveryHome() {
                       lastLocationRef.current = [lat, lng]
                     }
                   },
-                  (err) => false && console.warn("⚠️ Retry failed:", err),
+                  (err) => {
+                    console.warn("⚠️ Retry failed:", err)
+                  },
                   { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
                 )
               }
@@ -1675,7 +1680,9 @@ export default function DeliveryHome() {
                       lastLocationRef.current = [lat, lng]
                     }
                   },
-                  (err) => false && console.warn("⚠️ Retry failed:", err),
+                  (err) => {
+                    console.warn("⚠️ Retry failed:", err)
+                  },
                   { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
                 )
               }
@@ -3799,9 +3806,9 @@ export default function DeliveryHome() {
   }
 
   const handleOrderIdConfirmTouchEnd = (e) => {
-    // Disable swipe if pickup photo is not uploaded
-    if (!pickupImageUploaded) {
-      toast.error('Please upload pickup photo first')
+    // Disable swipe if pickup photo or OTP is not provided
+    if (!canConfirmPickup) {
+      toast.error('Please upload pickup photo or enter OTP first')
       setSliderProgressImmediate('orderIdConfirm', 0, setOrderIdConfirmButtonProgress)
       return
     }
@@ -10706,7 +10713,7 @@ export default function DeliveryHome() {
               </p>
 
               {/* Camera Button */}
-              <div className="flex justify-center mb-4">
+              <div className="flex justify-center mb-2">
                 <button
                   onClick={() => handleCameraCapture('pickup')}
                   disabled={isUploadingPickup}
@@ -10736,6 +10743,39 @@ export default function DeliveryHome() {
                 </button>
               </div>
 
+              {/* Optional: Try another way (OTP) */}
+              <div className="mb-4 text-center">
+                <button
+                  type="button"
+                  className="text-sm font-medium text-blue-600 hover:text-blue-700 underline"
+                  onClick={() => setShowPickupOtpOption((prev) => !prev)}
+                >
+                  Try another way
+                </button>
+
+                {showPickupOtpOption && (
+                  <div className="mt-3">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                      Or enter 4-digit OTP (optional)
+                    </label>
+                    <input
+                      type="tel"
+                      inputMode="numeric"
+                      maxLength={4}
+                      value={pickupOtp}
+                      onChange={(e) =>
+                        setPickupOtp(e.target.value.replace(/[^0-9]/g, "").slice(0, 4))
+                      }
+                      className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 text-center tracking-[0.4em] text-lg font-semibold"
+                      placeholder="••••"
+                    />
+                    <p className="mt-1 text-[11px] text-gray-500">
+                      Use this only if you are not able to upload a pickup photo.
+                    </p>
+                  </div>
+                )}
+              </div>
+
               {/* Hidden file input for camera (sr-only keeps it in DOM for mobile camera) */}
               <input
                 id="pickup-camera-input"
@@ -10752,17 +10792,17 @@ export default function DeliveryHome() {
             <div className="relative w-full">
               <motion.div
                 ref={orderIdConfirmButtonRef}
-                className={`relative w-full rounded-full overflow-hidden shadow-xl ${pickupImageUploaded ? 'bg-green-600' : 'bg-gray-400 cursor-not-allowed'
+                className={`relative w-full rounded-full overflow-hidden shadow-xl ${canConfirmPickup ? 'bg-green-600' : 'bg-gray-400 cursor-not-allowed'
                   }`}
                 style={{
-                  touchAction: pickupImageUploaded ? 'pan-x' : 'none',
-                  opacity: pickupImageUploaded ? 1 : 0.6
+                  touchAction: canConfirmPickup ? 'pan-x' : 'none',
+                  opacity: canConfirmPickup ? 1 : 0.6
                 }}
-                onTouchStart={pickupImageUploaded ? handleOrderIdConfirmTouchStart : undefined}
-                onTouchMove={pickupImageUploaded ? handleOrderIdConfirmTouchMove : undefined}
-                onTouchEnd={pickupImageUploaded ? handleOrderIdConfirmTouchEnd : undefined}
-                onTouchCancel={pickupImageUploaded ? handleOrderIdConfirmTouchEnd : undefined}
-                whileTap={pickupImageUploaded ? { scale: 0.98 } : {}}
+                onTouchStart={canConfirmPickup ? handleOrderIdConfirmTouchStart : undefined}
+                onTouchMove={canConfirmPickup ? handleOrderIdConfirmTouchMove : undefined}
+                onTouchEnd={canConfirmPickup ? handleOrderIdConfirmTouchEnd : undefined}
+                onTouchCancel={canConfirmPickup ? handleOrderIdConfirmTouchEnd : undefined}
+                whileTap={canConfirmPickup ? { scale: 0.98 } : {}}
               >
                 {/* Swipe progress background */}
                 <motion.div
@@ -10808,7 +10848,7 @@ export default function DeliveryHome() {
                         damping: 25
                       } : { duration: 0 }}
                     >
-                      {!pickupImageUploaded
+                      {!canConfirmPickup
                         ? 'Upload Photo First'
                         : orderIdConfirmButtonProgress > 0.5
                           ? 'Release to Confirm'
