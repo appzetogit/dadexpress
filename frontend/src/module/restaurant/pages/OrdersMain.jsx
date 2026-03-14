@@ -2076,11 +2076,12 @@ export default function OrdersMain() {
               </div>
 
               <div className="flex items-center justify-between text-[11px] text-gray-500 mb-4">
-                {/* Hide ETA for ready orders */}
-                {selectedOrder.status !== 'ready' && selectedOrder.eta && (
-                  <span>ETA: <span className="font-medium text-black">{selectedOrder.eta}</span></span>
-                )}
-                <span>Payment: <span className="font-medium text-black">Paid online</span></span>
+                <span>Payment: <span className="font-medium text-black">{(() => {
+                  const raw = selectedOrder.paymentMethod ?? selectedOrder.payment?.method;
+                  const m = raw != null ? String(raw).toLowerCase().trim() : '';
+                  const isCod = m === 'cash' || m === 'cod';
+                  return isCod ? 'Cash on Delivery' : 'Paid online';
+                })()}</span></span>
               </div>
 
               {selectedOrder.deliveryInstruction && (
@@ -2178,6 +2179,7 @@ function OrderCard({
   photoUrl,
   photoAlt,
   deliveryPartnerId,
+  paymentMethod,
   onSelect,
   onCancel,
   onMarkReady,
@@ -2213,6 +2215,8 @@ function OrderCard({
             eta,
             itemsSummary,
             deliveryInstruction,
+            deliveryPartnerId,
+            paymentMethod,
           })
         }
         className="w-full text-left flex gap-3 items-stretch cursor-pointer"
@@ -2311,15 +2315,6 @@ function OrderCard({
                 </div>
               )}
             </div>
-            {/* Hide ETA for ready orders */}
-            {status !== 'ready' && eta && (
-              <div className="flex items-baseline gap-1">
-                <span className="text-[11px] text-gray-500">ETA</span>
-                <span className="text-xs font-medium text-black">
-                  {eta}
-                </span>
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -2379,7 +2374,8 @@ function PreparingOrders({ onSelectOrder, onCancel }) {
               deliveryInstruction: order.deliveryInstruction || '',
               photoUrl: order.items?.[0]?.image || null,
               photoAlt: order.items?.[0]?.name || 'Order',
-              deliveryPartnerId: order.deliveryPartnerId || null // Track if delivery partner is assigned
+              deliveryPartnerId: order.deliveryPartnerId || null, // Track if delivery partner is assigned
+              paymentMethod: order.paymentMethod ?? order.payment?.method // Store payment method for display
             }
           })
 
@@ -2598,6 +2594,7 @@ function PreparingOrders({ onSelectOrder, onCancel }) {
                 photoUrl={order.photoUrl}
                 photoAlt={order.photoAlt}
                 deliveryPartnerId={order.deliveryPartnerId}
+                paymentMethod={order.paymentMethod}
                 onSelect={onSelectOrder}
                 onCancel={onCancel}
                 onMarkReady={() => handleMarkOrderReady(order)}
@@ -2650,7 +2647,8 @@ function ReadyOrders({ onSelectOrder }) {
             itemsSummary: order.items?.map(item => `${item.quantity}x ${item.name}`).join(', ') || 'No items',
             deliveryInstruction: order.deliveryInstruction || '',
             photoUrl: order.items?.[0]?.image || null,
-            photoAlt: order.items?.[0]?.name || 'Order'
+            photoAlt: order.items?.[0]?.name || 'Order',
+            paymentMethod: order.paymentMethod ?? order.payment?.method
           }))
 
           if (isMounted) {
@@ -2775,7 +2773,8 @@ const OutForDeliveryOrders = ({ onSelectOrder }) => {
             itemsSummary: order.items?.map(item => `${item.quantity}x ${item.name}`).join(', ') || 'No items',
             deliveryInstruction: order.deliveryInstruction || '',
             photoUrl: order.items?.[0]?.image || null,
-            photoAlt: order.items?.[0]?.name || 'Order'
+            photoAlt: order.items?.[0]?.name || 'Order',
+            paymentMethod: order.paymentMethod ?? order.payment?.method
           }))
 
           if (isMounted) {
