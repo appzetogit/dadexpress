@@ -40,7 +40,7 @@ if (import.meta.env.DEV) {
  */
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000, // 30 seconds
+  timeout: 60000, // 60 seconds - increased for slow server handling
   headers: {
     "Content-Type": "application/json",
   },
@@ -559,10 +559,10 @@ apiClient.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    // Handle timeout errors (ECONNABORTED)
+    // Handle timeout errors (ECONNABORTED) with retry logic for slow server
     if (error.code === "ECONNABORTED" || error.message?.includes("timeout")) {
       // Timeout errors are usually due to slow backend or network issues
-      // Don't spam console with timeout errors, but handle them gracefully
+      // Retry logic: Automatically retry timeout errors up to 2 times with exponential backoff
 
       // SILENT: Don't show timeout toast for delivery order accept/action APIs
       // These run in background after popup is already closed
@@ -579,6 +579,33 @@ apiClient.interceptors.response.use(
         return Promise.reject(error)
       }
 
+      // Retry logic for timeout errors (max 2 retries)
+      const retryCount = originalRequest._retryCount || 0
+      const maxRetries = 2
+
+      // Don't retry auth endpoints or if already retried max times
+      const isAuthEndpoint =
+        requestUrl.includes("/auth/login") ||
+        requestUrl.includes("/auth/signup") ||
+        requestUrl.includes("/auth/register") ||
+        requestUrl.includes("/auth/firebase/google-login")
+
+      if (retryCount < maxRetries && !isAuthEndpoint) {
+        // Increment retry count
+        originalRequest._retryCount = retryCount + 1
+
+        // Exponential backoff: wait 1s, 2s, 4s before retry
+        const delay = Math.min(1000 * Math.pow(2, retryCount), 4000)
+
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, delay))
+
+        // Retry the request with increased timeout
+        originalRequest.timeout = 60000 // Keep 60s timeout for retry
+        return apiClient(originalRequest)
+      }
+
+      // Max retries reached or auth endpoint - show error
       const now = Date.now()
       const timeSinceLastError = now - networkErrorState.lastErrorTime
       const timeSinceLastToast = now - networkErrorState.lastToastTime
@@ -595,7 +622,7 @@ apiClient.interceptors.response.use(
 
         // Show helpful error message (only once per minute)
         toast.error(
-          `Request timeout - Backend may be slow or not responding. Check server status.`,
+          `Request timeout - Backend may be slow or not responding. Please try again.`,
           {
             duration: 8000,
             id: "timeout-error-toast", // Use ID to prevent duplicate toasts

@@ -18,6 +18,31 @@ const debugLog = (...args) => {
 }
 const isPageVisible = () => typeof document !== "undefined" && document.visibilityState === "visible"
 
+// Normalize order status for UI in cases where legacy records have stale order.status
+// but delivery state already indicates completion.
+const getEffectiveOrderStatus = (order) => {
+  if (!order) return ""
+
+  const baseStatus = order.status || ""
+  const deliveryPhase = order.deliveryState?.currentPhase || ""
+  const deliveryStatus = order.deliveryState?.status || ""
+  const isDeliveredByTracking = !!order.tracking?.delivered?.status
+  const hasDeliveredAt = !!order.deliveredAt
+
+  if (
+    baseStatus === "delivered" ||
+    baseStatus === "completed" ||
+    deliveryPhase === "completed" ||
+    deliveryStatus === "delivered" ||
+    isDeliveredByTracking ||
+    hasDeliveredAt
+  ) {
+    return "delivered"
+  }
+
+  return baseStatus
+}
+
 // Top filter tabs
 const filterTabs = [
   { id: "preparing", label: "Preparing" },
@@ -50,14 +75,15 @@ function CompletedOrders({ onSelectOrder }) {
         if (!isMounted) return
 
         if (response.data?.success && response.data.data?.orders) {
-          const completedOrders = response.data.data.orders.filter(
-            order => order.status === 'delivered' || order.status === 'completed'
-          )
+          const completedOrders = response.data.data.orders.filter((order) => {
+            const effectiveStatus = getEffectiveOrderStatus(order)
+            return effectiveStatus === "delivered" || effectiveStatus === "completed"
+          })
 
           const transformedOrders = completedOrders.map(order => ({
             orderId: order.orderId || order._id,
             mongoId: order._id,
-            status: order.status || 'delivered',
+            status: getEffectiveOrderStatus(order) || 'delivered',
             customerName: order.userId?.name || 'Customer',
             type: order.deliveryFleet === 'standard' ? 'Home Delivery' : 'Express Delivery',
             tableOrToken: null,
@@ -263,13 +289,13 @@ function CancelledOrders({ onSelectOrder }) {
         if (response.data?.success && response.data.data?.orders) {
           // Filter cancelled orders (both restaurant and user cancelled)
           const cancelledOrders = response.data.data.orders.filter(
-            order => order.status === 'cancelled'
+            order => getEffectiveOrderStatus(order) === 'cancelled'
           )
 
           const transformedOrders = cancelledOrders.map(order => ({
             orderId: order.orderId || order._id,
             mongoId: order._id,
-            status: order.status || 'cancelled',
+            status: getEffectiveOrderStatus(order) || 'cancelled',
             customerName: order.userId?.name || 'Customer',
             type: order.deliveryFleet === 'standard' ? 'Home Delivery' : 'Express Delivery',
             tableOrToken: null,
@@ -2043,13 +2069,13 @@ export default function OrdersMain() {
                 </div>
                 <div className="flex flex-col items-end gap-1">
                   <span
-                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium border ${selectedOrder.status === "Ready"
+                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium border ${selectedOrder.status === "ready" || selectedOrder.status === "Ready"
                       ? "border-green-500 text-green-600"
                       : "border-gray-800 text-gray-900"
                       }`}
                   >
                     <span
-                      className={`h-1.5 w-1.5 rounded-full ${selectedOrder.status === "Ready"
+                      className={`h-1.5 w-1.5 rounded-full ${selectedOrder.status === "ready" || selectedOrder.status === "Ready"
                         ? "bg-green-500"
                         : "bg-gray-800"
                         }`}
@@ -2184,7 +2210,7 @@ function OrderCard({
   onMarkReady,
   isMarkingReady,
 }) {
-  const isReady = status === "Ready"
+  const isReady = status === "ready" || status === "Ready"
 
   return (
     <div className="w-full bg-white rounded-2xl p-4 mb-3 border border-gray-200 hover:border-gray-400 transition-colors relative">
@@ -2356,7 +2382,7 @@ function PreparingOrders({ onSelectOrder, onCancel }) {
           // 'confirmed' orders should only appear in popup notification, not in preparing list
           // After accepting, order status changes to 'preparing' and then appears here
           const preparingOrders = response.data.data.orders.filter(
-            order => order.status === 'preparing'
+            order => getEffectiveOrderStatus(order) === 'preparing'
           )
 
           const transformedOrders = preparingOrders.map(order => {
@@ -2368,7 +2394,7 @@ function PreparingOrders({ onSelectOrder, onCancel }) {
             return {
               orderId: order.orderId || order._id,
               mongoId: order._id,
-              status: order.status || 'preparing',
+              status: getEffectiveOrderStatus(order) || 'preparing',
               customerName: order.userId?.name || 'Customer',
               type: order.deliveryFleet === 'standard' ? 'Home Delivery' : 'Express Delivery',
               tableOrToken: null,
@@ -2638,13 +2664,13 @@ function ReadyOrders({ onSelectOrder }) {
         if (response.data?.success && response.data.data?.orders) {
           // Filter orders with 'ready' status
           const readyOrders = response.data.data.orders.filter(
-            order => order.status === 'ready'
+            order => getEffectiveOrderStatus(order) === 'ready'
           )
 
           const transformedOrders = readyOrders.map(order => ({
             orderId: order.orderId || order._id,
             mongoId: order._id,
-            status: order.status || 'ready',
+            status: getEffectiveOrderStatus(order) || 'ready',
             customerName: order.userId?.name || 'Customer',
             type: order.deliveryFleet === 'standard' ? 'Home Delivery' : 'Express Delivery',
             tableOrToken: null,
@@ -2764,13 +2790,13 @@ const OutForDeliveryOrders = ({ onSelectOrder }) => {
         if (response.data?.success && response.data.data?.orders) {
           // Filter orders with 'out_for_delivery' status
           const outForDeliveryOrders = response.data.data.orders.filter(
-            order => order.status === 'out_for_delivery'
+            order => getEffectiveOrderStatus(order) === 'out_for_delivery'
           )
 
           const transformedOrders = outForDeliveryOrders.map(order => ({
             orderId: order.orderId || order._id,
             mongoId: order._id,
-            status: order.status || 'out_for_delivery',
+            status: getEffectiveOrderStatus(order) || 'out_for_delivery',
             customerName: order.userId?.name || 'Customer',
             type: order.deliveryFleet === 'standard' ? 'Home Delivery' : 'Express Delivery',
             tableOrToken: null,
