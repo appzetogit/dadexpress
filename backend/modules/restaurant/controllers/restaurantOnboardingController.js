@@ -70,6 +70,8 @@ export const upsertOnboarding = async (req, res) => {
       completedSteps !== undefined
     ) {
       update["onboarding.completedSteps"] = completedSteps;
+      // Explicit completion flag for redirect/login logic.
+      update.isProfileCompleted = completedSteps >= 4;
     }
 
     // Persist the active onboarding step for reliable resume
@@ -366,6 +368,13 @@ export const upsertOnboarding = async (req, res) => {
         "✅ Onboarding is complete (step 4), finalizing restaurant data...",
       );
 
+      // Persist completion flag for login/redirect checks.
+      await Restaurant.findByIdAndUpdate(
+        restaurantId,
+        { $set: { isProfileCompleted: true } },
+        { new: false },
+      );
+
       // All individual steps have already updated the restaurant schema above
       // This section is kept for backward compatibility and final validation
 
@@ -376,7 +385,7 @@ export const upsertOnboarding = async (req, res) => {
       if (completeRestaurant && !completeRestaurant.approvedAt) {
         const pendingRestaurant = await Restaurant.findByIdAndUpdate(
           restaurantId,
-          { $set: { isActive: false, isAcceptingOrders: false } },
+          { $set: { isActive: false, isAcceptingOrders: false, isProfileCompleted: true } },
           { new: true },
         ).lean();
         if (pendingRestaurant) {

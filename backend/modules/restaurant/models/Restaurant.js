@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
-import { normalizePhoneNumber } from "../../../shared/utils/phoneUtils.js";
+import { normalizePhoneNumber, normalizePhoneNumberE164 } from "../../../shared/utils/phoneUtils.js";
 
 const locationSchema = new mongoose.Schema({
   latitude: Number,
@@ -57,6 +57,12 @@ const restaurantSchema = new mongoose.Schema(
       unique: true,
       sparse: true,
     },
+    // Consistent E.164-ish view of `phone` for comparisons/lookups, without breaking legacy `phone` format.
+    phoneE164: {
+      type: String,
+      trim: true,
+      default: null,
+    },
     phoneVerified: {
       type: Boolean,
       default: false,
@@ -94,6 +100,11 @@ const restaurantSchema = new mongoose.Schema(
         return !!this.phone;
       },
     },
+    ownerPhoneE164: {
+      type: String,
+      trim: true,
+      default: null,
+    },
     // Restaurant basic info
     name: {
       type: String,
@@ -108,6 +119,11 @@ const restaurantSchema = new mongoose.Schema(
       trim: true,
     },
     primaryContactNumber: String,
+    primaryContactNumberE164: {
+      type: String,
+      trim: true,
+      default: null,
+    },
     location: locationSchema,
     profileImage: {
       url: String,
@@ -139,6 +155,12 @@ const restaurantSchema = new mongoose.Schema(
     isAcceptingOrders: {
       type: Boolean,
       default: true,
+    },
+    // Explicit registration completion flag for onboarding redirect logic.
+    // Backward compatible: legacy records may not have onboarding data; controllers compute a safe fallback.
+    isProfileCompleted: {
+      type: Boolean,
+      default: false,
     },
     // Additional display data for user module
     estimatedDeliveryTime: {
@@ -369,6 +391,8 @@ restaurantSchema.pre("save", async function (next) {
     if (normalized) {
       this.phone = normalized;
     }
+    const e164 = normalizePhoneNumberE164(this.phone);
+    this.phoneE164 = e164 || this.phoneE164 || null;
   }
 
   // Normalize ownerPhone if it exists and is modified
@@ -377,6 +401,8 @@ restaurantSchema.pre("save", async function (next) {
     if (normalized) {
       this.ownerPhone = normalized;
     }
+    const e164 = normalizePhoneNumberE164(this.ownerPhone);
+    this.ownerPhoneE164 = e164 || this.ownerPhoneE164 || null;
   }
 
   // Normalize primaryContactNumber if it exists and is modified
@@ -385,6 +411,8 @@ restaurantSchema.pre("save", async function (next) {
     if (normalized) {
       this.primaryContactNumber = normalized;
     }
+    const e164 = normalizePhoneNumberE164(this.primaryContactNumber);
+    this.primaryContactNumberE164 = e164 || this.primaryContactNumberE164 || null;
   }
 
   // Generate slug from name (always generate if name exists and slug doesn't)

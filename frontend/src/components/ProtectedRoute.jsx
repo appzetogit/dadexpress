@@ -57,6 +57,23 @@ export default function ProtectedRoute({ children, requiredRole, loginPath }) {
     return <Navigate to={redirectPath} replace />;
   }
 
+  // Restaurant-specific guard: if auth exists but profile is incomplete, force onboarding.
+  // Backward compatible: only triggers when backend/client stored `isProfileCompleted === false`.
+  if (requiredRole === "restaurant") {
+    try {
+      const raw = localStorage.getItem("restaurant_user");
+      if (raw) {
+        const user = JSON.parse(raw);
+        const needsOnboarding = user?.isProfileCompleted === false;
+        const isOnboardingRoute = location.pathname.startsWith("/restaurant/onboarding");
+        if (needsOnboarding && !isOnboardingRoute) {
+          return <Navigate to="/restaurant/onboarding" replace />;
+        }
+      }
+    } catch {
+      // ignore storage parsing issues
+    }
+  }
+
   return children;
 }
-

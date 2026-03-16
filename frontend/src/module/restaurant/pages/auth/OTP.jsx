@@ -198,15 +198,16 @@ export default function RestaurantOTP() {
 
       if (accessToken && restaurant) {
         // Determine route synchronously before setting tokens that would trigger redirects
-        let targetRoute = "/restaurant";
-        if (!restaurant?.isActive) {
+        let targetRoute = "/restaurant"
+        if (restaurant?.isProfileCompleted === false) {
           try {
-            const incompleteStep = determineStepToShow(restaurant?.onboarding)
-            if (incompleteStep) {
-              targetRoute = `/restaurant/onboarding?step=${incompleteStep}`
-            }
+            const incompleteStep =
+              determineStepToShow(restaurant?.onboarding) ||
+              restaurant?.onboarding?.currentStep ||
+              1
+            targetRoute = `/restaurant/onboarding?step=${incompleteStep}`
           } catch {
-            // Fallback to dashboard if onboarding check fails
+            targetRoute = "/restaurant/onboarding"
           }
         }
 

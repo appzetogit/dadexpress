@@ -4,7 +4,7 @@ import jwtService from '../../auth/services/jwtService.js';
 import firebaseAuthService from '../../auth/services/firebaseAuthService.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
-import { normalizePhoneNumber } from '../../../shared/utils/phoneUtils.js';
+import { buildPhoneInQuery, normalizePhoneNumber, normalizePhoneNumberE164 } from '../../../shared/utils/phoneUtils.js';
 import winston from 'winston';
 
 /**
@@ -12,29 +12,20 @@ import winston from 'winston';
  * This handles both old data (without country code) and new data (with country code)
  */
 const buildPhoneQuery = (normalizedPhone) => {
-  if (!normalizedPhone) return null;
+  return buildPhoneInQuery(normalizedPhone, 'phone');
+};
 
-  let variants = [];
-  // Check if normalized phone has country code (starts with 91 and is 12 digits)
-  if (normalizedPhone.startsWith('91') && normalizedPhone.length === 12) {
-    // Search for both: with country code (917610416911) and without (7610416911)
-    const phoneWithoutCountryCode = normalizedPhone.substring(2);
-    variants = [
-      normalizedPhone,
-      phoneWithoutCountryCode,
-      `+${normalizedPhone}`,
-      `+91${phoneWithoutCountryCode}`
-    ];
-  } else {
-    // If it's already without country code, also check with country code
-    variants = [
-      normalizedPhone,
-      `91${normalizedPhone}`,
-      `+91${normalizedPhone}`,
-      `+${normalizedPhone}`
-    ];
-  }
-  return { phone: { $in: variants } };
+const computeIsProfileCompleted = (restaurant) => {
+  if (!restaurant) return false;
+  if (typeof restaurant.isProfileCompleted === 'boolean') return restaurant.isProfileCompleted;
+
+  const completedSteps = restaurant?.onboarding?.completedSteps;
+  if (typeof completedSteps === 'number') return completedSteps >= 4;
+
+  // Backward compatibility: older restaurants may not have the onboarding object at all.
+  if (restaurant?.onboarding === undefined || restaurant?.onboarding === null) return true;
+
+  return false;
 };
 
 const logger = winston.createLogger({
@@ -271,7 +262,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
               keyPattern: createError.keyPattern
             });
             // Try to find existing restaurant by phone
-            restaurant = await Restaurant.findOne({ phone });
+            restaurant = await Restaurant.findOne(buildPhoneQuery(normalizedPhone) || { phone: normalizedPhone || phone });
             if (restaurant) {
               return errorResponse(res, 400, `Restaurant already exists with this phone number. Please login.`);
             }
@@ -371,35 +362,10 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       }
     } else {
       // Login (with optional auto-registration)
-      // For phone, search in both formats (with and without country code) to handle old data
-      let findQuery;
-      if (normalizedPhone) {
-        // Check if normalized phone has country code (starts with 91 and is 12 digits)
-        if (normalizedPhone.startsWith('91') && normalizedPhone.length === 12) {
-          // Search for both: with country code (917610416911) and without (7610416911)
-          const phoneWithoutCountryCode = normalizedPhone.substring(2);
-          findQuery = {
-            $or: [
-              { phone: normalizedPhone },
-              { phone: phoneWithoutCountryCode },
-              { phone: `+${normalizedPhone}` },
-              { phone: `+91${phoneWithoutCountryCode}` }
-            ]
-          };
-        } else {
-          // If it's already without country code, also check with country code
-          findQuery = {
-            $or: [
-              { phone: normalizedPhone },
-              { phone: `91${normalizedPhone}` },
-              { phone: `+91${normalizedPhone}` },
-              { phone: `+${normalizedPhone}` }
-            ]
-          };
-        }
-      } else {
-        findQuery = { email: email?.toLowerCase().trim() };
-      }
+      // For phone, search in both formats (with and without country code) to handle old data.
+      const findQuery = normalizedPhone
+        ? (buildPhoneQuery(normalizedPhone) || { phone: normalizedPhone })
+        : { email: email?.toLowerCase().trim() };
       restaurant = await Restaurant.findOne(findQuery);
 
       // If restaurant not found, we will auto-register with a placeholder name
@@ -514,7 +480,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
                 keyPattern: createError.keyPattern
               });
               // Try to find existing restaurant by phone (search in both formats)
-              const phoneQuery = buildPhoneQuery(normalizedPhone) || { phone };
+              const phoneQuery = buildPhoneQuery(normalizedPhone) || { phone: normalizedPhone || phone };
               restaurant = await Restaurant.findOne(phoneQuery);
               if (restaurant) {
                 logger.info(`Restaurant found after email null duplicate key error: ${restaurant._id}`);
@@ -551,7 +517,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
                   // Check if it's still a duplicate key error
                   if (retryError.code === 11000) {
                     // Try to find restaurant again (search in both formats)
-                    const phoneQuery = buildPhoneQuery(normalizedPhone) || { phone };
+                    const phoneQuery = buildPhoneQuery(normalizedPhone) || { phone: normalizedPhone || phone };
                     restaurant = await Restaurant.findOne(phoneQuery);
                     if (restaurant) {
                       logger.info(`Restaurant found after retry error: ${restaurant._id}`);
@@ -566,7 +532,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
               }
             } else if (createError.keyPattern && createError.keyPattern.phone) {
               // Phone duplicate key error
-              restaurant = await Restaurant.findOne({ phone });
+              restaurant = await Restaurant.findOne(buildPhoneQuery(normalizedPhone) || { phone: normalizedPhone || phone });
               if (restaurant) {
                 logger.info(`Restaurant found after phone duplicate key error: ${restaurant._id}`);
                 // Continue with login flow
@@ -596,9 +562,9 @@ export const verifyOTP = asyncHandler(async (req, res) => {
                 });
               } catch (retryError) {
                 // If still fails, check if restaurant exists
-                const findQuery = phone
-                  ? { phone }
-                  : { email };
+                  const findQuery = phone
+                    ? (buildPhoneQuery(normalizedPhone) || { phone: normalizedPhone || phone })
+                    : { email };
                 restaurant = await Restaurant.findOne(findQuery);
                 if (!restaurant) {
                   throw retryError;
@@ -608,7 +574,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
             } else {
               // Other duplicate key errors (email, phone)
               const findQuery = phone
-                ? { phone }
+                ? (buildPhoneQuery(normalizedPhone) || { phone: normalizedPhone || phone })
                 : { email };
               restaurant = await Restaurant.findOne(findQuery);
               if (!restaurant) {
@@ -660,6 +626,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
     });
 
     // Return access token and restaurant info
+    const isProfileCompleted = computeIsProfileCompleted(restaurant);
     return successResponse(res, 200, 'Authentication successful', {
       accessToken: tokens.accessToken,
       user: {
@@ -668,10 +635,12 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         name: restaurant.name,
         email: restaurant.email,
         phone: restaurant.phone,
+        phoneE164: restaurant.phoneE164 || normalizePhoneNumberE164(restaurant.phone),
         phoneVerified: restaurant.phoneVerified,
         signupMethod: restaurant.signupMethod,
         profileImage: restaurant.profileImage,
         isActive: restaurant.isActive,
+        isProfileCompleted,
         onboarding: restaurant.onboarding
       },
       restaurant: {
@@ -680,10 +649,12 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         name: restaurant.name,
         email: restaurant.email,
         phone: restaurant.phone,
+        phoneE164: restaurant.phoneE164 || normalizePhoneNumberE164(restaurant.phone),
         phoneVerified: restaurant.phoneVerified,
         signupMethod: restaurant.signupMethod,
         profileImage: restaurant.profileImage,
         isActive: restaurant.isActive,
+        isProfileCompleted,
         onboarding: restaurant.onboarding
       }
     });
@@ -711,12 +682,16 @@ export const register = asyncHandler(async (req, res) => {
   }
 
   // Check if restaurant already exists
-  const existingRestaurant = await Restaurant.findOne({
-    $or: [
-      { email: email.toLowerCase().trim() },
-      ...(normalizedPhone ? [{ phone: normalizedPhone }] : [])
-    ]
-  });
+  const existingRestaurant = await Restaurant.findOne(
+    normalizedPhone
+      ? {
+          $or: [
+            { email: email.toLowerCase().trim() },
+            ...(buildPhoneQuery(normalizedPhone) ? [buildPhoneQuery(normalizedPhone)] : []),
+          ],
+        }
+      : { email: email.toLowerCase().trim() },
+  );
 
   if (existingRestaurant) {
     if (existingRestaurant.email === email.toLowerCase().trim()) {
@@ -778,6 +753,7 @@ export const register = asyncHandler(async (req, res) => {
 
   logger.info(`New restaurant registered via email: ${restaurant._id}`, { email, restaurantId: restaurant._id });
 
+  const isProfileCompleted = computeIsProfileCompleted(restaurant);
   return successResponse(res, 201, 'Registration successful', {
     accessToken: tokens.accessToken,
     restaurant: {
@@ -786,10 +762,12 @@ export const register = asyncHandler(async (req, res) => {
       name: restaurant.name,
       email: restaurant.email,
       phone: restaurant.phone,
+      phoneE164: restaurant.phoneE164 || normalizePhoneNumberE164(restaurant.phone),
       phoneVerified: restaurant.phoneVerified,
       signupMethod: restaurant.signupMethod,
       profileImage: restaurant.profileImage,
-      isActive: restaurant.isActive
+      isActive: restaurant.isActive,
+      isProfileCompleted
     }
   });
 });
@@ -869,6 +847,7 @@ export const login = asyncHandler(async (req, res) => {
 
   logger.info(`Restaurant logged in via email: ${restaurant._id}`, { email, restaurantId: restaurant._id });
 
+  const isProfileCompleted = computeIsProfileCompleted(restaurant);
   return successResponse(res, 200, 'Login successful', {
     accessToken: tokens.accessToken,
     restaurant: {
@@ -877,10 +856,12 @@ export const login = asyncHandler(async (req, res) => {
       name: restaurant.name,
       email: restaurant.email,
       phone: restaurant.phone,
+      phoneE164: restaurant.phoneE164 || normalizePhoneNumberE164(restaurant.phone),
       phoneVerified: restaurant.phoneVerified,
       signupMethod: restaurant.signupMethod,
       profileImage: restaurant.profileImage,
       isActive: restaurant.isActive,
+      isProfileCompleted,
       onboarding: restaurant.onboarding
     }
   });
@@ -1009,6 +990,7 @@ export const getCurrentRestaurant = asyncHandler(async (req, res) => {
   }
 
   // Restaurant is attached by authenticate middleware
+  const isProfileCompleted = computeIsProfileCompleted(req.restaurant);
   return successResponse(res, 200, 'Restaurant retrieved successfully', {
     restaurant: {
       id: req.restaurant._id,
@@ -1016,14 +998,17 @@ export const getCurrentRestaurant = asyncHandler(async (req, res) => {
       name: req.restaurant.name,
       email: req.restaurant.email,
       phone: req.restaurant.phone,
+      phoneE164: req.restaurant.phoneE164 || normalizePhoneNumberE164(req.restaurant.phone),
       phoneVerified: req.restaurant.phoneVerified,
       signupMethod: req.restaurant.signupMethod,
       profileImage: req.restaurant.profileImage,
       isActive: req.restaurant.isActive,
+      isProfileCompleted,
       onboarding: req.restaurant.onboarding,
       ownerName: req.restaurant.ownerName,
       ownerEmail: req.restaurant.ownerEmail,
       ownerPhone: req.restaurant.ownerPhone,
+      ownerPhoneE164: req.restaurant.ownerPhoneE164 || normalizePhoneNumberE164(req.restaurant.ownerPhone),
       // Include additional restaurant details
       cuisines: req.restaurant.cuisines,
       openDays: req.restaurant.openDays,
@@ -1303,6 +1288,7 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
       maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
     });
 
+    const isProfileCompleted = computeIsProfileCompleted(restaurant);
     return successResponse(res, 200, 'Firebase Google authentication successful', {
       accessToken: tokens.accessToken,
       restaurant: {
@@ -1311,10 +1297,12 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
         name: restaurant.name,
         email: restaurant.email,
         phone: restaurant.phone,
+        phoneE164: restaurant.phoneE164 || normalizePhoneNumberE164(restaurant.phone),
         phoneVerified: restaurant.phoneVerified,
         signupMethod: restaurant.signupMethod,
         profileImage: restaurant.profileImage,
         isActive: restaurant.isActive,
+        isProfileCompleted,
         onboarding: restaurant.onboarding
       }
     });
