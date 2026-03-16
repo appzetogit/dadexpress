@@ -1144,6 +1144,12 @@ export const adminAPI = {
     return apiClient.get(API_ENDPOINTS.ADMIN.RESTAURANTS, { params });
   },
 
+  getRestaurantReferralMappings: (params = {}) => {
+    return apiClient.get(API_ENDPOINTS.ADMIN.RESTAURANT_REFERRAL_MAPPINGS, {
+      params,
+    });
+  },
+
   // Create restaurant
   createRestaurant: (data) => {
     return apiClient.post(API_ENDPOINTS.ADMIN.RESTAURANTS, data);

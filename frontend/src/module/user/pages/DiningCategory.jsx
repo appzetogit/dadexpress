@@ -7,7 +7,6 @@ import AnimatedPage from "../components/AnimatedPage"
 import { useLocationSelector } from "../components/UserLayout"
 import { useLocation as useLocationHook } from "../hooks/useLocation"
 import { useProfile } from "../context/ProfileContext"
-import { FaLocationDot } from "react-icons/fa6"
 import { restaurantAPI } from "@/lib/api"
 
 export default function DiningCategory() {
@@ -182,7 +181,7 @@ export default function DiningCategory() {
               className="text-left text-gray-800 text-sm sm:text-base font-semibold rounded-full px-3 sm:px-4 py-2 hover:bg-gray-50 transition-colors"
             >
               <div className="flex items-center gap-2 min-w-0">
-                <FaLocationDot className="h-4 w-4 sm:h-5 sm:w-5 text-gray-700 flex-shrink-0" />
+                <MapPin className="h-4 w-4 sm:h-5 sm:w-5 text-gray-700 flex-shrink-0" />
                 <span className="text-sm sm:text-base font-semibold text-gray-800 truncate border-b-2 border-dotted border-gray-600">
                   {cityName}
                 </span>

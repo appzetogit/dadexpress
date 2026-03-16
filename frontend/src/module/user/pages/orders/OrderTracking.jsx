@@ -359,18 +359,64 @@ export default function OrderTracking() {
     return ""
   }, [order?.status, canUpdateLocationStatus, isDeliveryPartnerAssigned])
 
+  const etaReferenceMs = useMemo(() => {
+    const timestamp =
+      order?.eta?.lastUpdated ||
+      order?.updatedAt ||
+      order?.tracking?.outForDelivery?.timestamp ||
+      order?.tracking?.out_for_delivery?.timestamp ||
+      order?.tracking?.ready?.timestamp ||
+      order?.createdAt
+
+    const parsed = timestamp ? new Date(timestamp).getTime() : NaN
+    return Number.isFinite(parsed) ? parsed : null
+  }, [
+    order?.eta?.lastUpdated,
+    order?.updatedAt,
+    order?.tracking?.outForDelivery?.timestamp,
+    order?.tracking?.out_for_delivery?.timestamp,
+    order?.tracking?.ready?.timestamp,
+    order?.createdAt
+  ])
+
   const etaLabel = useMemo(() => {
     const minEta = Number(order?.eta?.min)
     const maxEta = Number(order?.eta?.max)
-    if (Number.isFinite(minEta) && Number.isFinite(maxEta)) {
-      return `${Math.round(minEta)}-${Math.round(maxEta)} mins`
-    }
     const estimated = Number(order?.estimatedDeliveryTime)
-    if (Number.isFinite(estimated)) {
-      return `${Math.round(estimated)} mins`
+    const routeToDeliveryDuration = Number(order?.deliveryState?.routeToDelivery?.duration)
+    const routeToPickupDuration = Number(order?.deliveryState?.routeToPickup?.duration)
+    const fallbackEstimated = Number.isFinite(estimated) && estimated > 0
+      ? estimated
+      : (Number.isFinite(routeToDeliveryDuration) && routeToDeliveryDuration > 0
+        ? routeToDeliveryDuration
+        : (Number.isFinite(routeToPickupDuration) && routeToPickupDuration > 0 ? routeToPickupDuration : NaN))
+    const elapsedMinutes = etaReferenceMs
+      ? Math.max(0, Math.floor((timerNow - etaReferenceMs) / 60000))
+      : 0
+
+    if (Number.isFinite(minEta) || Number.isFinite(maxEta)) {
+      const baseMin = Number.isFinite(minEta) ? minEta : maxEta
+      const baseMax = Number.isFinite(maxEta) ? maxEta : minEta
+      const liveMin = Math.max(1, Math.ceil(baseMin - elapsedMinutes))
+      const liveMax = Math.max(liveMin, Math.ceil(baseMax - elapsedMinutes))
+      return liveMin === liveMax ? `${liveMin} mins` : `${liveMin}-${liveMax} mins`
     }
+
+    if (Number.isFinite(fallbackEstimated)) {
+      const liveEstimated = Math.max(1, Math.ceil(fallbackEstimated - elapsedMinutes))
+      return `${liveEstimated} mins`
+    }
+
     return ""
-  }, [order?.eta?.min, order?.eta?.max, order?.estimatedDeliveryTime])
+  }, [
+    order?.eta?.min,
+    order?.eta?.max,
+    order?.estimatedDeliveryTime,
+    order?.deliveryState?.routeToDelivery?.duration,
+    order?.deliveryState?.routeToPickup?.duration,
+    etaReferenceMs,
+    timerNow
+  ])
 
   useEffect(() => {
     if (!order || showLocationDialog) return
@@ -388,12 +434,18 @@ export default function OrderTracking() {
   }, [order, showLocationDialog])
 
   useEffect(() => {
-    if (!isEditWindowOpen) return
+    const hasLiveEta = Boolean(
+      Number.isFinite(Number(order?.eta?.min)) ||
+      Number.isFinite(Number(order?.eta?.max)) ||
+      Number.isFinite(Number(order?.estimatedDeliveryTime))
+    )
+
+    if (!isEditWindowOpen && !hasLiveEta) return
     const interval = setInterval(() => {
       setTimerNow(Date.now())
     }, 1000)
     return () => clearInterval(interval)
-  }, [isEditWindowOpen])
+  }, [isEditWindowOpen, order?.eta?.min, order?.eta?.max, order?.estimatedDeliveryTime])
 
   // Poll for order updates (especially when delivery partner accepts)
   // Only poll if delivery partner is not yet assigned to avoid unnecessary updates
@@ -482,6 +534,7 @@ export default function OrderTracking() {
               assignmentInfo: apiOrder.assignmentInfo || null,
               deliveryState: apiOrder.deliveryState || null,
               createdAt: apiOrder.createdAt || null,
+              updatedAt: apiOrder.updatedAt || null,
               totalAmount: apiOrder.pricing?.total || apiOrder.totalAmount || 0,
               deliveryFee: apiOrder.pricing?.deliveryFee || apiOrder.deliveryFee || 0,
               gst: apiOrder.pricing?.gst || apiOrder.gst || 0,
@@ -617,6 +670,7 @@ export default function OrderTracking() {
             tracking: apiOrder.tracking || {},
             deliveryState: apiOrder.deliveryState || null,
             createdAt: apiOrder.createdAt || null,
+            updatedAt: apiOrder.updatedAt || null,
             totalAmount: apiOrder.pricing?.total || apiOrder.totalAmount || 0,
             deliveryFee: apiOrder.pricing?.deliveryFee || apiOrder.deliveryFee || 0,
             gst: apiOrder.pricing?.gst || apiOrder.gst || 0,
@@ -720,7 +774,16 @@ export default function OrderTracking() {
 
       // Update order status in UI
       if (status === 'out_for_delivery') {
-        setOrderStatus('on_way');
+        setOrderStatus('pickup');
+      } else if (status === 'delivered' || status === 'completed') {
+        setOrderStatus('delivered');
+      } else if (status === 'cancelled') {
+        setOrderStatus('cancelled');
+      }
+
+      // Keep order object in sync so all dependent UI uses latest status immediately.
+      if (status) {
+        setOrder((prev) => (prev ? { ...prev, status } : prev));
       }
 
       // Show notification toast
@@ -982,6 +1045,9 @@ export default function OrderTracking() {
             avatar: null
           } : null,
           tracking: apiOrder.tracking || {},
+          deliveryState: apiOrder.deliveryState || null,
+          createdAt: apiOrder.createdAt || null,
+          updatedAt: apiOrder.updatedAt || null,
           eta: apiOrder.eta || null,
           estimatedDeliveryTime: apiOrder.estimatedDeliveryTime ?? null,
           deliveryInstruction: apiOrder.deliveryInstruction || ''

@@ -20,8 +20,10 @@ const getFeeSettings = async () => {
     // Return default values if no active settings found
     return {
       deliveryFee: 25,
+      deliveryFeePerKm: 0,
       freeDeliveryThreshold: 149,
       platformFee: 5,
+      platformCommissionPercent: 0,
       gstRate: 5,
     };
   } catch (error) {
@@ -29,11 +31,30 @@ const getFeeSettings = async () => {
     // Return default values on error
     return {
       deliveryFee: 25,
+      deliveryFeePerKm: 0,
       freeDeliveryThreshold: 149,
       platformFee: 5,
+      platformCommissionPercent: 0,
       gstRate: 5,
     };
   }
+};
+
+const roundCurrency = (value) => Math.round((Number(value) || 0) * 100) / 100;
+
+const getPerKmDeliveryCharge = (feeSettings, restaurant, deliveryAddress) => {
+  const perKmRate = Number(feeSettings?.deliveryFeePerKm || 0);
+  const restaurantCoordinates = restaurant?.location?.coordinates;
+  const deliveryCoordinates = deliveryAddress?.location?.coordinates;
+
+  if (perKmRate <= 0) return 0;
+  if (!Array.isArray(restaurantCoordinates) || restaurantCoordinates.length < 2) return 0;
+  if (!Array.isArray(deliveryCoordinates) || deliveryCoordinates.length < 2) return 0;
+
+  const distanceKm = calculateDistance(restaurantCoordinates, deliveryCoordinates);
+  if (!Number.isFinite(distanceKm) || distanceKm <= 0) return 0;
+
+  return roundCurrency(distanceKm * perKmRate);
 };
 
 /**
@@ -42,6 +63,7 @@ const getFeeSettings = async () => {
 export const calculateDeliveryFee = async (orderValue, restaurant, deliveryAddress = null) => {
   // Get fee settings from database
   const feeSettings = await getFeeSettings();
+  const perKmCharge = getPerKmDeliveryCharge(feeSettings, restaurant, deliveryAddress);
 
   // 1) If delivery fee ranges are configured, they are the source of truth.
   // This avoids unintended FREE delivery from threshold defaults.
@@ -58,51 +80,47 @@ export const calculateDeliveryFee = async (orderValue, restaurant, deliveryAddre
       if (isLastRange) {
         // Last range: include max value
         if (orderValue >= range.min && orderValue <= range.max) {
-          return range.fee;
+          return roundCurrency(Number(range.fee) + perKmCharge);
         }
       } else {
         // Other ranges: exclude max value (handled by next range)
         if (orderValue >= range.min && orderValue < range.max) {
-          return range.fee;
+          return roundCurrency(Number(range.fee) + perKmCharge);
         }
       }
     }
 
     // If ranges exist but none matched, treat as free delivery.
-    return 0;
+    return roundCurrency(perKmCharge);
   }
 
   // 2) No ranges configured, use threshold-based free delivery logic.
   if (restaurant?.freeDeliveryAbove && orderValue >= restaurant.freeDeliveryAbove) {
-    return 0;
+    return roundCurrency(perKmCharge);
   }
 
   const freeDeliveryThreshold = feeSettings.freeDeliveryThreshold || 149;
   if (orderValue >= freeDeliveryThreshold) {
-    return 0;
+    return roundCurrency(perKmCharge);
   }
 
   // 3) Base delivery fee fallback.
   const baseDeliveryFee = feeSettings.deliveryFee || 25;
 
-  // TODO: Add distance-based calculation when address coordinates are available
-  // if (deliveryAddress?.location?.coordinates && restaurant?.location?.coordinates) {
-  //   const distance = calculateDistance(
-  //     restaurant.location.coordinates,
-  //     deliveryAddress.location.coordinates
-  //   );
-  //   deliveryFee = baseFee + (distance * perKmFee);
-  // }
-
-  return baseDeliveryFee;
+  return roundCurrency(baseDeliveryFee + perKmCharge);
 };
 
 /**
  * Calculate platform fee
  */
-export const calculatePlatformFee = async () => {
+export const calculatePlatformFee = async (subtotal = 0) => {
   const feeSettings = await getFeeSettings();
-  return feeSettings.platformFee || 5;
+  const fixedPlatformFee = Number(feeSettings.platformFee || 0);
+  const commissionPercent = Number(feeSettings.platformCommissionPercent || 0);
+  const commissionAmount = subtotal > 0 && commissionPercent > 0
+    ? (subtotal * commissionPercent) / 100
+    : 0;
+  return roundCurrency(fixedPlatformFee + commissionAmount);
 };
 
 /**
@@ -291,7 +309,7 @@ export const calculateOrderPricing = async ({
     const finalDeliveryFee = appliedCoupon?.freeDelivery ? 0 : deliveryFee;
 
     // Calculate platform fee
-    const platformFee = await calculatePlatformFee();
+    const platformFee = await calculatePlatformFee(subtotal);
 
     // Calculate GST on subtotal after discount
     const gst = await calculateGST(subtotal, discount);

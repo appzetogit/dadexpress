@@ -18,6 +18,7 @@ import {
   getUserById,
   updateUserStatus,
   getRestaurants,
+  getRestaurantReferralMappings,
   createRestaurant,
   getRestaurantById,
   updateRestaurant,
@@ -304,6 +305,7 @@ router.get("/customer-wallet-report", getCustomerWalletReport);
 router.get("/restaurants", getRestaurants);
 router.post("/restaurants", createRestaurant);
 router.get("/restaurants/requests", getRestaurantJoinRequests);
+router.get("/restaurants/referral-mapping", getRestaurantReferralMappings);
 router.get("/restaurant-analytics/:restaurantId", getRestaurantAnalytics);
 router.get("/restaurants/:id", getRestaurantById);
 router.put("/restaurants/:id", updateRestaurant);

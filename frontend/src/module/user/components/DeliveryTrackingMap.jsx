@@ -611,7 +611,14 @@ const DeliveryTrackingMap = ({
                 // Fallback: Move to nearest point on polyline (STAY ON ROAD)
                 const nearestPosition = new window.google.maps.LatLng(nearest.nearestPoint.lat, nearest.nearestPoint.lng);
                 bikeMarkerRef.current.setPosition(nearestPosition);
-                bikeMarkerRef.current.setRotation(heading || 0);
+                if (typeof bikeMarkerRef.current.setRotation === 'function') {
+                  bikeMarkerRef.current.setRotation(heading || 0);
+                } else if (typeof bikeMarkerRef.current.getIcon === 'function' && typeof bikeMarkerRef.current.setIcon === 'function') {
+                  const icon = bikeMarkerRef.current.getIcon();
+                  if (icon && typeof icon === 'object') {
+                    bikeMarkerRef.current.setIcon({ ...icon, rotation: heading || 0 });
+                  }
+                }
                 console.log('🛣️ Bike snapped to nearest road point:', nearest.nearestPoint);
               }
             }
@@ -625,13 +632,18 @@ const DeliveryTrackingMap = ({
             }
           }
         } else {
-          // CRITICAL: If no polyline, DO NOT show bike at raw GPS location
-          // Wait for route to be generated first
-          console.warn('⚠️⚠️⚠️ NO POLYLINE AVAILABLE - Bike marker NOT updated to prevent off-road display');
-          console.warn('⚠️ Waiting for route to be generated before showing bike position');
-          // Don't update marker position - keep it at last known position on route
-          // This prevents bike from jumping to buildings/footpaths
-          return; // Exit early - don't update marker
+          // Fallback to raw GPS when no route/polyline is available so live tracking never freezes.
+          const fallbackPosition = new window.google.maps.LatLng(lat, lng);
+          bikeMarkerRef.current.setPosition(fallbackPosition);
+          if (typeof bikeMarkerRef.current.setRotation === 'function') {
+            bikeMarkerRef.current.setRotation(heading || 0);
+          } else if (typeof bikeMarkerRef.current.getIcon === 'function' && typeof bikeMarkerRef.current.setIcon === 'function') {
+            const icon = bikeMarkerRef.current.getIcon();
+            if (icon && typeof icon === 'object') {
+              bikeMarkerRef.current.setIcon({ ...icon, rotation: heading || 0 });
+            }
+          }
+          console.log('📍 Updated bike marker using raw GPS fallback');
         }
 
         // Ensure bike is visible
@@ -656,11 +668,12 @@ const DeliveryTrackingMap = ({
     if (!trackingIds.length) return;
 
     socketRef.current = io(backendUrl, {
-      transports: ['websocket', 'polling'],
+      path: '/socket.io/',
+      transports: ['polling', 'websocket'],
       reconnection: true,
       reconnectionDelay: 500,
-      reconnectionAttempts: 5,
-      timeout: 5000
+      reconnectionAttempts: 10,
+      timeout: 10000
     });
 
     const handleRealtimeLocation = (data) => {

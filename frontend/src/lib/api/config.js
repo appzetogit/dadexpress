@@ -27,7 +27,9 @@ const normalizeApiBaseUrl = (inputUrl) => {
 
   // If protocol is missing, assume https in production-style URLs.
   if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(candidate)) {
-    candidate = `https://${candidate}`;
+    const looksLocalhost = /^localhost(?::\d+)?(\/|$)/i.test(candidate) ||
+      /^127\.0\.0\.1(?::\d+)?(\/|$)/i.test(candidate);
+    candidate = `${looksLocalhost ? "http" : "https"}://${candidate}`;
   }
 
   try {
@@ -267,6 +269,7 @@ export const API_ENDPOINTS = {
     USER_BY_ID: "/admin/users/:id",
     USER_STATUS: "/admin/users/:id/status",
     RESTAURANTS: "/admin/restaurants",
+    RESTAURANT_REFERRAL_MAPPINGS: "/admin/restaurants/referral-mapping",
     RESTAURANT_BY_ID: "/admin/restaurants/:id",
     RESTAURANT_ANALYTICS: "/admin/restaurant-analytics/:restaurantId",
     RESTAURANT_STATUS: "/admin/restaurants/:id/status",

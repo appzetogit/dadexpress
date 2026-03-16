@@ -7,6 +7,16 @@ import Restaurant from '../../restaurant/models/Restaurant.js';
 import mongoose from 'mongoose';
 import { calculateDistance } from './orderCalculationService.js';
 
+const calculatePlatformFeeFromSettings = (feeSettings, subtotal = 0) => {
+  const fixedPlatformFee = Number(feeSettings?.platformFee || 0);
+  const commissionPercent = Number(feeSettings?.platformCommissionPercent || 0);
+  const commissionAmount = subtotal > 0 && commissionPercent > 0
+    ? (subtotal * commissionPercent) / 100
+    : 0;
+
+  return Math.round((fixedPlatformFee + commissionAmount) * 100) / 100;
+};
+
 /**
  * Calculate comprehensive order settlement breakdown
  * This calculates earnings for User, Restaurant, Delivery Partner, and Admin
@@ -23,7 +33,7 @@ export const calculateOrderSettlement = async (orderId) => {
       .sort({ createdAt: -1 })
       .lean();
     
-    const platformFee = feeSettings?.platformFee || 5;
+    const platformFee = calculatePlatformFeeFromSettings(feeSettings, order?.pricing?.subtotal || 0);
     const gstRate = (feeSettings?.gstRate || 5) / 100;
 
     // Get restaurant details

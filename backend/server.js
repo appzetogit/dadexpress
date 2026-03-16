@@ -591,22 +591,38 @@ io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
 
   const getRealtimeRouteForTrackingIds = async (trackingIds = []) => {
-    if (!isFirebaseRealtimeAvailable()) return null;
-
     try {
-      const db = getFirebaseRealtimeDb();
-      for (const trackingId of trackingIds) {
-        const snap = await db.ref(`active_orders/${trackingId}`).once('value');
-        const value = snap.val();
-        if (value?.polyline) {
-          return { orderId: trackingId, polyline: value.polyline };
+      if (isFirebaseRealtimeAvailable()) {
+        const db = getFirebaseRealtimeDb();
+        for (const trackingId of trackingIds) {
+          const snap = await db.ref(`active_orders/${trackingId}`).once('value');
+          const value = snap.val();
+          if (value?.polyline) {
+            return { orderId: trackingId, polyline: value.polyline };
+          }
         }
       }
-      return null;
     } catch (error) {
       console.warn(`⚠️ Failed reading realtime route: ${error.message}`);
-      return null;
     }
+
+    try {
+      const { getCachedRoute } = await import('./modules/delivery/services/locationProcessingService.js');
+      for (const trackingId of trackingIds) {
+        const cachedRoute = getCachedRoute(String(trackingId));
+        if (cachedRoute?.polyline) {
+          return {
+            orderId: String(trackingId),
+            polyline: cachedRoute.polyline,
+            points: Array.isArray(cachedRoute.points) ? cachedRoute.points : undefined
+          };
+        }
+      }
+    } catch (error) {
+      console.warn(`⚠️ Failed reading in-memory route cache: ${error.message}`);
+    }
+
+    return null;
   };
 
   const getTrackedOrderAndIds = async (rawOrderId) => {
@@ -621,10 +637,7 @@ io.on('connection', (socket) => {
       order = await Order.findById(inputId)
         .populate({
           path: 'deliveryPartnerId',
-          select: 'availability',
-          populate: {
-            path: 'availability.currentLocation'
-          }
+          select: 'availability.currentLocation availability.lastLocationUpdate availability.isOnline'
         })
         .lean();
     }
@@ -633,10 +646,7 @@ io.on('connection', (socket) => {
       order = await Order.findOne({ orderId: inputId })
         .populate({
           path: 'deliveryPartnerId',
-          select: 'availability',
-          populate: {
-            path: 'availability.currentLocation'
-          }
+          select: 'availability.currentLocation availability.lastLocationUpdate availability.isOnline'
         })
         .lean();
     }

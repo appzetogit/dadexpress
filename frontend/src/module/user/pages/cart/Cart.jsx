@@ -1732,9 +1732,17 @@ export default function Cart() {
 
               {/* Delivery Address */}
               <div className="bg-white dark:bg-[#1a1a1a] px-4 md:px-6 py-3 md:py-4 rounded-lg md:rounded-xl">
-                <button
+                <div
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setShowAddressSheet(true)}
                   className="flex items-center justify-between w-full text-left"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      setShowAddressSheet(true)
+                    }
+                  }}
                 >
                   <div className="flex items-center gap-3 md:gap-4">
                     <MapPin className="h-4 w-4 md:h-5 md:w-5 text-gray-500 dark:text-gray-400" />
@@ -1774,7 +1782,7 @@ export default function Cart() {
                     </div>
                   </div>
                   <ChevronRight className="h-4 w-4 md:h-5 md:w-5 text-gray-400" />
-                </button>
+                </div>
               </div>
 
               {/* Contact */}

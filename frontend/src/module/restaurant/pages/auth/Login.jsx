@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { ArrowLeft, Mail, ChevronDown, Phone } from "lucide-react"
 import { setAuthData } from "@/lib/utils/auth"
@@ -64,6 +64,7 @@ export default function RestaurantLogin() {
   })
   const [isSending, setIsSending] = useState(false)
   const [apiError, setApiError] = useState("")
+  const googleLoginInProgressRef = useRef(false)
 
   // Get selected country details dynamically
   const selectedCountry = countryCodes.find(c => c.code === formData.countryCode) || countryCodes[2] // Default to India (+91)
@@ -234,6 +235,11 @@ export default function RestaurantLogin() {
   }
 
   const handleGoogleLogin = async () => {
+    if (isSending || googleLoginInProgressRef.current) {
+      return
+    }
+
+    googleLoginInProgressRef.current = true
     setApiError("")
     setIsSending(true)
 
@@ -303,6 +309,15 @@ export default function RestaurantLogin() {
       navigate("/restaurant")
     } catch (error) {
       console.error("Firebase Google login error:", error)
+      const errorCode = error?.code || ""
+
+      // This can happen when popup is requested more than once quickly.
+      // Treat as a cancelled attempt instead of surfacing a raw Firebase error.
+      if (errorCode === "auth/cancelled-popup-request") {
+        setApiError("")
+        return
+      }
+
       const message =
         error?.response?.data?.message ||
         error?.response?.data?.error ||
@@ -311,6 +326,7 @@ export default function RestaurantLogin() {
       setApiError(message)
     } finally {
       setIsSending(false)
+      googleLoginInProgressRef.current = false
     }
   }
 
@@ -529,6 +545,7 @@ export default function RestaurantLogin() {
             <Button
               onClick={handleGoogleLogin}
               variant="outline"
+              disabled={isSending}
               className="w-full h-12 rounded-lg border border-gray- hover:border-gray-400 hover:bg-gray-50 text-gray-900 font-semibold text-base flex items-center justify-center gap-3"
             >
               {/* Google Logo SVG */}

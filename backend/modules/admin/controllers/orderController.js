@@ -1124,6 +1124,7 @@ export const getTransactionReport = asyncHandler(async (req, res) => {
 
     // Calculate summary statistics
     const AdminCommission = (await import('../models/AdminCommission.js')).default;
+    const OrderSettlement = (await import('../../order/models/OrderSettlement.js')).default;
 
     // Build date query for summary stats
     const summaryDateQuery = {};
@@ -1181,26 +1182,101 @@ export const getTransactionReport = asyncHandler(async (req, res) => {
       sum + (order.pricing?.total || 0), 0
     );
 
-    // Get admin earning from AdminCommission
-    const adminCommissionQuery = {
-      status: 'completed',
-      ...summaryDateQuery,
-      ...summaryRestaurantQuery
+    // Build order-id based lookup for accurate "Admin Earning" when payments are updated.
+    // Some environments may miss AdminCommission docs for older/manual flows, so we fall back
+    // to settlement + pricing data without breaking existing calculations.
+    const completedOrderIds = completedOrders.map((order) => order._id);
+    const [adminCommissions, settlements] = await Promise.all([
+      completedOrderIds.length
+        ? AdminCommission.find({
+          orderId: { $in: completedOrderIds },
+          status: 'completed'
+        }).lean()
+        : [],
+      completedOrderIds.length
+        ? OrderSettlement.find({ orderId: { $in: completedOrderIds } })
+          .select('orderId userPayment.platformFee adminEarning restaurantEarning deliveryPartnerEarning')
+          .lean()
+        : []
+    ]);
+
+    const commissionByOrderId = new Map(
+      adminCommissions.map((commission) => [commission.orderId?.toString(), commission])
+    );
+    const settlementByOrderId = new Map(
+      settlements.map((settlement) => [settlement.orderId?.toString(), settlement])
+    );
+
+    const getFallbackPlatformFee = (order, settlement) => {
+      const pricingPlatformFee = Number(order.pricing?.platformFee);
+      if (Number.isFinite(pricingPlatformFee) && pricingPlatformFee >= 0) {
+        return pricingPlatformFee;
+      }
+
+      const settlementPlatformFee = Number(settlement?.userPayment?.platformFee);
+      if (Number.isFinite(settlementPlatformFee) && settlementPlatformFee >= 0) {
+        return settlementPlatformFee;
+      }
+
+      // Legacy fallback when platform fee is stored inside total.
+      const subtotal = Number(order.pricing?.subtotal) || 0;
+      const discount = Number(order.pricing?.discount) || 0;
+      const deliveryFee = Number(order.pricing?.deliveryFee) || 0;
+      const tax = Number(order.pricing?.tax) || 0;
+      const expectedTotal = subtotal - discount + deliveryFee + tax;
+      const actualTotal = Number(order.pricing?.total) || 0;
+      const impliedPlatformFee = actualTotal - expectedTotal;
+      return impliedPlatformFee > 0 ? impliedPlatformFee : 0;
     };
-    const adminCommissions = await AdminCommission.find(adminCommissionQuery).lean();
-    const adminEarning = adminCommissions.reduce((sum, comm) => sum + (comm.commissionAmount || 0), 0);
 
-    // Calculate restaurant earning (order total - admin commission - delivery commission)
-    // For simplicity, we'll use restaurantEarning from AdminCommission if available
-    const restaurantEarning = adminCommissions.reduce((sum, comm) => sum + (comm.restaurantEarning || 0), 0);
+    const adminEarning = completedOrders.reduce((sum, order) => {
+      const orderId = order._id?.toString();
+      const commission = commissionByOrderId.get(orderId);
+      const settlement = settlementByOrderId.get(orderId);
 
-    // Calculate deliveryman earning (from delivery commissions)
-    // This would need to be calculated from delivery wallet transactions or order assignment info
-    // For now, we'll estimate based on delivery fee or use a placeholder
+      const earningFromCommission = Number(commission?.commissionAmount);
+      if (Number.isFinite(earningFromCommission)) {
+        return sum + earningFromCommission;
+      }
+
+      const earningFromSettlement = Number(settlement?.adminEarning?.commission);
+      if (Number.isFinite(earningFromSettlement)) {
+        return sum + earningFromSettlement;
+      }
+
+      return sum + getFallbackPlatformFee(order, settlement);
+    }, 0);
+
+    const restaurantEarning = completedOrders.reduce((sum, order) => {
+      const orderId = order._id?.toString();
+      const commission = commissionByOrderId.get(orderId);
+      const settlement = settlementByOrderId.get(orderId);
+
+      const earningFromCommission = Number(commission?.restaurantEarning);
+      if (Number.isFinite(earningFromCommission)) {
+        return sum + earningFromCommission;
+      }
+
+      const earningFromSettlement = Number(settlement?.restaurantEarning?.netEarning);
+      if (Number.isFinite(earningFromSettlement)) {
+        return sum + earningFromSettlement;
+      }
+
+      const subtotal = Number(order.pricing?.subtotal) || 0;
+      const discount = Number(order.pricing?.discount) || 0;
+      return sum + Math.max(0, subtotal - discount);
+    }, 0);
+
     const deliverymanEarning = completedOrders.reduce((sum, order) => {
-      // Delivery commission is typically calculated from distance
-      // For now, we'll use a simple estimate or fetch from delivery wallet
-      return sum + (order.pricing?.deliveryFee || 0) * 0.8; // Estimate 80% of delivery fee goes to deliveryman
+      const orderId = order._id?.toString();
+      const settlement = settlementByOrderId.get(orderId);
+
+      const settlementEarning = Number(settlement?.deliveryPartnerEarning?.totalEarning);
+      if (Number.isFinite(settlementEarning)) {
+        return sum + settlementEarning;
+      }
+
+      return sum + (Number(order.pricing?.deliveryFee) || 0) * 0.8;
     }, 0);
 
     // Transform orders to match frontend format
@@ -1301,9 +1377,9 @@ export const getRestaurantReport = asyncHandler(async (req, res) => {
 
       if (zoneDoc) {
         // Find restaurants in this zone by checking orders with this zoneId
-        const ordersInZone = await Order.find({
+        const ordersInZone = await Order.distinct('restaurantId', {
           'assignmentInfo.zoneId': zoneDoc._id?.toString()
-        }).distinct('restaurantId').lean();
+        });
 
         if (ordersInZone.length > 0) {
           restaurantQuery.$or = [
@@ -1332,10 +1408,27 @@ export const getRestaurantReport = asyncHandler(async (req, res) => {
 
     // Search filter
     if (search) {
-      restaurantQuery.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { restaurantId: { $regex: search, $options: 'i' } }
-      ];
+      const searchCondition = {
+        $or: [
+          { name: { $regex: search, $options: 'i' } },
+          { restaurantId: { $regex: search, $options: 'i' } }
+        ]
+      };
+
+      if (restaurantQuery.$or) {
+        const existingOrCondition = [...restaurantQuery.$or];
+        const existingConditions = { ...restaurantQuery };
+        delete existingConditions.$or;
+        Object.assign(restaurantQuery, {
+          $and: [
+            { $or: existingOrCondition },
+            searchCondition,
+            existingConditions
+          ].filter((condition) => Object.keys(condition).length > 0)
+        });
+      } else {
+        Object.assign(restaurantQuery, searchCondition);
+      }
     }
 
     // Get all restaurants matching the query

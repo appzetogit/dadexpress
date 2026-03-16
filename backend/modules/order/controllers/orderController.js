@@ -219,10 +219,9 @@ export const createOrder = async (req, res) => {
       });
     }
 
-    // Check if restaurant is within any active zone
+    // Check if restaurant is within active zones
     const activeZones = await getActiveZonesCached();
-    let restaurantInZone = false;
-    let restaurantZone = null;
+    const matchedRestaurantZones = [];
 
     for (const zone of activeZones) {
       if (!zone.coordinates || zone.coordinates.length < 3) continue;
@@ -251,13 +250,11 @@ export const createOrder = async (req, res) => {
       }
 
       if (isInZone) {
-        restaurantInZone = true;
-        restaurantZone = zone;
-        break;
+        matchedRestaurantZones.push(zone);
       }
     }
 
-    if (!restaurantInZone) {
+    if (matchedRestaurantZones.length === 0) {
       logger.warn('⚠️ Restaurant location is not within any active zone:', {
         restaurantId: restaurant._id?.toString() || restaurant.restaurantId,
         restaurantName: restaurant.name,
@@ -270,6 +267,15 @@ export const createOrder = async (req, res) => {
       });
     }
 
+    // If restaurant overlaps multiple zones, prefer the user's zone (when provided)
+    // to avoid false mismatch due to different zone-selection strategies.
+    const { zoneId: userZoneId } = req.body; // User's zone ID from frontend
+    const normalizedUserZoneId = userZoneId ? String(userZoneId).trim() : null;
+    const restaurantZone =
+      normalizedUserZoneId
+        ? matchedRestaurantZones.find((zone) => zone?._id?.toString() === normalizedUserZoneId) || matchedRestaurantZones[0]
+        : matchedRestaurantZones[0];
+
     logger.info('✅ Restaurant validated - location is within active zone:', {
       restaurantId: restaurant._id?.toString() || restaurant.restaurantId,
       restaurantName: restaurant.name,
@@ -278,14 +284,12 @@ export const createOrder = async (req, res) => {
     });
 
     // CRITICAL: Validate user's zone matches restaurant's zone (strict zone matching)
-    const { zoneId: userZoneId } = req.body; // User's zone ID from frontend
-
-    if (userZoneId) {
+    if (normalizedUserZoneId) {
       const restaurantZoneId = restaurantZone._id.toString();
 
-      if (restaurantZoneId !== userZoneId) {
+      if (restaurantZoneId !== normalizedUserZoneId) {
         logger.warn('⚠️ Zone mismatch - user and restaurant are in different zones:', {
-          userZoneId,
+          userZoneId: normalizedUserZoneId,
           restaurantZoneId,
           restaurantId: restaurant._id?.toString() || restaurant.restaurantId,
           restaurantName: restaurant.name
@@ -297,7 +301,7 @@ export const createOrder = async (req, res) => {
       }
 
       logger.info('✅ Zone match validated - user and restaurant are in the same zone:', {
-        zoneId: userZoneId,
+        zoneId: normalizedUserZoneId,
         restaurantId: restaurant._id?.toString() || restaurant.restaurantId
       });
     } else {

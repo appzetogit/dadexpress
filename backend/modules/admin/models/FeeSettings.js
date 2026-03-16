@@ -31,6 +31,12 @@ const feeSettingsSchema = new mongoose.Schema(
       default: [],
       comment: 'Delivery fee based on order value ranges'
     },
+    deliveryFeePerKm: {
+      type: Number,
+      default: 0,
+      min: 0,
+      comment: 'Additional delivery fee charged per kilometer when coordinates are available'
+    },
     freeDeliveryThreshold: {
       type: Number,
       default: 149,
@@ -42,6 +48,13 @@ const feeSettingsSchema = new mongoose.Schema(
       required: [true, 'Platform fee is required'],
       default: 5,
       min: 0,
+    },
+    platformCommissionPercent: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100,
+      comment: 'Additional platform commission percentage applied on order subtotal'
     },
     gstRate: {
       type: Number,
