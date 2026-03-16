@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -21,6 +21,7 @@ import { determineStepToShow } from "../utils/onboardingUtils"
 import { toast } from "sonner"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
 import { clearModuleAuth } from "@/lib/utils/auth"
+import { readStoredRestaurantUser } from "@/module/restaurant/utils/restaurantSessionGuard"
 
 const cuisinesOptions = [
   "North Indian",
@@ -215,13 +216,16 @@ export default function RestaurantOnboarding() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [step, setStep] = useState(1)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
   const [verifiedPhoneNumber, setVerifiedPhoneNumber] = useState("")
   const [keyboardInset, setKeyboardInset] = useState(0)
   const [isFssaiCalendarOpen, setIsFssaiCalendarOpen] = useState(false)
   const [locating, setLocating] = useState(false)
+  const initOnceRef = useRef(false)
+  const fetchOnceRef = useRef(false)
+  const hasCachedOnboardingRef = useRef(false)
 
   const [step1, setStep1] = useState({
     restaurantName: "",
@@ -463,6 +467,19 @@ export default function RestaurantOnboarding() {
 
   // Load from localStorage on mount and check URL parameter
   useEffect(() => {
+    if (initOnceRef.current) {
+      // Preserve existing query parameter handling: allow `?step=` to control the visible step.
+      const stepParam = searchParams.get("step")
+      if (stepParam) {
+        const stepNum = parseInt(stepParam, 10)
+        if (stepNum >= 1 && stepNum <= 4) {
+          setStep(stepNum)
+        }
+      }
+      return
+    }
+
+    initOnceRef.current = true
     setVerifiedPhoneNumber(getVerifiedPhoneFromStoredRestaurant())
 
     // Check if step is specified in URL (from OTP login redirect)
@@ -476,6 +493,7 @@ export default function RestaurantOnboarding() {
 
     const localData = loadOnboardingFromLocalStorage()
     if (localData) {
+      hasCachedOnboardingRef.current = true
       if (localData.step1) {
         setStep1({
           restaurantName: localData.step1.restaurantName || "",
@@ -537,6 +555,9 @@ export default function RestaurantOnboarding() {
       if (localData.currentStep && !stepParam) {
         setStep(localData.currentStep)
       }
+
+      // Avoid a visible UI blink: render cached onboarding immediately.
+      setLoading(false)
     }
   }, [searchParams])
 
@@ -575,7 +596,13 @@ export default function RestaurantOnboarding() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        setLoading(true)
+        if (fetchOnceRef.current) return
+        fetchOnceRef.current = true
+
+        // Only show the blocking loader when no cached onboarding is available.
+        if (!hasCachedOnboardingRef.current) {
+          setLoading(true)
+        }
         const res = await api.get("/restaurant/onboarding")
         const data = res?.data?.data?.onboarding
         if (data) {
@@ -645,6 +672,19 @@ export default function RestaurantOnboarding() {
           // Determine which step to show based on completeness
           const stepToShow = determineStepToShow(data)
           if (stepToShow === null) {
+            // Safety: if auth/session says onboarding is incomplete, never bounce to /restaurant
+            // based on onboarding payload alone (prevents redirect loops/blinking).
+            const storedRestaurant = readStoredRestaurantUser()
+            if (storedRestaurant?.isProfileCompleted === false) {
+              const fallbackStep = Number(data?.currentStep || data?.step || 1)
+              setStep(
+                Number.isFinite(fallbackStep) && fallbackStep >= 1 && fallbackStep <= 4
+                  ? fallbackStep
+                  : 1,
+              )
+              return
+            }
+
             navigate("/restaurant", { replace: true })
             return
           } else {
@@ -662,7 +702,9 @@ export default function RestaurantOnboarding() {
           console.error("Error fetching onboarding data:", err)
         }
       } finally {
-        setLoading(false)
+        if (!hasCachedOnboardingRef.current) {
+          setLoading(false)
+        }
       }
     }
     fetchData()

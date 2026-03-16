@@ -1,6 +1,12 @@
 import { Navigate, useLocation } from "react-router-dom";
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { isModuleAuthenticated } from "@/lib/utils/auth";
+import Loader from "@/components/Loader";
+import {
+  bootstrapRestaurantSession,
+  getRestaurantOnboardingTarget,
+  readStoredRestaurantUser,
+} from "@/module/restaurant/utils/restaurantSessionGuard";
 
 /**
  * Role-based Protected Route Component
@@ -8,6 +14,7 @@ import { isModuleAuthenticated } from "@/lib/utils/auth";
  */
 export default function ProtectedRoute({ children, requiredRole, loginPath }) {
   const location = useLocation();
+  const [restaurantBootstrapDone, setRestaurantBootstrapDone] = useState(false);
 
   useEffect(() => {
     if (requiredRole !== "restaurant") return;
@@ -57,21 +64,71 @@ export default function ProtectedRoute({ children, requiredRole, loginPath }) {
     return <Navigate to={redirectPath} replace />;
   }
 
-  // Restaurant-specific guard: if auth exists but profile is incomplete, force onboarding.
-  // Backward compatible: only triggers when backend/client stored `isProfileCompleted === false`.
-  if (requiredRole === "restaurant") {
-    try {
-      const raw = localStorage.getItem("restaurant_user");
-      if (raw) {
-        const user = JSON.parse(raw);
-        const needsOnboarding = user?.isProfileCompleted === false;
-        const isOnboardingRoute = location.pathname.startsWith("/restaurant/onboarding");
-        if (needsOnboarding && !isOnboardingRoute) {
-          return <Navigate to="/restaurant/onboarding" replace />;
-        }
-      }
-    } catch {
-      // ignore storage parsing issues
+  const isRestaurant = requiredRole === "restaurant";
+  const isOnboardingRoute = useMemo(
+    () => location.pathname.startsWith("/restaurant/onboarding"),
+    [location.pathname],
+  );
+
+  // Centralized restaurant onboarding guard:
+  // - Only treat `isActive === false` as inactive elsewhere (not here)
+  // - Enforce onboarding redirect only AFTER we can reliably read completion flag.
+  // - On refresh/session restore where restaurant_user is missing/stale, hydrate once from /me.
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!isRestaurant) return;
+    if (!isAuthenticated) return;
+
+    const stored = readStoredRestaurantUser();
+    const hasFlag = typeof stored?.isProfileCompleted === "boolean";
+
+    // If we're on onboarding route, let it render even if the stored flag is missing;
+    // onboarding page will fetch its own data and we hydrate in background.
+    if (isOnboardingRoute && !hasFlag) {
+      bootstrapRestaurantSession().finally(() => {
+        if (!cancelled) setRestaurantBootstrapDone(true);
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    // For other protected routes, block render until we know completion status.
+    if (!hasFlag) {
+      bootstrapRestaurantSession().finally(() => {
+        if (!cancelled) setRestaurantBootstrapDone(true);
+      });
+    } else {
+      setRestaurantBootstrapDone(true);
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isRestaurant, isAuthenticated, isOnboardingRoute]);
+
+  if (isRestaurant) {
+    const stored = readStoredRestaurantUser();
+    const hasFlag = typeof stored?.isProfileCompleted === "boolean";
+
+    // If we can't determine completion yet, avoid rendering protected pages.
+    if (!isOnboardingRoute && !hasFlag && !restaurantBootstrapDone) {
+      return <Loader />;
+    }
+
+    const resolved = hasFlag ? stored : readStoredRestaurantUser();
+    const completionKnown = typeof resolved?.isProfileCompleted === "boolean";
+    const needsOnboarding = resolved?.isProfileCompleted === false;
+
+    // If we still can't determine completion after bootstrap, be conservative:
+    // route to onboarding so the user can resume or the page can self-resolve.
+    if (!isOnboardingRoute && !completionKnown) {
+      return <Navigate to="/restaurant/onboarding" replace />;
+    }
+
+    if (needsOnboarding && !isOnboardingRoute) {
+      return <Navigate to={getRestaurantOnboardingTarget(resolved)} replace />;
     }
   }
 

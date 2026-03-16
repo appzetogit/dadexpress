@@ -3,6 +3,7 @@ import { useEffect, Suspense, lazy } from "react"
 import ProtectedRoute from "@/components/ProtectedRoute"
 import AuthRedirect from "@/components/AuthRedirect"
 import Loader from "@/components/Loader"
+import { bootstrapRestaurantSession } from "@/module/restaurant/utils/restaurantSessionGuard"
 
 // Lazy Loading Components
 const UserRouter = lazy(() => import("@/module/user/components/UserRouter"))
@@ -139,6 +140,14 @@ function ScrollToTop() {
 import GlobalNotificationHandler from "@/components/GlobalNotificationHandler"
 
 export default function App() {
+  // Background hydration: if a restaurant token exists but stored user is stale/missing,
+  // fetch `/restaurant/auth/me` once so all guards have reliable `isProfileCompleted`.
+  useEffect(() => {
+    bootstrapRestaurantSession().catch(() => {
+      // Non-blocking: ProtectedRoute/AuthRedirect will still enforce onboarding when needed.
+    })
+  }, [])
+
   return (
     <>
       <ScrollToTop />
@@ -864,4 +873,3 @@ export default function App() {
     </>
   )
 }
-
