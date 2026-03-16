@@ -1,4 +1,4 @@
-﻿import { useParams, Link, useSearchParams, useNavigate } from "react-router-dom"
+import { useParams, Link, useSearchParams, useNavigate } from "react-router-dom"
 import { useState, useEffect, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { toast } from "sonner"
@@ -70,6 +70,26 @@ const AnimatedCheckmark = ({ delay = 0 }) => (
     />
   </motion.svg>
 )
+
+const RESTAURANT_REJECTION_REASON_PATTERN =
+  "rejected by restaurant|restaurant rejected|restaurant cancelled|restaurant is too busy|item not available|outside delivery area|kitchen closing|technical issue|order not accepted within time limit|restaurant did not respond"
+
+const isRestaurantRejectedCancellation = (orderData) => {
+  if (!orderData) return false
+
+  const status = String(orderData.status || "").toLowerCase()
+  if (status !== "cancelled" && status !== "canceled") return false
+
+  const cancelledBy = String(orderData.cancelledBy || orderData.canceledBy || "").toLowerCase()
+  const cancellationReason = String(
+    orderData.cancellationReason || orderData.rejectReason || orderData.reason || ""
+  ).toLowerCase()
+
+  return (
+    cancelledBy === "restaurant" ||
+    new RegExp(RESTAURANT_REJECTION_REASON_PATTERN, "i").test(cancellationReason)
+  )
+}
 
 // Real Delivery Map Component with User Live Location
 const DeliveryMap = ({ orderId, order, isVisible }) => {
@@ -217,6 +237,8 @@ export default function OrderTracking() {
   const [timerNow, setTimerNow] = useState(Date.now())
   const [showLocationDialog, setShowLocationDialog] = useState(false)
   const [showDeliveryInstructionModal, setShowDeliveryInstructionModal] = useState(false)
+  const [deliveryInstructionText, setDeliveryInstructionText] = useState("")
+  const [isSavingInstruction, setIsSavingInstruction] = useState(false)
   const [isUpdatingLocation, setIsUpdatingLocation] = useState(false)
   const [locationForm, setLocationForm] = useState({
     formattedAddress: "",
@@ -239,8 +261,13 @@ export default function OrderTracking() {
 
   const deliveryPartnerPhoneRaw =
     order?.deliveryPartner?.phone ||
+    order?.deliveryPartner?.mobile ||
     order?.deliveryPartnerPhone ||
+    order?.assignmentInfo?.deliveryPartnerPhone ||
+    order?.assignmentInfo?.deliveryPartner?.phone ||
+    order?.assignmentInfo?.deliveryPartner?.mobile ||
     order?.deliveryPartnerId?.phone ||
+    order?.deliveryPartnerId?.mobile ||
     ''
 
   const deliveryPartnerPhone =
@@ -293,7 +320,10 @@ export default function OrderTracking() {
   )
 
   const handleCallDeliveryPartner = () => {
-    if (!deliveryPartnerPhone) return
+    if (!deliveryPartnerPhone) {
+      toast.info('Delivery partner phone number is not available yet')
+      return
+    }
     const phone = String(deliveryPartnerPhone).replace(/\s+/g, '')
     window.location.href = `tel:${phone}`
   }
@@ -336,7 +366,7 @@ export default function OrderTracking() {
   }, [editWindowRemainingMs])
 
   const canUpdateLocationStatus = useMemo(() => {
-    return ['pending', 'confirmed'].includes(order?.status)
+    return ['pending', 'confirmed', 'preparing'].includes(order?.status)
   }, [order?.status])
 
   const isDeliveryPartnerAssigned = useMemo(() => {
@@ -354,7 +384,7 @@ export default function OrderTracking() {
 
   const locationUpdateBlockedReason = useMemo(() => {
     if (!order?.status) return "Order status unavailable"
-    if (!canUpdateLocationStatus) return "Location updates allowed only while pending or confirmed"
+    if (!canUpdateLocationStatus) return "Location updates allowed only while pending, confirmed, or preparing"
     if (isDeliveryPartnerAssigned) return "Delivery partner already assigned"
     return ""
   }, [order?.status, canUpdateLocationStatus, isDeliveryPartnerAssigned])
@@ -487,7 +517,11 @@ export default function OrderTracking() {
 
           // Check if order was cancelled
           if (newOrderStatus === 'cancelled' && currentOrderStatus !== 'cancelled') {
-            setOrderStatus('cancelled');
+            if (isRestaurantRejectedCancellation(apiOrder)) {
+              setOrderStatus('placed');
+            } else {
+              setOrderStatus('cancelled');
+            }
           }
 
           // Only update if status actually changed
@@ -660,6 +694,8 @@ export default function OrderTracking() {
             })) || [],
             total: apiOrder.pricing?.total || 0,
             status: apiOrder.status || 'pending',
+            cancellationReason: apiOrder.cancellationReason || '',
+            cancelledBy: apiOrder.cancelledBy || '',
             deliveryPartner: apiOrder.deliveryPartnerId ? {
               name: apiOrder.deliveryPartnerId.name || 'Delivery Partner',
               phone: apiOrder.deliveryPartnerId.phone || '',
@@ -684,7 +720,11 @@ export default function OrderTracking() {
 
           // Update orderStatus based on API order status
           if (apiOrder.status === 'cancelled') {
-            setOrderStatus('cancelled');
+            if (isRestaurantRejectedCancellation(apiOrder)) {
+              setOrderStatus('placed');
+            } else {
+              setOrderStatus('cancelled');
+            }
           } else if (apiOrder.status === 'preparing') {
             setOrderStatus('preparing');
           } else if (apiOrder.status === 'ready') {
@@ -877,16 +917,23 @@ export default function OrderTracking() {
   };
 
   const handleShare = async () => {
+    const shareUrl = window.location.href
+    const shareTitle = `Track my order from ${order?.restaurant || 'Quick Spicy'}`
+    const shareText = `Hey! Track my order from ${order?.restaurant || 'Quick Spicy'} with ID #${order?.orderId || order?.id}.`
+
     try {
       if (navigator.share) {
         await navigator.share({
-          title: `Track my order from ${order?.restaurant || 'Quick Spicy'}`,
-          text: `Hey! Track my order from ${order?.restaurant || 'Quick Spicy'} with ID #${order?.orderId || order?.id}.`,
-          url: window.location.href,
+          title: shareTitle,
+          text: shareText,
+          url: shareUrl,
         });
       } else {
-        await navigator.clipboard.writeText(window.location.href);
-        toast.success("Tracking link copied to clipboard!");
+        const encoded = encodeURIComponent(`${shareText} ${shareUrl}`)
+        const shareWindow = window.open(`https://wa.me/?text=${encoded}`, '_blank', 'noopener,noreferrer')
+        if (!shareWindow) {
+          window.location.href = `https://wa.me/?text=${encoded}`
+        }
       }
     } catch (error) {
       if (error.name !== 'AbortError') {
@@ -895,6 +942,37 @@ export default function OrderTracking() {
       }
     }
   };
+
+  useEffect(() => {
+    if (!showDeliveryInstructionModal) return
+    setDeliveryInstructionText(order?.deliveryInstruction || "")
+  }, [showDeliveryInstructionModal, order?.deliveryInstruction])
+
+  const handleSaveDeliveryInstruction = async () => {
+    if (!order?.id && !order?.orderId && !orderId) {
+      toast.error('Order not found')
+      return
+    }
+
+    try {
+      setIsSavingInstruction(true)
+      const currentOrderId = order?.id || order?.orderId || orderId
+      const response = await orderAPI.updateDeliveryInstruction(currentOrderId, deliveryInstructionText.trim())
+
+      if (response?.data?.success) {
+        setOrder((prev) => (prev ? { ...prev, deliveryInstruction: deliveryInstructionText.trim() } : prev))
+        toast.success('Delivery instruction updated')
+        setShowDeliveryInstructionModal(false)
+      } else {
+        toast.error(response?.data?.message || 'Failed to update delivery instruction')
+      }
+    } catch (error) {
+      console.error('Error updating delivery instruction:', error)
+      toast.error(error?.response?.data?.message || 'Failed to update delivery instruction')
+    } finally {
+      setIsSavingInstruction(false)
+    }
+  }
 
   const handleUseCurrentLocation = async () => {
     try {
@@ -1039,6 +1117,8 @@ export default function OrderTracking() {
           })) || [],
           total: apiOrder.pricing?.total || 0,
           status: apiOrder.status || 'pending',
+          cancellationReason: apiOrder.cancellationReason || '',
+          cancelledBy: apiOrder.cancelledBy || '',
           deliveryPartner: apiOrder.deliveryPartnerId ? {
             name: apiOrder.deliveryPartnerId.name || 'Delivery Partner',
             phone: apiOrder.deliveryPartnerId.phone || '',
@@ -1056,7 +1136,11 @@ export default function OrderTracking() {
 
         // Update order status for UI
         if (apiOrder.status === 'cancelled') {
-          setOrderStatus('cancelled');
+          if (isRestaurantRejectedCancellation(apiOrder)) {
+            setOrderStatus('placed');
+          } else {
+            setOrderStatus('cancelled');
+          }
         } else if (apiOrder.status === 'preparing') {
           setOrderStatus('preparing')
         } else if (apiOrder.status === 'ready') {
@@ -1323,11 +1407,13 @@ export default function OrderTracking() {
 
         {/* Delivery Partner Safety */}
         <motion.button
+          type="button"
           className="w-full bg-white rounded-xl p-4 shadow-sm flex items-center gap-3"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.6 }}
           whileTap={{ scale: 0.99 }}
+          onClick={() => navigate(`/user/help/orders/${orderId}`)}
         >
           <Shield className="w-6 h-6 text-gray-600" />
           <span className="flex-1 text-left font-medium text-gray-900">
@@ -1367,7 +1453,7 @@ export default function OrderTracking() {
                 ? (deliveryPartnerPhone || 'Phone number not available')
                 : ''
             }
-            onClick={deliveryPartnerPhone ? handleCallDeliveryPartner : undefined}
+            onClick={hasDeliveryPartner ? handleCallDeliveryPartner : () => toast.info('Delivery partner will be assigned soon')}
             showArrow={false}
             rightContent={
               hasDeliveryPartner ? (
@@ -1382,6 +1468,7 @@ export default function OrderTracking() {
           <SectionItem
             icon={HomeIcon}
             title="Delivery at Location"
+            onClick={() => setShowLocationDialog(true)}
             subtitle={(() => {
               // Priority 1: Use order address formattedAddress (live location address)
               if (order?.address?.formattedAddress && order.address.formattedAddress !== "Select location") {
@@ -1440,7 +1527,7 @@ export default function OrderTracking() {
           <SectionItem
             icon={MessageSquare}
             title="Add delivery instructions"
-            subtitle=""
+            subtitle={order?.deliveryInstruction ? order.deliveryInstruction : "Tap to add instructions"}
             onClick={() => setShowDeliveryInstructionModal(true)}
           />
         </motion.div>
@@ -1669,25 +1756,31 @@ export default function OrderTracking() {
             </DialogTitle>
           </DialogHeader>
           <div className="pt-2">
-            {order?.deliveryInstruction ? (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                <p className="text-sm text-amber-900">{order.deliveryInstruction}</p>
-              </div>
-            ) : (
-              <p className="text-sm text-gray-600">
-                No delivery instructions were added for this order.
-              </p>
-            )}
-            <p className="text-xs text-gray-500 mt-3">
-              Delivery instructions can be added during checkout for new orders.
+            <Textarea
+              value={deliveryInstructionText}
+              onChange={(e) => setDeliveryInstructionText(e.target.value)}
+              placeholder="Ex: Ring once, call on arrival, leave at gate, etc."
+              className="min-h-[100px] resize-none"
+              maxLength={200}
+            />
+            <p className="text-xs text-gray-500 mt-2">
+              {deliveryInstructionText.length}/200 characters
             </p>
           </div>
-          <div className="pt-6">
+          <div className="pt-6 flex gap-2">
             <Button
               onClick={() => setShowDeliveryInstructionModal(false)}
-              className="w-full bg-gray-900 text-white font-bold h-11 rounded-xl"
+              variant="outline"
+              className="flex-1 h-11 rounded-xl"
             >
               Close
+            </Button>
+            <Button
+              onClick={handleSaveDeliveryInstruction}
+              disabled={isSavingInstruction}
+              className="flex-1 bg-gray-900 text-white font-bold h-11 rounded-xl"
+            >
+              {isSavingInstruction ? 'Saving...' : 'Save'}
             </Button>
           </div>
         </DialogContent>

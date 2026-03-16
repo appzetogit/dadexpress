@@ -2193,11 +2193,6 @@ export function useLocation() {
       false && console.log("🧹 Cleaning up location watcher")
       stopWatchingLocation()
     }
-
-    return () => {
-      false && console.log("🧹 Cleaning up location watcher")
-      stopWatchingLocation()
-    }
   }, [])
 
   const requestLocation = async () => {

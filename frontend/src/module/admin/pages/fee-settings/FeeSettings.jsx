@@ -127,8 +127,11 @@ export default function FeeSettings() {
   }
 
   // Edit delivery fee range
-  const handleEditRange = (index) => {
-    const range = feeSettings.deliveryFeeRanges[index]
+  const handleEditRange = (range, index) => {
+    if (!range || index === null || index === undefined || index < 0) {
+      toast.error("Unable to edit this range")
+      return
+    }
     setNewRange({ min: range.min, max: range.max, fee: range.fee })
     setEditingRangeIndex(index)
   }
@@ -270,13 +273,15 @@ export default function FeeSettings() {
                               <td className="px-4 py-3 text-center border-b border-slate-100">
                                 <div className="flex items-center justify-center gap-2">
                                   <button
-                                    onClick={() => handleEditRange(originalIndex)}
+                                    type="button"
+                                    onClick={() => handleEditRange(range, originalIndex)}
                                     className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
                                     title="Edit"
                                   >
                                     <Edit className="w-4 h-4" />
                                   </button>
                                   <button
+                                    type="button"
                                     onClick={() => handleDeleteRange(originalIndex)}
                                     className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
                                     title="Delete"

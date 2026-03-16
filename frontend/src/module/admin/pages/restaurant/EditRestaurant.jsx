@@ -8,6 +8,16 @@ import { Button } from "@/components/ui/button"
 import { adminAPI, uploadAPI } from "@/lib/api"
 import { toast } from "sonner"
 
+const TEN_DIGIT_PHONE_REGEX = /^\d{10}$/
+const SIX_DIGIT_PINCODE_REGEX = /^\d{6}$/
+const CITY_STATE_REGEX = /^[A-Za-z\s]+$/
+const PAN_NUMBER_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]$/
+const FSSAI_NUMBER_REGEX = /^\d{14}$/
+const GST_NUMBER_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/
+const IFSC_REGEX = /^[A-Z]{4}0[A-Z0-9]{6}$/
+const ACCOUNT_NUMBER_REGEX = /^\d{9,18}$/
+const NAME_WITH_CHARS_REGEX = /^(?=.*[A-Za-z])[A-Za-z\s.'-]+$/
+
 const cuisinesOptions = [
     "North Indian", "South Indian", "Chinese", "Pizza",
     "Burgers", "Bakery", "Cafe",
@@ -165,8 +175,158 @@ export default function EditRestaurant() {
         }
     }
 
+    const validateStep1 = () => {
+        const errors = {}
+
+        const ownerPhone = (step1.ownerPhone || "").trim()
+        const primaryPhone = (step1.primaryContactNumber || "").trim()
+        const city = (step1.location?.city || "").trim()
+        const state = (step1.location?.state || "").trim()
+        const pincode = (step1.location?.pincode || "").trim()
+
+        if (ownerPhone && !TEN_DIGIT_PHONE_REGEX.test(ownerPhone)) {
+            errors.ownerPhone = "Phone number must be exactly 10 digits"
+        }
+        if (primaryPhone && !TEN_DIGIT_PHONE_REGEX.test(primaryPhone)) {
+            errors.primaryContactNumber = "Primary phone number must be exactly 10 digits"
+        }
+        if (city && !CITY_STATE_REGEX.test(city)) {
+            errors.city = "City must contain only letters and spaces"
+        }
+        if (state && !CITY_STATE_REGEX.test(state)) {
+            errors.state = "State must contain only letters and spaces"
+        }
+        if (pincode && !SIX_DIGIT_PINCODE_REGEX.test(pincode)) {
+            errors.pincode = "Pin code must be exactly 6 digits"
+        }
+
+        return errors
+    }
+
+    const validateStep2 = () => {
+        const errors = {}
+        if (!step2.profileImage) {
+            errors.profileImage = "Restaurant profile image is required"
+        }
+        if (!Array.isArray(step2.menuImages) || step2.menuImages.length === 0) {
+            errors.menuImages = "At least one menu image is required"
+        }
+        if (!Array.isArray(step2.cuisines) || step2.cuisines.length === 0) {
+            errors.cuisines = "Please select at least one cuisine"
+        }
+        return errors
+    }
+
+    const validateStep3 = () => {
+        const errors = {}
+        const panNumber = (step3.panNumber || "").trim().toUpperCase()
+        const panName = (step3.nameOnPan || "").trim()
+        const gstNumber = (step3.gstNumber || "").trim().toUpperCase()
+        const gstLegalName = (step3.gstLegalName || "").trim()
+        const fssaiNumber = (step3.fssaiNumber || "").trim()
+        const expiry = (step3.fssaiExpiry || "").trim()
+        const accountNumber = (step3.accountNumber || "").trim()
+        const ifscCode = (step3.ifscCode || "").trim().toUpperCase()
+        const accountHolderName = (step3.accountHolderName || "").trim()
+        const accountType = (step3.accountType || "").trim()
+
+        if (!panName) {
+            errors.nameOnPan = "PAN holder name is required"
+        } else if (!NAME_WITH_CHARS_REGEX.test(panName)) {
+            errors.nameOnPan = "PAN holder name must contain alphabetic characters only"
+        }
+
+        if (!panNumber) {
+            errors.panNumber = "PAN number is required"
+        } else if (!PAN_NUMBER_REGEX.test(panNumber)) {
+            errors.panNumber = "PAN number format is invalid (e.g., ABCDE1234F)"
+        }
+
+        if (!step3.panImage) {
+            errors.panImage = "PAN image is required"
+        }
+
+        if (step3.gstRegistered) {
+            if (!gstNumber) {
+                errors.gstNumber = "GST number is required"
+            } else if (!GST_NUMBER_REGEX.test(gstNumber)) {
+                errors.gstNumber = "GST number format is invalid (e.g., 22AAAAA0000A1Z5)"
+            }
+
+            if (!gstLegalName) {
+                errors.gstLegalName = "GST legal name is required"
+            } else if (!NAME_WITH_CHARS_REGEX.test(gstLegalName)) {
+                errors.gstLegalName = "GST legal name must contain alphabetic characters only"
+            }
+
+            if (!step3.gstImage) {
+                errors.gstImage = "GST image is required"
+            }
+        }
+
+        if (!fssaiNumber) {
+            errors.fssaiNumber = "FSSAI number is required"
+        } else if (!FSSAI_NUMBER_REGEX.test(fssaiNumber)) {
+            errors.fssaiNumber = "FSSAI number must be exactly 14 digits"
+        }
+
+        if (expiry) {
+            const selectedDate = new Date(expiry)
+            const today = new Date()
+            today.setHours(0, 0, 0, 0)
+            if (selectedDate < today) {
+                errors.fssaiExpiry = "Expiry date cannot be in the past"
+            }
+        }
+
+        if (!accountNumber) {
+            errors.accountNumber = "Account number is required"
+        } else if (!ACCOUNT_NUMBER_REGEX.test(accountNumber)) {
+            errors.accountNumber = "Account number must be 9 to 18 digits"
+        }
+
+        if (!ifscCode) {
+            errors.ifscCode = "IFSC code is required"
+        } else if (!IFSC_REGEX.test(ifscCode)) {
+            errors.ifscCode = "IFSC code format is invalid (e.g., SBIN0018764)"
+        }
+
+        if (!accountHolderName) {
+            errors.accountHolderName = "Account holder name is required"
+        } else if (!NAME_WITH_CHARS_REGEX.test(accountHolderName)) {
+            errors.accountHolderName = "Account holder name must contain alphabetic characters only"
+        }
+
+        if (!accountType || !["savings", "current"].includes(accountType)) {
+            errors.accountType = "Please select account type"
+        }
+
+        return errors
+    }
+
     const handleNext = () => {
         setFormErrors({})
+        if (step === 1) {
+            const step1Errors = validateStep1()
+            if (Object.keys(step1Errors).length > 0) {
+                setFormErrors(step1Errors)
+                return
+            }
+        }
+        if (step === 2) {
+            const step2Errors = validateStep2()
+            if (Object.keys(step2Errors).length > 0) {
+                setFormErrors(step2Errors)
+                return
+            }
+        }
+        if (step === 3) {
+            const step3Errors = validateStep3()
+            if (Object.keys(step3Errors).length > 0) {
+                setFormErrors(step3Errors)
+                return
+            }
+        }
         if (step < 4) {
             setStep(step + 1)
         } else {
@@ -178,6 +338,16 @@ export default function EditRestaurant() {
         setIsSubmitting(true)
         setFormErrors({})
         try {
+            const step1Errors = validateStep1()
+            const step2Errors = validateStep2()
+            const step3Errors = validateStep3()
+            const mergedErrors = { ...step1Errors, ...step2Errors, ...step3Errors }
+            if (Object.keys(mergedErrors).length > 0) {
+                setFormErrors(mergedErrors)
+                setIsSubmitting(false)
+                return
+            }
+
             // Upload new images (File objects), keep existing URL objects as-is
             let profileImageData = step2.profileImage
             if (step2.profileImage instanceof File) {
@@ -285,7 +455,15 @@ export default function EditRestaurant() {
                     </div>
                     <div>
                         <Label className="text-xs text-gray-700">Phone number</Label>
-                        <Input value={step1.ownerPhone} onChange={(e) => setStep1({ ...step1, ownerPhone: e.target.value })} className="mt-1 bg-white text-sm" placeholder="+91 98XXXXXX" />
+                        <Input
+                            value={step1.ownerPhone}
+                            onChange={(e) => setStep1({ ...step1, ownerPhone: (e.target.value || "").replace(/\D/g, "").slice(0, 10) })}
+                            className="mt-1 bg-white text-sm"
+                            placeholder="10 digit phone number"
+                            inputMode="numeric"
+                            maxLength={10}
+                        />
+                        {formErrors.ownerPhone && <p className="mt-1 text-xs text-red-600">{formErrors.ownerPhone}</p>}
                     </div>
                 </div>
             </section>
@@ -294,15 +472,43 @@ export default function EditRestaurant() {
                 <h2 className="text-lg font-semibold text-black">Restaurant contact & location</h2>
                 <div>
                     <Label className="text-xs text-gray-700">Primary contact number</Label>
-                    <Input value={step1.primaryContactNumber} onChange={(e) => setStep1({ ...step1, primaryContactNumber: e.target.value })} className="mt-1 bg-white text-sm" placeholder="Primary contact number" />
+                    <Input
+                        value={step1.primaryContactNumber}
+                        onChange={(e) => setStep1({ ...step1, primaryContactNumber: (e.target.value || "").replace(/\D/g, "").slice(0, 10) })}
+                        className="mt-1 bg-white text-sm"
+                        placeholder="10 digit primary phone number"
+                        inputMode="numeric"
+                        maxLength={10}
+                    />
+                    {formErrors.primaryContactNumber && <p className="mt-1 text-xs text-red-600">{formErrors.primaryContactNumber}</p>}
                 </div>
                 <div className="space-y-3">
                     <Input value={step1.location?.area || ""} onChange={(e) => setStep1({ ...step1, location: { ...step1.location, area: e.target.value } })} className="bg-white text-sm" placeholder="Area / Sector / Locality*" />
-                    <Input value={step1.location?.city || ""} onChange={(e) => setStep1({ ...step1, location: { ...step1.location, city: e.target.value } })} className="bg-white text-sm" placeholder="City*" />
+                    <Input
+                        value={step1.location?.city || ""}
+                        onChange={(e) => setStep1({ ...step1, location: { ...step1.location, city: (e.target.value || "").replace(/[^A-Za-z\s]/g, "") } })}
+                        className="bg-white text-sm"
+                        placeholder="City*"
+                    />
+                    {formErrors.city && <p className="-mt-2 text-xs text-red-600">{formErrors.city}</p>}
                     <Input value={step1.location?.addressLine1 || ""} onChange={(e) => setStep1({ ...step1, location: { ...step1.location, addressLine1: e.target.value } })} className="bg-white text-sm" placeholder="Shop no. / building no. (optional)" />
                     <Input value={step1.location?.addressLine2 || ""} onChange={(e) => setStep1({ ...step1, location: { ...step1.location, addressLine2: e.target.value } })} className="bg-white text-sm" placeholder="Floor / tower (optional)" />
-                    <Input value={step1.location?.state || ""} onChange={(e) => setStep1({ ...step1, location: { ...step1.location, state: e.target.value } })} className="bg-white text-sm" placeholder="State (optional)" />
-                    <Input value={step1.location?.pincode || ""} onChange={(e) => setStep1({ ...step1, location: { ...step1.location, pincode: e.target.value } })} className="bg-white text-sm" placeholder="Pin code (optional)" />
+                    <Input
+                        value={step1.location?.state || ""}
+                        onChange={(e) => setStep1({ ...step1, location: { ...step1.location, state: (e.target.value || "").replace(/[^A-Za-z\s]/g, "") } })}
+                        className="bg-white text-sm"
+                        placeholder="State (optional)"
+                    />
+                    {formErrors.state && <p className="-mt-2 text-xs text-red-600">{formErrors.state}</p>}
+                    <Input
+                        value={step1.location?.pincode || ""}
+                        onChange={(e) => setStep1({ ...step1, location: { ...step1.location, pincode: (e.target.value || "").replace(/\D/g, "").slice(0, 6) } })}
+                        className="bg-white text-sm"
+                        placeholder="Pin code (optional)"
+                        inputMode="numeric"
+                        maxLength={6}
+                    />
+                    {formErrors.pincode && <p className="-mt-2 text-xs text-red-600">{formErrors.pincode}</p>}
                     <Input value={step1.location?.landmark || ""} onChange={(e) => setStep1({ ...step1, location: { ...step1.location, landmark: e.target.value } })} className="bg-white text-sm" placeholder="Nearby landmark (optional)" />
                 </div>
             </section>
@@ -347,6 +553,7 @@ export default function EditRestaurant() {
                             })}
                         </div>
                     )}
+                    {formErrors.menuImages && <p className="text-xs text-red-600">{formErrors.menuImages}</p>}
                 </div>
 
                 {/* Profile Image */}
@@ -375,6 +582,7 @@ export default function EditRestaurant() {
                             }}
                         />
                     </div>
+                    {formErrors.profileImage && <p className="text-xs text-red-600">{formErrors.profileImage}</p>}
                 </div>
             </section>
 
@@ -402,6 +610,7 @@ export default function EditRestaurant() {
                             )
                         })}
                     </div>
+                    {formErrors.cuisines && <p className="mt-2 text-xs text-red-600">{formErrors.cuisines}</p>}
                 </div>
 
                 {/* Delivery Timings */}
@@ -457,17 +666,28 @@ export default function EditRestaurant() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <Label className="text-xs text-gray-700">PAN number</Label>
-                        <Input value={step3.panNumber || ""} onChange={(e) => setStep3({ ...step3, panNumber: e.target.value })} className="mt-1 bg-white text-sm" />
+                        <Input
+                            value={step3.panNumber || ""}
+                            onChange={(e) => setStep3({ ...step3, panNumber: (e.target.value || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10) })}
+                            className="mt-1 bg-white text-sm"
+                        />
+                        {formErrors.panNumber && <p className="mt-1 text-xs text-red-600">{formErrors.panNumber}</p>}
                     </div>
                     <div>
                         <Label className="text-xs text-gray-700">Name on PAN</Label>
-                        <Input value={step3.nameOnPan || ""} onChange={(e) => setStep3({ ...step3, nameOnPan: e.target.value })} className="mt-1 bg-white text-sm" />
+                        <Input
+                            value={step3.nameOnPan || ""}
+                            onChange={(e) => setStep3({ ...step3, nameOnPan: e.target.value.replace(/[^A-Za-z\s.'-]/g, "") })}
+                            className="mt-1 bg-white text-sm"
+                        />
+                        {formErrors.nameOnPan && <p className="mt-1 text-xs text-red-600">{formErrors.nameOnPan}</p>}
                     </div>
                 </div>
                 <div>
                     <Label className="text-xs text-gray-700">PAN image {step3.panImage?.url && <span className="text-green-600 ml-1">(existing image)</span>}</Label>
                     {step3.panImage?.url && <img src={step3.panImage.url} alt="PAN" className="h-16 w-auto rounded mt-1 border" />}
                     <Input type="file" accept="image/*" onChange={(e) => setStep3({ ...step3, panImage: e.target.files?.[0] || null })} className="mt-1 bg-white text-sm" />
+                    {formErrors.panImage && <p className="mt-1 text-xs text-red-600">{formErrors.panImage}</p>}
                 </div>
             </section>
 
@@ -481,11 +701,24 @@ export default function EditRestaurant() {
                 </div>
                 {step3.gstRegistered && (
                     <div className="space-y-3">
-                        <Input value={step3.gstNumber || ""} onChange={(e) => setStep3({ ...step3, gstNumber: e.target.value })} className="bg-white text-sm" placeholder="GST number" />
-                        <Input value={step3.gstLegalName || ""} onChange={(e) => setStep3({ ...step3, gstLegalName: e.target.value })} className="bg-white text-sm" placeholder="Legal name" />
+                        <Input
+                            value={step3.gstNumber || ""}
+                            onChange={(e) => setStep3({ ...step3, gstNumber: (e.target.value || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 15) })}
+                            className="bg-white text-sm"
+                            placeholder="GST number"
+                        />
+                        {formErrors.gstNumber && <p className="-mt-2 text-xs text-red-600">{formErrors.gstNumber}</p>}
+                        <Input
+                            value={step3.gstLegalName || ""}
+                            onChange={(e) => setStep3({ ...step3, gstLegalName: e.target.value.replace(/[^A-Za-z\s.'-]/g, "") })}
+                            className="bg-white text-sm"
+                            placeholder="Legal name"
+                        />
+                        {formErrors.gstLegalName && <p className="-mt-2 text-xs text-red-600">{formErrors.gstLegalName}</p>}
                         <Input value={step3.gstAddress || ""} onChange={(e) => setStep3({ ...step3, gstAddress: e.target.value })} className="bg-white text-sm" placeholder="Registered address" />
                         {step3.gstImage?.url && <img src={step3.gstImage.url} alt="GST" className="h-16 w-auto rounded border" />}
                         <Input type="file" accept="image/*" onChange={(e) => setStep3({ ...step3, gstImage: e.target.files?.[0] || null })} className="bg-white text-sm" />
+                        {formErrors.gstImage && <p className="-mt-2 text-xs text-red-600">{formErrors.gstImage}</p>}
                     </div>
                 )}
             </section>
@@ -494,10 +727,19 @@ export default function EditRestaurant() {
             <section className="bg-white p-4 sm:p-6 rounded-md space-y-4">
                 <h2 className="text-lg font-semibold text-black">FSSAI details</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <Input value={step3.fssaiNumber || ""} onChange={(e) => setStep3({ ...step3, fssaiNumber: e.target.value })} className="bg-white text-sm" placeholder="FSSAI number" />
+                    <div>
+                        <Input
+                            value={step3.fssaiNumber || ""}
+                            onChange={(e) => setStep3({ ...step3, fssaiNumber: (e.target.value || "").replace(/\D/g, "").slice(0, 14) })}
+                            className="bg-white text-sm"
+                            placeholder="FSSAI number"
+                        />
+                        {formErrors.fssaiNumber && <p className="mt-1 text-xs text-red-600">{formErrors.fssaiNumber}</p>}
+                    </div>
                     <div>
                         <Label className="text-xs text-gray-700 mb-1 block">FSSAI expiry date</Label>
                         <Input type="date" value={step3.fssaiExpiry || ""} onChange={(e) => setStep3({ ...step3, fssaiExpiry: e.target.value })} className="bg-white text-sm" />
+                        {formErrors.fssaiExpiry && <p className="mt-1 text-xs text-red-600">{formErrors.fssaiExpiry}</p>}
                     </div>
                 </div>
                 {step3.fssaiImage?.url && <img src={step3.fssaiImage.url} alt="FSSAI" className="h-16 w-auto rounded border" />}
@@ -508,14 +750,49 @@ export default function EditRestaurant() {
             <section className="bg-white p-4 sm:p-6 rounded-md space-y-4">
                 <h2 className="text-lg font-semibold text-black">Bank account details</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <Input value={step3.accountNumber || ""} onChange={(e) => setStep3({ ...step3, accountNumber: e.target.value.trim() })} className="bg-white text-sm" placeholder="Account number" />
+                    <div>
+                        <Input
+                            value={step3.accountNumber || ""}
+                            onChange={(e) => setStep3({ ...step3, accountNumber: (e.target.value || "").replace(/\D/g, "").slice(0, 18) })}
+                            className="bg-white text-sm"
+                            placeholder="Account number"
+                        />
+                        {formErrors.accountNumber && <p className="mt-1 text-xs text-red-600">{formErrors.accountNumber}</p>}
+                    </div>
                     <Input value={step3.confirmAccountNumber || ""} onChange={(e) => setStep3({ ...step3, confirmAccountNumber: e.target.value.trim() })} className="bg-white text-sm" placeholder="Re-enter account number" />
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <Input value={step3.ifscCode || ""} onChange={(e) => setStep3({ ...step3, ifscCode: e.target.value })} className="bg-white text-sm" placeholder="IFSC code" />
-                    <Input value={step3.accountType || ""} onChange={(e) => setStep3({ ...step3, accountType: e.target.value })} className="bg-white text-sm" placeholder="Account type (savings / current)" />
+                    <div>
+                        <Input
+                            value={step3.ifscCode || ""}
+                            onChange={(e) => setStep3({ ...step3, ifscCode: (e.target.value || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 11) })}
+                            className="bg-white text-sm"
+                            placeholder="IFSC code"
+                        />
+                        {formErrors.ifscCode && <p className="mt-1 text-xs text-red-600">{formErrors.ifscCode}</p>}
+                    </div>
+                    <div>
+                        <select
+                            className="flex h-9 w-full rounded-md border border-input bg-white px-3 py-1 text-sm shadow-sm"
+                            value={step3.accountType || ""}
+                            onChange={(e) => setStep3({ ...step3, accountType: e.target.value })}
+                        >
+                            <option value="">Select account type</option>
+                            <option value="savings">Savings</option>
+                            <option value="current">Current</option>
+                        </select>
+                        {formErrors.accountType && <p className="mt-1 text-xs text-red-600">{formErrors.accountType}</p>}
+                    </div>
                 </div>
-                <Input value={step3.accountHolderName || ""} onChange={(e) => setStep3({ ...step3, accountHolderName: e.target.value })} className="bg-white text-sm" placeholder="Account holder name" />
+                <div>
+                    <Input
+                        value={step3.accountHolderName || ""}
+                        onChange={(e) => setStep3({ ...step3, accountHolderName: e.target.value.replace(/[^A-Za-z\s.'-]/g, "") })}
+                        className="bg-white text-sm"
+                        placeholder="Account holder name"
+                    />
+                    {formErrors.accountHolderName && <p className="mt-1 text-xs text-red-600">{formErrors.accountHolderName}</p>}
+                </div>
             </section>
         </div>
     )

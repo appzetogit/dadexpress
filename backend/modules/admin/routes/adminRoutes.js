@@ -33,7 +33,13 @@ import {
   getRestaurantAnalytics,
   getCustomerWalletReport,
 } from "../controllers/adminController.js";
-import { sendPushNotification } from "../controllers/pushNotificationController.js";
+import {
+  sendPushNotification,
+  getPushNotifications,
+  updatePushNotification,
+  togglePushNotificationStatus,
+  deletePushNotification,
+} from "../controllers/pushNotificationController.js";
 import {
   getBusinessSettings,
   updateBusinessSettings,
@@ -262,11 +268,19 @@ router.use((req, res, next) => {
 router.get("/dashboard/stats", getDashboardStats);
 
 // Push Notification
+router.get("/push-notification", getPushNotifications);
 router.post(
   "/push-notification",
   uploadMiddleware.single("image"),
   sendPushNotification,
 );
+router.put(
+  "/push-notification/:id",
+  uploadMiddleware.single("image"),
+  updatePushNotification,
+);
+router.patch("/push-notification/:id/status", togglePushNotificationStatus);
+router.delete("/push-notification/:id", deletePushNotification);
 
 // Delivery Partner global cash limit (applies to all delivery boys)
 router.get("/delivery-cash-limit", getDeliveryCashLimit);

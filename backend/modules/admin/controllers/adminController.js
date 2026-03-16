@@ -1497,6 +1497,16 @@ export const updateRestaurantStatus = asyncHandler(async (req, res) => {
     }
 
     restaurant.isActive = isActive;
+
+    // Keep approval status consistent with activation so the same restaurant
+    // behaves consistently across admin, restaurant, and user-facing flows.
+    if (isActive && !restaurant.approvedAt) {
+      restaurant.approvedAt = new Date();
+      restaurant.rejectionReason = null;
+      restaurant.rejectedAt = null;
+      restaurant.rejectedBy = null;
+    }
+
     await restaurant.save();
 
     logger.info(`Restaurant status updated: ${id}`, {

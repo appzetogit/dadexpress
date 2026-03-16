@@ -144,8 +144,12 @@ export const getRestaurants = async (req, res) => {
               { "sections.subsections.items.foodType": "Veg" }
             ]
           },
-          { "sections.items.foodType": { $ne: "Non-Veg" } },
-          { "sections.subsections.items.foodType": { $ne: "Non-Veg" } }
+          {
+            $nor: [
+              { "sections.items.foodType": "Non-Veg" },
+              { "sections.subsections.items.foodType": "Non-Veg" }
+            ]
+          }
         ];
       }
 

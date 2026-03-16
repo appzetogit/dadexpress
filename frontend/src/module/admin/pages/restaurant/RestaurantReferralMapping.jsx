@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, Download, ExternalLink, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -13,6 +13,7 @@ export default function RestaurantReferralMapping() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [mappings, setMappings] = useState([]);
+  const latestRequestRef = useRef(0);
   const [policy, setPolicy] = useState({
     commissionPercentage: 5,
     applyOn: "First Order Only",
@@ -31,12 +32,15 @@ export default function RestaurantReferralMapping() {
   }, []);
 
   const fetchMappings = async (search = "") => {
+    const requestId = latestRequestRef.current + 1;
+    latestRequestRef.current = requestId;
     try {
       setIsLoading(true);
       const response = await adminAPI.getRestaurantReferralMappings({
-        search,
+        search: String(search || "").trim(),
         limit: 200,
       });
+      if (requestId !== latestRequestRef.current) return;
       const data = response?.data?.data || {};
       setMappings(Array.isArray(data.mappings) ? data.mappings : []);
       if (data.policy) {
@@ -46,10 +50,12 @@ export default function RestaurantReferralMapping() {
         });
       }
     } catch (error) {
+      if (requestId !== latestRequestRef.current) return;
       console.error("Error fetching restaurant referral mappings:", error);
       toast.error("Failed to fetch restaurant referral mappings.");
       setMappings([]);
     } finally {
+      if (requestId !== latestRequestRef.current) return;
       setIsLoading(false);
     }
   };
@@ -70,30 +76,48 @@ export default function RestaurantReferralMapping() {
   }, [mappings]);
 
   const handleExport = () => {
-    if (exportRows.length === 0) {
-      toast.error("No referral mappings available to export.");
-      return;
+    try {
+      if (exportRows.length === 0) {
+        toast.error("No referral mappings available to export.");
+        return;
+      }
+
+      const headers = Object.keys(exportRows[0]);
+      const csvRows = [
+        headers.join(","),
+        ...exportRows.map((row) =>
+          headers
+            .map((header) => `"${String(row[header] ?? "").replace(/"/g, '""')}"`)
+            .join(",")
+        ),
+      ];
+
+      // Include BOM so CSV opens reliably in Excel and spreadsheet apps.
+      const csvContent = `\uFEFF${csvRows.join("\n")}`;
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const fileName = "restaurant-referral-mapping.csv";
+
+      // Legacy fallback for older Edge/IE webviews.
+      if (window.navigator?.msSaveOrOpenBlob) {
+        window.navigator.msSaveOrOpenBlob(blob, fileName);
+        return;
+      }
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", fileName);
+      link.style.display = "none";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      // Revoke after click cycle to avoid early URL invalidation in some browsers.
+      setTimeout(() => URL.revokeObjectURL(url), 200);
+    } catch (error) {
+      console.error("Error exporting restaurant referral mappings:", error);
+      toast.error("Failed to export referral mappings.");
     }
-
-    const headers = Object.keys(exportRows[0]);
-    const csvRows = [
-      headers.join(","),
-      ...exportRows.map((row) =>
-        headers
-          .map((header) => `"${String(row[header] ?? "").replace(/"/g, '""')}"`)
-          .join(",")
-      ),
-    ];
-
-    const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", "restaurant-referral-mapping.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
   };
 
   return (

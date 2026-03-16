@@ -246,9 +246,12 @@ export default function Orders() {
             const isCancelled = order.status === 'cancelled'
             const cancellationReason = order.cancellationReason || ''
             // Check cancelledBy field first, then fallback to cancellation reason pattern
+            const restaurantRejectionPattern =
+              "rejected by restaurant|restaurant rejected|restaurant cancelled|restaurant is too busy|item not available|outside delivery area|kitchen closing|technical issue|order not accepted within time limit|restaurant did not respond"
+
             const isRestaurantCancelled = isCancelled && (
               order.cancelledBy === 'restaurant' ||
-              /rejected by restaurant|restaurant rejected|restaurant cancelled|restaurant is too busy|item not available|outside delivery area|kitchen closing|technical issue|order not accepted within time limit|restaurant did not respond/i.test(cancellationReason)
+              new RegExp(restaurantRejectionPattern, 'i').test(cancellationReason)
             )
             const isUserCancelled = isCancelled && order.cancelledBy === 'user'
 

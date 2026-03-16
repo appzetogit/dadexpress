@@ -258,7 +258,7 @@ export default function RestaurantWithdraws() {
               </span>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 sm:pr-12">
               <div className="relative flex-1 sm:flex-initial min-w-[200px]">
                 <input
                   type="text"

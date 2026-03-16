@@ -503,11 +503,18 @@ apiClient.interceptors.response.use(
           currentPath.includes("/landing-page");
 
         if (!isOnboardingPage && !isLandingPageManagement) {
+          const safeRedirect = (targetPath) => {
+            // Prevent hard-reload redirect loops when we're already on login page.
+            if (window.location.pathname !== targetPath) {
+              window.location.href = targetPath;
+            }
+          };
+
           if (currentPath.startsWith("/admin")) {
             localStorage.removeItem("admin_accessToken");
             localStorage.removeItem("admin_authenticated");
             localStorage.removeItem("admin_user");
-            window.location.href = "/admin/login";
+            safeRedirect("/admin/login");
           } else if (
             currentPath.startsWith("/restaurant") &&
             !currentPath.startsWith("/restaurants")
@@ -516,18 +523,19 @@ apiClient.interceptors.response.use(
             localStorage.removeItem("restaurant_accessToken");
             localStorage.removeItem("restaurant_authenticated");
             localStorage.removeItem("restaurant_user");
-            window.location.href = "/restaurant/login";
+            safeRedirect("/restaurant/login");
           } else if (currentPath.startsWith("/delivery")) {
             localStorage.removeItem("delivery_accessToken");
             localStorage.removeItem("delivery_authenticated");
             localStorage.removeItem("delivery_user");
-            window.location.href = "/delivery/sign-in";
+            safeRedirect("/delivery/sign-in");
           } else {
             // User module includes /restaurants/* paths
             localStorage.removeItem("user_accessToken");
             localStorage.removeItem("user_authenticated");
             localStorage.removeItem("user");
-            window.location.href = "/user/auth/sign-in";
+            localStorage.removeItem("user_user");
+            safeRedirect("/auth/sign-in");
           }
         }
 

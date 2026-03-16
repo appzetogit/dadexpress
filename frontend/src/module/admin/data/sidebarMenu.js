@@ -124,13 +124,6 @@ export const sidebarMenuData = [
         path: "/admin/coupons",
         icon: "Gift",
       },
-
-      {
-        type: "link",
-        label: "Push Notification",
-        path: "/admin/push-notification",
-        icon: "Bell",
-      },
     ],
   },
   {

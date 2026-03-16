@@ -1,8 +1,10 @@
 import { useState, useEffect, useMemo } from "react"
-import { Search } from "lucide-react"
+import { Search, Plus } from "lucide-react"
+import { useNavigate } from "react-router-dom"
 import { adminAPI } from "@/lib/api"
 
 export default function Coupons() {
+  const navigate = useNavigate()
   const [searchQuery, setSearchQuery] = useState("")
   const [offers, setOffers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -53,16 +55,26 @@ export default function Coupons() {
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
           <h1 className="text-2xl font-bold text-slate-900 mb-4">Restaurant Offers & Coupons</h1>
           
-          {/* Search Bar */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search by restaurant name, dish name, or coupon code..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
+          {/* Search and Add Option */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search by restaurant name, dish name, or coupon code..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate("/restaurant/coupon/new")}
+              className="px-4 py-2.5 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 flex items-center justify-center gap-2 transition-all shadow-sm whitespace-nowrap"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Coupons</span>
+            </button>
           </div>
         </div>
 

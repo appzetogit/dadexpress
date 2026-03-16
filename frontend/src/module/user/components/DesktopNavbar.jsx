@@ -1,4 +1,4 @@
-import { Link, useLocation } from "react-router-dom"
+import { Link, useLocation, useNavigate } from "react-router-dom"
 import { useEffect, useState, useRef } from "react"
 import { ChevronDown, ShoppingCart, Wallet, Search, Mic, MapPin } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -14,6 +14,7 @@ import { getCachedSettings, loadBusinessSettings } from "@/lib/utils/businessSet
 
 export default function DesktopNavbar() {
     const location = useLocation()
+    const navigate = useNavigate()
     const { location: userLocation, loading: locationLoading } = useLocationHook()
     const { getCartCount } = useCart()
     const { openLocationSelector } = useLocationSelector()
@@ -183,8 +184,9 @@ export default function DesktopNavbar() {
                                             }}
                                             onKeyDown={(e) => {
                                                 if (e.key === 'Enter' && heroSearch.trim()) {
-                                                    setSearchValue(heroSearch.trim())
-                                                    openSearch()
+                                                    navigate(`/user/search?q=${encodeURIComponent(heroSearch.trim())}`)
+                                                    closeSearch()
+                                                    setHeroSearch("")
                                                 }
                                             }}
                                             className="h-6 p-0 border-0 bg-transparent text-sm font-medium placeholder:text-gray-500 focus-visible:ring-0 focus-visible:ring-offset-0"

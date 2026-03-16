@@ -343,7 +343,7 @@ export default function SignIn() {
       sessionStorage.setItem("userAuthData", JSON.stringify(authData))
 
       // Navigate to OTP page
-      navigate("/user/auth/otp")
+      navigate("/auth/otp")
     } catch (error) {
       const message =
         error?.response?.data?.message ||
@@ -443,7 +443,7 @@ export default function SignIn() {
 
   const toggleMode = () => {
     const newMode = isSignUp ? "signin" : "signup"
-    navigate(`/user/auth/sign-in?mode=${newMode}`, { replace: true })
+    navigate(`/auth/sign-in?mode=${newMode}`, { replace: true })
     // Reset form
     setFormData({ phone: "", countryCode: "+91", email: "", name: "" })
     setErrors({ phone: "", email: "", name: "" })

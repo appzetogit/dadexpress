@@ -304,7 +304,7 @@ export default function DeliveryEarnings() {
             </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2">
+                <button className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 border border-blue-600 flex items-center gap-2 transition-colors">
                   <Download className="w-4 h-4" />
                   <span>Export</span>
                   <ChevronDown className="w-4 h-4" />

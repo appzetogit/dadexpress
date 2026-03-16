@@ -368,16 +368,8 @@ export default function RestaurantsList() {
         console.log(`Restaurant ${isBanning ? 'banned' : 'unbanned'} successfully`)
       } catch (apiErr) {
         console.error("API Error:", apiErr)
-        // If API fails, still update locally for better UX
-        setRestaurants(prevRestaurants =>
-          prevRestaurants.map(r =>
-            r.id === restaurant.id || r._id === restaurant._id
-              ? { ...r, status: newStatus }
-              : r
-          )
-        )
         setBanConfirmDialog(null)
-        alert(`Restaurant ${isBanning ? 'banned' : 'unbanned'} locally. Please check backend connection.`)
+        alert(`Failed to ${action} restaurant. Please check backend connection and try again.`)
       }
 
     } catch (err) {

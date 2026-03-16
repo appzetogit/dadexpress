@@ -81,7 +81,12 @@ export default function ReportSafetyEmergency() {
         </Card>
 
         {!isSubmitted ? (
-          <>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              handleSubmit()
+            }}
+          >
             {/* Info Card */}
             <Card className="bg-white dark:bg-[#1a1a1a] rounded-xl shadow-sm border-0 dark:border-gray-800 mb-4 md:mb-5 lg:mb-6">
               <CardContent className="p-4 md:p-5 lg:p-6">
@@ -111,12 +116,11 @@ export default function ReportSafetyEmergency() {
                   placeholder="Please provide details about the safety issue..."
                   value={report}
                   onChange={(e) => setReport(e.target.value)}
-                  className="min-h-[150px] md:min-h-[200px] lg:min-h-[250px] w-full resize-y text-sm md:text-base leading-relaxed p-3 md:p-4 box-border"
+                  className="min-h-[150px] md:min-h-[200px] lg:min-h-[250px] w-full resize-y text-sm md:text-base leading-relaxed px-4 py-3 md:px-5 md:py-4 box-border"
                   dir="ltr"
                   style={{
                     direction: 'ltr',
                     textAlign: 'left',
-                    unicodeBidi: 'bidi-override',
                     width: '100%',
                     maxWidth: '100%'
                   }}
@@ -128,21 +132,23 @@ export default function ReportSafetyEmergency() {
             </Card>
 
             {/* Submit Button */}
-            <Button
-              onClick={handleSubmit}
-              disabled={!report.trim() || isSubmitting}
-              className="w-full bg-red-600 hover:bg-red-700 text-white text-sm md:text-base h-10 md:h-12 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Submitting...
-                </>
-              ) : (
-                'Report Safety Issue'
-              )}
-            </Button>
-          </>
+            <div className="sticky bottom-0 z-20 bg-[#f5f5f5] dark:bg-[#0a0a0a] py-3 pb-24 md:pb-3">
+              <Button
+                type="submit"
+                disabled={!report.trim() || isSubmitting}
+                className="w-full bg-red-600 hover:bg-red-700 text-white text-sm md:text-base h-11 md:h-12 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Submitting...
+                  </>
+                ) : (
+                  'Report Safety Issue'
+                )}
+              </Button>
+            </div>
+          </form>
         ) : (
           /* Success State */
           <Card className="bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-md border-0 dark:border-gray-800 overflow-hidden">

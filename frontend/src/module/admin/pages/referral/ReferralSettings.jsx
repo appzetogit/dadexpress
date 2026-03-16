@@ -15,8 +15,17 @@ export default function ReferralSettings() {
     referrerReward: 100,
     refereeReward: 50,
     minOrderValue: 199,
-    rewardExpiryDays: 30,
+    expiryDays: 30,
     maxRedemptionPercentage: 20
+  });
+
+  const normalizeReferralSettings = (referralData = {}) => ({
+    isEnabled: referralData.isEnabled ?? true,
+    referrerReward: referralData.referrerReward ?? 100,
+    refereeReward: referralData.refereeReward ?? 50,
+    minOrderValue: referralData.minOrderValue ?? 199,
+    expiryDays: referralData.expiryDays ?? referralData.rewardExpiryDays ?? 30,
+    maxRedemptionPercentage: referralData.maxRedemptionPercentage ?? 20,
   });
 
   useEffect(() => {
@@ -27,8 +36,11 @@ export default function ReferralSettings() {
     try {
       setLoading(true);
       const res = await api.get(API_ENDPOINTS.REFERRAL.SETTINGS);
-      if (res.data?.success && res.data.data?.referral) {
-        setSettings(res.data.data.referral);
+      if (res.data?.success) {
+        const referralData = res.data.data?.referral ?? res.data.data;
+        if (referralData) {
+          setSettings(normalizeReferralSettings(referralData));
+        }
       }
     } catch (error) {
       console.error("Failed to fetch referral settings", error);
@@ -42,20 +54,19 @@ export default function ReferralSettings() {
     try {
       setSaving(true);
       const payload = {
-        referral: {
-          isEnabled: settings.isEnabled,
-          referrerReward: Number(settings.referrerReward),
-          refereeReward: Number(settings.refereeReward),
-          minOrderValue: Number(settings.minOrderValue),
-          rewardExpiryDays: Number(settings.rewardExpiryDays),
-          maxRedemptionPercentage: Number(settings.maxRedemptionPercentage)
-        }
+        isEnabled: settings.isEnabled,
+        referrerReward: Number(settings.referrerReward),
+        refereeReward: Number(settings.refereeReward),
+        minOrderValue: Number(settings.minOrderValue),
+        expiryDays: Number(settings.expiryDays),
+        maxRedemptionPercentage: Number(settings.maxRedemptionPercentage)
       };
       const res = await api.put(API_ENDPOINTS.REFERRAL.SETTINGS, payload);
       if (res.data?.success) {
         toast.success("Referral settings updated successfully!");
-        if (res.data.data?.referral) {
-          setSettings(res.data.data.referral);
+        const updatedReferral = res.data.data?.referral ?? res.data.data;
+        if (updatedReferral) {
+          setSettings(normalizeReferralSettings(updatedReferral));
         }
       }
     } catch (error) {
@@ -175,8 +186,8 @@ export default function ReferralSettings() {
                 <Label className="text-[12px] font-bold text-slate-700">Reward Expiry (Days)</Label>
                 <Input
                   type="number"
-                  name="rewardExpiryDays"
-                  value={settings.rewardExpiryDays}
+                  name="expiryDays"
+                  value={settings.expiryDays}
                   onChange={handleChange}
                   className="h-10 border-slate-200 rounded-lg focus-visible:ring-blue-600 text-md font-medium px-3"
                 />

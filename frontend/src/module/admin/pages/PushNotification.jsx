@@ -1,17 +1,6 @@
-import { useState, useMemo, useRef, useEffect } from "react"
+import { useState, useMemo, useRef, useEffect, useCallback } from "react"
 import { Search, Download, ChevronDown, Bell, Edit, Trash2, Upload, Settings, Image as ImageIcon } from "lucide-react"
-import { pushNotificationsDummy } from "../data/pushNotificationsDummy"
 import { adminAPI } from "../../../lib/api";
-// Using placeholders for notification images
-const notificationImage1 = "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&h=400&fit=crop"
-const notificationImage2 = "https://images.unsplash.com/photo-1559339352-11d035aa65de?w=800&h=400&fit=crop"
-const notificationImage3 = "https://images.unsplash.com/photo-1556910096-6f5e72db6803?w=800&h=400&fit=crop"
-
-const notificationImages = {
-  15: notificationImage1,
-  17: notificationImage2,
-  18: notificationImage3,
-}
 
 export default function PushNotification() {
   const fileInputRef = useRef(null)
@@ -23,8 +12,69 @@ export default function PushNotification() {
   })
   const [bannerPreview, setBannerPreview] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
-  const [notifications, setNotifications] = useState(pushNotificationsDummy)
+  const [notifications, setNotifications] = useState([])
   const [zones, setZones] = useState([])
+  const [editingNotificationId, setEditingNotificationId] = useState(null)
+
+  const handleExport = () => {
+    try {
+      if (!filteredNotifications || filteredNotifications.length === 0) {
+        alert("No notifications available to export")
+        return
+      }
+
+      const headers = ["SI", "Title", "Description", "Zone", "Target", "Status", "Has Image"]
+      const rows = filteredNotifications.map((n) => [
+        n.sl ?? "",
+        (n.title || "").replace(/"/g, '""'),
+        (n.description || "").replace(/"/g, '""'),
+        n.zone || "",
+        n.target || "",
+        n.status ? "Active" : "Inactive",
+        n.image ? "Yes" : "No",
+      ])
+
+      const csvContent = [
+        headers.join(","),
+        ...rows.map((row) => row.map((cell) => (typeof cell === "string" && cell.includes(",") ? `"${cell}"` : cell)).join(",")),
+      ].join("\n")
+
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.setAttribute("download", "push-notifications.csv")
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error("Failed to export notifications:", error)
+      alert("Failed to export notifications")
+    }
+  }
+
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const response = await adminAPI.getPushNotifications()
+      const rawNotifications = response?.data?.data?.notifications || []
+      const normalized = rawNotifications.map((item, index) => ({
+        _id: item._id,
+        sl: index + 1,
+        title: item.title || "",
+        description: item.description || "",
+        zone: item.zone || "All",
+        target: item.sendTo || "Customer",
+        status: item.status !== false,
+        image: Boolean(item.imageUrl),
+        imageUrl: item.imageUrl || null,
+      }))
+      setNotifications(normalized)
+    } catch (error) {
+      console.error("Failed to fetch push notifications:", error)
+      setNotifications([])
+    }
+  }, [])
 
   useEffect(() => {
     const fetchZones = async () => {
@@ -42,6 +92,10 @@ export default function PushNotification() {
     fetchZones()
   }, [])
 
+  useEffect(() => {
+    fetchNotifications()
+  }, [fetchNotifications])
+
   const filteredNotifications = useMemo(() => {
     if (!searchQuery.trim()) {
       return notifications
@@ -49,8 +103,8 @@ export default function PushNotification() {
 
     const query = searchQuery.toLowerCase().trim()
     return notifications.filter(notification =>
-      notification.title.toLowerCase().includes(query) ||
-      notification.description.toLowerCase().includes(query)
+      String(notification.title || "").toLowerCase().includes(query) ||
+      String(notification.description || "").toLowerCase().includes(query)
     )
   }, [notifications, searchQuery])
 
@@ -75,7 +129,9 @@ export default function PushNotification() {
         payload.append("zone", formData.zone);
         payload.append("sendTo", formData.sendTo);
         payload.append("image", file);
-        response = await adminAPI.sendPushNotification(payload);
+        response = editingNotificationId
+          ? await adminAPI.updatePushNotification(editingNotificationId, payload)
+          : await adminAPI.sendPushNotification(payload);
       } else {
         const payload = {
           title: formData.title.trim(),
@@ -83,35 +139,26 @@ export default function PushNotification() {
           zone: formData.zone,
           sendTo: formData.sendTo
         };
-        response = await adminAPI.sendPushNotification(payload);
+        response = editingNotificationId
+          ? await adminAPI.updatePushNotification(editingNotificationId, payload)
+          : await adminAPI.sendPushNotification(payload);
       }
 
       if (response && response.data && response.data.success) {
-        alert(response.data.message || "Push notifications sent successfully!");
-        const nextSl =
-          notifications.length > 0
-            ? Math.max(...notifications.map((n) => Number(n.sl) || 0)) + 1
-            : 1
-
-        const newNotification = {
-          sl: nextSl,
-          title: formData.title.trim(),
-          description: formData.description.trim(),
-          zone: formData.zone,
-          target: formData.sendTo,
-          status: true,
-          image: Boolean(bannerPreview),
-          imageUrl: bannerPreview || null,
-        }
-
-        setNotifications((prev) => [newNotification, ...prev])
+        alert(
+          response.data.message ||
+          (editingNotificationId
+            ? "Push notification updated successfully!"
+            : "Push notifications sent successfully!"),
+        );
+        await fetchNotifications()
         handleReset()
       } else {
-        alert(response?.data?.message || "Failed to send notifications");
+        alert(response?.data?.message || "Failed to save notification");
       }
     } catch (error) {
-      console.error("Error sending push notification:", error);
-      alert("Error sending push notification. " + (error.response?.data?.message || error.message));
+      console.error("Error saving push notification:", error);
+      alert("Error saving push notification. " + (error.response?.data?.message || error.message));
     }
   }
 
@@ -123,6 +170,7 @@ export default function PushNotification() {
       description: "",
     })
     setBannerPreview("")
+    setEditingNotificationId(null)
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
     }
@@ -145,15 +193,40 @@ export default function PushNotification() {
     reader.readAsDataURL(file)
   }
 
-  const handleToggleStatus = (sl) => {
-    setNotifications(notifications.map(notification =>
-      notification.sl === sl ? { ...notification, status: !notification.status } : notification
-    ))
+  const handleEdit = (notification) => {
+    setEditingNotificationId(notification._id)
+    setFormData({
+      title: notification.title || "",
+      zone: notification.zone || "All",
+      sendTo: notification.target || "Customer",
+      description: notification.description || "",
+    })
+    setBannerPreview(notification.imageUrl || "")
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""
+    }
+    window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
-  const handleDelete = (sl) => {
+  const handleToggleStatus = async (notificationId) => {
+    try {
+      await adminAPI.togglePushNotificationStatus(notificationId)
+      await fetchNotifications()
+    } catch (error) {
+      console.error("Failed to update notification status:", error)
+      alert(error?.response?.data?.message || "Failed to update notification status")
+    }
+  }
+
+  const handleDelete = async (notificationId) => {
     if (window.confirm("Are you sure you want to delete this notification?")) {
-      setNotifications(notifications.filter(notification => notification.sl !== sl))
+      try {
+        await adminAPI.deletePushNotification(notificationId)
+        await fetchNotifications()
+      } catch (error) {
+        console.error("Failed to delete notification:", error)
+        alert(error?.response?.data?.message || "Failed to delete notification")
+      }
     }
   }
 
@@ -263,14 +336,14 @@ export default function PushNotification() {
                 onClick={handleReset}
                 className="px-6 py-2.5 text-sm font-medium rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-all"
               >
-                Reset
+                {editingNotificationId ? "Cancel Edit" : "Reset"}
               </button>
               <div className="flex items-center gap-2">
                 <button
                   type="submit"
                   className="px-6 py-2.5 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all shadow-md"
                 >
-                  Send Notification
+                  {editingNotificationId ? "Update Notification" : "Send Notification"}
                 </button>
                 <button className="p-2.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 transition-all">
                   <Settings className="w-5 h-5" />
@@ -302,7 +375,12 @@ export default function PushNotification() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               </div>
 
-              <button className="px-4 py-2.5 text-sm font-medium rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 flex items-center gap-2 transition-all">
+              <button
+                type="button"
+                onClick={handleExport}
+                className="px-4 py-2.5 text-sm font-medium rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={!filteredNotifications || filteredNotifications.length === 0}
+              >
                 <Download className="w-4 h-4" />
                 <span>Export</span>
                 <ChevronDown className="w-3 h-3" />
@@ -328,7 +406,7 @@ export default function PushNotification() {
               <tbody className="bg-white divide-y divide-slate-100">
                 {filteredNotifications.map((notification) => (
                   <tr
-                    key={notification.sl}
+                    key={notification._id}
                     className="hover:bg-slate-50 transition-colors"
                   >
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -344,7 +422,7 @@ export default function PushNotification() {
                       {notification.image ? (
                         <div className="w-12 h-12 rounded-lg overflow-hidden bg-slate-100">
                           <img
-                            src={notification.imageUrl || notificationImages[notification.sl] || notificationImage1}
+                            src={notification.imageUrl}
                             alt={notification.title}
                             className="w-full h-full object-cover"
                             onError={(e) => {
@@ -366,7 +444,7 @@ export default function PushNotification() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <button
-                        onClick={() => handleToggleStatus(notification.sl)}
+                        onClick={() => handleToggleStatus(notification._id)}
                         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${notification.status ? "bg-blue-600" : "bg-slate-300"
                           }`}
                       >
@@ -379,13 +457,14 @@ export default function PushNotification() {
                     <td className="px-6 py-4 whitespace-nowrap text-center">
                       <div className="flex items-center justify-center gap-2">
                         <button
+                          onClick={() => handleEdit(notification)}
                           className="p-1.5 rounded text-blue-600 hover:bg-blue-50 transition-colors"
                           title="Edit"
                         >
                           <Edit className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => handleDelete(notification.sl)}
+                          onClick={() => handleDelete(notification._id)}
                           className="p-1.5 rounded text-red-600 hover:bg-red-50 transition-colors"
                           title="Delete"
                         >

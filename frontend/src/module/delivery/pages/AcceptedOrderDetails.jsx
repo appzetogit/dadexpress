@@ -371,7 +371,12 @@ export default function AcceptedOrderDetails() {
         rating: order.restaurantId?.rating || 3.3
       },
       items: normalizedItems || [],
-      cutlery: order.cutlery || "No",
+      cutlery:
+        typeof order.sendCutlery === "boolean"
+          ? (order.sendCutlery ? "Yes" : "No")
+          : (order.cutlery || "No"),
+      restaurantInstruction: order.note || "",
+      deliveryInstruction: order.deliveryInstruction || "",
       paymentMethod: {
         status: paymentStatus,
         method: 
@@ -624,6 +629,20 @@ export default function AcceptedOrderDetails() {
           <span className="text-gray-900 font-medium">Cutlery:</span>
           <span className="text-gray-900 font-medium">{displayOrderData.cutlery}</span>
         </div>
+
+        {displayOrderData.restaurantInstruction && (
+          <div className="bg-gray-50 rounded-lg p-4">
+            <p className="text-gray-900 font-medium mb-1">Restaurant Instruction</p>
+            <p className="text-gray-700 text-sm">{displayOrderData.restaurantInstruction}</p>
+          </div>
+        )}
+
+        {displayOrderData.deliveryInstruction && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <p className="text-amber-900 font-medium mb-1">Delivery Instruction</p>
+            <p className="text-amber-800 text-sm">{displayOrderData.deliveryInstruction}</p>
+          </div>
+        )}
 
         {/* Payment Method */}
         <div className="bg-gray-50 rounded-lg p-4">

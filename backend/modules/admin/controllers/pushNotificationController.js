@@ -1,9 +1,31 @@
 import User from "../../auth/models/User.js";
 import Delivery from "../../delivery/models/Delivery.js";
 import Restaurant from "../../restaurant/models/Restaurant.js";
+import AdminPushNotification from "../models/AdminPushNotification.js";
 import notificationService from "../../../shared/services/notificationService.js";
 import { successResponse, errorResponse } from "../../../shared/utils/response.js";
 import { asyncHandler } from "../../../shared/middleware/asyncHandler.js";
+
+// @desc    Get push notification list
+// @route   GET /api/admin/push-notification
+// @access  Private/Admin
+export const getPushNotifications = asyncHandler(async (req, res) => {
+    const search = String(req.query.search || "").trim();
+    const query = {};
+
+    if (search) {
+        const regex = new RegExp(search, "i");
+        query.$or = [{ title: regex }, { description: regex }];
+    }
+
+    const notifications = await AdminPushNotification.find(query)
+        .sort({ createdAt: -1 })
+        .lean();
+
+    return successResponse(res, 200, "Push notifications retrieved successfully", {
+        notifications,
+    });
+});
 
 // @desc    Send push notification to users, delivery men or restaurants
 // @route   POST /api/admin/push-notification
@@ -112,8 +134,83 @@ export const sendPushNotification = asyncHandler(async (req, res) => {
 
     console.log(`[PUSH NOTIFICATION] Results - Success: ${successCount}, Failures: ${failureCount}`);
 
+    const adminId = req.admin?._id || null;
+
+    await AdminPushNotification.create({
+        title: String(title).trim(),
+        description: String(description).trim(),
+        zone: zone || "All",
+        sendTo,
+        imageUrl: notificationImage || null,
+        status: true,
+        sentStats: {
+            successCount,
+            failureCount,
+        },
+        createdBy: adminId,
+        updatedBy: adminId,
+    });
+
     return successResponse(res, 200, `Push notifications sent successfully! Delivered: ${successCount}, Failed: ${failureCount}`, {
         successCount,
         failureCount
     });
+});
+
+// @desc    Update push notification details
+// @route   PUT /api/admin/push-notification/:id
+// @access  Private/Admin
+export const updatePushNotification = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { title, description, zone, sendTo } = req.body;
+
+    const notification = await AdminPushNotification.findById(id);
+    if (!notification) {
+        return errorResponse(res, 404, "Push notification not found");
+    }
+
+    if (title !== undefined) notification.title = String(title).trim();
+    if (description !== undefined) notification.description = String(description).trim();
+    if (zone !== undefined) notification.zone = String(zone).trim() || "All";
+    if (sendTo !== undefined) notification.sendTo = sendTo;
+    if (req.file) {
+        notification.imageUrl = req.file.path || req.file.url || notification.imageUrl;
+    }
+    notification.updatedBy = req.admin?._id || notification.updatedBy;
+
+    await notification.save();
+
+    return successResponse(res, 200, "Push notification updated successfully", notification);
+});
+
+// @desc    Toggle push notification status
+// @route   PATCH /api/admin/push-notification/:id/status
+// @access  Private/Admin
+export const togglePushNotificationStatus = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const notification = await AdminPushNotification.findById(id);
+
+    if (!notification) {
+        return errorResponse(res, 404, "Push notification not found");
+    }
+
+    notification.status = !notification.status;
+    notification.updatedBy = req.admin?._id || notification.updatedBy;
+    await notification.save();
+
+    return successResponse(res, 200, "Push notification status updated successfully", notification);
+});
+
+// @desc    Delete push notification
+// @route   DELETE /api/admin/push-notification/:id
+// @access  Private/Admin
+export const deletePushNotification = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+
+    const deleted = await AdminPushNotification.findByIdAndDelete(id);
+    if (!deleted) {
+        return errorResponse(res, 404, "Push notification not found");
+    }
+
+    return successResponse(res, 200, "Push notification deleted successfully");
 });

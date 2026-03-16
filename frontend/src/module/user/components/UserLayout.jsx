@@ -110,6 +110,10 @@ function LocationSelectorProvider({ children }) {
 
 export default function UserLayout() {
   const location = useLocation()
+  const isUserAuthRoute =
+    location.pathname === "/auth/sign-in" ||
+    location.pathname.startsWith("/auth/") ||
+    location.pathname.startsWith("/user/auth/")
 
   useEffect(() => {
     // Reset scroll to top whenever location changes (pathname, search, or hash)
@@ -163,7 +167,7 @@ export default function UserLayout() {
                 <div className="hidden md:block">
                   {showBottomNav && <DesktopNavbar />}
                 </div>
-                <LocationPrompt />
+                {!isUserAuthRoute && <LocationPrompt />}
                 <main className={showBottomNav ? "md:pt-40" : ""}>
                   <Outlet />
                 </main>

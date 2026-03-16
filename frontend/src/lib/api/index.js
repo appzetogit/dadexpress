@@ -1063,15 +1063,43 @@ export const deliveryAPI = {
 // Export admin API helper functions
 export const adminAPI = {
   // Push Notification
+  getPushNotifications: (params = {}) => {
+    return apiClient.get(API_ENDPOINTS.ADMIN.PUSH_NOTIFICATION, { params });
+  },
+
   sendPushNotification: (data) => {
     if (data instanceof FormData) {
-      return apiClient.post('/admin/push-notification', data, {
+      return apiClient.post(API_ENDPOINTS.ADMIN.PUSH_NOTIFICATION, data, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       });
     }
-    return apiClient.post('/admin/push-notification', data);
+    return apiClient.post(API_ENDPOINTS.ADMIN.PUSH_NOTIFICATION, data);
+  },
+
+  updatePushNotification: (id, data) => {
+    const endpoint = API_ENDPOINTS.ADMIN.PUSH_NOTIFICATION_BY_ID.replace(":id", id);
+    if (data instanceof FormData) {
+      return apiClient.put(endpoint, data, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+    }
+    return apiClient.put(endpoint, data);
+  },
+
+  togglePushNotificationStatus: (id) => {
+    return apiClient.patch(
+      API_ENDPOINTS.ADMIN.PUSH_NOTIFICATION_STATUS.replace(":id", id),
+    );
+  },
+
+  deletePushNotification: (id) => {
+    return apiClient.delete(
+      API_ENDPOINTS.ADMIN.PUSH_NOTIFICATION_BY_ID.replace(":id", id),
+    );
   },
 
   // Admin Auth
@@ -1894,6 +1922,12 @@ export const adminAPI = {
     );
   },
 
+  deleteFeedbackExperience: (id) => {
+    return apiClient.delete(
+      API_ENDPOINTS.ADMIN.FEEDBACK_EXPERIENCE_BY_ID.replace(":id", id),
+    );
+  },
+
   // Referral Settings
   getReferralSettings: () => {
     return apiClient.get(API_ENDPOINTS.REFERRAL.SETTINGS);
@@ -2016,6 +2050,13 @@ export const orderAPI = {
     return apiClient.patch(
       API_ENDPOINTS.ORDER.LOCATION.replace(":orderId", encodeURIComponent(orderId)),
       { address }
+    );
+  },
+
+  updateDeliveryInstruction: (orderId, deliveryInstruction) => {
+    return apiClient.patch(
+      API_ENDPOINTS.ORDER.LOCATION.replace(":orderId", encodeURIComponent(orderId)),
+      { deliveryInstruction }
     );
   },
 };

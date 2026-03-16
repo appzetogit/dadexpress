@@ -148,9 +148,9 @@ export default function SearchOverlay({ isOpen, onClose, searchValue, onSearchCh
 
   const handleFoodClick = (item) => {
     if (item.isCategory) {
-      navigate(`/usermain/category/${item.name.toLowerCase()}`)
+      navigate(`/user/category/${item.name.toLowerCase()}`)
     } else {
-      navigate(`/usermain/food/${item.id}`)
+      navigate(`/user/product/${item.id}`)
     }
     onClose()
     onSearchChange("")
