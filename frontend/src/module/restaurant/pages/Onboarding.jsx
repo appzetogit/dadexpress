@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -248,6 +248,7 @@ export default function RestaurantOnboarding() {
     closingTime: "",
     openDays: [],
   })
+  const [customCuisineInput, setCustomCuisineInput] = useState("")
 
   const [step3, setStep3] = useState({
     panNumber: "",
@@ -435,6 +436,30 @@ export default function RestaurantOnboarding() {
     return fallbackLabel
   }
 
+  const normalizeCuisineValue = (value) => {
+    if (value === null || value === undefined) return ""
+    return String(value).trim().replace(/\s+/g, " ")
+  }
+
+  const cuisineKey = (value) => normalizeCuisineValue(value).toLowerCase()
+
+  const dedupeCuisines = (values) => {
+    const list = Array.isArray(values) ? values : []
+    const seen = new Set()
+    const out = []
+
+    for (const item of list) {
+      const normalized = normalizeCuisineValue(item)
+      if (!normalized) continue
+      const key = cuisineKey(normalized)
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push(normalized)
+    }
+
+    return out
+  }
+
 
   // Load from localStorage on mount and check URL parameter
   useEffect(() => {
@@ -473,7 +498,7 @@ export default function RestaurantOnboarding() {
         setStep2({
           menuImages: localData.step2.menuImages || [],
           profileImage: localData.step2.profileImage || null,
-          cuisines: localData.step2.cuisines || [],
+          cuisines: dedupeCuisines(localData.step2.cuisines || []),
           openingTime: localData.step2.openingTime || "",
           closingTime: localData.step2.closingTime || "",
           openDays: localData.step2.openDays || [],
@@ -578,7 +603,7 @@ export default function RestaurantOnboarding() {
               menuImages: data.step2.menuImageUrls || [],
               // Load profile image URL if available
               profileImage: data.step2.profileImageUrl || null,
-              cuisines: data.step2.cuisines || [],
+              cuisines: dedupeCuisines(data.step2.cuisines || []),
               openingTime: data.step2.deliveryTimings?.openingTime || "",
               closingTime: data.step2.deliveryTimings?.closingTime || "",
               openDays: data.step2.openDays || [],
@@ -1235,15 +1260,44 @@ export default function RestaurantOnboarding() {
   }
 
   const toggleCuisine = (cuisine) => {
+    const nextCuisine = normalizeCuisineValue(cuisine)
+    if (!nextCuisine) return
+
     setStep2((prev) => {
-      const exists = prev.cuisines.includes(cuisine)
+      const current = dedupeCuisines(prev.cuisines)
+      const nextKey = cuisineKey(nextCuisine)
+      const exists = current.some((item) => cuisineKey(item) === nextKey)
+
       if (exists) {
-        return { ...prev, cuisines: prev.cuisines.filter((c) => c !== cuisine) }
+        return { ...prev, cuisines: current.filter((item) => cuisineKey(item) !== nextKey) }
       }
-      if (prev.cuisines.length >= 3) return prev
-      return { ...prev, cuisines: [...prev.cuisines, cuisine] }
+
+      return { ...prev, cuisines: [...current, nextCuisine] }
     })
   }
+
+  const addCustomCuisine = () => {
+    const nextCuisine = normalizeCuisineValue(customCuisineInput)
+    if (!nextCuisine) return
+
+    setCustomCuisineInput("")
+    setStep2((prev) => {
+      const current = dedupeCuisines(prev.cuisines)
+      const nextKey = cuisineKey(nextCuisine)
+      if (current.some((item) => cuisineKey(item) === nextKey)) {
+        return prev
+      }
+      return { ...prev, cuisines: [...current, nextCuisine] }
+    })
+  }
+
+  const availableCuisines = useMemo(() => {
+    return dedupeCuisines([...(cuisinesOptions || []), ...(step2.cuisines || [])])
+  }, [step2.cuisines])
+
+  const selectedCuisineKeys = useMemo(() => {
+    return new Set(dedupeCuisines(step2.cuisines).map((c) => cuisineKey(c)))
+  }, [step2.cuisines])
 
   const toggleDay = (day) => {
     setStep2((prev) => {
@@ -1655,13 +1709,39 @@ export default function RestaurantOnboarding() {
       <section className="bg-white p-4 sm:p-6 rounded-md space-y-5">
         {/* Cuisines */}
         <div>
-          <Label className="text-xs text-gray-700">Select cuisines (up to 3)</Label>
+          <Label className="text-xs text-gray-700">Select cuisines</Label>
+          <p className="text-[11px] text-gray-500 mt-1">
+            Select as many as you need. You can also add custom cuisines.
+          </p>
+          <div className="mt-2 flex gap-2">
+            <Input
+              value={customCuisineInput}
+              onChange={(e) => setCustomCuisineInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault()
+                  addCustomCuisine()
+                }
+              }}
+              className="bg-white text-sm"
+              placeholder="Add a cuisine (e.g., Thai)"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={addCustomCuisine}
+              disabled={!normalizeCuisineValue(customCuisineInput)}
+              className="text-xs"
+            >
+              Add
+            </Button>
+          </div>
           <div className="mt-2 flex flex-wrap gap-2">
-            {cuisinesOptions.map((cuisine) => {
-              const active = step2.cuisines.includes(cuisine)
+            {availableCuisines.map((cuisine) => {
+              const active = selectedCuisineKeys.has(cuisineKey(cuisine))
               return (
                 <button
-                  key={cuisine}
+                  key={cuisineKey(cuisine)}
                   type="button"
                   onClick={() => toggleCuisine(cuisine)}
                   className={`px-3 py-1.5 text-xs rounded-full ${active ? "bg-black text-white" : "bg-gray-100 text-gray-800"
@@ -2168,5 +2248,3 @@ export default function RestaurantOnboarding() {
     </LocalizationProvider>
   )
 }
-
-
