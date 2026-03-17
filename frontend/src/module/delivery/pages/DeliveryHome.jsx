@@ -10638,6 +10638,18 @@ export default function DeliveryHome() {
                     <p className="text-base font-semibold text-gray-900">
                       {newOrder?.orderId || selectedRestaurant?.orderId || 'ORD1234567890'}
                     </p>
+                    {(() => {
+                      const firstItemName =
+                        newOrder?.items?.[0]?.name ||
+                        selectedRestaurant?.items?.[0]?.name ||
+                        newOrder?.fullOrder?.items?.[0]?.name ||
+                        '';
+                      return firstItemName ? (
+                        <p className="text-sm font-semibold text-gray-900 mt-1">
+                          {firstItemName}
+                        </p>
+                      ) : null;
+                    })()}
                   </div>
 
                   {/* Customer details hidden in Stage 1 */}
