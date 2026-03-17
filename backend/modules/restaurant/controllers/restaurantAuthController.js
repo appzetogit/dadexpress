@@ -33,6 +33,30 @@ const computeIsProfileCompleted = (restaurant) => {
   return false;
 };
 
+const pickBestRestaurantForGoogleLogin = (restaurants = [], email, firebaseUid) => {
+  if (!Array.isArray(restaurants) || restaurants.length === 0) return null;
+  const normalizedEmail = (email || '').toLowerCase().trim();
+
+  const score = (restaurant) => {
+    let s = 0;
+    if (computeIsProfileCompleted(restaurant)) s += 200;
+    if (restaurant?.isActive === true) s += 100;
+    if (restaurant?.googleId && restaurant.googleId === firebaseUid) s += 80;
+    if (restaurant?.email && restaurant.email.toLowerCase().trim() === normalizedEmail) s += 60;
+    if (restaurant?.ownerEmail && restaurant.ownerEmail.toLowerCase().trim() === normalizedEmail) s += 40;
+    if (
+      restaurant?.onboarding?.step1?.ownerEmail &&
+      restaurant.onboarding.step1.ownerEmail.toLowerCase().trim() === normalizedEmail
+    ) {
+      s += 30;
+    }
+    if (restaurant?.phone) s += 10;
+    return s;
+  };
+
+  return [...restaurants].sort((a, b) => score(b) - score(a))[0] || null;
+};
+
 const logger = winston.createLogger({
   level: 'info',
   format: winston.format.json(),
@@ -1115,13 +1139,42 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
       return errorResponse(res, 400, 'Invalid email format received from Google.');
     }
 
-    // Find existing restaurant by firebase UID (stored in googleId) or email
-    let restaurant = await Restaurant.findOne({
+    // Find possible existing restaurants and choose best match:
+    // completed/active account should win over an incomplete auto-created one.
+    const candidateRestaurants = await Restaurant.find({
       $or: [
         { googleId: firebaseUid },
-        { email }
+        { email },
+        { ownerEmail: email },
+        { 'onboarding.step1.ownerEmail': email }
       ]
     });
+
+    let restaurant = pickBestRestaurantForGoogleLogin(candidateRestaurants, email, firebaseUid);
+
+    // If Google UID is currently linked to another weaker/incomplete account,
+    // and we selected a better account, move the linkage safely.
+    if (restaurant) {
+      const currentGoogleLinked = await Restaurant.findOne({ googleId: firebaseUid });
+      if (
+        currentGoogleLinked &&
+        currentGoogleLinked._id?.toString() !== restaurant._id?.toString()
+      ) {
+        const selectedCompleted = computeIsProfileCompleted(restaurant);
+        const currentCompleted = computeIsProfileCompleted(currentGoogleLinked);
+
+        if (selectedCompleted && !currentCompleted) {
+          currentGoogleLinked.googleId = undefined;
+          currentGoogleLinked.googleEmail = undefined;
+          await currentGoogleLinked.save();
+          logger.info('Moved Google UID from incomplete account to completed account', {
+            fromRestaurantId: currentGoogleLinked._id,
+            toRestaurantId: restaurant._id,
+            email
+          });
+        }
+      }
+    }
 
     if (restaurant) {
       // If restaurant exists but googleId not linked yet, link it
