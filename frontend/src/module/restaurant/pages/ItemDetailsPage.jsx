@@ -375,6 +375,25 @@ export default function ItemDetailsPage() {
     return result
   }
 
+  const parseGalleryResults = (rawResult) => {
+    let result = rawResult
+
+    if (typeof result === "string") {
+      try {
+        result = JSON.parse(result)
+      } catch {
+        return []
+      }
+    }
+
+    if (Array.isArray(result)) {
+      return result.map((item) => parseCameraResult(item)).filter(Boolean)
+    }
+
+    const single = parseCameraResult(result)
+    return single ? [single] : []
+  }
+
   const convertBase64ToFile = (cameraResult) => {
     const base64Content = cameraResult.base64.includes(",")
       ? cameraResult.base64.split(",").pop()
@@ -390,6 +409,29 @@ export default function ItemDetailsPage() {
     const extension = mimeType.split("/")[1] || "jpg"
     const fileName = cameraResult.fileName || `item-image-${Date.now()}.${extension}`
     return new File([uint8Array], fileName, { type: mimeType })
+  }
+
+  const handleAddImagesClick = async () => {
+    try {
+      if (!window.flutter_inappwebview?.callHandler) {
+        fileInputRef.current?.click()
+        return
+      }
+
+      const rawResult = await window.flutter_inappwebview.callHandler("openGallery")
+      const galleryResults = parseGalleryResults(rawResult)
+
+      if (!galleryResults.length) {
+        toast.error("No image selected")
+        return
+      }
+
+      const galleryFiles = galleryResults.map(convertBase64ToFile)
+      processSelectedFiles(galleryFiles)
+    } catch (error) {
+      console.error("Gallery selection failed:", error)
+      fileInputRef.current?.click()
+    }
   }
 
   const handleCameraCapture = async () => {
@@ -953,15 +995,16 @@ export default function ItemDetailsPage() {
               id="image-upload"
             />
             <div className="grid grid-cols-2 gap-2">
-              <label
-                htmlFor="image-upload"
-                className="flex items-center justify-center gap-2.5 px-4 py-3.5 bg-gradient-to-r from-gray-900 to-gray-800 text-white rounded-xl text-sm font-semibold cursor-pointer hover:from-gray-800 hover:to-gray-700 transition-all shadow-md hover:shadow-lg active:scale-95"
+              <button
+                type="button"
+                onClick={handleAddImagesClick}
+                className="flex items-center justify-center gap-2.5 px-4 py-3.5 bg-gradient-to-r from-gray-900 to-gray-800 text-white rounded-xl text-sm font-semibold hover:from-gray-800 hover:to-gray-700 transition-all shadow-md hover:shadow-lg active:scale-95"
               >
                 <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center">
                   <Plus className="w-4 h-4" />
                 </div>
                 <span>Add Images</span>
-              </label>
+              </button>
               <button
                 type="button"
                 onClick={handleCameraCapture}
