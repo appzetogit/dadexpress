@@ -78,6 +78,186 @@ const apiClient = axios.create({
   withCredentials: true, // Include cookies for refresh token
 });
 
+// Lightweight request tracing for diagnosing request storms/timeouts in production.
+// Enable at runtime via `localStorage.setItem('api_trace','1')` (and refresh),
+// or at build time via `VITE_API_TRACE=true`.
+const apiTraceState = {
+  maxEntries: 500,
+  stormWindowMs: 5000,
+  stormWarnThreshold: 15,
+  inFlightGet: new Map(), // key -> deferred
+  history: [],
+  recent: new Map(), // key -> timestamps[]
+  lastStormWarnAt: new Map(), // key -> ts
+};
+
+const ensureApiTraceGlobal = () => {
+  try {
+    if (typeof window === "undefined") return;
+    // eslint-disable-next-line no-undef
+    window.__API_TRACE__ = window.__API_TRACE__ || {};
+    // eslint-disable-next-line no-undef
+    const trace = window.__API_TRACE__;
+
+    // Keep a stable reference so console helpers work even before any requests are traced.
+    if (!trace.history) trace.history = apiTraceState.history;
+
+    if (typeof trace.getRecent !== "function") {
+      trace.getRecent = (ms = 10000) => {
+        const now = Date.now();
+        return apiTraceState.history.filter((e) => now - (e.ts || 0) <= ms);
+      };
+    }
+
+    if (typeof trace.summary !== "function") {
+      trace.summary = (ms = 10000) => {
+        const now = Date.now();
+        const counts = new Map();
+        for (const e of apiTraceState.history) {
+          if (now - (e.ts || 0) > ms) continue;
+          const key = e.key || "";
+          counts.set(key, (counts.get(key) || 0) + 1);
+        }
+        return Array.from(counts.entries())
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 30)
+          .map(([key, count]) => ({ key, count }));
+      };
+    }
+  } catch {
+    // Ignore trace initialization issues
+  }
+};
+
+const isApiTraceEnabled = () => {
+  try {
+    return (
+      import.meta.env.VITE_API_TRACE === "true" ||
+      localStorage.getItem("api_trace") === "1"
+    );
+  } catch {
+    return import.meta.env.VITE_API_TRACE === "true";
+  }
+};
+
+const safeToJson = (value, maxLen = 800) => {
+  try {
+    if (value === undefined) return undefined;
+    if (value === null) return null;
+    if (typeof value === "string") return value.slice(0, maxLen);
+    if (value instanceof FormData) return "[FormData]";
+    const str = JSON.stringify(value);
+    return str.length > maxLen ? `${str.slice(0, maxLen)}...` : str;
+  } catch {
+    return "[unserializable]";
+  }
+};
+
+const normalizeUrlForKey = (config) => {
+  const base = config.baseURL || apiClient.defaults.baseURL || "";
+  const url = config.url || "";
+  try {
+    return new URL(url, base).toString();
+  } catch {
+    return `${base}${url}`;
+  }
+};
+
+const buildRequestKey = (config) => {
+  const method = (config.method || "get").toLowerCase();
+  const fullUrl = normalizeUrlForKey(config);
+  const params = safeToJson(config.params, 300);
+  return `${method} ${fullUrl} ${params || ""}`.trim();
+};
+
+const captureCallsite = () => {
+  try {
+    const stack = new Error().stack || "";
+    return stack
+      .split("\n")
+      .slice(2)
+      .filter(
+        (line) =>
+          !line.includes("node_modules") &&
+          !line.includes("/src/lib/api/axios") &&
+          !line.includes("\\src\\lib\\api\\axios"),
+      )
+      .slice(0, 6)
+      .join("\n");
+  } catch {
+    return "";
+  }
+};
+
+const recordApiTrace = (entry) => {
+  try {
+    ensureApiTraceGlobal();
+
+    apiTraceState.history.push(entry);
+    if (apiTraceState.history.length > apiTraceState.maxEntries) {
+      apiTraceState.history.splice(
+        0,
+        apiTraceState.history.length - apiTraceState.maxEntries,
+      );
+    }
+
+    // Helpers are attached in ensureApiTraceGlobal(); don't reassign every request.
+  } catch {
+    // Ignore trace failures
+  }
+};
+
+// Initialize the global trace helper early so console calls don't crash
+// even before the first traced request is made.
+ensureApiTraceGlobal();
+
+const trackStorm = (key) => {
+  const now = Date.now();
+  const list = apiTraceState.recent.get(key) || [];
+  const trimmed = list.filter((ts) => now - ts <= apiTraceState.stormWindowMs);
+  trimmed.push(now);
+  apiTraceState.recent.set(key, trimmed);
+
+  if (trimmed.length >= apiTraceState.stormWarnThreshold) {
+    const lastWarn = apiTraceState.lastStormWarnAt.get(key) || 0;
+    if (now - lastWarn > apiTraceState.stormWindowMs) {
+      apiTraceState.lastStormWarnAt.set(key, now);
+      console.warn(
+        `[API TRACE] Request storm detected (${trimmed.length} in ${apiTraceState.stormWindowMs}ms): ${key}`,
+      );
+    }
+  }
+};
+
+const createDeferred = () => {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+};
+
+const resolveAxiosAdapter = (config) => {
+  // Axios adapters can be functions, arrays (node), or undefined depending on bundling/runtime.
+  const candidates = [
+    config?.adapter,
+    apiClient?.defaults?.adapter,
+    axios?.defaults?.adapter,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "function") return candidate;
+    if (Array.isArray(candidate)) {
+      const fn = candidate.find((x) => typeof x === "function");
+      if (fn) return fn;
+    }
+  }
+
+  return null;
+};
+
 /**
  * Get the appropriate module token based on the current route
  * @returns {string|null} - Access token for the current module or null
@@ -120,6 +300,80 @@ function getTokenForCurrentRoute() {
  */
 apiClient.interceptors.request.use(
   (config) => {
+    const traceEnabled = isApiTraceEnabled();
+    const key = buildRequestKey(config);
+    const ts = Date.now();
+
+    // Attach tracing metadata to the request config for response/error logs.
+    config.__trace = {
+      ts,
+      key,
+      method: (config.method || "get").toUpperCase(),
+      url: normalizeUrlForKey(config),
+      params: config.params,
+      callsite: traceEnabled ? captureCallsite() : "",
+    };
+
+    if (traceEnabled) {
+      trackStorm(key);
+      recordApiTrace({
+        ts,
+        phase: "request",
+        key,
+        method: config.__trace.method,
+        url: config.__trace.url,
+        params: safeToJson(config.params),
+        data: safeToJson(config.data),
+        callsite: config.__trace.callsite,
+      });
+
+      console.debug(`[API TRACE] -> ${config.__trace.method} ${config.__trace.url}`, {
+        ts: new Date(ts).toISOString(),
+        params: config.params,
+        data: config.data instanceof FormData ? "[FormData]" : config.data,
+      });
+      if (config.__trace.callsite) {
+        console.debug(`[API TRACE] callsite:\n${config.__trace.callsite}`);
+      }
+    }
+
+    // Dedupe identical concurrent GETs to prevent request stampedes (safe/idempotent).
+    // Can be disabled per request via `config.__noDedupeGet = true`.
+    const method = (config.method || "get").toLowerCase();
+    if (method === "get" && !config.__noDedupeGet) {
+      const existing = apiTraceState.inFlightGet.get(key);
+      if (existing) {
+        if (traceEnabled) {
+          recordApiTrace({ ts, phase: "dedupe-hit", key, url: config.__trace.url });
+          console.debug(`[API TRACE] deduped GET (in-flight): ${key}`);
+        }
+        config.adapter = () => existing.promise;
+        return config;
+      }
+
+      const deferred = createDeferred();
+      apiTraceState.inFlightGet.set(key, deferred);
+      const originalAdapter = resolveAxiosAdapter(config);
+
+      if (typeof originalAdapter === "function") {
+        config.adapter = async (cfg) => {
+          try {
+            const resp = await originalAdapter(cfg);
+            deferred.resolve(resp);
+            return resp;
+          } catch (err) {
+            deferred.reject(err);
+            throw err;
+          } finally {
+            apiTraceState.inFlightGet.delete(key);
+          }
+        };
+      } else {
+        // Can't safely wrap/dedupe without a callable adapter in this runtime.
+        apiTraceState.inFlightGet.delete(key);
+      }
+    }
+
     // Get access token for the current module based on route
     let accessToken = getTokenForCurrentRoute();
 
@@ -298,6 +552,24 @@ apiClient.interceptors.request.use(
  */
 apiClient.interceptors.response.use(
   (response) => {
+    const traceEnabled = isApiTraceEnabled();
+    const meta = response?.config?.__trace;
+    if (traceEnabled && meta) {
+      const ts = Date.now();
+      recordApiTrace({
+        ts,
+        phase: "response",
+        key: meta.key,
+        method: meta.method,
+        url: meta.url,
+        status: response.status,
+        durationMs: ts - meta.ts,
+      });
+      console.debug(
+        `[API TRACE] <- ${response.status} ${meta.method} ${meta.url} (${ts - meta.ts}ms)`,
+      );
+    }
+
     // Reset network error state on successful response (backend is back online)
     if (networkErrorState.errorCount > 0 || hasShownBackendDownToast()) {
       clearBackendDownToastState();
@@ -341,6 +613,31 @@ apiClient.interceptors.response.use(
     return response;
   },
   async (error) => {
+    const traceEnabled = isApiTraceEnabled();
+    const meta = error?.config?.__trace;
+    if (traceEnabled && meta) {
+      const ts = Date.now();
+      const status = error?.response?.status;
+      recordApiTrace({
+        ts,
+        phase: "error",
+        key: meta.key,
+        method: meta.method,
+        url: meta.url,
+        status,
+        code: error?.code,
+        message:
+          error?.response?.data?.message ||
+          error?.response?.data?.error ||
+          error?.message ||
+          "",
+        durationMs: ts - meta.ts,
+      });
+      console.debug(
+        `[API TRACE] <- ERROR ${meta.method} ${meta.url} (${status || error?.code || "?"})`,
+      );
+    }
+
     const originalRequest = error.config || {};
 
     // Determine request URL for refresh logic
