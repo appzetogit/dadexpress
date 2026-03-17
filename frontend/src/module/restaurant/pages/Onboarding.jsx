@@ -20,7 +20,7 @@ import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns"
 import { determineStepToShow } from "../utils/onboardingUtils"
 import { toast } from "sonner"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
-import { clearModuleAuth } from "@/lib/utils/auth"
+import { clearModuleAuth, getModuleToken, setAuthData } from "@/lib/utils/auth"
 import { readStoredRestaurantUser } from "@/module/restaurant/utils/restaurantSessionGuard"
 
 const cuisinesOptions = [
@@ -1112,9 +1112,12 @@ export default function RestaurantOnboarding() {
         const response = await api.put("/restaurant/onboarding", payload)
         console.log('✅ Step2 response:', response?.data)
 
-        // Verify response is successful
-        if (!response || !response.data) {
-          throw new Error('Invalid response from server')
+        // Verify request is successful (some APIs return 204 with empty body)
+        if (
+          !response ||
+          (typeof response.status === "number" && (response.status < 200 || response.status >= 300))
+        ) {
+          throw new Error("Failed to save Step 2")
         }
 
         // After step2, also update restaurant schema with step2 data
@@ -1271,9 +1274,46 @@ export default function RestaurantOnboarding() {
         const response = await api.put("/restaurant/onboarding", payload)
         console.log('✅ Step4 completed, response:', response?.data)
 
-        // Verify response is successful
-        if (!response || !response.data) {
-          throw new Error('Invalid response from server')
+        // Verify request is successful (some APIs return 204 with empty body)
+        if (
+          !response ||
+          (typeof response.status === "number" && (response.status < 200 || response.status >= 300))
+        ) {
+          throw new Error("Failed to complete onboarding")
+        }
+
+        // Ensure restaurant session reflects completion, otherwise ProtectedRoute will keep redirecting to onboarding.
+        try {
+          const token = getModuleToken("restaurant")
+          const stored = readStoredRestaurantUser()
+          const fromApi =
+            response?.data?.data?.restaurant ||
+            response?.data?.data?.user ||
+            response?.data?.data ||
+            response?.data?.restaurant ||
+            response?.data?.user ||
+            null
+
+          const baseUser = fromApi && typeof fromApi === "object" ? fromApi : stored
+          if (token && baseUser) {
+            const nextUser = {
+              ...baseUser,
+              onboarding: {
+                ...(baseUser.onboarding || {}),
+                currentStep: 4,
+                completedSteps: 4,
+              },
+              isProfileCompleted: true,
+            }
+            setAuthData("restaurant", token, nextUser)
+            try {
+              window.dispatchEvent(new Event("restaurantAuthChanged"))
+            } catch {
+              // ignore
+            }
+          }
+        } catch {
+          // Non-blocking: navigation still happens and session will self-heal on refresh.
         }
 
         // Clear localStorage when onboarding is complete
