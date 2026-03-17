@@ -26,6 +26,21 @@ export default function RestaurantSignIn() {
   const redirectHandledRef = useRef(false)
   const companyName = useCompanyName()
 
+  const normalizeRestaurantSessionData = (restaurantData) => {
+    if (!restaurantData || typeof restaurantData !== "object") return restaurantData
+    if (typeof restaurantData.isProfileCompleted === "boolean") return restaurantData
+
+    const completedSteps = Number(restaurantData?.onboarding?.completedSteps)
+    const hasOnboardingObject =
+      restaurantData?.onboarding !== undefined && restaurantData?.onboarding !== null
+
+    const isProfileCompleted = Number.isFinite(completedSteps)
+      ? completedSteps >= 4
+      : !hasOnboardingObject
+
+    return { ...restaurantData, isProfileCompleted }
+  }
+
   // Redirect to restaurant home if already authenticated
   useEffect(() => {
     const isAuthenticated = localStorage.getItem("restaurant_authenticated") === "true"
@@ -73,7 +88,7 @@ export default function RestaurantSignIn() {
       })
 
       const accessToken = data.accessToken
-      const restaurant = data.restaurant
+      const restaurant = normalizeRestaurantSessionData(data.restaurant)
 
       if (accessToken && restaurant) {
         setAuthData("restaurant", accessToken, restaurant)
@@ -197,7 +212,12 @@ export default function RestaurantSignIn() {
         throw new Error("Firebase Auth is not initialized. Please check your Firebase configuration.")
       }
 
-      const { signInWithPopup, GoogleAuthProvider, signInWithCredential } = await import("firebase/auth")
+      const { signInWithPopup, GoogleAuthProvider, signInWithCredential, signOut } = await import("firebase/auth")
+
+      // Ensure stale Firebase session does not auto-pick previous account.
+      if (firebaseAuth?.currentUser) {
+        await signOut(firebaseAuth)
+      }
 
       let user = null
 

@@ -66,6 +66,21 @@ export default function RestaurantLogin() {
   const [apiError, setApiError] = useState("")
   const googleLoginInProgressRef = useRef(false)
 
+  const normalizeRestaurantSessionData = (restaurantData) => {
+    if (!restaurantData || typeof restaurantData !== "object") return restaurantData
+    if (typeof restaurantData.isProfileCompleted === "boolean") return restaurantData
+
+    const completedSteps = Number(restaurantData?.onboarding?.completedSteps)
+    const hasOnboardingObject =
+      restaurantData?.onboarding !== undefined && restaurantData?.onboarding !== null
+
+    const isProfileCompleted = Number.isFinite(completedSteps)
+      ? completedSteps >= 4
+      : !hasOnboardingObject
+
+    return { ...restaurantData, isProfileCompleted }
+  }
+
   // Get selected country details dynamically
   const selectedCountry = countryCodes.find(c => c.code === formData.countryCode) || countryCodes[2] // Default to India (+91)
 
@@ -244,7 +259,12 @@ export default function RestaurantLogin() {
     setIsSending(true)
 
     try {
-      const { signInWithPopup, GoogleAuthProvider, signInWithCredential } = await import("firebase/auth")
+      const { signInWithPopup, GoogleAuthProvider, signInWithCredential, signOut } = await import("firebase/auth")
+
+      // Ensure stale Firebase session does not auto-pick previous account.
+      if (firebaseAuth?.currentUser) {
+        await signOut(firebaseAuth)
+      }
 
       let user = null
 
@@ -293,7 +313,7 @@ export default function RestaurantLogin() {
       const data = response?.data?.data || {}
 
       const accessToken = data.accessToken
-      const restaurant = data.restaurant
+      const restaurant = normalizeRestaurantSessionData(data.restaurant)
 
       if (!accessToken || !restaurant) {
         throw new Error("Invalid response from server")
