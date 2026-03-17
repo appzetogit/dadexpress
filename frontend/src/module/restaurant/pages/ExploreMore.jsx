@@ -1155,6 +1155,15 @@ export default function ExploreMore() {
               {/* Logout Button */}
               <div className="px-6 pb-6">
                 <button
+                  onClick={() => {
+                    setProfileOpen(false)
+                    navigate("/restaurant/edit-owner")
+                  }}
+                  className="w-full border border-gray-300 hover:bg-gray-50 text-gray-900 font-semibold py-3 px-4 rounded-lg transition-colors mb-3"
+                >
+                  Edit profile details
+                </button>
+                <button
                   onClick={handleLogoutAllDevices}
                   disabled={isLoggingOut}
                   className="w-full bg-red-600 hover:bg-red-700 disabled:bg-red-400 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 rounded-lg transition-colors"

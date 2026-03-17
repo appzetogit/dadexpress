@@ -1,6 +1,6 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Download, ChevronDown, RefreshCw, FileText, DollarSign, Settings, FileSpreadsheet, Code } from "lucide-react"
-import { taxReportDummy, taxStats } from "../../data/taxReportDummy"
+import { adminAPI } from "@/lib/api"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { exportReportsToCSV, exportReportsToExcel, exportReportsToPDF, exportReportsToJSON } from "../../components/reports/reportsExportUtils"
@@ -12,22 +12,106 @@ export default function TaxReport() {
     taxRate: "Select Tax Rate",
   })
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [reportRows, setReportRows] = useState([])
+  const [summaryStats, setSummaryStats] = useState({
+    totalIncome: 0,
+    totalTax: 0,
+  })
+
+  const formatCurrency = (value) => `$ ${Number(value || 0).toFixed(2)}`
+
+  const getDateRangeFromType = (dateRangeType) => {
+    const now = new Date()
+    const toDate = new Date(now)
+    let fromDate = null
+
+    switch (dateRangeType) {
+      case "Today": {
+        fromDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+        break
+      }
+      case "This Week": {
+        const day = now.getDay()
+        const diff = now.getDate() - day + (day === 0 ? -6 : 1)
+        fromDate = new Date(now.getFullYear(), now.getMonth(), diff)
+        break
+      }
+      case "This Month": {
+        fromDate = new Date(now.getFullYear(), now.getMonth(), 1)
+        break
+      }
+      case "This Year": {
+        fromDate = new Date(now.getFullYear(), 0, 1)
+        break
+      }
+      default:
+        return {}
+    }
+
+    const toISODate = (date) => date.toISOString().split("T")[0]
+    return {
+      fromDate: fromDate ? toISODate(fromDate) : undefined,
+      toDate: toISODate(toDate),
+    }
+  }
+
+  const fetchTaxReport = async (dateRangeType) => {
+    try {
+      const params = getDateRangeFromType(dateRangeType)
+      const response = await adminAPI.getTransactionReport(params)
+      const transactions = response?.data?.data?.transactions || []
+
+      const mappedRows = transactions.map((txn, index) => ({
+        sl: index + 1,
+        incomeSource: txn.orderId || "N/A",
+        totalIncome: formatCurrency(txn.orderAmount || 0),
+        totalTax: formatCurrency(txn.vatTax || 0),
+      }))
+
+      const totalIncome = transactions.reduce(
+        (sum, txn) => sum + Number(txn.orderAmount || 0),
+        0,
+      )
+      const totalTax = transactions.reduce(
+        (sum, txn) => sum + Number(txn.vatTax || 0),
+        0,
+      )
+
+      setReportRows(mappedRows)
+      setSummaryStats({
+        totalIncome,
+        totalTax,
+      })
+    } catch (error) {
+      console.error("Failed to fetch tax report:", error)
+      setReportRows([])
+      setSummaryStats({
+        totalIncome: 0,
+        totalTax: 0,
+      })
+    }
+  }
+
+  useEffect(() => {
+    fetchTaxReport(filters.dateRangeType)
+  }, [])
 
   const handleReset = () => {
-    setFilters({
+    const resetFilters = {
       dateRangeType: "Select Date Range",
       calculateTax: "Select Calculate Tax",
       taxRate: "Select Tax Rate",
-    })
+    }
+    setFilters(resetFilters)
+    fetchTaxReport(resetFilters.dateRangeType)
   }
 
   const handleSubmit = () => {
-    // Handle form submission
-    console.log("Submitting tax report filters:", filters)
+    fetchTaxReport(filters.dateRangeType)
   }
 
   const handleExport = (format) => {
-    if (taxReportDummy.length === 0) {
+    if (reportRows.length === 0) {
       alert("No data to export")
       return
     }
@@ -38,10 +122,10 @@ export default function TaxReport() {
       { key: "totalTax", label: "Total Tax" },
     ]
     switch (format) {
-      case "csv": exportReportsToCSV(taxReportDummy, headers, "tax_report"); break
-      case "excel": exportReportsToExcel(taxReportDummy, headers, "tax_report"); break
-      case "pdf": exportReportsToPDF(taxReportDummy, headers, "tax_report", "Tax Report"); break
-      case "json": exportReportsToJSON(taxReportDummy, "tax_report"); break
+      case "csv": exportReportsToCSV(reportRows, headers, "tax_report"); break
+      case "excel": exportReportsToExcel(reportRows, headers, "tax_report"); break
+      case "pdf": exportReportsToPDF(reportRows, headers, "tax_report", "Tax Report"); break
+      case "json": exportReportsToJSON(reportRows, "tax_report"); break
     }
   }
 
@@ -139,7 +223,7 @@ export default function TaxReport() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-slate-600 mb-1">Total Income</p>
-                <p className="text-2xl font-bold text-blue-600">{taxStats.totalIncome}</p>
+                <p className="text-2xl font-bold text-blue-600">{formatCurrency(summaryStats.totalIncome)}</p>
               </div>
               <div className="w-14 h-14 rounded-lg bg-yellow-100 flex items-center justify-center">
                 <DollarSign className="w-8 h-8 text-yellow-600" />
@@ -152,7 +236,7 @@ export default function TaxReport() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-slate-600 mb-1">Total Tax</p>
-                <p className="text-2xl font-bold text-red-600">{taxStats.totalTax}</p>
+                <p className="text-2xl font-bold text-red-600">{formatCurrency(summaryStats.totalTax)}</p>
               </div>
               <div className="w-14 h-14 rounded-lg bg-pink-100 flex items-center justify-center">
                 <FileText className="w-8 h-8 text-purple-600" />
@@ -206,7 +290,7 @@ export default function TaxReport() {
           </div>
 
           {/* Table */}
-          {taxReportDummy.length === 0 ? (
+          {reportRows.length === 0 ? (
             <div className="py-20 text-center">
               <div className="flex flex-col items-center justify-center">
                 <div className="w-20 h-20 rounded-lg bg-purple-100 flex items-center justify-center mb-4">
@@ -241,7 +325,7 @@ export default function TaxReport() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-slate-100">
-                  {taxReportDummy.map((report) => (
+                  {reportRows.map((report) => (
                     <tr key={report.sl} className="hover:bg-slate-50 transition-colors">
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span className="text-sm font-medium text-slate-700">{report.sl}</span>

@@ -1102,9 +1102,39 @@ export const getTransactionReport = asyncHandler(async (req, res) => {
       }
     }
 
-    // Search filter (orderId)
+    // Search filter (case-insensitive: orderId + customer name/phone)
     if (search) {
-      query.orderId = { $regex: search, $options: 'i' };
+      const searchOrConditions = [
+        { orderId: { $regex: search, $options: 'i' } }
+      ];
+
+      // Search by customer phone
+      const phoneRegex = /[\d\s\+\-()]+/;
+      if (phoneRegex.test(search)) {
+        const User = (await import('../../auth/models/User.js')).default;
+        const cleanSearch = search.replace(/\D/g, '');
+        const usersByPhone = await User.find({
+          phone: { $regex: cleanSearch, $options: 'i' }
+        }).select('_id').lean();
+        const userIdsByPhone = usersByPhone.map((u) => u._id);
+        if (userIdsByPhone.length > 0) {
+          searchOrConditions.push({ userId: { $in: userIdsByPhone } });
+        }
+      }
+
+      // Search by customer name
+      {
+        const User = (await import('../../auth/models/User.js')).default;
+        const usersByName = await User.find({
+          name: { $regex: search, $options: 'i' }
+        }).select('_id').lean();
+        const userIdsByName = usersByName.map((u) => u._id);
+        if (userIdsByName.length > 0) {
+          searchOrConditions.push({ userId: { $in: userIdsByName } });
+        }
+      }
+
+      query.$or = searchOrConditions;
     }
 
     // Calculate pagination
