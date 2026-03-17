@@ -17,13 +17,18 @@ const buildPhoneQuery = (normalizedPhone) => {
 
 const computeIsProfileCompleted = (restaurant) => {
   if (!restaurant) return false;
-  if (typeof restaurant.isProfileCompleted === 'boolean') return restaurant.isProfileCompleted;
+  if (restaurant.isProfileCompleted === true) return true;
 
   const completedSteps = restaurant?.onboarding?.completedSteps;
   if (typeof completedSteps === 'number') return completedSteps >= 4;
 
-  // Backward compatibility: older restaurants may not have the onboarding object at all.
-  if (restaurant?.onboarding === undefined || restaurant?.onboarding === null) return true;
+  // Backward compatibility for legacy records:
+  // many approved/active restaurants can still have default `isProfileCompleted=false`
+  // even though onboarding is effectively not required anymore.
+  if (restaurant?.onboarding === undefined || restaurant?.onboarding === null) {
+    if (restaurant?.isActive === true) return true;
+    if (restaurant?.signupMethod === 'google') return true;
+  }
 
   return false;
 };

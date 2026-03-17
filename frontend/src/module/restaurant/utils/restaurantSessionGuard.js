@@ -20,13 +20,16 @@ export const readStoredRestaurantUser = () => {
 
 const computeIsProfileCompletedFallback = (restaurant) => {
   if (!restaurant) return undefined;
-  if (typeof restaurant.isProfileCompleted === "boolean") return restaurant.isProfileCompleted;
+  if (restaurant.isProfileCompleted === true) return true;
 
   const completedSteps = restaurant?.onboarding?.completedSteps;
   if (typeof completedSteps === "number") return completedSteps >= 4;
 
-  // Backward compatibility: if onboarding object doesn't exist, treat as completed.
-  if (restaurant?.onboarding === undefined || restaurant?.onboarding === null) return true;
+  // Backward compatibility for old/stale records where DB default false is persisted.
+  if (restaurant?.onboarding === undefined || restaurant?.onboarding === null) {
+    if (restaurant?.isActive === true) return true;
+    if (restaurant?.signupMethod === "google") return true;
+  }
 
   return false;
 };
@@ -84,10 +87,7 @@ export async function bootstrapRestaurantSession({ force = false } = {}) {
         return { ok: false, reason: "empty_me", restaurant: null };
       }
 
-      const isProfileCompleted =
-        typeof payload?.isProfileCompleted === "boolean"
-          ? payload.isProfileCompleted
-          : computeIsProfileCompletedFallback(payload);
+      const isProfileCompleted = computeIsProfileCompletedFallback(payload);
 
       const normalized = { ...payload, isProfileCompleted };
 
