@@ -203,6 +203,7 @@ export default function UserOrderDetails() {
   const handleDownloadSummary = async () => {
     try {
       const companyName = await getCompanyNameAsync()
+      const formatPdfAmount = (value) => `Rs. ${Number(value || 0).toFixed(2)}`
       // Create new PDF document
       const doc = new jsPDF()
 
@@ -265,8 +266,8 @@ export default function UserOrderDetails() {
       const tableData = items.map(item => [
         item.name || 'Item',
         String(item.quantity || item.qty || 1),
-        `₹${Number(item.price || 0).toFixed(2)}`,
-        `₹${Number((item.price || 0) * (item.quantity || item.qty || 1)).toFixed(2)}`
+        formatPdfAmount(item.price || 0),
+        formatPdfAmount((item.price || 0) * (item.quantity || item.qty || 1))
       ])
 
       autoTable(doc, {
@@ -291,7 +292,7 @@ export default function UserOrderDetails() {
       doc.setFontSize(12)
       doc.setFont('helvetica', 'bold')
       doc.text('Total:', 145, finalY + 10, { align: 'right' })
-      doc.text(`₹${Number(pricing.total || 0).toFixed(2)}`, 195, finalY + 10, { align: 'right' })
+      doc.text(formatPdfAmount(pricing.total || 0), 195, finalY + 10, { align: 'right' })
 
       // Save PDF instantly
       const fileName = `Order_Summary_${orderIdDisplay}_${Date.now()}.pdf`

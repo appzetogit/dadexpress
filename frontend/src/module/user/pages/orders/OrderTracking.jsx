@@ -1405,22 +1405,7 @@ export default function OrderTracking() {
           return null
         })()}
 
-        {/* Delivery Partner Safety */}
-        <motion.button
-          type="button"
-          className="w-full bg-white rounded-xl p-4 shadow-sm flex items-center gap-3"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6 }}
-          whileTap={{ scale: 0.99 }}
-          onClick={() => navigate(`/user/help/orders/${orderId}`)}
-        >
-          <Shield className="w-6 h-6 text-gray-600" />
-          <span className="flex-1 text-left font-medium text-gray-900">
-            Learn about delivery partner safety
-          </span>
-          <ChevronRight className="w-5 h-5 text-gray-400" />
-        </motion.button>
+
 
         {/* Delivery Details Banner */}
         <motion.div
@@ -1509,27 +1494,34 @@ export default function OrderTracking() {
               return 'Add delivery address'
             })()}
           />
-          <div className="px-4 pb-4">
-            <Button
-              type="button"
-              onClick={() => setShowLocationDialog(true)}
-              disabled={!canUpdateLocation}
-              className="w-full bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-60"
-            >
-              Update Delivery Location
-            </Button>
-            {!canUpdateLocation && (
-              <p className="text-xs text-gray-500 mt-2">
-                {locationUpdateBlockedReason}
-              </p>
-            )}
-          </div>
-          <SectionItem
-            icon={MessageSquare}
-            title="Add delivery instructions"
-            subtitle={order?.deliveryInstruction ? order.deliveryInstruction : "Tap to add instructions"}
-            onClick={() => setShowDeliveryInstructionModal(true)}
-          />
+          {canUpdateLocation && (
+            <div className="px-4 pb-4">
+              <Button
+                type="button"
+                onClick={() => setShowLocationDialog(true)}
+                disabled={!canUpdateLocation}
+                className="w-full bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-60"
+              >
+                Update Delivery Location
+              </Button>
+              {!canUpdateLocation && (
+                <p className="text-xs text-gray-500 mt-2">
+                  {locationUpdateBlockedReason}
+                </p>
+              )}
+            </div>
+          )}
+          {(order?.deliveryInstruction || canUpdateLocation) && (
+            <SectionItem
+              icon={MessageSquare}
+              title={canUpdateLocation ? "Add delivery instructions" : "Delivery instructions"}
+              subtitle={order?.deliveryInstruction 
+                ? order.deliveryInstruction 
+                : (canUpdateLocation ? "Tap to add instructions" : "Cannot add instructions in this state")}
+              onClick={() => setShowDeliveryInstructionModal(true)}
+              showArrow={canUpdateLocation}
+            />
+          )}
         </motion.div>
 
         {/* Restaurant Section */}
@@ -1665,123 +1657,203 @@ export default function OrderTracking() {
         <DialogContent className="sm:max-w-xl w-[95%] max-w-[600px]">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-gray-900">
-              Update Delivery Location
+              {canUpdateLocation ? "Update Delivery Location" : "Delivery Location"}
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-gray-700">Full Address</p>
-              <Textarea
-                value={locationForm.formattedAddress}
-                onChange={(e) => setLocationForm((prev) => ({ ...prev, formattedAddress: e.target.value }))}
-                placeholder="Enter complete delivery address"
-                className="min-h-[90px] resize-none"
-              />
+          {canUpdateLocation ? (
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-gray-700">Full Address</p>
+                <Textarea
+                  value={locationForm.formattedAddress}
+                  onChange={(e) => setLocationForm((prev) => ({ ...prev, formattedAddress: e.target.value }))}
+                  placeholder="Enter complete delivery address"
+                  className="min-h-[90px] resize-none"
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Input
+                  value={locationForm.street}
+                  onChange={(e) => setLocationForm((prev) => ({ ...prev, street: e.target.value }))}
+                  placeholder="Street"
+                />
+                <Input
+                  value={locationForm.additionalDetails}
+                  onChange={(e) => setLocationForm((prev) => ({ ...prev, additionalDetails: e.target.value }))}
+                  placeholder="Additional details"
+                />
+                <Input
+                  value={locationForm.city}
+                  onChange={(e) => setLocationForm((prev) => ({ ...prev, city: e.target.value }))}
+                  placeholder="City"
+                />
+                <Input
+                  value={locationForm.state}
+                  onChange={(e) => setLocationForm((prev) => ({ ...prev, state: e.target.value }))}
+                  placeholder="State"
+                />
+                <Input
+                  value={locationForm.zipCode}
+                  onChange={(e) => setLocationForm((prev) => ({ ...prev, zipCode: e.target.value }))}
+                  placeholder="Zip Code"
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Input
+                  type="number"
+                  value={locationForm.lat}
+                  onChange={(e) => setLocationForm((prev) => ({ ...prev, lat: e.target.value }))}
+                  placeholder="Latitude"
+                />
+                <Input
+                  type="number"
+                  value={locationForm.lng}
+                  onChange={(e) => setLocationForm((prev) => ({ ...prev, lng: e.target.value }))}
+                  placeholder="Longitude"
+                />
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleUseCurrentLocation}
+                  disabled={locationLoading}
+                  className="flex-1"
+                >
+                  Use Current Location
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleUpdateLocation}
+                  disabled={isUpdatingLocation || !canUpdateLocation}
+                  className="flex-1 bg-gray-900 text-white hover:bg-gray-800"
+                >
+                  {isUpdatingLocation ? "Updating..." : "Update Location"}
+                </Button>
+              </div>
+              {!canUpdateLocation && (
+                <p className="text-xs text-gray-500">
+                  {locationUpdateBlockedReason}
+                </p>
+              )}
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Input
-                value={locationForm.street}
-                onChange={(e) => setLocationForm((prev) => ({ ...prev, street: e.target.value }))}
-                placeholder="Street"
-              />
-              <Input
-                value={locationForm.additionalDetails}
-                onChange={(e) => setLocationForm((prev) => ({ ...prev, additionalDetails: e.target.value }))}
-                placeholder="Additional details"
-              />
-              <Input
-                value={locationForm.city}
-                onChange={(e) => setLocationForm((prev) => ({ ...prev, city: e.target.value }))}
-                placeholder="City"
-              />
-              <Input
-                value={locationForm.state}
-                onChange={(e) => setLocationForm((prev) => ({ ...prev, state: e.target.value }))}
-                placeholder="State"
-              />
-              <Input
-                value={locationForm.zipCode}
-                onChange={(e) => setLocationForm((prev) => ({ ...prev, zipCode: e.target.value }))}
-                placeholder="Zip Code"
-              />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Input
-                type="number"
-                value={locationForm.lat}
-                onChange={(e) => setLocationForm((prev) => ({ ...prev, lat: e.target.value }))}
-                placeholder="Latitude"
-              />
-              <Input
-                type="number"
-                value={locationForm.lng}
-                onChange={(e) => setLocationForm((prev) => ({ ...prev, lng: e.target.value }))}
-                placeholder="Longitude"
-              />
-            </div>
-            <div className="flex flex-col sm:flex-row gap-3">
+          ) : (
+            <div className="space-y-6 py-6 px-1 text-left">
+              <div className="flex items-start gap-4 p-5 bg-orange-50/50 rounded-2xl border border-orange-100">
+                <MapPin className="w-6 h-6 text-[#EB590E] shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-[10px] font-bold text-[#EB590E] uppercase tracking-widest">
+                    Delivery Address
+                  </p>
+                  <p className="text-gray-900 font-semibold leading-relaxed mt-1.5 text-base">
+                    {locationForm.formattedAddress || order?.address?.formattedAddress || "No address details available"}
+                  </p>
+                  {(locationForm.city || locationForm.zipCode) && (
+                     <p className="text-sm text-gray-500 mt-2 font-medium">
+                       {[locationForm.city, locationForm.zipCode].filter(Boolean).join(" - ")}
+                     </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-gray-50 p-4 rounded-xl space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                  <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Order Info</p>
+                </div>
+                <p className="text-sm text-gray-600">
+                  Location updates are only available until the order is prepared.
+                </p>
+              </div>
+
               <Button
-                type="button"
-                variant="outline"
-                onClick={handleUseCurrentLocation}
-                disabled={locationLoading}
-                className="flex-1"
+                onClick={() => setShowLocationDialog(false)}
+                className="w-full bg-gray-900 text-white h-12 rounded-xl font-bold hover:bg-gray-800 transition-all active:scale-[0.98]"
               >
-                Use Current Location
-              </Button>
-              <Button
-                type="button"
-                onClick={handleUpdateLocation}
-                disabled={isUpdatingLocation || !canUpdateLocation}
-                className="flex-1 bg-gray-900 text-white hover:bg-gray-800"
-              >
-                {isUpdatingLocation ? 'Updating...' : 'Update Location'}
+                Got it
               </Button>
             </div>
-            {!canUpdateLocation && (
-              <p className="text-xs text-gray-500">
-                {locationUpdateBlockedReason}
-              </p>
-            )}
-          </div>
+          )}
         </DialogContent>
       </Dialog>
 
-      {/* Delivery Instructions Dialog */}
       <Dialog open={showDeliveryInstructionModal} onOpenChange={setShowDeliveryInstructionModal}>
-        <DialogContent className="sm:max-w-md w-[95%] max-w-[520px]">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-gray-900">
-              Delivery Instructions
-            </DialogTitle>
-          </DialogHeader>
-          <div className="pt-2">
-            <Textarea
-              value={deliveryInstructionText}
-              onChange={(e) => setDeliveryInstructionText(e.target.value)}
-              placeholder="Ex: Ring once, call on arrival, leave at gate, etc."
-              className="min-h-[100px] resize-none"
-              maxLength={200}
-            />
-            <p className="text-xs text-gray-500 mt-2">
-              {deliveryInstructionText.length}/200 characters
-            </p>
+        <DialogContent className="sm:max-w-md w-[95%] p-0 overflow-hidden border-none bg-white dark:bg-[#1a1a1a] rounded-3xl shadow-2xl">
+          <div className="bg-gradient-to-r from-[#EB590E] to-[#ff8c42] p-6 text-white relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16" />
+            <div className="relative flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center shadow-lg">
+                <MessageSquare className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <DialogHeader className="p-0 border-none space-y-0 text-left">
+                  <DialogTitle className="text-xl font-bold text-white pr-8">
+                    Delivery Instructions
+                  </DialogTitle>
+                  <p className="text-orange-50 text-xs mt-0.5">Help our partner find you easily</p>
+                </DialogHeader>
+              </div>
+            </div>
           </div>
-          <div className="pt-6 flex gap-2">
-            <Button
-              onClick={() => setShowDeliveryInstructionModal(false)}
-              variant="outline"
-              className="flex-1 h-11 rounded-xl"
-            >
-              Close
-            </Button>
-            <Button
-              onClick={handleSaveDeliveryInstruction}
-              disabled={isSavingInstruction}
-              className="flex-1 bg-gray-900 text-white font-bold h-11 rounded-xl"
-            >
-              {isSavingInstruction ? 'Saving...' : 'Save'}
-            </Button>
+
+          <div className="p-6 space-y-6">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Your Instructions</label>
+                <div className="relative group">
+                  <Textarea
+                    value={deliveryInstructionText}
+                    onChange={(e) => setDeliveryInstructionText(e.target.value)}
+                    placeholder="Ex: Ring once, call on arrival, leave at gate, etc."
+                    className={`w-full min-h-[120px] resize-none border-gray-100 bg-gray-50/50 rounded-2xl p-4 text-gray-900 focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all duration-300 ${!canUpdateLocation ? 'bg-gray-100/50 border-dashed cursor-not-allowed opacity-80' : ''}`}
+                    maxLength={200}
+                    readOnly={!canUpdateLocation}
+                  />
+                  {canUpdateLocation && (
+                    <div className="absolute bottom-3 right-3">
+                      <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${deliveryInstructionText.length >= 200 ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-400'}`}>
+                        {deliveryInstructionText.length}/200
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {!canUpdateLocation && (
+                <div className="p-4 bg-orange-50 rounded-2xl border border-orange-100 flex gap-3">
+                  <div className="w-1.5 h-1.5 rounded-full bg-orange-500 shrink-0 mt-1.5 animate-pulse" />
+                  <p className="text-xs text-orange-800 leading-relaxed font-medium">
+                    Instructions cannot be modified in this state.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setShowDeliveryInstructionModal(false)}
+                className="flex-1 h-12 rounded-xl border-gray-200 text-gray-600 font-bold hover:bg-gray-50 active:scale-[0.98] transition-all"
+              >
+                Close
+              </Button>
+              {canUpdateLocation && (
+                <Button
+                  onClick={handleSaveDeliveryInstruction}
+                  disabled={isSavingInstruction}
+                  className="flex-1 h-12 rounded-xl bg-gray-900 text-white font-bold shadow-lg shadow-gray-200 active:scale-[0.98] transition-all disabled:opacity-50"
+                >
+                  {isSavingInstruction ? (
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Saving...</span>
+                    </div>
+                  ) : (
+                    'Save'
+                  )}
+                </Button>
+              )}
+            </div>
           </div>
         </DialogContent>
       </Dialog>

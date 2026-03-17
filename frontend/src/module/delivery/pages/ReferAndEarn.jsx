@@ -14,6 +14,7 @@ export default function ReferAndEarn() {
   const [mobileNumber, setMobileNumber] = useState("")
   const [showSuccessPopup, setShowSuccessPopup] = useState(false)
   const [referralCount, setReferralCount] = useState(0)
+  const [referralCode, setReferralCode] = useState("")
   const [referralStats, setReferralStats] = useState(null)
   const [loadingStats, setLoadingStats] = useState(false)
   const [bannerText, setBannerText] = useState(
@@ -48,6 +49,7 @@ export default function ReferAndEarn() {
         if (!isMounted || !data) return
 
         setReferralStats(data)
+        setReferralCode(data.referralCode || "")
 
         // Prefer backend referralStats.invited as primary count
         const invitedCount = data.referralStats?.invited ?? null
@@ -111,6 +113,16 @@ export default function ReferAndEarn() {
         }
       }
 
+      // Prevent duplicate mobile referrals (one number can be used once)
+      const normalizedMobile = String(mobileNumber).trim()
+      const alreadyReferred = referrals.some(
+        (ref) => String(ref.mobile).trim() === normalizedMobile
+      )
+      if (alreadyReferred) {
+        alert("This number has already been referred.")
+        return
+      }
+
       // Add new referral
       const newReferral = {
         name: friendName.trim(),
@@ -132,19 +144,20 @@ export default function ReferAndEarn() {
   }
 
   const getDeliveryAppLink = () => {
-    return (
-      import.meta.env.VITE_DELIVERY_APP_DOWNLOAD_URL ||
-      import.meta.env.VITE_DELIVERY_APP_LINK ||
-      import.meta.env.VITE_APP_DOWNLOAD_URL ||
-      `${window.location.origin}/delivery`
-    )
+    const baseLink = "https://dadexpress.in/delivery/signup"
+    if (!referralCode) return baseLink
+    const url = new URL(baseLink)
+    url.searchParams.set("ref", referralCode)
+    return url.toString()
   }
 
   const handleWhatsAppShare = async () => {
     const companyName = await getCompanyNameAsync()
     const appLink = getDeliveryAppLink()
-    const message = `Hey ${friendName}! Join ${companyName} as a delivery partner and earn together!\nDownload app: ${appLink}`
-    const whatsappUrl = `https://wa.me/${mobileNumber}?text=${encodeURIComponent(message)}`
+    const waPhone = `91${String(mobileNumber || "").replace(/\D/g, "")}` // WhatsApp expects country code, no '+'
+    const codeLine = referralCode ? `Referral code: ${referralCode}` : ""
+    const message = `Hey ${friendName}! Join ${companyName} as a delivery partner and earn together!\n${codeLine}\nSign up: ${appLink}`.trim()
+    const whatsappUrl = `https://wa.me/${waPhone}?text=${encodeURIComponent(message)}`
     window.open(whatsappUrl, '_blank')
   }
 
@@ -216,16 +229,22 @@ export default function ReferAndEarn() {
             <label className="block text-sm text-gray-700 mb-2">
               Enter your friend's number
             </label>
-            <input
-              type="tel"
-              value={mobileNumber}
-              onChange={(e) => {
-                const value = e.target.value.replace(/\D/g, '').slice(0, 10)
-                setMobileNumber(value)
-              }}
-              placeholder="Mobile number"
-              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#ff8100] focus:border-transparent"
-            />
+            <div className="flex items-center w-full px-4 py-3 rounded-lg border border-gray-300 focus-within:ring-2 focus-within:ring-[#ff8100] focus-within:border-transparent">
+              <span className="text-gray-700 font-medium mr-2">+91</span>
+              <input
+                type="tel"
+                value={mobileNumber}
+                onChange={(e) => {
+                  let digits = e.target.value.replace(/\D/g, "")
+                  // If someone pastes +91XXXXXXXXXX or 0XXXXXXXXXX, normalize to 10-digit Indian mobile.
+                  if (digits.length === 12 && digits.startsWith("91")) digits = digits.slice(2)
+                  if (digits.length === 11 && digits.startsWith("0")) digits = digits.slice(1)
+                  setMobileNumber(digits.slice(0, 10))
+                }}
+                placeholder="Mobile number"
+                className="flex-1 outline-none bg-transparent"
+              />
+            </div>
           </div>
         </div>
 
