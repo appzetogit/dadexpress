@@ -42,6 +42,8 @@ const ACCOUNT_NUMBER_REGEX = /^[0-9]{9,18}$/
 const PHONE_REGEX = /^[6-9][0-9]{9}$/
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const NAME_REGEX = /^[A-Za-z][A-Za-z .'-]*$/
+const RESTAURANT_NAME_REGEX = /^[A-Za-z][A-Za-z &.'-]*$/
+const CITY_REGEX = /^[A-Za-z][A-Za-z .'-]*$/
 const IFSC_REGEX = /^[A-Z]{4}0[A-Z0-9]{6}$/
 
 const getVerifiedPhoneFromStoredRestaurant = () => {
@@ -381,13 +383,20 @@ export default function RestaurantOnboarding() {
     return digits
   }
 
+  const stripDigits = (value) => {
+    if (value === null || value === undefined) return ""
+    return String(value).replace(/[0-9]/g, "")
+  }
+
   const validateField = (key, value, context) => {
     const ctx = context || { step1, step2, step3, step4 }
     const text = normalizeTextValue(value)
 
     switch (key) {
       case "step1.restaurantName":
-        return text ? "" : "Restaurant name is required"
+        if (!text) return "Restaurant name is required"
+        if (!RESTAURANT_NAME_REGEX.test(text)) return "Restaurant name contains invalid characters"
+        return ""
       case "step1.ownerName":
         if (!text) return "Owner name is required"
         if (!NAME_REGEX.test(text)) return "Owner name must not contain numbers or special characters"
@@ -413,7 +422,9 @@ export default function RestaurantOnboarding() {
       case "step1.location.area":
         return text ? "" : "Area/Sector/Locality is required"
       case "step1.location.city":
-        return text ? "" : "City is required"
+        if (!text) return "City is required"
+        if (!CITY_REGEX.test(text)) return "City contains invalid characters"
+        return ""
 
       case "step2.menuImages": {
         const list = Array.isArray(value) ? value : ctx.step2?.menuImages
@@ -706,7 +717,7 @@ export default function RestaurantOnboarding() {
                 location: {
                   ...prev.location,
                   area: extractedArea || prev.location.area,
-                  city: extractedCity || prev.location.city,
+                  city: normalizeTextValue(stripDigits(extractedCity)) || prev.location.city,
                   latitude,
                   longitude
                 }
@@ -1599,7 +1610,7 @@ export default function RestaurantOnboarding() {
             <Input
               value={step1.restaurantName || ""}
               onChange={(e) => {
-                const v = e.target.value
+                const v = stripDigits(e.target.value)
                 setStep1({ ...step1, restaurantName: v })
                 if (touched["step1.restaurantName"]) {
                   setFieldError("step1.restaurantName", validateField("step1.restaurantName", v))
@@ -1608,7 +1619,7 @@ export default function RestaurantOnboarding() {
                 }
               }}
               onBlur={(e) => {
-                const v = normalizeTextValue(e.target.value)
+                const v = normalizeTextValue(stripDigits(e.target.value))
                 if (v !== e.target.value) {
                   setStep1({ ...step1, restaurantName: v })
                 }
@@ -1636,7 +1647,7 @@ export default function RestaurantOnboarding() {
             <Input
               value={step1.ownerName || ""}
               onChange={(e) => {
-                const v = e.target.value
+                const v = stripDigits(e.target.value)
                 setStep1({ ...step1, ownerName: v })
                 if (touched["step1.ownerName"]) {
                   setFieldError("step1.ownerName", validateField("step1.ownerName", v))
@@ -1645,7 +1656,7 @@ export default function RestaurantOnboarding() {
                 }
               }}
               onBlur={(e) => {
-                const v = normalizeTextValue(e.target.value)
+                const v = normalizeTextValue(stripDigits(e.target.value))
                 if (v !== e.target.value) {
                   setStep1({ ...step1, ownerName: v })
                 }
@@ -1743,7 +1754,6 @@ export default function RestaurantOnboarding() {
               markTouched("step1.primaryContactNumber")
               setFieldError("step1.primaryContactNumber", validateField("step1.primaryContactNumber", v))
             }}
-            readOnly={Boolean(verifiedPhoneNumber)}
             className={`mt-1 bg-white text-sm text-black placeholder-black ${getFieldError("step1.primaryContactNumber") ? "border-red-500" : ""}`}
             placeholder="Restaurant's primary contact number"
           />
@@ -1835,7 +1845,7 @@ export default function RestaurantOnboarding() {
           <Input
             value={step1.location?.city || ""}
             onChange={(e) => {
-              const v = e.target.value
+              const v = stripDigits(e.target.value)
               setStep1({
                 ...step1,
                 location: { ...step1.location, city: v },
@@ -1847,7 +1857,7 @@ export default function RestaurantOnboarding() {
               }
             }}
             onBlur={(e) => {
-              const v = normalizeTextValue(e.target.value)
+              const v = normalizeTextValue(stripDigits(e.target.value))
               if (v !== e.target.value) {
                 setStep1({
                   ...step1,
