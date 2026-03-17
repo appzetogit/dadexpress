@@ -64,6 +64,7 @@ export default function SignIn() {
   const [isLoading, setIsLoading] = useState(false)
   const [apiError, setApiError] = useState("")
   const redirectHandledRef = useRef(false)
+  const googleLoginInProgressRef = useRef(false)
 
   // Capture referral code from URL
   useEffect(() => {
@@ -356,6 +357,11 @@ export default function SignIn() {
   }
 
   const handleGoogleSignIn = async () => {
+    if (isLoading || googleLoginInProgressRef.current) {
+      return
+    }
+
+    googleLoginInProgressRef.current = true
     setApiError("")
     setIsLoading(true)
     redirectHandledRef.current = false // Reset flag when starting new sign-in
@@ -423,6 +429,13 @@ export default function SignIn() {
       const errorCode = error?.code || ""
       const errorMessage = error?.message || ""
 
+      // Common when popup is requested multiple times quickly.
+      // Keep UX clean and allow retry without surfacing raw Firebase error.
+      if (errorCode === "auth/cancelled-popup-request") {
+        setApiError("")
+        return
+      }
+
       let message = "Google sign-in failed. Please try again."
 
       if (errorCode === "auth/popup-closed-by-user") {
@@ -438,6 +451,8 @@ export default function SignIn() {
       }
 
       setApiError(message)
+    } finally {
+      googleLoginInProgressRef.current = false
     }
   }
 
@@ -588,6 +603,7 @@ export default function SignIn() {
             <button
               type="button"
               onClick={handleGoogleSignIn}
+              disabled={isLoading}
               className="w-12 h-12 md:w-14 md:h-14 rounded-full border border-gray-300 dark:border-gray-700 flex items-center justify-center hover:bg-gray-50 dark:hover:bg-gray-800 transition-all hover:shadow-md active:scale-95"
               aria-label="Sign in with Google"
             >
