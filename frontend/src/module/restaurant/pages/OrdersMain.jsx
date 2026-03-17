@@ -816,7 +816,7 @@ export default function OrdersMain() {
     const checkConfirmedOrders = async () => {
       // Do not poll orders until restaurant status is loaded and active.
       // Inactive/unapproved accounts are blocked by backend on orders APIs (401).
-      if (restaurantStatus.isLoading || !restaurantStatus.isActive) return
+      if (restaurantStatus.isLoading || restaurantStatus.isActive !== true) return
 
       // Skip if popup is already showing or Socket.IO order exists
       if (showNewOrderPopupRef.current || newOrderRef.current) return
@@ -917,8 +917,12 @@ export default function OrdersMain() {
   // Handle accept order
   const handleAcceptOrder = async () => {
     // Hard gate: do not allow accepting orders when restaurant is not active/approved
-    if (!restaurantStatus.isLoading && !restaurantStatus.isActive) {
-      toast.error('Your restaurant is not yet approved/active. Please wait for admin approval before accepting orders.')
+    if (restaurantStatus.isActive !== true) {
+      if (restaurantStatus.isActive === false) {
+        toast.error('Your restaurant is not yet approved/active. Please wait for admin approval before accepting orders.')
+      } else {
+        toast.error('Loading account status. Please try again.')
+      }
       setShowNewOrderPopup(false)
       return
     }
@@ -1313,8 +1317,17 @@ export default function OrdersMain() {
   const renderContent = () => {
     // For inactive/unapproved restaurants, keep the home screen visible
     // but avoid mounting order-list components that continuously hit blocked APIs.
-    if (!restaurantStatus.isLoading && !restaurantStatus.isActive) {
+    if (restaurantStatus.isLoading) {
+      return <EmptyState message="Loading your restaurant dashboard..." />
+    }
+
+    if (restaurantStatus.isActive === false) {
       return <EmptyState message="Your account is under review. Orders will be available after approval." />
+    }
+
+    // Defensive: status couldn't be fetched or is missing. Don't treat this as inactive.
+    if (restaurantStatus.isActive !== true) {
+      return <EmptyState message="Unable to verify account status. Please refresh and try again." />
     }
 
     switch (activeFilter) {
@@ -1552,7 +1565,7 @@ export default function OrdersMain() {
 
         {/* Verification Pending Card - Show if onboarding is complete (all 4 steps) and restaurant is not active */}
         {!restaurantStatus.isLoading &&
-          !restaurantStatus.isActive &&
+          restaurantStatus.isActive === false &&
           restaurantStatus.onboarding?.completedSteps === 4 && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
