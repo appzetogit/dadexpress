@@ -1,8 +1,7 @@
 import { useState, useMemo, useEffect } from "react"
 import { useLocation } from "react-router-dom"
-import { BarChart3, ChevronDown, Info, Settings, FileText, FileSpreadsheet, Code, Loader2 } from "lucide-react"
+import { BarChart3, ChevronDown, Info, FileText, FileSpreadsheet, Code, Loader2 } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { exportTransactionReportToCSV, exportTransactionReportToExcel, exportTransactionReportToPDF, exportTransactionReportToJSON } from "../../components/reports/reportsExportUtils"
 import { adminAPI } from "@/lib/api"
 import { toast } from "sonner"
@@ -37,7 +36,6 @@ export default function TransactionReport() {
     restaurant: "All restaurants",
     time: "All Time",
   })
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [zones, setZones] = useState([])
   const [restaurants, setRestaurants] = useState([])
 
@@ -422,12 +420,6 @@ export default function TransactionReport() {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <button
-                onClick={() => setIsSettingsOpen(true)}
-                className="p-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 transition-all"
-              >
-                <Settings className="w-3 h-3" />
-              </button>
             </div>
           </div>
 
@@ -575,30 +567,6 @@ export default function TransactionReport() {
         </div>
       </div>
 
-      {/* Settings Dialog */}
-      <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
-        <DialogContent className="max-w-md bg-white p-0 opacity-0 data-[state=open]:opacity-100 data-[state=closed]:opacity-0 transition-opacity duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:scale-100 data-[state=closed]:scale-100">
-          <DialogHeader className="px-6 pt-6 pb-4">
-            <DialogTitle className="flex items-center gap-2">
-              <Settings className="w-5 h-5" />
-              Report Settings
-            </DialogTitle>
-          </DialogHeader>
-          <div className="px-6 pb-6">
-            <p className="text-sm text-slate-700">
-              Transaction report settings and preferences will be available here.
-            </p>
-          </div>
-          <div className="px-6 pb-6 flex items-center justify-end">
-            <button
-              onClick={() => setIsSettingsOpen(false)}
-              className="px-4 py-2 text-sm font-medium rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-all shadow-md"
-            >
-              Close
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

@@ -9,7 +9,6 @@ import AnimatedPage from "../components/AnimatedPage"
 import { useSearchOverlay, useLocationSelector } from "../components/UserLayout"
 import { useLocation as useLocationHook } from "../hooks/useLocation"
 import { useProfile } from "../context/ProfileContext"
-import { FaLocationDot } from "react-icons/fa6"
 import quickSpicyLogo from "@/assets/quicky-spicy-logo.png"
 // Using placeholder for dining restaurant banner
 const diningBanner = "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=1200&h=400&fit=crop"
@@ -234,7 +233,7 @@ export default function DiningRestaurants() {
               className="text-left text-white text-sm sm:text-base font-semibold backdrop-blur-sm rounded-full px-3 sm:px-4 py-2 hover:bg-white transition-colors"
             >
               <div className="flex items-start justify-start gap-2 min-w-0">
-                <FaLocationDot className="h-4 w-4 sm:h-5 sm:w-5 text-white flex-shrink-0 mt-1" />
+                <MapPin className="h-4 w-4 sm:h-5 sm:w-5 text-white flex-shrink-0 mt-1" />
                 <span className="text-sm sm:text-base font-semibold text-white truncate border-b-2 border-dotted border-white">
                   Home - {cityName}
                 </span>

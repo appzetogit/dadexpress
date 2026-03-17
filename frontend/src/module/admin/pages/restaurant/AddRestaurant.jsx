@@ -20,12 +20,15 @@ const cuisinesOptions = [
 
 const daysOfWeek = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 const TEN_DIGIT_PHONE_REGEX = /^\d{10}$/
+const SIX_DIGIT_PINCODE_REGEX = /^\d{6}$/
+const CITY_STATE_REGEX = /^[A-Za-z\s]+$/
 const PAN_NUMBER_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]$/
 const FSSAI_NUMBER_REGEX = /^\d{14}$/
 const GST_NUMBER_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/
 const IFSC_REGEX = /^[A-Z]{4}0[A-Z0-9]{6}$/
 const ACCOUNT_NUMBER_REGEX = /^\d{9,18}$/
 const NAME_WITH_CHARS_REGEX = /^(?=.*[A-Za-z])[A-Za-z\s.'-]+$/
+const RESTAURANT_NAME_REGEX = /^(?=.*[A-Za-z])[A-Za-z0-9\s&.'()-]+$/
 
 export default function AddRestaurant() {
   const navigate = useNavigate()
@@ -127,7 +130,13 @@ export default function AddRestaurant() {
   const validateStep1 = () => {
     const errors = []
     if (!step1.restaurantName?.trim()) errors.push("Restaurant name is required")
+    if (step1.restaurantName?.trim() && !RESTAURANT_NAME_REGEX.test(step1.restaurantName.trim())) {
+      errors.push("Restaurant name format is invalid")
+    }
     if (!step1.ownerName?.trim()) errors.push("Owner name is required")
+    if (step1.ownerName?.trim() && !NAME_WITH_CHARS_REGEX.test(step1.ownerName.trim())) {
+      errors.push("Owner full name format is invalid")
+    }
     if (!step1.ownerEmail?.trim()) errors.push("Owner email is required")
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(step1.ownerEmail)) errors.push("Please enter a valid email address")
     if (!step1.ownerPhone?.trim()) errors.push("Owner phone number is required")
@@ -140,6 +149,12 @@ export default function AddRestaurant() {
     }
     if (!step1.location?.area?.trim()) errors.push("Area/Sector/Locality is required")
     if (!step1.location?.city?.trim()) errors.push("City is required")
+    if (step1.location?.state?.trim() && !CITY_STATE_REGEX.test(step1.location.state.trim())) {
+      errors.push("State format is invalid")
+    }
+    if (step1.location?.pincode?.trim() && !SIX_DIGIT_PINCODE_REGEX.test(step1.location.pincode.trim())) {
+      errors.push("Pin code must be exactly 6 digits")
+    }
     return errors
   }
 
@@ -464,15 +479,21 @@ export default function AddRestaurant() {
           />
           <Input
             value={step1.location?.state || ""}
-            onChange={(e) => setStep1({ ...step1, location: { ...step1.location, state: e.target.value } })}
+            onChange={(e) =>
+              setStep1({ ...step1, location: { ...step1.location, state: (e.target.value || "").replace(/[^A-Za-z\s]/g, "") } })
+            }
             className="bg-white text-sm"
             placeholder="State (optional)"
           />
           <Input
             value={step1.location?.pincode || ""}
-            onChange={(e) => setStep1({ ...step1, location: { ...step1.location, pincode: e.target.value } })}
+            onChange={(e) =>
+              setStep1({ ...step1, location: { ...step1.location, pincode: (e.target.value || "").replace(/\D/g, "").slice(0, 6) } })
+            }
             className="bg-white text-sm"
             placeholder="Pin code (optional)"
+            inputMode="numeric"
+            maxLength={6}
           />
           <Input
             value={step1.location?.landmark || ""}

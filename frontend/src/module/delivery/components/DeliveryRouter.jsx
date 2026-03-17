@@ -3,6 +3,7 @@ import { Routes, Route } from "react-router-dom"
 import DeliveryLayout from "./DeliveryLayout"
 import ProtectedRoute from "./ProtectedRoute"
 import Loader from "@/components/Loader"
+import { DeliveryNotificationProvider } from "../context/DeliveryNotificationContext"
 
 // Main pages (with layout)
 const DeliveryHome = lazy(() => import("../pages/DeliveryHome"))
@@ -47,8 +48,9 @@ const PocketDetails = lazy(() => import("../pages/PocketDetails"))
 
 export default function DeliveryRouter() {
   return (
-    <Suspense fallback={<Loader />}>
-      <Routes>
+    <DeliveryNotificationProvider>
+      <Suspense fallback={<Loader />}>
+        <Routes>
         {/* Protected routes - require authentication */}
         <Route
           path="/"
@@ -436,8 +438,9 @@ export default function DeliveryRouter() {
           }
           path="/help/language"
         />
-      </Routes>
-    </Suspense>
+        </Routes>
+      </Suspense>
+    </DeliveryNotificationProvider>
   )
 }
 

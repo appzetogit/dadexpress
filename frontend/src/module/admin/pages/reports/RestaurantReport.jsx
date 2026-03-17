@@ -125,6 +125,18 @@ export default function RestaurantReport() {
     return "★".repeat(fullStars) + (hasHalfStar ? "½" : "") + "☆".repeat(5 - Math.ceil(rating)) + ` (${reviews})`
   }
 
+  const getRestaurantInitial = (restaurantName) => {
+    const safeName = typeof restaurantName === "string" ? restaurantName.trim() : ""
+    return safeName ? safeName.charAt(0).toUpperCase() : "?"
+  }
+
+  const getCommissionDisplayClass = (value) => {
+    const safeValue = typeof value === "string" ? value : String(value ?? "")
+    return safeValue.startsWith("₹-") || safeValue.startsWith("-₹")
+      ? "text-red-600"
+      : "text-slate-900"
+  }
+
   if (loading) {
     return (
       <div className="p-4 lg:p-6 bg-slate-50 min-h-screen flex items-center justify-center">
@@ -394,7 +406,7 @@ export default function RestaurantReport() {
                               />
                             ) : (
                               <div className="w-full h-full bg-slate-300 flex items-center justify-center text-xs text-slate-600 font-semibold">
-                                {restaurant.restaurantName.charAt(0).toUpperCase()}
+                                {getRestaurantInitial(restaurant.restaurantName)}
                               </div>
                             )}
                           </div>
@@ -414,11 +426,7 @@ export default function RestaurantReport() {
                         <span className="text-sm text-slate-700">{restaurant.totalDiscountGiven}</span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`text-sm font-medium ${
-                          restaurant.totalAdminCommission.startsWith('₹-') || restaurant.totalAdminCommission.startsWith('-₹')
-                            ? 'text-red-600'
-                            : 'text-slate-900'
-                        }`}>
+                        <span className={`text-sm font-medium ${getCommissionDisplayClass(restaurant.totalAdminCommission)}`}>
                           {restaurant.totalAdminCommission}
                         </span>
                       </td>

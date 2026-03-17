@@ -79,8 +79,7 @@ export default function DeliverySupportTickets() {
     try {
       setUpdating(true)
       const response = await adminAPI.updateDeliverySupportTicket(selectedTicket._id, {
-        adminResponse: responseText.trim(),
-        status: selectedTicket.status === 'open' ? 'in_progress' : selectedTicket.status
+        adminResponse: responseText.trim()
       })
 
       if (response?.data?.success) {

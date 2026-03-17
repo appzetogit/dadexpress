@@ -1577,6 +1577,20 @@ export function useLocation() {
               // Don't save placeholder values to localStorage
               // Only set in state for display
               false && console.warn("⚠️ Skipping save - all geocoding failed, using placeholder")
+              const hasStableExistingLocation =
+                location &&
+                location.formattedAddress &&
+                location.formattedAddress !== "Select location"
+
+              if (hasStableExistingLocation) {
+                // Keep current valid location so checkout state doesn't regress to "Select location".
+                setLocation(location)
+                setPermissionGranted(true)
+                if (showLoading) setLoading(false)
+                resolve(location)
+                return
+              }
+
               setLocation(fallbackLoc)
               setPermissionGranted(true)
               if (showLoading) setLoading(false)
@@ -1650,7 +1664,21 @@ export function useLocation() {
               }
             } catch (fallbackErr) {
               false && console.warn("⚠️ Fallback retrieval failed:", fallbackErr)
-              setLocation(null)
+              // Preserve any previously valid location so checkout/cart CTA state does not flicker.
+              setLocation((currentLocation) => {
+                if (
+                  currentLocation &&
+                  currentLocation.formattedAddress &&
+                  currentLocation.formattedAddress !== "Select location"
+                ) {
+                  return currentLocation
+                }
+                return {
+                  city: "Select location",
+                  address: "Select location",
+                  formattedAddress: "Select location"
+                }
+              })
               setError(err.code === 3 ? "Location request timed out. Please try again." : err.message)
               setPermissionGranted(false)
               if (showLoading) setLoading(false)
@@ -1857,10 +1885,19 @@ export function useLocation() {
               formattedAddress: "Select location", // NEVER use coordinates
             }
             false && console.warn("⚠️ Using fallback location (reverse geocoding failed):", fallbackLoc)
-            // Don't save placeholder values to localStorage
-            // Only set in state for display
-            false && console.warn("⚠️ Skipping localStorage save - fallback location contains placeholder values")
-            setLocation(fallbackLoc)
+            // Keep existing valid address instead of replacing it with a placeholder.
+            // This avoids checkout CTA/state regressions caused by transient watch/update failures.
+            setLocation((currentLocation) => {
+              const hasStableAddress =
+                currentLocation &&
+                currentLocation.formattedAddress &&
+                currentLocation.formattedAddress !== "Select location"
+
+              if (hasStableAddress) {
+                return currentLocation
+              }
+              return fallbackLoc
+            })
             setPermissionGranted(true)
           }
         },
@@ -2153,11 +2190,6 @@ export function useLocation() {
     // Cleanup timeout and watcher
     return () => {
       clearTimeout(loadingTimeout)
-      false && console.log("🧹 Cleaning up location watcher")
-      stopWatchingLocation()
-    }
-
-    return () => {
       false && console.log("🧹 Cleaning up location watcher")
       stopWatchingLocation()
     }

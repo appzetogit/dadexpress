@@ -68,6 +68,39 @@ export const createOrder = async (req, res) => {
       sendCutlery,
       paymentMethod: bodyPaymentMethod
     } = req.body;
+    const normalizedRestaurantInstruction = (() => {
+      const restaurantInstructionRaw =
+        note ??
+        req.body?.restaurantInstruction ??
+        req.body?.restaurantInstructions ??
+        req.body?.specialInstruction ??
+        req.body?.specialInstructions ??
+        req.body?.instructions ??
+        '';
+      return typeof restaurantInstructionRaw === 'string' ? restaurantInstructionRaw.trim() : '';
+    })();
+    const normalizedDeliveryInstruction = (() => {
+      const deliveryInstructionRaw =
+        deliveryInstruction ??
+        req.body?.deliveryInstructions ??
+        req.body?.delivery_instruction ??
+        '';
+      return typeof deliveryInstructionRaw === 'string' ? deliveryInstructionRaw.trim() : '';
+    })();
+    const normalizedSendCutlery = (() => {
+      const cutleryRaw =
+        sendCutlery ??
+        req.body?.cutlery ??
+        req.body?.send_cutlery;
+      if (typeof cutleryRaw === 'boolean') return cutleryRaw;
+      if (typeof cutleryRaw === 'number') return cutleryRaw !== 0;
+      if (typeof cutleryRaw === 'string') {
+        const value = cutleryRaw.trim().toLowerCase();
+        if (['false', '0', 'no', 'none'].includes(value)) return false;
+        if (['true', '1', 'yes'].includes(value)) return true;
+      }
+      return true;
+    })();
     // Support both camelCase and snake_case from client
     const paymentMethod = bodyPaymentMethod ?? req.body.payment_method;
 
@@ -105,7 +138,7 @@ export const createOrder = async (req, res) => {
       });
     }
 
-    if (deliveryInstruction && String(deliveryInstruction).length > 200) {
+    if (normalizedDeliveryInstruction && String(normalizedDeliveryInstruction).length > 200) {
       return res.status(400).json({
         success: false,
         message: 'Delivery instruction is too long (max 200 characters)'
@@ -219,10 +252,9 @@ export const createOrder = async (req, res) => {
       });
     }
 
-    // Check if restaurant is within any active zone
+    // Check if restaurant is within active zones
     const activeZones = await getActiveZonesCached();
-    let restaurantInZone = false;
-    let restaurantZone = null;
+    const matchedRestaurantZones = [];
 
     for (const zone of activeZones) {
       if (!zone.coordinates || zone.coordinates.length < 3) continue;
@@ -251,13 +283,11 @@ export const createOrder = async (req, res) => {
       }
 
       if (isInZone) {
-        restaurantInZone = true;
-        restaurantZone = zone;
-        break;
+        matchedRestaurantZones.push(zone);
       }
     }
 
-    if (!restaurantInZone) {
+    if (matchedRestaurantZones.length === 0) {
       logger.warn('⚠️ Restaurant location is not within any active zone:', {
         restaurantId: restaurant._id?.toString() || restaurant.restaurantId,
         restaurantName: restaurant.name,
@@ -270,6 +300,15 @@ export const createOrder = async (req, res) => {
       });
     }
 
+    // If restaurant overlaps multiple zones, prefer the user's zone (when provided)
+    // to avoid false mismatch due to different zone-selection strategies.
+    const { zoneId: userZoneId } = req.body; // User's zone ID from frontend
+    const normalizedUserZoneId = userZoneId ? String(userZoneId).trim() : null;
+    const restaurantZone =
+      normalizedUserZoneId
+        ? matchedRestaurantZones.find((zone) => zone?._id?.toString() === normalizedUserZoneId) || matchedRestaurantZones[0]
+        : matchedRestaurantZones[0];
+
     logger.info('✅ Restaurant validated - location is within active zone:', {
       restaurantId: restaurant._id?.toString() || restaurant.restaurantId,
       restaurantName: restaurant.name,
@@ -278,14 +317,12 @@ export const createOrder = async (req, res) => {
     });
 
     // CRITICAL: Validate user's zone matches restaurant's zone (strict zone matching)
-    const { zoneId: userZoneId } = req.body; // User's zone ID from frontend
-
-    if (userZoneId) {
+    if (normalizedUserZoneId) {
       const restaurantZoneId = restaurantZone._id.toString();
 
-      if (restaurantZoneId !== userZoneId) {
+      if (restaurantZoneId !== normalizedUserZoneId) {
         logger.warn('⚠️ Zone mismatch - user and restaurant are in different zones:', {
-          userZoneId,
+          userZoneId: normalizedUserZoneId,
           restaurantZoneId,
           restaurantId: restaurant._id?.toString() || restaurant.restaurantId,
           restaurantName: restaurant.name
@@ -297,7 +334,7 @@ export const createOrder = async (req, res) => {
       }
 
       logger.info('✅ Zone match validated - user and restaurant are in the same zone:', {
-        zoneId: userZoneId,
+        zoneId: normalizedUserZoneId,
         restaurantId: restaurant._id?.toString() || restaurant.restaurantId
       });
     } else {
@@ -357,9 +394,9 @@ export const createOrder = async (req, res) => {
       address,
       pricing: finalPricing,
       deliveryFleet: deliveryFleet || 'standard',
-      note: note || '',
-      deliveryInstruction: typeof deliveryInstruction === 'string' ? deliveryInstruction.trim() : '',
-      sendCutlery: sendCutlery !== false,
+      note: normalizedRestaurantInstruction,
+      deliveryInstruction: normalizedDeliveryInstruction,
+      sendCutlery: normalizedSendCutlery,
       status: 'pending',
       payment: {
         method: normalizedPaymentMethod,
@@ -1146,7 +1183,13 @@ export const updateOrderLocation = async (req, res) => {
     const userId = req.user.id;
     const { orderId } = req.params;
     const payload = req.body || {};
-    const address = payload.address || payload;
+    const hasDeliveryInstruction =
+      Object.prototype.hasOwnProperty.call(payload, 'deliveryInstruction') &&
+      typeof payload.deliveryInstruction === 'string';
+    const deliveryInstruction = hasDeliveryInstruction ? payload.deliveryInstruction.trim() : null;
+    const isInstructionOnlyPayload =
+      Object.keys(payload).length === 1 && Object.prototype.hasOwnProperty.call(payload, 'deliveryInstruction');
+    const address = payload.address || (isInstructionOnlyPayload ? null : payload);
 
     if (!orderId) {
       return res.status(400).json({
@@ -1155,10 +1198,10 @@ export const updateOrderLocation = async (req, res) => {
       });
     }
 
-    if (!address || typeof address !== 'object') {
+    if (!hasDeliveryInstruction && (!address || typeof address !== 'object')) {
       return res.status(400).json({
         success: false,
-        message: 'Address payload is required'
+        message: 'Address payload or delivery instruction is required'
       });
     }
 
@@ -1199,11 +1242,11 @@ export const updateOrderLocation = async (req, res) => {
       });
     }
 
-    const allowedStatuses = new Set(['pending', 'confirmed']);
+    const allowedStatuses = new Set(['pending', 'confirmed', 'preparing']);
     if (!allowedStatuses.has(order.status)) {
       return res.status(400).json({
         success: false,
-        message: 'Delivery location can only be updated while the order is pending or confirmed'
+        message: 'Delivery location can only be updated while the order is pending, confirmed, or preparing'
       });
     }
 
@@ -1221,53 +1264,67 @@ export const updateOrderLocation = async (req, res) => {
         message: 'Delivery location cannot be updated after a delivery partner has been assigned'
       });
     }
+    const hasAddressUpdate = !isInstructionOnlyPayload && !!address && typeof address === 'object';
 
-    const coordsFromAddress = (() => {
-      if (Array.isArray(address?.location?.coordinates) && address.location.coordinates.length >= 2) {
-        return address.location.coordinates;
-      }
-      if (Array.isArray(address?.coordinates) && address.coordinates.length >= 2) {
-        return address.coordinates;
-      }
-      const lat = address?.lat ?? address?.latitude;
-      const lng = address?.lng ?? address?.longitude;
-      if (typeof lat === 'number' && typeof lng === 'number') {
-        return [lng, lat];
-      }
-      return null;
-    })();
+    if (hasAddressUpdate) {
+      const coordsFromAddress = (() => {
+        if (Array.isArray(address?.location?.coordinates) && address.location.coordinates.length >= 2) {
+          return address.location.coordinates;
+        }
+        if (Array.isArray(address?.coordinates) && address.coordinates.length >= 2) {
+          return address.coordinates;
+        }
+        const lat = address?.lat ?? address?.latitude;
+        const lng = address?.lng ?? address?.longitude;
+        if (typeof lat === 'number' && typeof lng === 'number') {
+          return [lng, lat];
+        }
+        return null;
+      })();
 
-    const existingCoords = order.address?.location?.coordinates;
-    const nextCoords = coordsFromAddress || existingCoords;
+      const existingCoords = order.address?.location?.coordinates;
+      const nextCoords = coordsFromAddress || existingCoords;
 
-    if (!nextCoords || !Array.isArray(nextCoords) || nextCoords.length < 2) {
-      return res.status(400).json({
-        success: false,
-        message: 'Valid location coordinates are required'
-      });
+      if (!nextCoords || !Array.isArray(nextCoords) || nextCoords.length < 2) {
+        return res.status(400).json({
+          success: false,
+          message: 'Valid location coordinates are required'
+        });
+      }
+
+      const updatedAddress = {
+        ...(order.address || {}),
+        ...(address || {})
+      };
+
+      updatedAddress.location = {
+        ...(order.address?.location || {}),
+        ...(address.location || {}),
+        type: address.location?.type || order.address?.location?.type || 'Point',
+        coordinates: nextCoords
+      };
+
+      if (address.formattedAddress !== undefined) updatedAddress.formattedAddress = address.formattedAddress;
+      if (address.street !== undefined) updatedAddress.street = address.street;
+      if (address.additionalDetails !== undefined) updatedAddress.additionalDetails = address.additionalDetails;
+      if (address.city !== undefined) updatedAddress.city = address.city;
+      if (address.state !== undefined) updatedAddress.state = address.state;
+      if (address.zipCode !== undefined) updatedAddress.zipCode = address.zipCode;
+      if (address.label !== undefined) updatedAddress.label = address.label;
+
+      order.address = updatedAddress;
     }
 
-    const updatedAddress = {
-      ...(order.address || {}),
-      ...(address || {})
-    };
+    if (hasDeliveryInstruction) {
+      if (deliveryInstruction.length > 200) {
+        return res.status(400).json({
+          success: false,
+          message: 'Delivery instruction is too long (max 200 characters)'
+        });
+      }
+      order.deliveryInstruction = deliveryInstruction;
+    }
 
-    updatedAddress.location = {
-      ...(order.address?.location || {}),
-      ...(address.location || {}),
-      type: address.location?.type || order.address?.location?.type || 'Point',
-      coordinates: nextCoords
-    };
-
-    if (address.formattedAddress !== undefined) updatedAddress.formattedAddress = address.formattedAddress;
-    if (address.street !== undefined) updatedAddress.street = address.street;
-    if (address.additionalDetails !== undefined) updatedAddress.additionalDetails = address.additionalDetails;
-    if (address.city !== undefined) updatedAddress.city = address.city;
-    if (address.state !== undefined) updatedAddress.state = address.state;
-    if (address.zipCode !== undefined) updatedAddress.zipCode = address.zipCode;
-    if (address.label !== undefined) updatedAddress.label = address.label;
-
-    order.address = updatedAddress;
     await order.save();
 
     const responseAddress = {
@@ -1277,10 +1334,13 @@ export const updateOrderLocation = async (req, res) => {
 
     return res.json({
       success: true,
-      message: 'Delivery location updated',
+      message: hasAddressUpdate && hasDeliveryInstruction
+        ? 'Delivery details updated'
+        : (hasAddressUpdate ? 'Delivery location updated' : 'Delivery instruction updated'),
       data: {
         orderId: order.orderId || order._id?.toString(),
-        address: responseAddress
+        address: responseAddress,
+        deliveryInstruction: order.deliveryInstruction || ''
       }
     });
   } catch (error) {

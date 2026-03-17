@@ -1,11 +1,10 @@
 import { Link } from "react-router-dom"
 import { useState, useEffect } from "react"
-import { ChevronDown, ShoppingCart, Wallet } from "lucide-react"
+import { ChevronDown, ShoppingCart, Wallet, MapPin } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useLocation } from "../hooks/useLocation"
 import { useCart } from "../context/CartContext"
 import { useLocationSelector } from "./UserLayout"
-import { FaLocationDot } from "react-icons/fa6"
 import { getCachedSettings, loadBusinessSettings } from "@/lib/utils/businessSettings"
 import quickSpicyLogo from "@/assets/quicky-spicy-logo.png"
 
@@ -959,6 +958,7 @@ export default function PageNavbar({
             ) : (
               <div className="flex flex-col items-center min-w-0">
                 <div className="flex items-center justify-center gap-1">
+                  <MapPin className={`h-4 w-4 sm:h-5 sm:w-5 ${textColorClass} flex-shrink-0`} strokeWidth={2.5} />
                   <span className={`text-sm sm:text-base md:text-lg font-bold ${textColorClass} truncate max-w-[140px] sm:max-w-[200px]`}>
                     {mainLocationName}
                   </span>

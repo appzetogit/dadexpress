@@ -1,6 +1,6 @@
-import { Link, useLocation } from "react-router-dom"
+import { Link, useLocation, useNavigate } from "react-router-dom"
 import { useEffect, useState, useRef } from "react"
-import { ChevronDown, ShoppingCart, Wallet, Search, Mic } from "lucide-react"
+import { ChevronDown, ShoppingCart, Wallet, Search, Mic, MapPin } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
@@ -8,13 +8,13 @@ import { useLocation as useLocationHook } from "../hooks/useLocation"
 import { useCart } from "../context/CartContext"
 import { useLocationSelector, useSearchOverlay } from "./UserLayout"
 import { useProfile } from "../context/ProfileContext"
-import { FaLocationDot } from "react-icons/fa6"
 import { AnimatePresence, motion } from "framer-motion"
 import quickSpicyLogo from "@/assets/quicky-spicy-logo.png"
 import { getCachedSettings, loadBusinessSettings } from "@/lib/utils/businessSettings"
 
 export default function DesktopNavbar() {
     const location = useLocation()
+    const navigate = useNavigate()
     const { location: userLocation, loading: locationLoading } = useLocationHook()
     const { getCartCount } = useCart()
     const { openLocationSelector } = useLocationSelector()
@@ -145,9 +145,8 @@ export default function DesktopNavbar() {
                                 ) : (
                                     <div className="flex flex-col items-start min-w-0">
                                         <div className="flex items-center gap-1.5 lg:gap-2">
-                                            <FaLocationDot
+                                            <MapPin
                                                 className="h-5 w-5 lg:h-6 lg:w-6 text-black dark:text-white flex-shrink-0"
-                                                fill="currentColor"
                                                 strokeWidth={2}
                                             />
                                             <span className="text-sm lg:text-base font-bold text-black dark:text-white whitespace-nowrap">
@@ -185,8 +184,9 @@ export default function DesktopNavbar() {
                                             }}
                                             onKeyDown={(e) => {
                                                 if (e.key === 'Enter' && heroSearch.trim()) {
-                                                    setSearchValue(heroSearch.trim())
-                                                    openSearch()
+                                                    navigate(`/user/search?q=${encodeURIComponent(heroSearch.trim())}`)
+                                                    closeSearch()
+                                                    setHeroSearch("")
                                                 }
                                             }}
                                             className="h-6 p-0 border-0 bg-transparent text-sm font-medium placeholder:text-gray-500 focus-visible:ring-0 focus-visible:ring-offset-0"

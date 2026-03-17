@@ -189,7 +189,7 @@ export default function Navbar() {
                 <Link to="/user/help">
                   <DropdownMenuItem>Help</DropdownMenuItem>
                 </Link>
-                <Link to="/user/auth/sign-in">
+                <Link to="/auth/sign-in">
                   <DropdownMenuItem>Sign Out</DropdownMenuItem>
                 </Link>
               </DropdownMenuContent>

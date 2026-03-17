@@ -41,9 +41,9 @@ import {
 } from "../utils/deliveryWalletState"
 import { formatCurrency } from "../../restaurant/utils/currency"
 import { getAllDeliveryOrders } from "../utils/deliveryOrderStatus"
-import { getUnreadDeliveryNotificationCount } from "../utils/deliveryNotifications"
+import { addDeliveryNotification, getUnreadDeliveryNotificationCount } from "../utils/deliveryNotifications"
 import { deliveryAPI, restaurantAPI, uploadAPI, zoneAPI } from "@/lib/api"
-import { useDeliveryNotifications } from "../hooks/useDeliveryNotifications"
+import { useDeliveryNotificationContext } from "../context/DeliveryNotificationContext"
 import { getGoogleMapsApiKey } from "@/lib/utils/googleMapsApiKey"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
 import { Loader } from "@googlemaps/js-api-loader"
@@ -418,7 +418,7 @@ export default function DeliveryHome() {
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(() => getUnreadDeliveryNotificationCount())
 
   // Delivery notifications hook
-  const { newOrder, clearNewOrder, orderReady, clearOrderReady, isConnected } = useDeliveryNotifications()
+  const { newOrder, clearNewOrder, orderReady, clearOrderReady, isConnected } = useDeliveryNotificationContext()
 
   // Default location - will be set from saved location or GPS, not hardcoded
   const [riderLocation, setRiderLocation] = useState(null) // Will be set from GPS or saved location
@@ -462,6 +462,7 @@ export default function DeliveryHome() {
   const lastRouteRecalculationRef = useRef(null) // Track last route recalculation time (API cost optimization)
   const lastBikePositionRef = useRef(null) // Track last bike position for deviation detection
   const acceptedOrderIdsRef = useRef(new Set()) // Track accepted order IDs to prevent duplicate notifications
+  const incomingOrderNoticeIdsRef = useRef(new Set()) // Prevent duplicate banner notifications for the same order
   // Live tracking polyline refs
   const liveTrackingPolylineRef = useRef(null) // Google Maps Polyline instance for live tracking
   const liveTrackingPolylineShadowRef = useRef(null) // Shadow/outline polyline for better visibility (Zomato/Rapido style)
@@ -645,6 +646,7 @@ export default function DeliveryHome() {
   const [newOrderDragY, setNewOrderDragY] = useState(0)
   const [isDraggingNewOrderPopup, setIsDraggingNewOrderPopup] = useState(false)
   const [isNewOrderPopupMinimized, setIsNewOrderPopupMinimized] = useState(false)
+  const [incomingOrderBanner, setIncomingOrderBanner] = useState(null)
   const [showDirectionsMap, setShowDirectionsMap] = useState(false)
   const [navigationMode, setNavigationMode] = useState('restaurant') // 'restaurant' or 'customer'
   const [showreachedPickupPopup, setShowreachedPickupPopup] = useState(false)
@@ -812,6 +814,81 @@ export default function DeliveryHome() {
 
     return 'pickup'
   }
+
+  const isOrderCompleted = useCallback((orderLike = {}) => {
+    const deliveryPhase = orderLike?.deliveryPhase || orderLike?.deliveryState?.currentPhase || ''
+    const orderStatus = orderLike?.orderStatus || orderLike?.status || ''
+    const deliveryStateStatus = orderLike?.deliveryState?.status || ''
+
+    return orderStatus === 'delivered' ||
+      orderStatus === 'completed' ||
+      deliveryPhase === 'completed' ||
+      deliveryPhase === 'delivered' ||
+      deliveryStateStatus === 'delivered'
+  }, [])
+
+  const isSameOrderIdentity = useCallback((firstOrder, secondOrder) => {
+    const first = getOrderIdentity(firstOrder)
+    const second = getOrderIdentity(secondOrder)
+
+    return (
+      (first.orderId && second.orderId && String(first.orderId) === String(second.orderId)) ||
+      (first.orderMongoId && second.orderMongoId && String(first.orderMongoId) === String(second.orderMongoId))
+    )
+  }, [])
+
+  const showIncomingOrderBanner = useCallback((orderData) => {
+    if (!orderData) return
+
+    const incomingOrderKey = orderData?.orderMongoId || orderData?.id || orderData?.orderId
+    if (incomingOrderKey && incomingOrderNoticeIdsRef.current.has(String(incomingOrderKey))) {
+      return
+    }
+    if (incomingOrderKey) {
+      incomingOrderNoticeIdsRef.current.add(String(incomingOrderKey))
+    }
+
+    const earningsValue = Number(
+      orderData?.amount ??
+      orderData?.estimatedEarnings?.totalEarning ??
+      orderData?.estimatedEarnings ??
+      orderData?.deliveryFee ??
+      0
+    ) || 0
+
+    setIncomingOrderBanner({
+      ...orderData,
+      amount: earningsValue,
+      receivedAt: Date.now()
+    })
+
+    addDeliveryNotification({
+      type: "order",
+      title: "New Order Request",
+      message: `${orderData?.name || "Restaurant"} sent a new delivery request${earningsValue > 0 ? ` • Est. earning ₹${earningsValue.toFixed(2)}` : ""}`,
+      time: "Just now"
+    })
+
+    toast.success(`New order request from ${orderData?.name || "restaurant"}`, {
+      duration: 3500
+    })
+  }, [])
+
+  const shouldKeepActiveOrderVisible = useCallback((incomingOrderData) => {
+    if (!selectedRestaurant) return false
+    if (isOrderCompleted(selectedRestaurant)) return false
+    return !isSameOrderIdentity(selectedRestaurant, incomingOrderData)
+  }, [isOrderCompleted, isSameOrderIdentity, selectedRestaurant])
+
+  useEffect(() => {
+    if (!incomingOrderBanner) return undefined
+
+    const timeoutId = setTimeout(() => {
+      setIncomingOrderBanner(null)
+    }, 12000)
+
+    return () => clearTimeout(timeoutId)
+  }, [incomingOrderBanner])
 
   useEffect(() => {
     const activeOrderKey =
@@ -4756,11 +4833,17 @@ export default function DeliveryHome() {
         total: newOrder.total || 0
       }
 
+      if (shouldKeepActiveOrderVisible(restaurantData)) {
+        showIncomingOrderBanner(restaurantData)
+        clearNewOrder()
+        return
+      }
+
       setSelectedRestaurant(restaurantData)
       setShowNewOrderPopup(true)
       setCountdownSeconds(300) // Reset countdown to 5 minutes
     }
-  }, [newOrder, calculateTimeAway, riderLocation])
+  }, [newOrder, calculateTimeAway, riderLocation, shouldKeepActiveOrderVisible, showIncomingOrderBanner, clearNewOrder])
 
   // Recalculate distance when rider location becomes available
   useEffect(() => {
@@ -5073,6 +5156,15 @@ export default function DeliveryHome() {
       fetchWalletData()
     }
 
+    // Refresh immediately when delivery/order flow signals wallet change
+    // (e.g. after "mark delivered"), so dashboard cards don't wait for interval.
+    const handleWalletRefreshEvent = () => {
+      if (deliveryStatus !== 'pending') {
+        fetchWalletData()
+      }
+    }
+    window.addEventListener('deliveryWalletStateUpdated', handleWalletRefreshEvent)
+
     // Refresh wallet data periodically (every 30 seconds) to keep stats dynamic
     const walletInterval = setInterval(() => {
       if (deliveryStatus !== null && deliveryStatus !== 'pending') {
@@ -5080,7 +5172,10 @@ export default function DeliveryHome() {
       }
     }, 30000)
 
-    return () => clearInterval(walletInterval)
+    return () => {
+      clearInterval(walletInterval)
+      window.removeEventListener('deliveryWalletStateUpdated', handleWalletRefreshEvent)
+    }
   }, [deliveryStatus])
 
   // Fetch assigned orders from API when delivery person goes online
@@ -5233,6 +5328,11 @@ export default function DeliveryHome() {
             amount: firstOrder.pricing?.total || 0
           }
 
+          if (shouldKeepActiveOrderVisible(restaurantData)) {
+            showIncomingOrderBanner(restaurantData)
+            return
+          }
+
           setSelectedRestaurant(restaurantData)
 
           // CRITICAL: Re-check if order was accepted AFTER the async operations above
@@ -5257,7 +5357,7 @@ export default function DeliveryHome() {
     } finally {
       assignedOrdersInFlightRef.current = false
     }
-  }, [isOnline, calculateTimeAway, hasAssignedZones, detectedZone, isOutOfZone])
+  }, [isOnline, calculateTimeAway, hasAssignedZones, detectedZone, isOutOfZone, shouldKeepActiveOrderVisible, showIncomingOrderBanner])
 
   // Fetch assigned orders when delivery person goes online
   useEffect(() => {
@@ -10208,6 +10308,45 @@ export default function DeliveryHome() {
           </button>
         </div>
       </BottomPopup>
+
+      {incomingOrderBanner && !showNewOrderPopup && (
+        <motion.div
+          initial={{ y: -24, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: -24, opacity: 0 }}
+          className="fixed top-20 left-4 right-4 z-[300]"
+        >
+          <div className="rounded-2xl bg-white border border-green-100 shadow-xl px-4 py-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center shrink-0">
+                  <Bell className="w-5 h-5 text-green-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-green-600">New order request</p>
+                  <p className="text-sm font-semibold text-gray-900 truncate">
+                    {incomingOrderBanner?.name || "Restaurant"}
+                  </p>
+                  <p className="text-xs text-gray-500 truncate">
+                    {incomingOrderBanner?.address || "Order notification received while another order is active"}
+                  </p>
+                  <p className="text-xs font-medium text-gray-700 mt-1">
+                    Est. earning ₹{Number(incomingOrderBanner?.amount || 0).toFixed(2)}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIncomingOrderBanner(null)}
+                className="p-1 rounded-full hover:bg-gray-100 transition-colors"
+                aria-label="Dismiss incoming order notification"
+              >
+                <X className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       {/* New Order Popup with Countdown Timer - Custom Implementation */}
       <AnimatePresence>

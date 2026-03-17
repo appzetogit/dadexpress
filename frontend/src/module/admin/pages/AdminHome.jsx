@@ -107,9 +107,10 @@ export default function AdminHome() {
   const ordersTotal = dashboardData?.orders?.total || 0
   const platformFeeTotal = dashboardData?.platformFee?.total || 0
   const deliveryFeeTotal = dashboardData?.deliveryFee?.total || 0
+  const deliveryEarningTotal = dashboardData?.deliveryEarning?.total || 0
   const gstTotal = dashboardData?.gst?.total || 0
-  // Total revenue = Commission + Platform Fee + Delivery Fee + GST
-  const totalAdminEarnings = commissionTotal + platformFeeTotal + deliveryFeeTotal + gstTotal
+  // Total revenue (specific earnings) = Commission + Platform Fee + Delivery Earning + GST
+  const totalAdminEarnings = commissionTotal + platformFeeTotal + deliveryEarningTotal + gstTotal
 
   // Additional stats
   const totalRestaurants = dashboardData?.restaurants?.total || 0
@@ -216,12 +217,12 @@ export default function AdminHome() {
               isLoading={isLoading && !hasLoadedOnce}
             />
             <MetricCard
-              title="Delivery fee"
-              value={`₹${deliveryFeeTotal.toLocaleString("en-IN")}`}
-              helper="Total delivery fees"
+              title="Delivery earning"
+              value={`₹${deliveryEarningTotal.toLocaleString("en-IN")}`}
+              helper="Total delivery partner earnings"
               icon={<Truck className="h-5 w-5 text-blue-600" />}
               accent="bg-blue-200/40"
-              path={transactionReportPath}
+              path="/admin/delivery-partners/earnings"
               isLoading={isLoading && !hasLoadedOnce}
             />
             <MetricCard
@@ -236,7 +237,7 @@ export default function AdminHome() {
             <MetricCard
               title="Total revenue"
               value={`₹${totalAdminEarnings.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-              helper={`Commission ₹${commissionTotal.toFixed(2)} + Platform ₹${platformFeeTotal.toFixed(2)} + Delivery ₹${deliveryFeeTotal.toFixed(2)} + GST ₹${gstTotal.toFixed(2)}`}
+              helper={`Commission ₹${commissionTotal.toFixed(2)} + Platform ₹${platformFeeTotal.toFixed(2)} + Delivery Earning ₹${deliveryEarningTotal.toFixed(2)} + GST ₹${gstTotal.toFixed(2)}`}
               icon={<DollarSign className="h-5 w-5 text-green-600" />}
               accent="bg-green-200/40"
               path={transactionReportPath}

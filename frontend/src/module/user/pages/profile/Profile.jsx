@@ -232,7 +232,7 @@ export default function Profile() {
       window.dispatchEvent(new Event("userAuthChanged"))
 
       // Navigate to sign in page
-      navigate("/user/auth/sign-in", { replace: true })
+      navigate("/auth/sign-in", { replace: true })
     } catch (err) {
       // Even if there's an error, we should still clear local data and logout
       console.error("Error during logout:", err)
@@ -249,7 +249,7 @@ export default function Profile() {
       window.dispatchEvent(new Event("userAuthChanged"))
 
       // Still navigate to login page
-      navigate("/user/auth/sign-in", { replace: true })
+      navigate("/auth/sign-in", { replace: true })
     } finally {
       setIsLoggingOut(false)
     }
@@ -863,7 +863,7 @@ export default function Profile() {
                       >
                         <SettingsIcon className="h-5 w-5 text-gray-700 dark:text-gray-300" />
                       </motion.div>
-                      <span className="text-base font-medium text-gray-900 dark:text-white">Settings</span>
+                      <span className="text-base font-medium text-gray-900 dark:text-white">Notification Settings</span>
                     </div>
                     <motion.div
                       whileHover={{ x: 4 }}

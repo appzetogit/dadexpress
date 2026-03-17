@@ -42,6 +42,7 @@ export default function SearchResults() {
   ])
   const [loadingCategories, setLoadingCategories] = useState(true)
   const [categoryKeywords, setCategoryKeywords] = useState({})
+  const [isListening, setIsListening] = useState(false)
 
   // Fetch categories from admin API
   useEffect(() => {
@@ -391,6 +392,35 @@ export default function SearchResults() {
     }
   }
 
+  const handleVoiceSearch = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SpeechRecognition) return
+
+    const recognition = new SpeechRecognition()
+    recognition.lang = "en-IN"
+    recognition.interimResults = false
+    recognition.maxAlternatives = 1
+
+    setIsListening(true)
+
+    recognition.onresult = (event) => {
+      const transcript = event?.results?.[0]?.[0]?.transcript?.trim() || ""
+      if (!transcript) return
+      setSearchQuery(transcript)
+      setSearchParams({ q: transcript })
+    }
+
+    recognition.onerror = () => {
+      setIsListening(false)
+    }
+
+    recognition.onend = () => {
+      setIsListening(false)
+    }
+
+    recognition.start()
+  }
+
   const handleCategorySelect = (catId) => {
     setSelectedCategory(catId)
     // Update search query to match category name
@@ -625,8 +655,13 @@ export default function SearchResults() {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10 pr-10 h-11 rounded-lg border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-[#1a1a1a] focus:bg-white dark:focus:bg-[#2a2a2a] focus:border-gray-500 dark:focus:border-gray-600 text-sm dark:text-white placeholder:text-gray-600 dark:placeholder:text-gray-400"
               />
-              <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2">
-                <Mic className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+              <button
+                type="button"
+                onClick={handleVoiceSearch}
+                className="absolute right-3 top-1/2 -translate-y-1/2"
+                aria-label="Search by voice"
+              >
+                <Mic className={`h-4 w-4 ${isListening ? "text-[#EB590E]" : "text-gray-500 dark:text-gray-400"}`} />
               </button>
             </form>
           </div>

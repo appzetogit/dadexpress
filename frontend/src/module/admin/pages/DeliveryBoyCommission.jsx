@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react"
-import { Search, Edit, Trash2, IndianRupee, Settings, Check, Columns, MapPin, Loader2 } from "lucide-react"
+import { Search, Edit, Trash2, IndianRupee, Settings, Check, Columns, MapPin, Loader2, Plus } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { adminAPI } from "@/lib/api"
 import { API_BASE_URL } from "@/lib/api/config"
@@ -12,7 +12,6 @@ export default function DeliveryBoyCommission() {
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [isAddEditOpen, setIsAddEditOpen] = useState(false)
-  const [isDeleteOpen, setIsDeleteOpen] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [selectedCommission, setSelectedCommission] = useState(null)
   const [formData, setFormData] = useState({
@@ -76,7 +75,7 @@ export default function DeliveryBoyCommission() {
   const fetchCommissionRules = async () => {
     try {
       setLoading(true)
-      const response = await adminAPI.getCommissionRules({ status: true })
+      const response = await adminAPI.getCommissionRules()
       
       // Handle different response structures
       let commissionsData = null
@@ -135,9 +134,7 @@ export default function DeliveryBoyCommission() {
     try {
       const newStatus = !commission.status
       await adminAPI.toggleCommissionRuleStatus(commission._id, newStatus)
-      setCommissions(commissions.map(c =>
-        c._id === commission._id ? { ...c, status: newStatus } : c
-      ))
+      await fetchCommissionRules()
       toast.success('Commission rule status updated successfully')
     } catch (error) {
       console.error('Error toggling status:', error)
@@ -165,28 +162,11 @@ export default function DeliveryBoyCommission() {
     setIsAddEditOpen(true)
   }
 
-  const handleDelete = (commission) => {
-    setSelectedCommission(commission)
-    setIsDeleteOpen(true)
-  }
-
-  const confirmDelete = async () => {
-    if (!selectedCommission) return
-    
-    // Prevent deletion if it's the only rule - always keep at least one rule
-    if (commissions.length <= 1) {
-      toast.error('Cannot delete the only commission rule. At least one rule must exist.')
-      setIsDeleteOpen(false)
-      setSelectedCommission(null)
-      return
-    }
-    
+  const handleDelete = async (commission) => {
     try {
       setDeleting(true)
-      await adminAPI.deleteCommissionRule(selectedCommission._id)
-      setCommissions(commissions.filter(commission => commission._id !== selectedCommission._id))
-      setIsDeleteOpen(false)
-      setSelectedCommission(null)
+      await adminAPI.deleteCommissionRule(commission._id)
+      setCommissions(prev => prev.filter(item => item._id !== commission._id))
       toast.success('Commission rule deleted successfully')
     } catch (error) {
       console.error('Error deleting commission rule:', error)
@@ -232,52 +212,13 @@ export default function DeliveryBoyCommission() {
       
       if (selectedCommission) {
         // Update existing commission
-        const response = await adminAPI.updateCommissionRule(selectedCommission._id, commissionData)
-        let commission = null
-        if (response?.data?.success && response?.data?.data?.commission) {
-          commission = response.data.data.commission
-        } else if (response?.data?.data?.commission) {
-          commission = response.data.data.commission
-        } else if (response?.data?.commission) {
-          commission = response.data.commission
-        }
-        
-        if (commission) {
-          const updatedCommission = {
-            ...commission,
-            sl: selectedCommission.sl
-          }
-          setCommissions(commissions.map(c =>
-            c._id === selectedCommission._id ? updatedCommission : c
-          ))
-          toast.success('Commission rule updated successfully')
-        }
+        await adminAPI.updateCommissionRule(selectedCommission._id, commissionData)
+        await fetchCommissionRules()
+        toast.success('Commission rule updated successfully')
       } else {
-        // Only allow one commission rule - check if one already exists
-        if (commissions.length > 0) {
-          toast.error('Only one commission rule is allowed. Please edit the existing rule instead.')
-          return
-        }
-        
-        // Create new commission (only if no existing rule)
-        const response = await adminAPI.createCommissionRule(commissionData)
-        let commission = null
-        if (response?.data?.success && response?.data?.data?.commission) {
-          commission = response.data.data.commission
-        } else if (response?.data?.data?.commission) {
-          commission = response.data.data.commission
-        } else if (response?.data?.commission) {
-          commission = response.data.commission
-        }
-        
-        if (commission) {
-          const newCommission = {
-            ...commission,
-            sl: 1
-          }
-          setCommissions([newCommission])
-          toast.success('Commission rule created successfully')
-        }
+        await adminAPI.createCommissionRule(commissionData)
+        await fetchCommissionRules()
+        toast.success('Commission rule created successfully')
       }
       
       setIsAddEditOpen(false)
@@ -367,7 +308,6 @@ export default function DeliveryBoyCommission() {
       maxDistance: true,
       commissionPerKm: true,
       basePayout: true,
-      totalCommission: true,
       status: true,
       actions: true,
     })
@@ -400,6 +340,13 @@ export default function DeliveryBoyCommission() {
             </div>
 
             <div className="flex items-center gap-2">
+              <button
+                onClick={handleAdd}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all shadow-sm"
+              >
+                <Plus className="w-4 h-4" />
+                <span className="text-sm font-semibold">Add Rule</span>
+              </button>
               <button 
                 onClick={() => setIsSettingsOpen(true)}
                 className="p-2.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 transition-all"
@@ -418,6 +365,9 @@ export default function DeliveryBoyCommission() {
                 <p className="text-slate-600">
                   Commission is calculated as: <strong>Base Payout + (Distance × Commission Per Km)</strong>. 
                   Each rule applies to a specific distance range. For orders outside any range, the nearest applicable rule will be used.
+                </p>
+                <p className="text-slate-600 mt-2">
+                  All rules are shown here, including inactive ones, so add/edit/delete/status functionality works from one place.
                 </p>
               </div>
             </div>
@@ -485,7 +435,7 @@ export default function DeliveryBoyCommission() {
                   </tr>
                 ) : (
                   filteredCommissions.map((commission) => (
-                    <tr key={commission.sl} className="hover:bg-slate-50 transition-colors">
+                    <tr key={commission._id || commission.sl} className="hover:bg-slate-50 transition-colors">
                       {visibleColumns.si && (
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className="text-sm font-medium text-slate-700">{commission.sl}</span>
@@ -548,15 +498,13 @@ export default function DeliveryBoyCommission() {
                             >
                               <Edit className="w-4 h-4" />
                             </button>
-                            {commissions.length > 1 && (
-                              <button
-                                onClick={() => handleDelete(commission)}
-                                className="p-1.5 rounded text-red-600 hover:bg-red-50 transition-colors"
-                                title="Delete"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            )}
+                            <button
+                              onClick={() => handleDelete(commission)}
+                              className="p-1.5 rounded text-red-600 hover:bg-red-50 transition-colors"
+                              title="Delete"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
                           </div>
                         </td>
                       )}
@@ -678,36 +626,6 @@ export default function DeliveryBoyCommission() {
             >
               {saving && <Loader2 className="w-4 h-4 animate-spin" />}
               {selectedCommission ? "Update" : "Add"}
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
-        <DialogContent className="max-w-md bg-white p-0 opacity-0 data-[state=open]:opacity-100 data-[state=closed]:opacity-0 transition-opacity duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:scale-100 data-[state=closed]:scale-100">
-          <DialogHeader className="px-6 pt-6 pb-4">
-            <DialogTitle>Delete Commission Rule</DialogTitle>
-          </DialogHeader>
-          <div className="px-6 pb-6">
-            <p className="text-sm text-slate-700">
-              Are you sure you want to delete "{selectedCommission?.name}"? This action cannot be undone.
-            </p>
-          </div>
-          <DialogFooter className="px-6 pb-6">
-            <button
-              onClick={() => setIsDeleteOpen(false)}
-              className="px-4 py-2 text-sm font-medium rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-all"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={confirmDelete}
-              disabled={deleting}
-              className="px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {deleting && <Loader2 className="w-4 h-4 animate-spin" />}
-              Delete
             </button>
           </DialogFooter>
         </DialogContent>

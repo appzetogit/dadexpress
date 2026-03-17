@@ -279,14 +279,20 @@ export const updateBusinessSettings = asyncHandler(async (req, res) => {
  */
 export const updateReferralSettings = asyncHandler(async (req, res) => {
   try {
+    const referralPayload =
+      req.body?.referral && typeof req.body.referral === "object"
+        ? req.body.referral
+        : req.body;
+
     const {
       isEnabled,
       referrerReward,
       refereeReward,
       minOrderValue,
       expiryDays,
+      rewardExpiryDays,
       maxRedemptionPercentage,
-    } = req.body;
+    } = referralPayload;
 
     let settings = await BusinessSettings.findOne();
     if (!settings) {
@@ -308,7 +314,11 @@ export const updateReferralSettings = asyncHandler(async (req, res) => {
     if (referrerReward !== undefined) settings.referral.referrerReward = referrerReward;
     if (refereeReward !== undefined) settings.referral.refereeReward = refereeReward;
     if (minOrderValue !== undefined) settings.referral.minOrderValue = minOrderValue;
-    if (expiryDays !== undefined) settings.referral.expiryDays = expiryDays;
+    const resolvedExpiryDays =
+      expiryDays !== undefined ? expiryDays : rewardExpiryDays;
+    if (resolvedExpiryDays !== undefined) {
+      settings.referral.expiryDays = resolvedExpiryDays;
+    }
     if (maxRedemptionPercentage !== undefined) settings.referral.maxRedemptionPercentage = maxRedemptionPercentage;
 
     await settings.save();

@@ -4,6 +4,7 @@ import { adminAPI } from "@/lib/api"
 import { toast } from "sonner"
 import OrdersTopbar from "../components/orders/OrdersTopbar"
 import OrderDetectDeliveryTable from "../components/orders/OrderDetectDeliveryTable"
+import DispatchFilterPanel from "../components/orders/DispatchFilterPanel"
 import ViewOrderDetectDeliveryDialog from "../components/orders/ViewOrderDetectDeliveryDialog"
 import SettingsDialog from "../components/orders/SettingsDialog"
 import { useGenericTableManagement } from "../components/orders/useGenericTableManagement"
@@ -285,7 +286,6 @@ export default function OrderDetectDelivery() {
     handleExport,
     handleViewOrder,
     handlePrintOrder,
-    toggleColumn,
   } = useGenericTableManagement(
     orders,
     "Order Detect Delivery",
@@ -317,6 +317,13 @@ export default function OrderDetectDelivery() {
       status: true,
       actions: true,
     })
+  }
+
+  const toggleColumn = (columnKey) => {
+    setVisibleColumns((prev) => ({
+      ...prev,
+      [columnKey]: !prev[columnKey],
+    }))
   }
 
   // Loading state
@@ -483,6 +490,14 @@ export default function OrderDetectDelivery() {
           status: "Status",
           actions: "Actions",
         }}
+      />
+      <DispatchFilterPanel
+        isOpen={isFilterOpen}
+        onClose={() => setIsFilterOpen(false)}
+        filters={filters}
+        setFilters={setFilters}
+        onApply={handleApplyFilters}
+        onReset={handleResetFilters}
       />
       <ViewOrderDetectDeliveryDialog
         isOpen={isViewOrderOpen}

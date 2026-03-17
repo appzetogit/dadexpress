@@ -1,6 +1,7 @@
 import Admin from "../models/Admin.js";
 import Order from "../../order/models/Order.js";
 import Restaurant from "../../restaurant/models/Restaurant.js";
+import Delivery from "../../delivery/models/Delivery.js";
 import Offer from "../../restaurant/models/Offer.js";
 import AdminCommission from "../models/AdminCommission.js";
 import OrderSettlement from "../../order/models/OrderSettlement.js";
@@ -195,17 +196,21 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     let totalPlatformFee = 0;
     let totalDeliveryFee = 0;
     let totalGST = 0;
+    let totalDeliveryEarning = 0;
 
     allSettlements.forEach((s, index) => {
       const commission = s.adminEarning?.commission || 0;
       const platformFee = s.adminEarning?.platformFee || 0;
       const deliveryFee = s.adminEarning?.deliveryFee || 0;
-      const gst = s.adminEarning?.gst || 0;
+      // Some historical settlements may miss adminEarning.gst, so fallback to userPayment.gst.
+      const gst = Number(s.adminEarning?.gst ?? s.userPayment?.gst ?? 0);
+      const deliveryEarning = Number(s.deliveryPartnerEarning?.totalEarning || 0);
 
       totalCommission += commission;
       totalPlatformFee += platformFee;
       totalDeliveryFee += deliveryFee;
       totalGST += gst;
+      totalDeliveryEarning += deliveryEarning;
 
       // Log each settlement for debugging
       if (index < 5) {
@@ -220,6 +225,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     totalPlatformFee = Math.round(totalPlatformFee * 100) / 100;
     totalDeliveryFee = Math.round(totalDeliveryFee * 100) / 100;
     totalGST = Math.round(totalGST * 100) / 100;
+    totalDeliveryEarning = Math.round(totalDeliveryEarning * 100) / 100;
 
     console.log(
       `💰 Final calculated totals - Commission: ₹${totalCommission}, Platform Fee: ₹${totalPlatformFee}, Delivery Fee: ₹${totalDeliveryFee}, GST: ₹${totalGST}`,
@@ -242,7 +248,11 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       0,
     );
     const last30DaysGST = last30DaysSettlements.reduce(
-      (sum, s) => sum + (s.adminEarning?.gst || 0),
+      (sum, s) => sum + Number(s.adminEarning?.gst ?? s.userPayment?.gst ?? 0),
+      0,
+    );
+    const last30DaysDeliveryEarning = last30DaysSettlements.reduce(
+      (sum, s) => sum + Number(s.deliveryPartnerEarning?.totalEarning || 0),
       0,
     );
 
@@ -320,14 +330,16 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       pendingRestaurantRequestsQuery,
     );
 
-    // Total delivery boys (all delivery users)
-    const totalDeliveryBoys = await User.countDocuments({ role: "delivery" });
+    // Total delivery boys should match Deliveryman List criteria.
+    // Deliveryman List shows partners with status in ['approved', 'active'].
+    const totalDeliveryBoys = await Delivery.countDocuments({
+      status: { $in: ["approved", "active"] },
+    });
 
-    // Delivery boy requests pending (delivery users with isActive: false or verification pending)
-    // Assuming deliveryStatus field exists, if not we'll use isActive: false
-    const pendingDeliveryBoyRequests = await User.countDocuments({
-      role: "delivery",
-      $or: [{ isActive: false }, { deliveryStatus: "pending" }],
+    // Delivery boy pending requests should match join-request screen criteria.
+    // Admin join requests are sourced from Delivery model with status='pending'.
+    const pendingDeliveryBoyRequests = await Delivery.countDocuments({
+      status: "pending",
     });
 
     // Total foods (Menu items) - Count all individual menu items from active menus
@@ -343,27 +355,23 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
         menu.sections.forEach((section) => {
           // Count items from ALL sections (enabled and disabled)
 
-          // Count items directly in section (all items, excluding only rejected)
+          // Count items directly in section (same as admin food list total view)
           if (section.items && Array.isArray(section.items)) {
             totalFoods += section.items.filter((item) => {
               // Must have required fields
               if (!item || !item.id || !item.name) return false;
-              // Exclude only rejected items (include all others: pending, approved, available, unavailable)
-              if (item.approvalStatus === "rejected") return false;
-              // Count all other items regardless of availability or approval status
+              // Count all items regardless of availability/approval status for dashboard list parity
               return true;
             }).length;
           }
-          // Count items in subsections (all items, excluding only rejected)
+          // Count items in subsections (same as admin food list total view)
           if (section.subsections && Array.isArray(section.subsections)) {
             section.subsections.forEach((subsection) => {
               if (subsection.items && Array.isArray(subsection.items)) {
                 totalFoods += subsection.items.filter((item) => {
                   // Must have required fields
                   if (!item || !item.id || !item.name) return false;
-                  // Exclude only rejected items (include all others: pending, approved, available, unavailable)
-                  if (item.approvalStatus === "rejected") return false;
-                  // Count all other items regardless of availability or approval status
+                  // Count all items regardless of availability/approval status for dashboard list parity
                   return true;
                 }).length;
               }
@@ -412,8 +420,21 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       $or: [{ role: "user" }, { role: { $exists: false } }, { role: null }],
     });
 
-    // Pending orders (already in orderStatusMap)
-    const pendingOrders = orderStatusMap.pending || 0;
+    // Pending orders should reflect all active/in-progress orders, not just literal "pending".
+    const terminalStatuses = new Set([
+      "delivered",
+      "cancelled",
+      "canceled",
+      "refunded",
+      "payment-failed",
+      "failed",
+      "rejected",
+    ]);
+    const pendingOrders = Object.entries(orderStatusMap).reduce(
+      (sum, [status, count]) =>
+        terminalStatuses.has(status) ? sum : sum + (Number(count) || 0),
+      0,
+    );
 
     // Completed orders (delivered orders)
     const completedOrders = orderStatusMap.delivered || 0;
@@ -499,6 +520,11 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       deliveryFee: {
         total: totalDeliveryFee,
         last30Days: last30DaysDeliveryFee,
+        currency: "INR",
+      },
+      deliveryEarning: {
+        total: totalDeliveryEarning,
+        last30Days: Math.round(last30DaysDeliveryEarning * 100) / 100,
         currency: "INR",
       },
       gst: {
@@ -1291,6 +1317,167 @@ export const getRestaurants = asyncHandler(async (req, res) => {
 });
 
 /**
+ * Get Restaurant Referral Mapping
+ * GET /api/admin/restaurants/referral-mapping
+ * Query params: page, limit, search, referralStatus
+ */
+export const getRestaurantReferralMappings = asyncHandler(async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 50,
+      search = "",
+      referralStatus,
+    } = req.query;
+
+    const parsedPage = Math.max(parseInt(page, 10) || 1, 1);
+    const parsedLimit = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 200);
+    const skip = (parsedPage - 1) * parsedLimit;
+    const trimmedSearch = String(search || "").trim();
+
+    const query = {
+      referredBy: { $ne: null },
+    };
+
+    if (referralStatus && ["pending", "completed"].includes(String(referralStatus).toLowerCase())) {
+      query.referralStatus = String(referralStatus).toLowerCase();
+    }
+
+    if (trimmedSearch) {
+      const referrerMatches = await Restaurant.find({
+        $or: [
+          { name: { $regex: trimmedSearch, $options: "i" } },
+          { ownerName: { $regex: trimmedSearch, $options: "i" } },
+          { phone: { $regex: trimmedSearch, $options: "i" } },
+          { email: { $regex: trimmedSearch, $options: "i" } },
+          { referralCode: { $regex: trimmedSearch, $options: "i" } },
+        ],
+      })
+        .select("_id")
+        .lean();
+
+      const referrerIds = referrerMatches.map((restaurant) => restaurant._id);
+
+      query.$or = [
+        { name: { $regex: trimmedSearch, $options: "i" } },
+        { ownerName: { $regex: trimmedSearch, $options: "i" } },
+        { phone: { $regex: trimmedSearch, $options: "i" } },
+        { email: { $regex: trimmedSearch, $options: "i" } },
+        { referralCode: { $regex: trimmedSearch, $options: "i" } },
+        { referredByName: { $regex: trimmedSearch, $options: "i" } },
+      ];
+
+      if (referrerIds.length > 0) {
+        query.$or.push({ referredBy: { $in: referrerIds } });
+      }
+    }
+
+    const [mappedRestaurants, total, settings] = await Promise.all([
+      Restaurant.find(query)
+        .populate("referredBy", "name referralCode restaurantId phone email")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parsedLimit)
+        .lean(),
+      Restaurant.countDocuments(query),
+      (async () => {
+        try {
+          const BusinessSettings = (await import("../models/BusinessSettings.js")).default;
+          return await BusinessSettings.getSettings();
+        } catch {
+          return null;
+        }
+      })(),
+    ]);
+
+    const referredRestaurantIds = mappedRestaurants.map((restaurant) => restaurant._id);
+    let deliveredCountByRestaurantId = new Map();
+
+    if (referredRestaurantIds.length > 0) {
+      const deliveredCounts = await Order.aggregate([
+        {
+          $match: {
+            restaurantId: { $in: referredRestaurantIds },
+            status: "delivered",
+          },
+        },
+        {
+          $group: {
+            _id: "$restaurantId",
+            deliveredOrders: { $sum: 1 },
+          },
+        },
+      ]);
+
+      deliveredCountByRestaurantId = new Map(
+        deliveredCounts.map((item) => [String(item._id), item.deliveredOrders])
+      );
+    }
+
+    const applyOn = settings?.restaurantReferral?.applyOn || "First Order Only";
+    const commissionFallback = Number(settings?.restaurantReferral?.commissionPercentage);
+    const requiredOrders = String(applyOn).toLowerCase().includes("first") ? 1 : 1;
+
+    const mappings = mappedRestaurants.map((restaurant) => {
+      const deliveredOrders = deliveredCountByRestaurantId.get(String(restaurant._id)) || 0;
+      const progressCompleted =
+        restaurant.referralStatus === "completed" ? requiredOrders : Math.min(deliveredOrders, requiredOrders);
+      const commissionPercentage = Number.isFinite(Number(restaurant.referralCommission))
+        ? Number(restaurant.referralCommission)
+        : (Number.isFinite(commissionFallback) ? commissionFallback : 0);
+
+      return {
+        id: restaurant._id?.toString(),
+        joinedAt: restaurant.createdAt || null,
+        referredRestaurant: {
+          id: restaurant._id?.toString(),
+          name: restaurant.name || "Restaurant",
+          restaurantId: restaurant.restaurantId || null,
+          referralCode: restaurant.referralCode || null,
+          phone: restaurant.phone || null,
+          email: restaurant.email || null,
+          isActive: !!restaurant.isActive,
+        },
+        referrerRestaurant: {
+          id: restaurant.referredBy?._id?.toString?.() || restaurant.referredBy?.toString?.() || null,
+          name: restaurant.referredBy?.name || restaurant.referredByName || "Unknown",
+          restaurantId: restaurant.referredBy?.restaurantId || null,
+          referralCode: restaurant.referredBy?.referralCode || null,
+          phone: restaurant.referredBy?.phone || null,
+          email: restaurant.referredBy?.email || null,
+        },
+        commissionPercentage,
+        progress: {
+          completed: progressCompleted,
+          required: requiredOrders,
+          deliveredOrders,
+        },
+        status: restaurant.referralStatus || "pending",
+      };
+    });
+
+    return successResponse(res, 200, "Restaurant referral mappings retrieved successfully", {
+      mappings,
+      policy: {
+        commissionPercentage: Number.isFinite(commissionFallback) ? commissionFallback : 5,
+        applyOn,
+      },
+      pagination: {
+        page: parsedPage,
+        limit: parsedLimit,
+        total,
+        pages: Math.ceil(total / parsedLimit),
+      },
+    });
+  } catch (error) {
+    logger.error(`Error fetching restaurant referral mappings: ${error.message}`, {
+      error: error.stack,
+    });
+    return errorResponse(res, 500, "Failed to fetch restaurant referral mappings");
+  }
+});
+
+/**
  * Update Restaurant Status (Active/Inactive/Ban)
  * PUT /api/admin/restaurants/:id/status
  */
@@ -1310,6 +1497,16 @@ export const updateRestaurantStatus = asyncHandler(async (req, res) => {
     }
 
     restaurant.isActive = isActive;
+
+    // Keep approval status consistent with activation so the same restaurant
+    // behaves consistently across admin, restaurant, and user-facing flows.
+    if (isActive && !restaurant.approvedAt) {
+      restaurant.approvedAt = new Date();
+      restaurant.rejectionReason = null;
+      restaurant.rejectedAt = null;
+      restaurant.rejectedBy = null;
+    }
+
     await restaurant.save();
 
     logger.info(`Restaurant status updated: ${id}`, {

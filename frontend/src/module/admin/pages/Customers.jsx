@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect } from "react"
-import { Search, Download, ChevronDown, Calendar, Eye, FileDown, FileSpreadsheet, FileText, X, Mail, Phone, MapPin, Package, IndianRupee, Calendar as CalendarIcon, User, CheckCircle, XCircle } from "lucide-react"
+import { useState, useMemo, useEffect, useCallback } from "react"
+import { Search, Download, ChevronDown, Eye, FileDown, FileSpreadsheet, FileText, X, Mail, Phone, MapPin, Package, IndianRupee, Calendar as CalendarIcon, User, CheckCircle, XCircle } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { exportCustomersToCSV, exportCustomersToExcel, exportCustomersToPDF } from "../components/customers/customersExportUtils"
 import { adminAPI } from "@/lib/api"
@@ -83,47 +83,48 @@ export default function Customers() {
     setFilters(prev => ({ ...prev, [field]: value }))
   }
 
-  // Fetch customers from API
-  useEffect(() => {
-    const fetchCustomers = async () => {
-      try {
-        setLoading(true)
-        const params = {
-          limit: 1000, // Get all customers
-          offset: 0,
-          ...(searchQuery && { search: searchQuery }),
-          ...(filters.status && { status: filters.status }),
-          ...(filters.joiningDate && { joiningDate: filters.joiningDate }),
-          ...(filters.sortBy && { sortBy: filters.sortBy }),
-        }
+  const fetchCustomers = useCallback(async () => {
+    try {
+      setLoading(true)
+      const params = {
+        limit: 1000, // Get all customers
+        offset: 0,
+        ...(searchQuery && { search: searchQuery }),
+        ...(filters.orderDate && { orderDate: filters.orderDate }),
+        ...(filters.status && { status: filters.status }),
+        ...(filters.joiningDate && { joiningDate: filters.joiningDate }),
+        ...(filters.sortBy && { sortBy: filters.sortBy }),
+      }
 
-        const response = await adminAPI.getUsers(params)
-        const data = response?.data?.data || response?.data
+      const response = await adminAPI.getUsers(params)
+      const data = response?.data?.data || response?.data
 
-        if (data?.users) {
-          setCustomers(data.users)
-          setTotalCustomers(data.total || data.users.length)
-        } else {
-          setCustomers([])
-          setTotalCustomers(0)
-        }
-      } catch (error) {
-        console.error('Error fetching customers:', error)
-        toast.error('Failed to load customers')
+      if (data?.users) {
+        setCustomers(data.users)
+        setTotalCustomers(data.total || data.users.length)
+      } else {
         setCustomers([])
         setTotalCustomers(0)
-      } finally {
-        setLoading(false)
       }
+    } catch (error) {
+      console.error('Error fetching customers:', error)
+      toast.error('Failed to load customers')
+      setCustomers([])
+      setTotalCustomers(0)
+    } finally {
+      setLoading(false)
     }
+  }, [searchQuery, filters.orderDate, filters.status, filters.joiningDate, filters.sortBy])
 
+  // Fetch customers from API
+  useEffect(() => {
     fetchCustomers()
 
     // Keep totals dynamic without requiring full page reload.
     const intervalId = setInterval(fetchCustomers, 30000)
 
     return () => clearInterval(intervalId)
-  }, [searchQuery, filters.status, filters.joiningDate, filters.sortBy])
+  }, [fetchCustomers])
 
   const handleToggleStatus = async (customerId) => {
     try {
@@ -221,9 +222,8 @@ export default function Customers() {
                   type="date"
                   value={filters.orderDate}
                   onChange={(e) => handleFilterChange("orderDate", e.target.value)}
-                  className="w-full px-4 py-2.5 pr-10 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                 />
-                <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
               </div>
             </div>
 
@@ -236,9 +236,8 @@ export default function Customers() {
                   type="date"
                   value={filters.joiningDate}
                   onChange={(e) => handleFilterChange("joiningDate", e.target.value)}
-                  className="w-full px-4 py-2.5 pr-10 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  className="joining-date-filter w-full px-4 py-2.5 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                 />
-                <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
               </div>
             </div>
 
@@ -291,9 +290,7 @@ export default function Customers() {
           <div className="mt-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <button
-                onClick={() => {
-                  // Filters are applied automatically via useMemo
-                }}
+                onClick={fetchCustomers}
                 className="px-6 py-2.5 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all"
               >
                 Apply Filters
@@ -454,6 +451,13 @@ export default function Customers() {
           </div>
         </div>
       </div>
+
+      <style>{`
+        input.joining-date-filter::-webkit-clear-button,
+        input.joining-date-filter::-webkit-inner-spin-button {
+          display: none;
+        }
+      `}</style>
 
       {/* User Details Modal */}
       <Dialog open={showUserDetails} onOpenChange={setShowUserDetails}>

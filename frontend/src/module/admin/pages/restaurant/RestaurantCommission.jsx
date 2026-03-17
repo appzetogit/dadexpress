@@ -612,16 +612,16 @@ export default function RestaurantCommission() {
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
-        <DialogContent className="max-w-md bg-white">
-          <DialogHeader>
+        <DialogContent className="max-w-md bg-white p-0">
+          <DialogHeader className="px-6 pt-6">
             <DialogTitle>Delete Restaurant Commission</DialogTitle>
           </DialogHeader>
-          <div className="py-4">
+          <div className="px-6 py-4">
             <p className="text-sm text-slate-700">
               Are you sure you want to delete commission for "{selectedCommission?.restaurantName || selectedCommission?.restaurant?.name}"? This action cannot be undone.
             </p>
           </div>
-          <DialogFooter>
+          <DialogFooter className="px-6 pb-6">
             <button
               onClick={() => setIsDeleteOpen(false)}
               className="px-4 py-2 text-sm font-medium rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-all"

@@ -85,6 +85,29 @@ export default function CashLimitSettlement() {
     fetchData();
   }, [page, debouncedSearchQuery]);
 
+  // Keep list fresh when admin returns to this tab/page after a settlement happens elsewhere.
+  useEffect(() => {
+    const refreshOnFocus = () => {
+      if (!document.hidden) {
+        fetchData();
+      }
+    };
+
+    const refreshOnVisibility = () => {
+      if (!document.hidden) {
+        fetchData();
+      }
+    };
+
+    window.addEventListener("focus", refreshOnFocus);
+    document.addEventListener("visibilitychange", refreshOnVisibility);
+
+    return () => {
+      window.removeEventListener("focus", refreshOnFocus);
+      document.removeEventListener("visibilitychange", refreshOnVisibility);
+    };
+  }, [page, debouncedSearchQuery]);
+
   return (
     <div className="p-4 lg:p-6 bg-slate-50 min-h-screen">
       <div className="max-w-7xl mx-auto">

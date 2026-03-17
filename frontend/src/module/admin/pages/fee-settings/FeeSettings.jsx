@@ -9,8 +9,10 @@ export default function FeeSettings() {
   const [feeSettings, setFeeSettings] = useState({
     deliveryFee: 25,
     deliveryFeeRanges: [],
+    deliveryFeePerKm: 0,
     freeDeliveryThreshold: 149,
     platformFee: 5,
+    platformCommissionPercent: 0,
     gstRate: 5,
   })
   const [loadingFeeSettings, setLoadingFeeSettings] = useState(false)
@@ -25,11 +27,13 @@ export default function FeeSettings() {
       const response = await adminAPI.getFeeSettings()
       if (response.data.success && response.data.data.feeSettings) {
         setFeeSettings({
-          deliveryFee: response.data.data.feeSettings.deliveryFee || 25,
+          deliveryFee: response.data.data.feeSettings.deliveryFee ?? 25,
           deliveryFeeRanges: response.data.data.feeSettings.deliveryFeeRanges || [],
-          freeDeliveryThreshold: response.data.data.feeSettings.freeDeliveryThreshold || 149,
-          platformFee: response.data.data.feeSettings.platformFee || 5,
-          gstRate: response.data.data.feeSettings.gstRate || 5,
+          deliveryFeePerKm: response.data.data.feeSettings.deliveryFeePerKm ?? 0,
+          freeDeliveryThreshold: response.data.data.feeSettings.freeDeliveryThreshold ?? 149,
+          platformFee: response.data.data.feeSettings.platformFee ?? 5,
+          platformCommissionPercent: response.data.data.feeSettings.platformCommissionPercent ?? 0,
+          gstRate: response.data.data.feeSettings.gstRate ?? 5,
         })
       }
     } catch (error) {
@@ -52,8 +56,10 @@ export default function FeeSettings() {
       const response = await adminAPI.createOrUpdateFeeSettings({
         deliveryFee: Number(feeSettings.deliveryFee),
         deliveryFeeRanges: feeSettings.deliveryFeeRanges,
+        deliveryFeePerKm: Number(feeSettings.deliveryFeePerKm),
         freeDeliveryThreshold: Number(feeSettings.freeDeliveryThreshold),
         platformFee: Number(feeSettings.platformFee),
+        platformCommissionPercent: Number(feeSettings.platformCommissionPercent),
         gstRate: Number(feeSettings.gstRate),
         isActive: true,
       })
@@ -121,8 +127,11 @@ export default function FeeSettings() {
   }
 
   // Edit delivery fee range
-  const handleEditRange = (index) => {
-    const range = feeSettings.deliveryFeeRanges[index]
+  const handleEditRange = (range, index) => {
+    if (!range || index === null || index === undefined || index < 0) {
+      toast.error("Unable to edit this range")
+      return
+    }
     setNewRange({ min: range.min, max: range.max, fee: range.fee })
     setEditingRangeIndex(index)
   }
@@ -190,7 +199,7 @@ export default function FeeSettings() {
           <h1 className="text-2xl font-bold text-slate-900">Delivery & Platform Fee</h1>
         </div>
         <p className="text-sm text-slate-600">
-          Configure delivery fee, platform fee, and GST settings for orders
+          Configure delivery fee, per-km delivery charge, platform fee, commission, and GST settings for orders
         </p>
       </div>
 
@@ -264,13 +273,15 @@ export default function FeeSettings() {
                               <td className="px-4 py-3 text-center border-b border-slate-100">
                                 <div className="flex items-center justify-center gap-2">
                                   <button
-                                    onClick={() => handleEditRange(originalIndex)}
+                                    type="button"
+                                    onClick={() => handleEditRange(range, originalIndex)}
                                     className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
                                     title="Edit"
                                   >
                                     <Edit className="w-4 h-4" />
                                   </button>
                                   <button
+                                    type="button"
                                     onClick={() => handleDeleteRange(originalIndex)}
                                     className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
                                     title="Delete"
@@ -363,6 +374,44 @@ export default function FeeSettings() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t border-slate-200 pt-6 mt-6">
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-slate-700">
+                    Base Delivery Fee (₹)
+                  </label>
+                  <input
+                    type="number"
+                    value={feeSettings.deliveryFee}
+                    onChange={(e) => setFeeSettings({ ...feeSettings, deliveryFee: e.target.value })}
+                    min="0"
+                    step="1"
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
+                    placeholder="25"
+                  />
+                  <p className="text-xs text-slate-500">
+                    Default delivery fee used when order-value ranges are not matched.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-slate-700">
+                    Delivery Charge Per Km (₹)
+                  </label>
+                  <input
+                    type="number"
+                    value={feeSettings.deliveryFeePerKm}
+                    onChange={(e) => setFeeSettings({ ...feeSettings, deliveryFeePerKm: e.target.value })}
+                    min="0"
+                    step="0.01"
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
+                    placeholder="0"
+                  />
+                  <p className="text-xs text-slate-500">
+                    This per-km amount will be added on top of the delivery fee when restaurant and customer coordinates are available.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t border-slate-200 pt-6 mt-6">
 
                 {/* Platform Fee */}
                 <div className="space-y-2">
@@ -382,6 +431,28 @@ export default function FeeSettings() {
                     Platform service fee per order
                   </p>
                 </div>
+
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-slate-700">
+                    Platform Commission (%)
+                  </label>
+                  <input
+                    type="number"
+                    value={feeSettings.platformCommissionPercent}
+                    onChange={(e) => setFeeSettings({ ...feeSettings, platformCommissionPercent: e.target.value })}
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
+                    placeholder="0"
+                  />
+                  <p className="text-xs text-slate-500">
+                    This commission percentage is added with the fixed platform fee on the order subtotal.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t border-slate-200 pt-6 mt-6">
 
                 {/* GST Rate */}
                 <div className="space-y-2">

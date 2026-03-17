@@ -223,11 +223,26 @@ export const initializeRoute = asyncHandler(async (req, res) => {
     // Broadcast route to connected clients
     const io = req.app.get('io');
     if (io) {
-      io.to(`order-${orderId}`).emit(`route-initialized-${orderId}`, {
-        polyline: route.polyline,
-        points: route.points,
-        totalDistance: route.totalDistance,
-        duration: route.duration
+      const trackingIds = [...new Set([
+        String(orderId),
+        order?._id?.toString(),
+        order?.orderId
+      ].filter(Boolean))];
+
+      trackingIds.forEach((trackingId) => {
+        io.to(`order:${trackingId}`).emit(`route-initialized-${trackingId}`, {
+          polyline: route.polyline,
+          points: route.points,
+          totalDistance: route.totalDistance,
+          duration: route.duration
+        });
+
+        if (route.polyline) {
+          io.to(`order:${trackingId}`).emit(`route-polyline-${trackingId}`, {
+            orderId: order.orderId || order._id?.toString() || String(orderId),
+            polyline: route.polyline
+          });
+        }
       });
     }
     

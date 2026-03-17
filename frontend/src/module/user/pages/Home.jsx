@@ -186,7 +186,7 @@ export default function Home() {
   const [prevVegMode, setPrevVegMode] = useState(vegMode)
   const [showVegModePopup, setShowVegModePopup] = useState(false)
   const [showSwitchOffPopup, setShowSwitchOffPopup] = useState(false)
-  const [vegModeOption, setVegModeOption] = useState("all") // "all" or "pure-veg"
+  const [vegModeOption, setVegModeOption] = useState("pure-veg") // "all" or "pure-veg"
   const [isApplyingVegMode, setIsApplyingVegMode] = useState(false)
   const [isSwitchingOffVegMode, setIsSwitchingOffVegMode] = useState(false)
   const [popupPosition, setPopupPosition] = useState({ top: 0, right: 0 })
@@ -694,6 +694,15 @@ export default function Home() {
         params.trusted = 'true'
       }
 
+      // Dietary filter for Home restaurants.
+      // Veg mode ON: show veg/pure-veg based on user selection.
+      // Veg mode OFF: show non-veg restaurants.
+      if (vegMode === true) {
+        params.dietary = vegModeOption === "all" ? "veg" : "pure-veg"
+      } else {
+        params.dietary = "non-veg"
+      }
+
       // Optional: Add zoneId if available (for sorting/filtering, but show all restaurants)
       if (zoneId) {
         params.zoneId = zoneId
@@ -840,7 +849,7 @@ export default function Home() {
     } finally {
       setLoadingRestaurants(false)
     }
-  }, [zoneId])
+  }, [zoneId, vegMode, vegModeOption])
 
   // Fetch restaurants when appliedFilters change
   useEffect(() => {
@@ -1554,6 +1563,7 @@ export default function Home() {
               whileTap={{ scale: 0.95 }}
             >
               <Button
+                type="button"
                 variant="outline"
                 onClick={() => setIsFilterOpen(true)}
                 className="h-7 sm:h-8 px-2 sm:px-3 rounded-md flex items-center gap-1.5 whitespace-nowrap flex-shrink-0 font-medium transition-all bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-white"

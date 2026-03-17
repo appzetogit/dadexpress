@@ -1,11 +1,14 @@
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import Delivery from '../models/Delivery.js';
+import Order from '../../order/models/Order.js';
 import Zone from '../../admin/models/Zone.js';
 import { validate } from '../../../shared/middleware/validate.js';
 import Joi from 'joi';
 import winston from 'winston';
 import { syncDeliveryPartnerRealtime } from '../services/firebaseTrackingService.js';
+import etaCalculationService from '../../order/services/etaCalculationService.js';
+import etaWebSocketService from '../../order/services/etaWebSocketService.js';
 
 const logger = winston.createLogger({
   level: 'info',
@@ -16,6 +19,9 @@ const logger = winston.createLogger({
     })
   ]
 });
+
+const ETA_EMIT_THROTTLE_MS = 15000;
+const lastEtaEmitByOrder = new Map();
 
 /**
  * Update Delivery Partner Location
@@ -109,6 +115,52 @@ export const updateLocation = asyncHandler(async (req, res) => {
     }).catch((syncError) => {
       logger.warn(`Firebase delivery_boys sync failed: ${syncError.message}`);
     });
+
+    // Broadcast rider location to tracked customer rooms for active delivery orders.
+    // This keeps user-app live map in sync when delivery app sends /delivery/location updates.
+    if (typeof lat === 'number' && typeof lng === 'number') {
+      try {
+        const activeOrder = await Order.findOne({
+          deliveryPartnerId: updatedDelivery._id,
+          status: 'out_for_delivery'
+        }).select('_id orderId userId status eta estimatedDeliveryTime');
+
+        const io = req.app.get('io');
+        if (io && activeOrder) {
+          const trackingIds = [...new Set([
+            activeOrder.orderId,
+            activeOrder._id?.toString()
+          ].filter(Boolean).map((id) => String(id)))];
+
+          const locationPayload = {
+            orderId: activeOrder.orderId || activeOrder._id?.toString(),
+            lat,
+            lng,
+            heading: 0,
+            timestamp: Date.now()
+          };
+
+          trackingIds.forEach((trackingId) => {
+            io.to(`order:${trackingId}`).emit(`location-receive-${trackingId}`, locationPayload);
+          });
+
+          const now = Date.now();
+          const orderKey = activeOrder._id?.toString();
+          const lastEtaEmit = orderKey ? (lastEtaEmitByOrder.get(orderKey) || 0) : 0;
+          if (orderKey && (now - lastEtaEmit >= ETA_EMIT_THROTTLE_MS)) {
+            lastEtaEmitByOrder.set(orderKey, now);
+            try {
+              const liveETA = await etaCalculationService.getLiveETA(orderKey);
+              await etaWebSocketService.emitETAUpdate(orderKey, liveETA, activeOrder);
+            } catch (etaError) {
+              logger.warn(`ETA emit skipped for order ${orderKey}: ${etaError.message}`);
+            }
+          }
+        }
+      } catch (liveTrackingError) {
+        logger.warn(`Live tracking emit failed: ${liveTrackingError.message}`);
+      }
+    }
 
     return successResponse(res, 200, 'Status updated successfully', {
       location: currentLocation ? {

@@ -69,6 +69,77 @@ export const useDeliveryNotifications = () => {
     }
   }, []);
 
+  const normalizeIncomingOrderNotification = useCallback((orderData) => {
+    if (!orderData || typeof orderData !== 'object') return null;
+
+    const normalizedOrderId =
+      orderData.orderMongoId ||
+      orderData.mongoId ||
+      orderData.orderId ||
+      orderData._id ||
+      orderData.id ||
+      null;
+
+    const restaurantName =
+      orderData.restaurantName ||
+      orderData.restaurant?.name ||
+      orderData.name ||
+      '';
+
+    const restaurantAddress =
+      orderData.restaurantAddress ||
+      orderData.restaurantLocation?.address ||
+      orderData.restaurant?.address ||
+      '';
+
+    const customerAddress =
+      orderData.customerLocation?.address ||
+      orderData.deliveryAddress ||
+      orderData.address?.formattedAddress ||
+      orderData.address?.address ||
+      '';
+
+    const restaurantLat = orderData.restaurantLocation?.latitude ?? orderData.restaurantLat;
+    const restaurantLng = orderData.restaurantLocation?.longitude ?? orderData.restaurantLng;
+    const customerLat = orderData.customerLocation?.latitude ?? orderData.deliveryLat;
+    const customerLng = orderData.customerLocation?.longitude ?? orderData.deliveryLng;
+
+    const deliveryFee = orderData.deliveryFee ?? orderData.pricing?.deliveryFee ?? 0;
+    const estimatedEarnings =
+      orderData.estimatedEarnings != null
+        ? orderData.estimatedEarnings
+        : deliveryFee;
+
+    return {
+      ...orderData,
+      orderMongoId: orderData.orderMongoId || orderData.mongoId || orderData._id || null,
+      orderId: orderData.orderId || orderData.id || orderData._id || null,
+      restaurantName,
+      restaurantLocation: orderData.restaurantLocation || (
+        restaurantLat != null && restaurantLng != null
+          ? {
+              latitude: restaurantLat,
+              longitude: restaurantLng,
+              address: restaurantAddress,
+            }
+          : null
+      ),
+      customerLocation: orderData.customerLocation || (
+        customerLat != null && customerLng != null
+          ? {
+              latitude: customerLat,
+              longitude: customerLng,
+              address: customerAddress,
+            }
+          : null
+      ),
+      deliveryFee,
+      estimatedEarnings,
+      pickupDistance: orderData.pickupDistance || 'Calculating...',
+      __normalizedNotificationKey: normalizedOrderId,
+    };
+  }, []);
+
   // Step 4: All effects (unconditional hook calls, conditional logic inside)
   // Track user interaction for autoplay policy
   useEffect(() => {
@@ -314,28 +385,22 @@ export const useDeliveryNotifications = () => {
 
     // Helper: ensure we only show *real* orders to the delivery partner
     const isValidNewOrderNotification = (orderData) => {
-      if (!orderData || typeof orderData !== 'object') return false;
+      const normalizedOrder = normalizeIncomingOrderNotification(orderData);
+      if (!normalizedOrder) return false;
 
       // Must have some kind of order identifier
       const hasOrderId =
-        !!orderData.orderMongoId ||
-        !!orderData.orderId ||
-        !!orderData._id;
+        !!normalizedOrder.orderMongoId ||
+        !!normalizedOrder.orderId ||
+        !!normalizedOrder.__normalizedNotificationKey;
 
       // Must have some restaurant information
       const hasRestaurantInfo =
-        !!orderData.restaurantLocation ||
-        !!orderData.restaurantId ||
-        !!orderData.restaurantName ||
-        !!orderData.restaurant;
+        !!normalizedOrder.restaurantLocation ||
+        !!normalizedOrder.restaurantId ||
+        !!normalizedOrder.restaurantName;
 
-      // Optional but helpful: basic payout / distance info
-      const hasDynamicData =
-        orderData.estimatedEarnings != null ||
-        orderData.deliveryFee != null ||
-        orderData.pickupDistance != null;
-
-      return hasOrderId && hasRestaurantInfo && hasDynamicData;
+      return hasOrderId && hasRestaurantInfo;
     };
 
     socketRef.current.on('new_order', (orderData) => {
@@ -348,7 +413,7 @@ export const useDeliveryNotifications = () => {
         return;
       }
 
-      setNewOrder(orderData);
+      setNewOrder(normalizeIncomingOrderNotification(orderData));
       playNotificationSound();
     });
 
@@ -364,7 +429,7 @@ export const useDeliveryNotifications = () => {
       }
 
       // Treat it the same as new_order for now - delivery partner can accept it
-      setNewOrder(orderData);
+      setNewOrder(normalizeIncomingOrderNotification(orderData));
       playNotificationSound();
     });
 
@@ -385,7 +450,7 @@ export const useDeliveryNotifications = () => {
         socketRef.current = null;
       }
     };
-  }, [deliveryPartnerId, playNotificationSound]);
+  }, [deliveryPartnerId, normalizeIncomingOrderNotification, playNotificationSound]);
 
   // Helper functions
   const clearNewOrder = () => {
