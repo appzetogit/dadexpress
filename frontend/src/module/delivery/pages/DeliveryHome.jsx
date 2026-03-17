@@ -626,6 +626,9 @@ export default function DeliveryHome() {
   const [showNewOrderPopup, setShowNewOrderPopup] = useState(false)
   const [countdownSeconds, setCountdownSeconds] = useState(300)
   const countdownTimerRef = useRef(null)
+  const stablePickupTimeAwayRef = useRef("Calculating...")
+  const stablePickupDistanceAwayRef = useRef("Calculating...")
+  const pickupDisplayOrderKeyRef = useRef("")
   const [showRejectPopup, setShowRejectPopup] = useState(false)
   const [rejectReason, setRejectReason] = useState("")
   const alertAudioRef = useRef(null)
@@ -693,6 +696,51 @@ export default function DeliveryHome() {
   }, [selectedRestaurant?.orderId, selectedRestaurant?.id, newOrder?.orderId, newOrder?.orderMongoId])
   const isPickupOtpVerified = pickupOtp.length === 4 && expectedPickupOtp.length === 4 && pickupOtp === expectedPickupOtp
   const canConfirmPickup = pickupImageUploaded || isPickupOtpVerified
+  const pickupDisplayOrderKey =
+    newOrder?.orderId ||
+    selectedRestaurant?.orderId ||
+    newOrder?.orderMongoId ||
+    selectedRestaurant?.orderMongoId ||
+    selectedRestaurant?.id ||
+    ""
+
+  useEffect(() => {
+    if (pickupDisplayOrderKeyRef.current !== pickupDisplayOrderKey) {
+      pickupDisplayOrderKeyRef.current = pickupDisplayOrderKey
+      stablePickupTimeAwayRef.current = "Calculating..."
+      stablePickupDistanceAwayRef.current = "Calculating..."
+    }
+  }, [pickupDisplayOrderKey])
+
+  const pickupTimeAwayText = useMemo(() => {
+    const computedValue =
+      selectedRestaurant?.timeAway && selectedRestaurant.timeAway !== "Calculating..."
+        ? `${selectedRestaurant.timeAway} away`
+        : (newOrder?.pickupDistance && newOrder.pickupDistance !== "0 km" && newOrder.pickupDistance !== "Calculating..."
+          ? `${calculateTimeAway(newOrder.pickupDistance)} away`
+          : "Calculating...")
+
+    if (computedValue !== "Calculating..." && stablePickupTimeAwayRef.current === "Calculating...") {
+      stablePickupTimeAwayRef.current = computedValue
+    }
+
+    return stablePickupTimeAwayRef.current
+  }, [selectedRestaurant?.timeAway, newOrder?.pickupDistance, calculateTimeAway])
+
+  const pickupDistanceAwayText = useMemo(() => {
+    const computedValue =
+      selectedRestaurant?.distance && selectedRestaurant.distance !== "0 km" && selectedRestaurant.distance !== "Calculating..."
+        ? `${selectedRestaurant.distance} away`
+        : (newOrder?.pickupDistance && newOrder.pickupDistance !== "0 km" && newOrder.pickupDistance !== "Calculating..."
+          ? `${newOrder.pickupDistance} away`
+          : "Calculating...")
+
+    if (computedValue !== "Calculating..." && stablePickupDistanceAwayRef.current === "Calculating...") {
+      stablePickupDistanceAwayRef.current = computedValue
+    }
+
+    return stablePickupDistanceAwayRef.current
+  }, [selectedRestaurant?.distance, newOrder?.pickupDistance])
   const [dropImageUrl, setDropImageUrl] = useState(null)
   const [isUploadingDrop, setIsUploadingDrop] = useState(false)
   const [dropImageUploaded, setDropImageUploaded] = useState(false)
@@ -10608,22 +10656,14 @@ export default function DeliveryHome() {
                     <div className="flex items-center gap-1.5 text-gray-500 text-sm mb-2">
                       <Clock className="w-4 h-4" />
                       <span>
-                        {selectedRestaurant?.timeAway && selectedRestaurant.timeAway !== 'Calculating...'
-                          ? `${selectedRestaurant.timeAway} away`
-                          : (newOrder?.pickupDistance && newOrder.pickupDistance !== '0 km' && newOrder.pickupDistance !== 'Calculating...'
-                            ? `${calculateTimeAway(newOrder.pickupDistance)} away`
-                            : 'Calculating...')}
+                        {pickupTimeAwayText}
                       </span>
                     </div>
 
                     <div className="flex items-center gap-1.5 text-gray-500 text-sm">
                       <MapPin className="w-4 h-4" />
                       <span>
-                        {selectedRestaurant?.distance && selectedRestaurant.distance !== '0 km' && selectedRestaurant.distance !== 'Calculating...'
-                          ? `${selectedRestaurant.distance} away`
-                          : (newOrder?.pickupDistance && newOrder.pickupDistance !== '0 km' && newOrder.pickupDistance !== 'Calculating...'
-                            ? `${newOrder.pickupDistance} away`
-                            : 'Calculating...')}
+                        {pickupDistanceAwayText}
                       </span>
                     </div>
                   </div>
