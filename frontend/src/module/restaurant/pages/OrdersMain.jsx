@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import Lenis from "lenis"
-import { Printer, Volume2, VolumeX, ChevronDown, ChevronUp, Minus, Plus, X, AlertCircle, Loader2, Calendar, Clock, Users, MessageSquare, Gift, CheckCircle2 } from "lucide-react"
+import { Volume2, VolumeX, ChevronDown, ChevronUp, Minus, Plus, X, AlertCircle, Loader2, Calendar, Clock, Users, MessageSquare, Gift, CheckCircle2 } from "lucide-react"
 import { toast } from "sonner"
 import BottomNavOrders from "../components/BottomNavOrders"
 import RestaurantNavbar from "../components/RestaurantNavbar"
@@ -1661,13 +1661,6 @@ export default function OrdersMain() {
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={handlePrint}
-                      className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                      aria-label="Print"
-                    >
-                      <Printer className="w-5 h-5 text-gray-700" />
-                    </button>
                     <button
                       onClick={toggleMute}
                       className="p-2 hover:bg-gray-100 rounded-lg transition-colors"

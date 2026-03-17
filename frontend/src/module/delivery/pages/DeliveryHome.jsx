@@ -704,6 +704,16 @@ export default function DeliveryHome() {
     selectedRestaurant?.id ||
     ""
 
+  // Helper function to calculate time away from distance
+  const calculateTimeAway = useCallback((distanceStr) => {
+    if (!distanceStr) return '0 mins'
+    const distance = parseFloat(distanceStr.replace(' km', ''))
+    if (isNaN(distance)) return '0 mins'
+    // Assume average speed of 30 km/h for delivery
+    const minutes = Math.ceil((distance / 30) * 60)
+    return `${minutes} mins`
+  }, [])
+
   useEffect(() => {
     if (pickupDisplayOrderKeyRef.current !== pickupDisplayOrderKey) {
       pickupDisplayOrderKeyRef.current = pickupDisplayOrderKey
@@ -4750,16 +4760,6 @@ export default function DeliveryHome() {
       window.removeEventListener('storage', handleActiveOrderUpdate)
       window.removeEventListener('deliveryNotificationsUpdated', handleNotificationUpdate)
     }
-  }, [])
-
-  // Helper function to calculate time away from distance
-  const calculateTimeAway = useCallback((distanceStr) => {
-    if (!distanceStr) return '0 mins'
-    const distance = parseFloat(distanceStr.replace(' km', ''))
-    if (isNaN(distance)) return '0 mins'
-    // Assume average speed of 30 km/h for delivery
-    const minutes = Math.ceil((distance / 30) * 60)
-    return `${minutes} mins`
   }, [])
 
   // Show new order popup when order is received from Socket.IO
