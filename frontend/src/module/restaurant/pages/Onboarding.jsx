@@ -37,6 +37,12 @@ const daysOfWeek = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 const ONBOARDING_STORAGE_KEY = "restaurant_onboarding_data"
 const PAN_NUMBER_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]$/
+const FSSAI_NUMBER_REGEX = /^[0-9]{14}$/
+const ACCOUNT_NUMBER_REGEX = /^[0-9]{9,18}$/
+const PHONE_REGEX = /^[6-9][0-9]{9}$/
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const NAME_REGEX = /^[A-Za-z][A-Za-z .'-]*$/
+const IFSC_REGEX = /^[A-Z]{4}0[A-Z0-9]{6}$/
 
 const getVerifiedPhoneFromStoredRestaurant = () => {
   try {
@@ -158,7 +164,7 @@ const parseLocalYMDDate = (value) => {
   return new Date(year, month - 1, day)
 }
 
-function TimeSelector({ label, value, onChange }) {
+function TimeSelector({ label, value, onChange, error }) {
   const timeValue = stringToTime(value)
 
   const handleTimeChange = (newValue) => {
@@ -206,6 +212,9 @@ function TimeSelector({ label, value, onChange }) {
         }}
         format="hh:mm a"
       />
+      {error ? (
+        <p className="text-[11px] text-red-600 mt-2">{error}</p>
+      ) : null}
     </div>
   )
 }
@@ -219,6 +228,8 @@ export default function RestaurantOnboarding() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
+  const [errors, setErrors] = useState({})
+  const [touched, setTouched] = useState({})
   const [verifiedPhoneNumber, setVerifiedPhoneNumber] = useState("")
   const [keyboardInset, setKeyboardInset] = useState(0)
   const [isFssaiCalendarOpen, setIsFssaiCalendarOpen] = useState(false)
@@ -280,6 +291,317 @@ export default function RestaurantOnboarding() {
     offer: "",
     referralCode: "",
   })
+
+  const STEP_FIELD_KEYS = useMemo(() => {
+    return {
+      1: [
+        "step1.restaurantName",
+        "step1.ownerName",
+        "step1.ownerEmail",
+        "step1.ownerPhone",
+        "step1.primaryContactNumber",
+        "step1.location.area",
+        "step1.location.city",
+      ],
+      2: [
+        "step2.menuImages",
+        "step2.profileImage",
+        "step2.cuisines",
+        "step2.openingTime",
+        "step2.closingTime",
+        "step2.openDays",
+      ],
+      3: [
+        "step3.panNumber",
+        "step3.nameOnPan",
+        "step3.panImage",
+        "step3.gstNumber",
+        "step3.gstLegalName",
+        "step3.gstAddress",
+        "step3.gstImage",
+        "step3.fssaiNumber",
+        "step3.fssaiExpiry",
+        "step3.fssaiImage",
+        "step3.accountNumber",
+        "step3.confirmAccountNumber",
+        "step3.ifscCode",
+        "step3.accountHolderName",
+        "step3.accountType",
+      ],
+      4: [
+        "step4.estimatedDeliveryTime",
+        "step4.featuredDish",
+        "step4.featuredPrice",
+        "step4.offer",
+      ],
+    }
+  }, [])
+
+  const getFieldError = (key) => (errors && key in errors ? errors[key] : "")
+
+  const clearFieldError = (key) => {
+    setErrors((prev) => {
+      if (!prev || !(key in prev)) return prev
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
+  }
+
+  const setFieldError = (key, message) => {
+    setErrors((prev) => {
+      const next = { ...(prev || {}) }
+      if (!message) {
+        delete next[key]
+      } else {
+        next[key] = message
+      }
+      return next
+    })
+  }
+
+  const markTouched = (key) => {
+    setTouched((prev) => ({ ...(prev || {}), [key]: true }))
+  }
+
+  const normalizeTextValue = (value) => {
+    if (value === null || value === undefined) return ""
+    return String(value).replace(/\s+/g, " ").trim()
+  }
+
+  const normalizeDigits = (value) => {
+    if (value === null || value === undefined) return ""
+    return String(value).replace(/[^\d]/g, "")
+  }
+
+  const normalizePhoneForValidation = (value) => {
+    let digits = normalizeDigits(value)
+    if (digits.length === 12 && digits.startsWith("91")) digits = digits.slice(2)
+    if (digits.length === 11 && digits.startsWith("0")) digits = digits.slice(1)
+    return digits
+  }
+
+  const validateField = (key, value, context) => {
+    const ctx = context || { step1, step2, step3, step4 }
+    const text = normalizeTextValue(value)
+
+    switch (key) {
+      case "step1.restaurantName":
+        return text ? "" : "Restaurant name is required"
+      case "step1.ownerName":
+        if (!text) return "Owner name is required"
+        if (!NAME_REGEX.test(text)) return "Owner name must not contain numbers or special characters"
+        return ""
+      case "step1.ownerEmail": {
+        const email = normalizeTextValue(value).toLowerCase()
+        if (!email) return "Owner email is required"
+        if (!EMAIL_REGEX.test(email)) return "Please enter a valid email address"
+        return ""
+      }
+      case "step1.ownerPhone": {
+        const digits = normalizePhoneForValidation(value)
+        if (!digits) return "Owner phone number is required"
+        if (!PHONE_REGEX.test(digits)) return "Phone number must be a valid 10-digit number"
+        return ""
+      }
+      case "step1.primaryContactNumber": {
+        const digits = normalizePhoneForValidation(value)
+        if (!digits) return "Primary contact number is required"
+        if (!PHONE_REGEX.test(digits)) return "Primary contact number must be a valid 10-digit number"
+        return ""
+      }
+      case "step1.location.area":
+        return text ? "" : "Area/Sector/Locality is required"
+      case "step1.location.city":
+        return text ? "" : "City is required"
+
+      case "step2.menuImages": {
+        const list = Array.isArray(value) ? value : ctx.step2?.menuImages
+        const hasMenuImages = Array.isArray(list) && list.length > 0
+        if (!hasMenuImages) return "At least one menu image is required"
+        const validMenuImages = list.filter((img) => {
+          if (img instanceof File) return true
+          if (img?.url && typeof img.url === "string") return true
+          if (typeof img === "string" && img.startsWith("http")) return true
+          return false
+        })
+        return validMenuImages.length > 0 ? "" : "Please upload at least one valid menu image"
+      }
+      case "step2.profileImage": {
+        const img = value ?? ctx.step2?.profileImage
+        if (!img) return "Restaurant profile image is required"
+        const isValid =
+          img instanceof File ||
+          (img?.url && typeof img.url === "string") ||
+          (typeof img === "string" && img.startsWith("http"))
+        return isValid ? "" : "Please upload a valid restaurant profile image"
+      }
+      case "step2.cuisines": {
+        const cuisines = Array.isArray(value) ? value : ctx.step2?.cuisines
+        return cuisines && cuisines.length > 0 ? "" : "Please select at least one cuisine"
+      }
+      case "step2.openingTime":
+        return normalizeTextValue(value) ? "" : "Opening time is required"
+      case "step2.closingTime":
+        return normalizeTextValue(value) ? "" : "Closing time is required"
+      case "step2.openDays": {
+        const days = Array.isArray(value) ? value : ctx.step2?.openDays
+        return days && days.length > 0 ? "" : "Please select at least one open day"
+      }
+
+      case "step3.panNumber": {
+        const pan = normalizeTextValue(value).toUpperCase()
+        if (!pan) return "PAN number is required"
+        if (!PAN_NUMBER_REGEX.test(pan)) return "PAN number must be valid (e.g., ABCDE1234F)"
+        return ""
+      }
+      case "step3.nameOnPan":
+        if (!text) return "Name on PAN is required"
+        if (!NAME_REGEX.test(text)) return "Name on PAN must not contain numbers or special characters"
+        return ""
+      case "step3.panImage": {
+        const img = value ?? ctx.step3?.panImage
+        if (!img) return "PAN image is required"
+        const isValid =
+          img instanceof File ||
+          (img?.url && typeof img.url === "string") ||
+          (typeof img === "string" && img.startsWith("http"))
+        return isValid ? "" : "Please upload a valid PAN image"
+      }
+      case "step3.fssaiNumber": {
+        const digits = normalizeDigits(value)
+        if (!digits) return "FSSAI number is required"
+        if (!FSSAI_NUMBER_REGEX.test(digits)) return "FSSAI number must be exactly 14 digits"
+        return ""
+      }
+      case "step3.fssaiExpiry":
+        return normalizeTextValue(value) ? "" : "FSSAI expiry date is required"
+      case "step3.fssaiImage": {
+        const img = value ?? ctx.step3?.fssaiImage
+        if (!img) return "FSSAI image is required"
+        const isValid =
+          img instanceof File ||
+          (img?.url && typeof img.url === "string") ||
+          (typeof img === "string" && img.startsWith("http"))
+        return isValid ? "" : "Please upload a valid FSSAI image"
+      }
+
+      case "step3.gstNumber": {
+        if (!ctx.step3?.gstRegistered) return ""
+        return normalizeTextValue(value) ? "" : "GST number is required when GST registered"
+      }
+      case "step3.gstLegalName": {
+        if (!ctx.step3?.gstRegistered) return ""
+        return normalizeTextValue(value) ? "" : "GST legal name is required when GST registered"
+      }
+      case "step3.gstAddress": {
+        if (!ctx.step3?.gstRegistered) return ""
+        return normalizeTextValue(value) ? "" : "GST registered address is required when GST registered"
+      }
+      case "step3.gstImage": {
+        if (!ctx.step3?.gstRegistered) return ""
+        const img = value ?? ctx.step3?.gstImage
+        if (!img) return "GST image is required when GST registered"
+        const isValid =
+          img instanceof File ||
+          (img?.url && typeof img.url === "string") ||
+          (typeof img === "string" && img.startsWith("http"))
+        return isValid ? "" : "Please upload a valid GST image"
+      }
+
+      case "step3.accountNumber": {
+        const digits = normalizeDigits(value)
+        if (!digits) return "Account number is required"
+        if (!ACCOUNT_NUMBER_REGEX.test(digits)) return "Account number must be 9 to 18 digits"
+        return ""
+      }
+      case "step3.confirmAccountNumber": {
+        const confirmDigits = normalizeDigits(value)
+        if (!confirmDigits) return "Please confirm your account number"
+        const baseDigits = normalizeDigits(ctx.step3?.accountNumber)
+        if (baseDigits && confirmDigits && baseDigits !== confirmDigits) {
+          return "Account number and confirmation do not match"
+        }
+        if (!ACCOUNT_NUMBER_REGEX.test(confirmDigits)) return "Account number must be 9 to 18 digits"
+        return ""
+      }
+      case "step3.ifscCode": {
+        const ifsc = normalizeTextValue(value).toUpperCase().replace(/\s+/g, "")
+        if (!ifsc) return "IFSC code is required"
+        if (!IFSC_REGEX.test(ifsc)) return "IFSC code must be valid (e.g., HDFC0001234)"
+        return ""
+      }
+      case "step3.accountHolderName":
+        if (!text) return "Account holder name is required"
+        if (!NAME_REGEX.test(text)) return "Account holder name must not contain numbers or special characters"
+        return ""
+      case "step3.accountType":
+        return normalizeTextValue(value) ? "" : "Account type is required"
+
+      case "step4.estimatedDeliveryTime":
+        return normalizeTextValue(value) ? "" : "Estimated delivery time is required"
+      case "step4.featuredDish":
+        return normalizeTextValue(value) ? "" : "Featured dish name is required"
+      case "step4.featuredPrice": {
+        const raw = normalizeTextValue(value)
+        const price = raw ? Number.parseFloat(raw) : NaN
+        if (!raw) return "Featured dish price is required"
+        if (Number.isNaN(price) || price <= 0) return "Featured dish price must be greater than 0"
+        return ""
+      }
+      case "step4.offer":
+        return normalizeTextValue(value) ? "" : "Special offer/promotion is required"
+
+      default:
+        return ""
+    }
+  }
+
+  const validateStepFields = (stepNumber) => {
+    const keys = STEP_FIELD_KEYS[stepNumber] || []
+    const next = {}
+    const ctx = { step1, step2, step3, step4 }
+
+    for (const key of keys) {
+      let value
+      if (key.startsWith("step1.")) {
+        if (key === "step1.location.area") value = step1.location?.area
+        else if (key === "step1.location.city") value = step1.location?.city
+        else value = step1[key.split(".")[1]]
+      } else if (key.startsWith("step2.")) {
+        value = step2[key.split(".")[1]]
+      } else if (key.startsWith("step3.")) {
+        value = step3[key.split(".")[1]]
+      } else if (key.startsWith("step4.")) {
+        value = step4[key.split(".")[1]]
+      }
+
+      const message = validateField(key, value, ctx)
+      if (message) next[key] = message
+    }
+
+    // Extra conditional requirements: only validate GST fields when enabled
+    if (stepNumber === 3 && !step3.gstRegistered) {
+      delete next["step3.gstNumber"]
+      delete next["step3.gstLegalName"]
+      delete next["step3.gstAddress"]
+      delete next["step3.gstImage"]
+    }
+
+    return next
+  }
+
+  const replaceErrorsForStep = (stepNumber, stepErrors) => {
+    const keys = STEP_FIELD_KEYS[stepNumber] || []
+    setErrors((prev) => {
+      const next = { ...(prev || {}) }
+      for (const k of keys) delete next[k]
+      for (const [k, v] of Object.entries(stepErrors || {})) {
+        if (v) next[k] = v
+      }
+      return next
+    })
+  }
 
   const parseCameraResult = (rawResult) => {
     let result = rawResult
@@ -739,190 +1061,19 @@ export default function RestaurantOnboarding() {
 
   // Validation functions for each step
   const validateStep1 = () => {
-    const errors = []
-
-    if (!step1.restaurantName?.trim()) {
-      errors.push("Restaurant name is required")
-    }
-    if (!step1.ownerName?.trim()) {
-      errors.push("Owner name is required")
-    }
-    if (!step1.ownerEmail?.trim()) {
-      errors.push("Owner email is required")
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(step1.ownerEmail)) {
-      errors.push("Please enter a valid email address")
-    }
-    if (!step1.ownerPhone?.trim()) {
-      errors.push("Owner phone number is required")
-    }
-    if (!step1.primaryContactNumber?.trim()) {
-      errors.push("Primary contact number is required")
-    }
-    if (!step1.location?.area?.trim()) {
-      errors.push("Area/Sector/Locality is required")
-    }
-    if (!step1.location?.city?.trim()) {
-      errors.push("City is required")
-    }
-
-    return errors
+    return validateStepFields(1)
   }
 
   const validateStep2 = () => {
-    const errors = []
-
-    // Check menu images - must have at least one File or existing URL
-    const hasMenuImages = step2.menuImages && step2.menuImages.length > 0
-    if (!hasMenuImages) {
-      errors.push("At least one menu image is required")
-    } else {
-      // Verify that menu images are either File objects or have valid URLs
-      const validMenuImages = step2.menuImages.filter(img => {
-        if (img instanceof File) return true
-        if (img?.url && typeof img.url === 'string') return true
-        if (typeof img === 'string' && img.startsWith('http')) return true
-        return false
-      })
-      if (validMenuImages.length === 0) {
-        errors.push("Please upload at least one valid menu image")
-      }
-    }
-
-    // Check profile image - must be a File or existing URL
-    if (!step2.profileImage) {
-      errors.push("Restaurant profile image is required")
-    } else {
-      // Verify profile image is either a File or has a valid URL
-      const isValidProfileImage =
-        step2.profileImage instanceof File ||
-        (step2.profileImage?.url && typeof step2.profileImage.url === 'string') ||
-        (typeof step2.profileImage === 'string' && step2.profileImage.startsWith('http'))
-      if (!isValidProfileImage) {
-        errors.push("Please upload a valid restaurant profile image")
-      }
-    }
-
-    if (!step2.cuisines || step2.cuisines.length === 0) {
-      errors.push("Please select at least one cuisine")
-    }
-    if (!step2.openingTime?.trim()) {
-      errors.push("Opening time is required")
-    }
-    if (!step2.closingTime?.trim()) {
-      errors.push("Closing time is required")
-    }
-    if (!step2.openDays || step2.openDays.length === 0) {
-      errors.push("Please select at least one open day")
-    }
-
-    return errors
+    return validateStepFields(2)
   }
 
   const validateStep4 = () => {
-    const errors = []
-    if (!step4.estimatedDeliveryTime || !step4.estimatedDeliveryTime.trim()) {
-      errors.push("Estimated delivery time is required")
-    }
-    if (!step4.featuredDish || !step4.featuredDish.trim()) {
-      errors.push("Featured dish name is required")
-    }
-    if (!step4.featuredPrice || step4.featuredPrice === "" || isNaN(parseFloat(step4.featuredPrice)) || parseFloat(step4.featuredPrice) <= 0) {
-      errors.push("Featured dish price is required and must be greater than 0")
-    }
-    if (!step4.offer || !step4.offer.trim()) {
-      errors.push("Special offer/promotion is required")
-    }
-    return errors
+    return validateStepFields(4)
   }
 
   const validateStep3 = () => {
-    const errors = []
-
-    if (!step3.panNumber?.trim()) {
-      errors.push("PAN number is required")
-    } else if (!PAN_NUMBER_REGEX.test(step3.panNumber.trim().toUpperCase())) {
-      errors.push("PAN number must be valid (e.g., ABCDE1234F)")
-    }
-    if (!step3.nameOnPan?.trim()) {
-      errors.push("Name on PAN is required")
-    }
-    // Validate PAN image - must be a File or existing URL
-    if (!step3.panImage) {
-      errors.push("PAN image is required")
-    } else {
-      const isValidPanImage =
-        step3.panImage instanceof File ||
-        (step3.panImage?.url && typeof step3.panImage.url === 'string') ||
-        (typeof step3.panImage === 'string' && step3.panImage.startsWith('http'))
-      if (!isValidPanImage) {
-        errors.push("Please upload a valid PAN image")
-      }
-    }
-
-    if (!step3.fssaiNumber?.trim()) {
-      errors.push("FSSAI number is required")
-    }
-    if (!step3.fssaiExpiry?.trim()) {
-      errors.push("FSSAI expiry date is required")
-    }
-    // Validate FSSAI image - must be a File or existing URL
-    if (!step3.fssaiImage) {
-      errors.push("FSSAI image is required")
-    } else {
-      const isValidFssaiImage =
-        step3.fssaiImage instanceof File ||
-        (step3.fssaiImage?.url && typeof step3.fssaiImage.url === 'string') ||
-        (typeof step3.fssaiImage === 'string' && step3.fssaiImage.startsWith('http'))
-      if (!isValidFssaiImage) {
-        errors.push("Please upload a valid FSSAI image")
-      }
-    }
-
-    // Validate GST details if GST registered
-    if (step3.gstRegistered) {
-      if (!step3.gstNumber?.trim()) {
-        errors.push("GST number is required when GST registered")
-      }
-      if (!step3.gstLegalName?.trim()) {
-        errors.push("GST legal name is required when GST registered")
-      }
-      if (!step3.gstAddress?.trim()) {
-        errors.push("GST registered address is required when GST registered")
-      }
-      // Validate GST image if GST registered
-      if (!step3.gstImage) {
-        errors.push("GST image is required when GST registered")
-      } else {
-        const isValidGstImage =
-          step3.gstImage instanceof File ||
-          (step3.gstImage?.url && typeof step3.gstImage.url === 'string') ||
-          (typeof step3.gstImage === 'string' && step3.gstImage.startsWith('http'))
-        if (!isValidGstImage) {
-          errors.push("Please upload a valid GST image")
-        }
-      }
-    }
-
-    if (!step3.accountNumber?.trim()) {
-      errors.push("Account number is required")
-    }
-    if (!step3.confirmAccountNumber?.trim()) {
-      errors.push("Please confirm your account number")
-    }
-    if (step3.accountNumber && step3.confirmAccountNumber && step3.accountNumber !== step3.confirmAccountNumber) {
-      errors.push("Account number and confirmation do not match")
-    }
-    if (!step3.ifscCode?.trim()) {
-      errors.push("IFSC code is required")
-    }
-    if (!step3.accountHolderName?.trim()) {
-      errors.push("Account holder name is required")
-    }
-    if (!step3.accountType?.trim()) {
-      errors.push("Account type is required")
-    }
-
-    return errors
+    return validateStepFields(3)
   }
 
   // Fill dummy data for testing (development mode only)
@@ -994,18 +1145,18 @@ export default function RestaurantOnboarding() {
     setError("")
 
     // Validate current step before proceeding
-    let validationErrors = []
+    let stepErrors = {}
     if (step === 1) {
-      validationErrors = validateStep1()
+      stepErrors = validateStep1()
     } else if (step === 2) {
-      validationErrors = validateStep2()
+      stepErrors = validateStep2()
     } else if (step === 3) {
-      validationErrors = validateStep3()
+      stepErrors = validateStep3()
     } else if (step === 4) {
-      validationErrors = validateStep4()
+      stepErrors = validateStep4()
       console.log('🔍 Step 4 validation:', {
         step4,
-        errors: validationErrors,
+        errors: stepErrors,
         estimatedDeliveryTime: step4.estimatedDeliveryTime,
         featuredDish: step4.featuredDish,
         featuredPrice: step4.featuredPrice,
@@ -1013,6 +1164,16 @@ export default function RestaurantOnboarding() {
       })
     }
 
+    replaceErrorsForStep(step, stepErrors)
+    if (STEP_FIELD_KEYS[step]?.length) {
+      setTouched((prev) => {
+        const next = { ...(prev || {}) }
+        for (const key of STEP_FIELD_KEYS[step]) next[key] = true
+        return next
+      })
+    }
+
+    const validationErrors = Object.values(stepErrors || {}).filter(Boolean)
     if (validationErrors.length > 0) {
       // Show error toast for each validation error
       validationErrors.forEach((error, index) => {
@@ -1029,8 +1190,24 @@ export default function RestaurantOnboarding() {
     setSaving(true)
     try {
       if (step === 1) {
+        const cleanedStep1 = {
+          ...step1,
+          restaurantName: normalizeTextValue(step1.restaurantName),
+          ownerName: normalizeTextValue(step1.ownerName),
+          ownerEmail: normalizeTextValue(step1.ownerEmail).toLowerCase(),
+          ownerPhone: normalizePhoneForValidation(step1.ownerPhone),
+          primaryContactNumber: normalizePhoneForValidation(step1.primaryContactNumber),
+          location: {
+            ...step1.location,
+            addressLine1: normalizeTextValue(step1.location?.addressLine1),
+            addressLine2: normalizeTextValue(step1.location?.addressLine2),
+            area: normalizeTextValue(step1.location?.area),
+            city: normalizeTextValue(step1.location?.city),
+            landmark: normalizeTextValue(step1.location?.landmark),
+          },
+        }
         const payload = {
-          step1,
+          step1: cleanedStep1,
           completedSteps: 1,
           currentStep: 2,
         }
@@ -1091,10 +1268,10 @@ export default function RestaurantOnboarding() {
           step2: {
             menuImageUrls: allMenuUrls.length > 0 ? allMenuUrls : [],
             profileImageUrl: profileUpload,
-            cuisines: step2.cuisines || [],
+            cuisines: dedupeCuisines(step2.cuisines || []),
             deliveryTimings: {
-              openingTime: step2.openingTime || "",
-              closingTime: step2.closingTime || "",
+              openingTime: normalizeTextValue(step2.openingTime),
+              closingTime: normalizeTextValue(step2.closingTime),
             },
             openDays: step2.openDays || [],
           },
@@ -1217,27 +1394,27 @@ export default function RestaurantOnboarding() {
         const payload = {
           step3: {
             pan: {
-              panNumber: step3.panNumber || "",
-              nameOnPan: step3.nameOnPan || "",
+              panNumber: normalizeTextValue(step3.panNumber).toUpperCase(),
+              nameOnPan: normalizeTextValue(step3.nameOnPan),
               image: panImageUpload,
             },
             gst: {
               isRegistered: step3.gstRegistered || false,
-              gstNumber: step3.gstNumber || "",
-              legalName: step3.gstLegalName || "",
-              address: step3.gstAddress || "",
+              gstNumber: normalizeTextValue(step3.gstNumber),
+              legalName: normalizeTextValue(step3.gstLegalName),
+              address: normalizeTextValue(step3.gstAddress),
               image: gstImageUpload,
             },
             fssai: {
-              registrationNumber: step3.fssaiNumber || "",
-              expiryDate: step3.fssaiExpiry || null,
+              registrationNumber: normalizeDigits(step3.fssaiNumber),
+              expiryDate: normalizeTextValue(step3.fssaiExpiry) || null,
               image: fssaiImageUpload,
             },
             bank: {
-              accountNumber: step3.accountNumber || "",
-              ifscCode: step3.ifscCode || "",
-              accountHolderName: step3.accountHolderName || "",
-              accountType: step3.accountType || "",
+              accountNumber: normalizeDigits(step3.accountNumber),
+              ifscCode: normalizeTextValue(step3.ifscCode).toUpperCase().replace(/\s+/g, ""),
+              accountHolderName: normalizeTextValue(step3.accountHolderName),
+              accountType: normalizeTextValue(step3.accountType),
             },
           },
           completedSteps: 3,
@@ -1261,11 +1438,11 @@ export default function RestaurantOnboarding() {
         console.log('📤 Submitting Step 4:', step4)
         const payload = {
           step4: {
-            estimatedDeliveryTime: step4.estimatedDeliveryTime,
-            featuredDish: step4.featuredDish,
-            featuredPrice: parseFloat(step4.featuredPrice) || 249,
-            offer: step4.offer,
-            referralCode: step4.referralCode,
+            estimatedDeliveryTime: normalizeTextValue(step4.estimatedDeliveryTime),
+            featuredDish: normalizeTextValue(step4.featuredDish),
+            featuredPrice: parseFloat(normalizeTextValue(step4.featuredPrice)) || 249,
+            offer: normalizeTextValue(step4.offer),
+            referralCode: normalizeTextValue(step4.referralCode).toUpperCase(),
           },
           completedSteps: 4,
           currentStep: 4,
@@ -1350,11 +1527,14 @@ export default function RestaurantOnboarding() {
       const nextKey = cuisineKey(nextCuisine)
       const exists = current.some((item) => cuisineKey(item) === nextKey)
 
-      if (exists) {
-        return { ...prev, cuisines: current.filter((item) => cuisineKey(item) !== nextKey) }
-      }
+      const nextCuisines = exists
+        ? current.filter((item) => cuisineKey(item) !== nextKey)
+        : [...current, nextCuisine]
 
-      return { ...prev, cuisines: [...current, nextCuisine] }
+      const nextState = { ...prev, cuisines: nextCuisines }
+      markTouched("step2.cuisines")
+      setFieldError("step2.cuisines", validateField("step2.cuisines", nextCuisines, { step1, step2: nextState, step3, step4 }))
+      return nextState
     })
   }
 
@@ -1369,7 +1549,11 @@ export default function RestaurantOnboarding() {
       if (current.some((item) => cuisineKey(item) === nextKey)) {
         return prev
       }
-      return { ...prev, cuisines: [...current, nextCuisine] }
+      const nextCuisines = [...current, nextCuisine]
+      const nextState = { ...prev, cuisines: nextCuisines }
+      markTouched("step2.cuisines")
+      setFieldError("step2.cuisines", validateField("step2.cuisines", nextCuisines, { step1, step2: nextState, step3, step4 }))
+      return nextState
     })
   }
 
@@ -1384,10 +1568,11 @@ export default function RestaurantOnboarding() {
   const toggleDay = (day) => {
     setStep2((prev) => {
       const exists = prev.openDays.includes(day)
-      if (exists) {
-        return { ...prev, openDays: prev.openDays.filter((d) => d !== day) }
-      }
-      return { ...prev, openDays: [...prev.openDays, day] }
+      const nextDays = exists ? prev.openDays.filter((d) => d !== day) : [...prev.openDays, day]
+      const nextState = { ...prev, openDays: nextDays }
+      markTouched("step2.openDays")
+      setFieldError("step2.openDays", validateField("step2.openDays", nextDays, { step1, step2: nextState, step3, step4 }))
+      return nextState
     })
   }
 
@@ -1413,10 +1598,29 @@ export default function RestaurantOnboarding() {
             <Label className="text-xs text-gray-700">Restaurant name*</Label>
             <Input
               value={step1.restaurantName || ""}
-              onChange={(e) => setStep1({ ...step1, restaurantName: e.target.value })}
-              className="mt-1 bg-white text-sm text-black placeholder-black"
+              onChange={(e) => {
+                const v = e.target.value
+                setStep1({ ...step1, restaurantName: v })
+                if (touched["step1.restaurantName"]) {
+                  setFieldError("step1.restaurantName", validateField("step1.restaurantName", v))
+                } else {
+                  clearFieldError("step1.restaurantName")
+                }
+              }}
+              onBlur={(e) => {
+                const v = normalizeTextValue(e.target.value)
+                if (v !== e.target.value) {
+                  setStep1({ ...step1, restaurantName: v })
+                }
+                markTouched("step1.restaurantName")
+                setFieldError("step1.restaurantName", validateField("step1.restaurantName", v))
+              }}
+              className={`mt-1 bg-white text-sm text-black placeholder-black ${getFieldError("step1.restaurantName") ? "border-red-500" : ""}`}
               placeholder="Customers will see this name"
             />
+            {getFieldError("step1.restaurantName") ? (
+              <p className="text-[11px] text-red-600 mt-1">{getFieldError("step1.restaurantName")}</p>
+            ) : null}
           </div>
         </div>
       </section>
@@ -1431,30 +1635,87 @@ export default function RestaurantOnboarding() {
             <Label className="text-xs text-gray-700">Full name*</Label>
             <Input
               value={step1.ownerName || ""}
-              onChange={(e) => setStep1({ ...step1, ownerName: e.target.value })}
-              className="mt-1 bg-white text-sm text-black placeholder-black"
+              onChange={(e) => {
+                const v = e.target.value
+                setStep1({ ...step1, ownerName: v })
+                if (touched["step1.ownerName"]) {
+                  setFieldError("step1.ownerName", validateField("step1.ownerName", v))
+                } else {
+                  clearFieldError("step1.ownerName")
+                }
+              }}
+              onBlur={(e) => {
+                const v = normalizeTextValue(e.target.value)
+                if (v !== e.target.value) {
+                  setStep1({ ...step1, ownerName: v })
+                }
+                markTouched("step1.ownerName")
+                setFieldError("step1.ownerName", validateField("step1.ownerName", v))
+              }}
+              className={`mt-1 bg-white text-sm text-black placeholder-black ${getFieldError("step1.ownerName") ? "border-red-500" : ""}`}
               placeholder="Owner full name"
             />
+            {getFieldError("step1.ownerName") ? (
+              <p className="text-[11px] text-red-600 mt-1">{getFieldError("step1.ownerName")}</p>
+            ) : null}
           </div>
           <div>
             <Label className="text-xs text-gray-700">Email address*</Label>
             <Input
               type="email"
               value={step1.ownerEmail || ""}
-              onChange={(e) => setStep1({ ...step1, ownerEmail: e.target.value })}
-              className="mt-1 bg-white text-sm text-black placeholder-black"
+              onChange={(e) => {
+                const v = e.target.value
+                setStep1({ ...step1, ownerEmail: v })
+                if (touched["step1.ownerEmail"]) {
+                  setFieldError("step1.ownerEmail", validateField("step1.ownerEmail", v))
+                } else {
+                  clearFieldError("step1.ownerEmail")
+                }
+              }}
+              onBlur={(e) => {
+                const v = normalizeTextValue(e.target.value).toLowerCase()
+                if (v !== e.target.value) {
+                  setStep1({ ...step1, ownerEmail: v })
+                }
+                markTouched("step1.ownerEmail")
+                setFieldError("step1.ownerEmail", validateField("step1.ownerEmail", v))
+              }}
+              className={`mt-1 bg-white text-sm text-black placeholder-black ${getFieldError("step1.ownerEmail") ? "border-red-500" : ""}`}
               placeholder="owner@example.com"
             />
+            {getFieldError("step1.ownerEmail") ? (
+              <p className="text-[11px] text-red-600 mt-1">{getFieldError("step1.ownerEmail")}</p>
+            ) : null}
           </div>
           <div>
             <Label className="text-xs text-gray-700">Phone number*</Label>
             <Input
               value={step1.ownerPhone || ""}
-              onChange={(e) => setStep1({ ...step1, ownerPhone: e.target.value })}
+              onChange={(e) => {
+                const v = e.target.value
+                setStep1({ ...step1, ownerPhone: v })
+                if (touched["step1.ownerPhone"]) {
+                  setFieldError("step1.ownerPhone", validateField("step1.ownerPhone", v))
+                } else {
+                  clearFieldError("step1.ownerPhone")
+                }
+              }}
+              onBlur={(e) => {
+                const v = normalizeTextValue(e.target.value)
+                if (v !== e.target.value) {
+                  setStep1({ ...step1, ownerPhone: v })
+                }
+                markTouched("step1.ownerPhone")
+                setFieldError("step1.ownerPhone", validateField("step1.ownerPhone", v))
+              }}
               readOnly={Boolean(verifiedPhoneNumber)}
-              className="mt-1 bg-white text-sm text-black placeholder-black"
+              className={`mt-1 bg-white text-sm text-black placeholder-black ${getFieldError("step1.ownerPhone") ? "border-red-500" : ""}`}
               placeholder="+91 98XXXXXX"
             />
+            {getFieldError("step1.ownerPhone") ? (
+              <p className="text-[11px] text-red-600 mt-1">{getFieldError("step1.ownerPhone")}</p>
+            ) : null}
           </div>
         </div>
       </section>
@@ -1465,13 +1726,30 @@ export default function RestaurantOnboarding() {
           <Label className="text-xs text-gray-700">Primary contact number*</Label>
           <Input
             value={step1.primaryContactNumber || ""}
-            onChange={(e) =>
-              setStep1({ ...step1, primaryContactNumber: e.target.value })
-            }
+            onChange={(e) => {
+              const v = e.target.value
+              setStep1({ ...step1, primaryContactNumber: v })
+              if (touched["step1.primaryContactNumber"]) {
+                setFieldError("step1.primaryContactNumber", validateField("step1.primaryContactNumber", v))
+              } else {
+                clearFieldError("step1.primaryContactNumber")
+              }
+            }}
+            onBlur={(e) => {
+              const v = normalizeTextValue(e.target.value)
+              if (v !== e.target.value) {
+                setStep1({ ...step1, primaryContactNumber: v })
+              }
+              markTouched("step1.primaryContactNumber")
+              setFieldError("step1.primaryContactNumber", validateField("step1.primaryContactNumber", v))
+            }}
             readOnly={Boolean(verifiedPhoneNumber)}
-            className="mt-1 bg-white text-sm text-black placeholder-black"
+            className={`mt-1 bg-white text-sm text-black placeholder-black ${getFieldError("step1.primaryContactNumber") ? "border-red-500" : ""}`}
             placeholder="Restaurant's primary contact number"
           />
+          {getFieldError("step1.primaryContactNumber") ? (
+            <p className="text-[11px] text-red-600 mt-1">{getFieldError("step1.primaryContactNumber")}</p>
+          ) : null}
           <p className="text-[11px] text-gray-500 mt-1">
             Customers, delivery partners and {companyName} may call on this number for order
             support.
@@ -1525,26 +1803,66 @@ export default function RestaurantOnboarding() {
           />
           <Input
             value={step1.location?.area || ""}
-            onChange={(e) =>
+            onChange={(e) => {
+              const v = e.target.value
               setStep1({
                 ...step1,
-                location: { ...step1.location, area: e.target.value },
+                location: { ...step1.location, area: v },
               })
-            }
-            className="bg-white text-sm"
+              if (touched["step1.location.area"]) {
+                setFieldError("step1.location.area", validateField("step1.location.area", v))
+              } else {
+                clearFieldError("step1.location.area")
+              }
+            }}
+            onBlur={(e) => {
+              const v = normalizeTextValue(e.target.value)
+              if (v !== e.target.value) {
+                setStep1({
+                  ...step1,
+                  location: { ...step1.location, area: v },
+                })
+              }
+              markTouched("step1.location.area")
+              setFieldError("step1.location.area", validateField("step1.location.area", v))
+            }}
+            className={`bg-white text-sm ${getFieldError("step1.location.area") ? "border-red-500" : ""}`}
             placeholder="Area / Sector / Locality*"
           />
+          {getFieldError("step1.location.area") ? (
+            <p className="text-[11px] text-red-600 mt-1">{getFieldError("step1.location.area")}</p>
+          ) : null}
           <Input
             value={step1.location?.city || ""}
-            onChange={(e) =>
+            onChange={(e) => {
+              const v = e.target.value
               setStep1({
                 ...step1,
-                location: { ...step1.location, city: e.target.value },
+                location: { ...step1.location, city: v },
               })
-            }
-            className="bg-white text-sm"
+              if (touched["step1.location.city"]) {
+                setFieldError("step1.location.city", validateField("step1.location.city", v))
+              } else {
+                clearFieldError("step1.location.city")
+              }
+            }}
+            onBlur={(e) => {
+              const v = normalizeTextValue(e.target.value)
+              if (v !== e.target.value) {
+                setStep1({
+                  ...step1,
+                  location: { ...step1.location, city: v },
+                })
+              }
+              markTouched("step1.location.city")
+              setFieldError("step1.location.city", validateField("step1.location.city", v))
+            }}
+            className={`bg-white text-sm ${getFieldError("step1.location.city") ? "border-red-500" : ""}`}
             placeholder="City"
           />
+          {getFieldError("step1.location.city") ? (
+            <p className="text-[11px] text-red-600 mt-1">{getFieldError("step1.location.city")}</p>
+          ) : null}
           <p className="text-[11px] text-gray-500 mt-1">
             Please ensure that this address is the same as mentioned on your FSSAI license.
           </p>
@@ -1590,10 +1908,16 @@ export default function RestaurantOnboarding() {
               onClick={() =>
                 captureImageFromLiveCamera(
                   (file) =>
-                    setStep2((prev) => ({
-                      ...prev,
-                      menuImages: [...(prev.menuImages || []), file],
-                    })),
+                    setStep2((prev) => {
+                      const nextMenuImages = [...(prev.menuImages || []), file]
+                      const nextState = { ...prev, menuImages: nextMenuImages }
+                      markTouched("step2.menuImages")
+                      setFieldError(
+                        "step2.menuImages",
+                        validateField("step2.menuImages", nextMenuImages, { step1, step2: nextState, step3, step4 }),
+                      )
+                      return nextState
+                    }),
                   `menu-image-${Date.now()}.jpg`,
                 )
               }
@@ -1612,15 +1936,24 @@ export default function RestaurantOnboarding() {
                 const files = Array.from(e.target.files || [])
                 if (!files.length) return
                 console.log('📸 Menu images selected:', files.length, 'files')
-                setStep2((prev) => ({
-                  ...prev,
-                  menuImages: [...(prev.menuImages || []), ...files], // Append new files to existing ones
-                }))
+                setStep2((prev) => {
+                  const nextMenuImages = [...(prev.menuImages || []), ...files] // Append new files to existing ones
+                  const nextState = { ...prev, menuImages: nextMenuImages }
+                  markTouched("step2.menuImages")
+                  setFieldError(
+                    "step2.menuImages",
+                    validateField("step2.menuImages", nextMenuImages, { step1, step2: nextState, step3, step4 }),
+                  )
+                  return nextState
+                })
                 // Reset input to allow selecting same file again
                 e.target.value = ''
               }}
             />
           </div>
+          {getFieldError("step2.menuImages") ? (
+            <p className="text-[11px] text-red-600 mt-2">{getFieldError("step2.menuImages")}</p>
+          ) : null}
 
           {/* Menu image previews */}
           {!!step2.menuImages.length && (
@@ -1653,10 +1986,16 @@ export default function RestaurantOnboarding() {
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          setStep2((prev) => ({
-                            ...prev,
-                            menuImages: prev.menuImages.filter((_, i) => i !== idx),
-                          }));
+                          setStep2((prev) => {
+                            const nextMenuImages = prev.menuImages.filter((_, i) => i !== idx)
+                            const nextState = { ...prev, menuImages: nextMenuImages }
+                            markTouched("step2.menuImages")
+                            setFieldError(
+                              "step2.menuImages",
+                              validateField("step2.menuImages", nextMenuImages, { step1, step2: nextState, step3, step4 }),
+                            )
+                            return nextState
+                          });
                         }}
                         className="bg-red-500 text-white rounded-full p-1 shadow-md hover:bg-red-600 transition-colors"
                       >
@@ -1726,10 +2065,15 @@ export default function RestaurantOnboarding() {
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    setStep2((prev) => ({
-                      ...prev,
-                      profileImage: null,
-                    }));
+                    setStep2((prev) => {
+                      const nextState = { ...prev, profileImage: null }
+                      markTouched("step2.profileImage")
+                      setFieldError(
+                        "step2.profileImage",
+                        validateField("step2.profileImage", null, { step1, step2: nextState, step3, step4 }),
+                      )
+                      return nextState
+                    });
                   }}
                   className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-1 shadow-md hover:bg-red-600 transition-colors z-10"
                 >
@@ -1762,10 +2106,15 @@ export default function RestaurantOnboarding() {
               const file = e.target.files?.[0] || null
               if (file) {
                 console.log('📸 Profile image selected:', file.name)
-                setStep2((prev) => ({
-                  ...prev,
-                  profileImage: file,
-                }))
+                setStep2((prev) => {
+                  const nextState = { ...prev, profileImage: file }
+                  markTouched("step2.profileImage")
+                  setFieldError(
+                    "step2.profileImage",
+                    validateField("step2.profileImage", file, { step1, step2: nextState, step3, step4 }),
+                  )
+                  return nextState
+                })
               }
               // Reset input to allow selecting same file again
               e.target.value = ''
@@ -1775,7 +2124,16 @@ export default function RestaurantOnboarding() {
             type="button"
             onClick={() =>
               captureImageFromLiveCamera(
-                (file) => setStep2((prev) => ({ ...prev, profileImage: file })),
+                (file) =>
+                  setStep2((prev) => {
+                    const nextState = { ...prev, profileImage: file }
+                    markTouched("step2.profileImage")
+                    setFieldError(
+                      "step2.profileImage",
+                      validateField("step2.profileImage", file, { step1, step2: nextState, step3, step4 }),
+                    )
+                    return nextState
+                  }),
                 `restaurant-profile-${Date.now()}.jpg`,
               )
             }
@@ -1784,6 +2142,9 @@ export default function RestaurantOnboarding() {
             <Camera className="w-4 h-4" />
             <span>Live Camera</span>
           </button>
+          {getFieldError("step2.profileImage") ? (
+            <p className="text-[11px] text-red-600 mt-2">{getFieldError("step2.profileImage")}</p>
+          ) : null}
         </div>
       </section>
 
@@ -1834,6 +2195,9 @@ export default function RestaurantOnboarding() {
               )
             })}
           </div>
+          {getFieldError("step2.cuisines") ? (
+            <p className="text-[11px] text-red-600 mt-2">{getFieldError("step2.cuisines")}</p>
+          ) : null}
         </div>
 
         {/* Timings with popover time selectors */}
@@ -1843,12 +2207,26 @@ export default function RestaurantOnboarding() {
             <TimeSelector
               label="Opening time"
               value={step2.openingTime || ""}
-              onChange={(val) => setStep2({ ...step2, openingTime: val || "" })}
+              onChange={(val) => {
+                const v = val || ""
+                const nextState = { ...step2, openingTime: v }
+                setStep2(nextState)
+                markTouched("step2.openingTime")
+                setFieldError("step2.openingTime", validateField("step2.openingTime", v, { step1, step2: nextState, step3, step4 }))
+              }}
+              error={getFieldError("step2.openingTime")}
             />
             <TimeSelector
               label="Closing time"
               value={step2.closingTime || ""}
-              onChange={(val) => setStep2({ ...step2, closingTime: val || "" })}
+              onChange={(val) => {
+                const v = val || ""
+                const nextState = { ...step2, closingTime: v }
+                setStep2(nextState)
+                markTouched("step2.closingTime")
+                setFieldError("step2.closingTime", validateField("step2.closingTime", v, { step1, step2: nextState, step3, step4 }))
+              }}
+              error={getFieldError("step2.closingTime")}
             />
           </div>
         </div>
@@ -1878,6 +2256,9 @@ export default function RestaurantOnboarding() {
               )
             })}
           </div>
+          {getFieldError("step2.openDays") ? (
+            <p className="text-[11px] text-red-600 mt-2">{getFieldError("step2.openDays")}</p>
+          ) : null}
         </div>
       </section>
     </div>
@@ -1897,19 +2278,56 @@ export default function RestaurantOnboarding() {
                   .toUpperCase()
                   .replace(/[^A-Z0-9]/g, "")
                   .slice(0, 10)
-                setStep3({ ...step3, panNumber: normalized })
+                const nextState = { ...step3, panNumber: normalized }
+                setStep3(nextState)
+                if (touched["step3.panNumber"]) {
+                  setFieldError("step3.panNumber", validateField("step3.panNumber", normalized, { step1, step2, step3: nextState, step4 }))
+                } else {
+                  clearFieldError("step3.panNumber")
+                }
               }}
-              className="mt-1 bg-white text-sm text-black placeholder-black"
+              onBlur={() => {
+                markTouched("step3.panNumber")
+                setFieldError("step3.panNumber", validateField("step3.panNumber", step3.panNumber, { step1, step2, step3, step4 }))
+              }}
+              className={`mt-1 bg-white text-sm text-black placeholder-black ${getFieldError("step3.panNumber") ? "border-red-500" : ""}`}
               placeholder="ABCDE1234F"
             />
+            {getFieldError("step3.panNumber") ? (
+              <p className="text-[11px] text-red-600 mt-1">{getFieldError("step3.panNumber")}</p>
+            ) : null}
           </div>
           <div>
             <Label className="text-xs text-gray-700">Name on PAN</Label>
             <Input
               value={step3.nameOnPan || ""}
-              onChange={(e) => setStep3({ ...step3, nameOnPan: e.target.value })}
-              className="mt-1 bg-white text-sm text-black placeholder-black"
+              onChange={(e) => {
+                const v = e.target.value
+                const nextState = { ...step3, nameOnPan: v }
+                setStep3(nextState)
+                if (touched["step3.nameOnPan"]) {
+                  setFieldError("step3.nameOnPan", validateField("step3.nameOnPan", v, { step1, step2, step3: nextState, step4 }))
+                } else {
+                  clearFieldError("step3.nameOnPan")
+                }
+              }}
+              onBlur={(e) => {
+                const v = normalizeTextValue(e.target.value)
+                if (v !== e.target.value) {
+                  const nextState = { ...step3, nameOnPan: v }
+                  setStep3(nextState)
+                  markTouched("step3.nameOnPan")
+                  setFieldError("step3.nameOnPan", validateField("step3.nameOnPan", v, { step1, step2, step3: nextState, step4 }))
+                  return
+                }
+                markTouched("step3.nameOnPan")
+                setFieldError("step3.nameOnPan", validateField("step3.nameOnPan", v, { step1, step2, step3, step4 }))
+              }}
+              className={`mt-1 bg-white text-sm text-black placeholder-black ${getFieldError("step3.nameOnPan") ? "border-red-500" : ""}`}
             />
+            {getFieldError("step3.nameOnPan") ? (
+              <p className="text-[11px] text-red-600 mt-1">{getFieldError("step3.nameOnPan")}</p>
+            ) : null}
           </div>
         </div>
         <div>
@@ -1926,15 +2344,26 @@ export default function RestaurantOnboarding() {
             type="file"
             accept="image/*"
             className="hidden"
-            onChange={(e) =>
-              setStep3({ ...step3, panImage: e.target.files?.[0] || null })
-            }
+            onChange={(e) => {
+              const file = e.target.files?.[0] || null
+              const nextState = { ...step3, panImage: file }
+              setStep3(nextState)
+              markTouched("step3.panImage")
+              setFieldError("step3.panImage", validateField("step3.panImage", file, { step1, step2, step3: nextState, step4 }))
+              e.target.value = ""
+            }}
           />
           <button
             type="button"
             onClick={() =>
               captureImageFromLiveCamera(
-                (file) => setStep3((prev) => ({ ...prev, panImage: file })),
+                (file) =>
+                  setStep3((prev) => {
+                    const nextState = { ...prev, panImage: file }
+                    markTouched("step3.panImage")
+                    setFieldError("step3.panImage", validateField("step3.panImage", file, { step1, step2, step3: nextState, step4 }))
+                    return nextState
+                  }),
                 `pan-image-${Date.now()}.jpg`,
               )
             }
@@ -1948,6 +2377,9 @@ export default function RestaurantOnboarding() {
               Selected: {getImageLabel(step3.panImage, "pan-image.jpg")}
             </p>
           )}
+          {getFieldError("step3.panImage") ? (
+            <p className="text-[11px] text-red-600 mt-2">{getFieldError("step3.panImage")}</p>
+          ) : null}
         </div>
       </section>
 
@@ -1957,7 +2389,18 @@ export default function RestaurantOnboarding() {
           <span className="text-gray-700">GST registered?</span>
           <button
             type="button"
-            onClick={() => setStep3({ ...step3, gstRegistered: true })}
+            onClick={() => {
+              const nextState = { ...step3, gstRegistered: true }
+              setStep3(nextState)
+              markTouched("step3.gstNumber")
+              markTouched("step3.gstLegalName")
+              markTouched("step3.gstAddress")
+              markTouched("step3.gstImage")
+              setFieldError("step3.gstNumber", validateField("step3.gstNumber", nextState.gstNumber, { step1, step2, step3: nextState, step4 }))
+              setFieldError("step3.gstLegalName", validateField("step3.gstLegalName", nextState.gstLegalName, { step1, step2, step3: nextState, step4 }))
+              setFieldError("step3.gstAddress", validateField("step3.gstAddress", nextState.gstAddress, { step1, step2, step3: nextState, step4 }))
+              setFieldError("step3.gstImage", validateField("step3.gstImage", nextState.gstImage, { step1, step2, step3: nextState, step4 }))
+            }}
             className={`px-3 py-1.5 text-xs rounded-full ${step3.gstRegistered ? "bg-black text-white" : "bg-gray-100 text-gray-800"
               }`}
           >
@@ -1965,7 +2408,14 @@ export default function RestaurantOnboarding() {
           </button>
           <button
             type="button"
-            onClick={() => setStep3({ ...step3, gstRegistered: false })}
+            onClick={() => {
+              const nextState = { ...step3, gstRegistered: false }
+              setStep3(nextState)
+              clearFieldError("step3.gstNumber")
+              clearFieldError("step3.gstLegalName")
+              clearFieldError("step3.gstAddress")
+              clearFieldError("step3.gstImage")
+            }}
             className={`px-3 py-1.5 text-xs rounded-full ${!step3.gstRegistered ? "bg-black text-white" : "bg-gray-100 text-gray-800"
               }`}
           >
@@ -1976,22 +2426,79 @@ export default function RestaurantOnboarding() {
           <div className="space-y-3">
             <Input
               value={step3.gstNumber || ""}
-              onChange={(e) => setStep3({ ...step3, gstNumber: e.target.value })}
-              className="bg-white text-sm"
+              onChange={(e) => {
+                const v = e.target.value
+                const nextState = { ...step3, gstNumber: v }
+                setStep3(nextState)
+                if (touched["step3.gstNumber"]) {
+                  setFieldError("step3.gstNumber", validateField("step3.gstNumber", v, { step1, step2, step3: nextState, step4 }))
+                } else {
+                  clearFieldError("step3.gstNumber")
+                }
+              }}
+              onBlur={(e) => {
+                const v = normalizeTextValue(e.target.value)
+                const nextState = { ...step3, gstNumber: v }
+                if (v !== e.target.value) setStep3(nextState)
+                markTouched("step3.gstNumber")
+                setFieldError("step3.gstNumber", validateField("step3.gstNumber", v, { step1, step2, step3: nextState, step4 }))
+              }}
+              className={`bg-white text-sm ${getFieldError("step3.gstNumber") ? "border-red-500" : ""}`}
               placeholder="GST number"
             />
+            {getFieldError("step3.gstNumber") ? (
+              <p className="text-[11px] text-red-600">{getFieldError("step3.gstNumber")}</p>
+            ) : null}
             <Input
               value={step3.gstLegalName || ""}
-              onChange={(e) => setStep3({ ...step3, gstLegalName: e.target.value })}
-              className="bg-white text-sm"
+              onChange={(e) => {
+                const v = e.target.value
+                const nextState = { ...step3, gstLegalName: v }
+                setStep3(nextState)
+                if (touched["step3.gstLegalName"]) {
+                  setFieldError("step3.gstLegalName", validateField("step3.gstLegalName", v, { step1, step2, step3: nextState, step4 }))
+                } else {
+                  clearFieldError("step3.gstLegalName")
+                }
+              }}
+              onBlur={(e) => {
+                const v = normalizeTextValue(e.target.value)
+                const nextState = { ...step3, gstLegalName: v }
+                if (v !== e.target.value) setStep3(nextState)
+                markTouched("step3.gstLegalName")
+                setFieldError("step3.gstLegalName", validateField("step3.gstLegalName", v, { step1, step2, step3: nextState, step4 }))
+              }}
+              className={`bg-white text-sm ${getFieldError("step3.gstLegalName") ? "border-red-500" : ""}`}
               placeholder="Legal name"
             />
+            {getFieldError("step3.gstLegalName") ? (
+              <p className="text-[11px] text-red-600">{getFieldError("step3.gstLegalName")}</p>
+            ) : null}
             <Input
               value={step3.gstAddress || ""}
-              onChange={(e) => setStep3({ ...step3, gstAddress: e.target.value })}
-              className="bg-white text-sm"
+              onChange={(e) => {
+                const v = e.target.value
+                const nextState = { ...step3, gstAddress: v }
+                setStep3(nextState)
+                if (touched["step3.gstAddress"]) {
+                  setFieldError("step3.gstAddress", validateField("step3.gstAddress", v, { step1, step2, step3: nextState, step4 }))
+                } else {
+                  clearFieldError("step3.gstAddress")
+                }
+              }}
+              onBlur={(e) => {
+                const v = normalizeTextValue(e.target.value)
+                const nextState = { ...step3, gstAddress: v }
+                if (v !== e.target.value) setStep3(nextState)
+                markTouched("step3.gstAddress")
+                setFieldError("step3.gstAddress", validateField("step3.gstAddress", v, { step1, step2, step3: nextState, step4 }))
+              }}
+              className={`bg-white text-sm ${getFieldError("step3.gstAddress") ? "border-red-500" : ""}`}
               placeholder="Registered address"
             />
+            {getFieldError("step3.gstAddress") ? (
+              <p className="text-[11px] text-red-600">{getFieldError("step3.gstAddress")}</p>
+            ) : null}
             <div className="space-y-2">
               <label
                 htmlFor="gstImageInput"
@@ -2000,47 +2507,82 @@ export default function RestaurantOnboarding() {
                 <Upload className="w-4 h-4" />
                 <span>Choose file</span>
               </label>
-              <input
-                id="gstImageInput"
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) =>
-                  setStep3({ ...step3, gstImage: e.target.files?.[0] || null })
-                }
-              />
+                <input
+                  id="gstImageInput"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null
+                    const nextState = { ...step3, gstImage: file }
+                    setStep3(nextState)
+                    markTouched("step3.gstImage")
+                    setFieldError("step3.gstImage", validateField("step3.gstImage", file, { step1, step2, step3: nextState, step4 }))
+                    e.target.value = ""
+                  }}
+                />
               <button
                 type="button"
                 onClick={() =>
-                  captureImageFromLiveCamera(
-                    (file) => setStep3((prev) => ({ ...prev, gstImage: file })),
-                    `gst-image-${Date.now()}.jpg`,
-                  )
-                }
+                    captureImageFromLiveCamera(
+                      (file) =>
+                        setStep3((prev) => {
+                          const nextState = { ...prev, gstImage: file }
+                          markTouched("step3.gstImage")
+                          setFieldError("step3.gstImage", validateField("step3.gstImage", file, { step1, step2, step3: nextState, step4 }))
+                          return nextState
+                        }),
+                      `gst-image-${Date.now()}.jpg`,
+                    )
+                  }
                 className="inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm border border-gray-300 bg-white text-gray-900 text-xs font-medium w-full"
               >
                 <Camera className="w-4 h-4" />
                 <span>Live Camera</span>
               </button>
-              {step3.gstImage && (
-                <p className="text-[11px] text-gray-500 truncate">
-                  Selected: {getImageLabel(step3.gstImage, "gst-image.jpg")}
-                </p>
-              )}
+                {step3.gstImage && (
+                  <p className="text-[11px] text-gray-500 truncate">
+                    Selected: {getImageLabel(step3.gstImage, "gst-image.jpg")}
+                  </p>
+                )}
+                {getFieldError("step3.gstImage") ? (
+                  <p className="text-[11px] text-red-600 mt-1">{getFieldError("step3.gstImage")}</p>
+                ) : null}
+              </div>
             </div>
-          </div>
-        )}
+          )}
       </section>
 
       <section className="bg-white p-4 sm:p-6 rounded-md space-y-4">
         <h2 className="text-lg font-semibold text-black">FSSAI details</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input
-            value={step3.fssaiNumber || ""}
-            onChange={(e) => setStep3({ ...step3, fssaiNumber: e.target.value })}
-            className="bg-white text-sm"
-            placeholder="FSSAI number"
-          />
+          <div>
+            <Input
+              value={step3.fssaiNumber || ""}
+              onChange={(e) => {
+                const v = e.target.value
+                const nextState = { ...step3, fssaiNumber: v }
+                setStep3(nextState)
+                if (touched["step3.fssaiNumber"]) {
+                  setFieldError("step3.fssaiNumber", validateField("step3.fssaiNumber", v, { step1, step2, step3: nextState, step4 }))
+                } else {
+                  clearFieldError("step3.fssaiNumber")
+                }
+              }}
+              onBlur={(e) => {
+                const v = normalizeDigits(e.target.value)
+                const nextState = { ...step3, fssaiNumber: v }
+                if (v !== e.target.value) setStep3(nextState)
+                markTouched("step3.fssaiNumber")
+                setFieldError("step3.fssaiNumber", validateField("step3.fssaiNumber", v, { step1, step2, step3: nextState, step4 }))
+              }}
+              className={`bg-white text-sm ${getFieldError("step3.fssaiNumber") ? "border-red-500" : ""}`}
+              placeholder="FSSAI number"
+            />
+            {getFieldError("step3.fssaiNumber") ? (
+              <p className="text-[11px] text-red-600 mt-1">{getFieldError("step3.fssaiNumber")}</p>
+            ) : null}
+          </div>
           <div>
             <Label className="text-xs text-gray-700 mb-1 block">FSSAI expiry date</Label>
             <Popover open={isFssaiCalendarOpen} onOpenChange={setIsFssaiCalendarOpen}>
@@ -2067,13 +2609,16 @@ export default function RestaurantOnboarding() {
                   <Calendar
                     mode="single"
                     selected={parseLocalYMDDate(step3.fssaiExpiry)}
-                    onSelect={(date) => {
-                      if (date) {
-                        const formattedDate = formatDateToLocalYMD(date)
-                        setStep3({ ...step3, fssaiExpiry: formattedDate })
-                        setIsFssaiCalendarOpen(false)
-                      }
-                    }}
+                     onSelect={(date) => {
+                       if (date) {
+                         const formattedDate = formatDateToLocalYMD(date)
+                        const nextState = { ...step3, fssaiExpiry: formattedDate }
+                        setStep3(nextState)
+                        markTouched("step3.fssaiExpiry")
+                        setFieldError("step3.fssaiExpiry", validateField("step3.fssaiExpiry", formattedDate, { step1, step2, step3: nextState, step4 }))
+                         setIsFssaiCalendarOpen(false)
+                       }
+                     }}
                     initialFocus
                     classNames={{
                       today: "bg-transparent text-foreground border-none", // Remove today highlight
@@ -2082,6 +2627,9 @@ export default function RestaurantOnboarding() {
                 </div>
               </PopoverContent>
             </Popover>
+            {getFieldError("step3.fssaiExpiry") ? (
+              <p className="text-[11px] text-red-600 mt-1">{getFieldError("step3.fssaiExpiry")}</p>
+            ) : null}
           </div>
         </div>
         <div className="space-y-2">
@@ -2097,15 +2645,26 @@ export default function RestaurantOnboarding() {
             type="file"
             accept="image/*"
             className="hidden"
-            onChange={(e) =>
-              setStep3({ ...step3, fssaiImage: e.target.files?.[0] || null })
-            }
+            onChange={(e) => {
+              const file = e.target.files?.[0] || null
+              const nextState = { ...step3, fssaiImage: file }
+              setStep3(nextState)
+              markTouched("step3.fssaiImage")
+              setFieldError("step3.fssaiImage", validateField("step3.fssaiImage", file, { step1, step2, step3: nextState, step4 }))
+              e.target.value = ""
+            }}
           />
           <button
             type="button"
             onClick={() =>
               captureImageFromLiveCamera(
-                (file) => setStep3((prev) => ({ ...prev, fssaiImage: file })),
+                (file) =>
+                  setStep3((prev) => {
+                    const nextState = { ...prev, fssaiImage: file }
+                    markTouched("step3.fssaiImage")
+                    setFieldError("step3.fssaiImage", validateField("step3.fssaiImage", file, { step1, step2, step3: nextState, step4 }))
+                    return nextState
+                  }),
                 `fssai-image-${Date.now()}.jpg`,
               )
             }
@@ -2119,51 +2678,171 @@ export default function RestaurantOnboarding() {
               Selected: {getImageLabel(step3.fssaiImage, "fssai-image.jpg")}
             </p>
           )}
+          {getFieldError("step3.fssaiImage") ? (
+            <p className="text-[11px] text-red-600 mt-1">{getFieldError("step3.fssaiImage")}</p>
+          ) : null}
         </div>
       </section>
 
       <section className="bg-white p-4 sm:p-6 rounded-md space-y-4">
         <h2 className="text-lg font-semibold text-black">Bank account details</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input
-            value={step3.accountNumber || ""}
-            onChange={(e) =>
-              setStep3({ ...step3, accountNumber: e.target.value.trim() })
-            }
-            className="bg-white text-sm"
-            placeholder="Account number"
-          />
-          <Input
-            value={step3.confirmAccountNumber || ""}
-            onChange={(e) =>
-              setStep3({ ...step3, confirmAccountNumber: e.target.value.trim() })
-            }
-            className="bg-white text-sm"
-            placeholder="Re-enter account number"
-          />
+          <div>
+            <Input
+              value={step3.accountNumber || ""}
+              onChange={(e) => {
+                const v = e.target.value
+                const nextState = { ...step3, accountNumber: v }
+                setStep3(nextState)
+                if (touched["step3.accountNumber"]) {
+                  setFieldError("step3.accountNumber", validateField("step3.accountNumber", v, { step1, step2, step3: nextState, step4 }))
+                  if (touched["step3.confirmAccountNumber"]) {
+                    setFieldError(
+                      "step3.confirmAccountNumber",
+                      validateField("step3.confirmAccountNumber", nextState.confirmAccountNumber, { step1, step2, step3: nextState, step4 }),
+                    )
+                  }
+                } else {
+                  clearFieldError("step3.accountNumber")
+                }
+              }}
+              onBlur={(e) => {
+                const v = normalizeDigits(e.target.value)
+                const nextState = { ...step3, accountNumber: v }
+                if (v !== e.target.value) setStep3(nextState)
+                markTouched("step3.accountNumber")
+                setFieldError("step3.accountNumber", validateField("step3.accountNumber", v, { step1, step2, step3: nextState, step4 }))
+                if (touched["step3.confirmAccountNumber"]) {
+                  setFieldError(
+                    "step3.confirmAccountNumber",
+                    validateField("step3.confirmAccountNumber", nextState.confirmAccountNumber, { step1, step2, step3: nextState, step4 }),
+                  )
+                }
+              }}
+              className={`bg-white text-sm ${getFieldError("step3.accountNumber") ? "border-red-500" : ""}`}
+              placeholder="Account number"
+            />
+            {getFieldError("step3.accountNumber") ? (
+              <p className="text-[11px] text-red-600 mt-1">{getFieldError("step3.accountNumber")}</p>
+            ) : null}
+          </div>
+          <div>
+            <Input
+              value={step3.confirmAccountNumber || ""}
+              onChange={(e) => {
+                const v = e.target.value
+                const nextState = { ...step3, confirmAccountNumber: v }
+                setStep3(nextState)
+                if (touched["step3.confirmAccountNumber"]) {
+                  setFieldError(
+                    "step3.confirmAccountNumber",
+                    validateField("step3.confirmAccountNumber", v, { step1, step2, step3: nextState, step4 }),
+                  )
+                } else {
+                  clearFieldError("step3.confirmAccountNumber")
+                }
+              }}
+              onBlur={(e) => {
+                const v = normalizeDigits(e.target.value)
+                const nextState = { ...step3, confirmAccountNumber: v }
+                if (v !== e.target.value) setStep3(nextState)
+                markTouched("step3.confirmAccountNumber")
+                setFieldError(
+                  "step3.confirmAccountNumber",
+                  validateField("step3.confirmAccountNumber", v, { step1, step2, step3: nextState, step4 }),
+                )
+              }}
+              className={`bg-white text-sm ${getFieldError("step3.confirmAccountNumber") ? "border-red-500" : ""}`}
+              placeholder="Re-enter account number"
+            />
+            {getFieldError("step3.confirmAccountNumber") ? (
+              <p className="text-[11px] text-red-600 mt-1">{getFieldError("step3.confirmAccountNumber")}</p>
+            ) : null}
+          </div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input
-            value={step3.ifscCode || ""}
-            onChange={(e) => setStep3({ ...step3, ifscCode: e.target.value })}
-            className="bg-white text-sm"
-            placeholder="IFSC code"
-          />
-          <Input
-            value={step3.accountType || ""}
-            onChange={(e) => setStep3({ ...step3, accountType: e.target.value })}
-            className="bg-white text-sm"
-            placeholder="Account type (savings / current)"
-          />
+          <div>
+            <Input
+              value={step3.ifscCode || ""}
+              onChange={(e) => {
+                const v = e.target.value
+                const nextState = { ...step3, ifscCode: v }
+                setStep3(nextState)
+                if (touched["step3.ifscCode"]) {
+                  setFieldError("step3.ifscCode", validateField("step3.ifscCode", v, { step1, step2, step3: nextState, step4 }))
+                } else {
+                  clearFieldError("step3.ifscCode")
+                }
+              }}
+              onBlur={(e) => {
+                const v = normalizeTextValue(e.target.value).toUpperCase().replace(/\s+/g, "")
+                const nextState = { ...step3, ifscCode: v }
+                if (v !== e.target.value) setStep3(nextState)
+                markTouched("step3.ifscCode")
+                setFieldError("step3.ifscCode", validateField("step3.ifscCode", v, { step1, step2, step3: nextState, step4 }))
+              }}
+              className={`bg-white text-sm ${getFieldError("step3.ifscCode") ? "border-red-500" : ""}`}
+              placeholder="IFSC code"
+            />
+            {getFieldError("step3.ifscCode") ? (
+              <p className="text-[11px] text-red-600 mt-1">{getFieldError("step3.ifscCode")}</p>
+            ) : null}
+          </div>
+          <div>
+            <Input
+              value={step3.accountType || ""}
+              onChange={(e) => {
+                const v = e.target.value
+                const nextState = { ...step3, accountType: v }
+                setStep3(nextState)
+                if (touched["step3.accountType"]) {
+                  setFieldError("step3.accountType", validateField("step3.accountType", v, { step1, step2, step3: nextState, step4 }))
+                } else {
+                  clearFieldError("step3.accountType")
+                }
+              }}
+              onBlur={(e) => {
+                const v = normalizeTextValue(e.target.value)
+                const nextState = { ...step3, accountType: v }
+                if (v !== e.target.value) setStep3(nextState)
+                markTouched("step3.accountType")
+                setFieldError("step3.accountType", validateField("step3.accountType", v, { step1, step2, step3: nextState, step4 }))
+              }}
+              className={`bg-white text-sm ${getFieldError("step3.accountType") ? "border-red-500" : ""}`}
+              placeholder="Account type (savings / current)"
+            />
+            {getFieldError("step3.accountType") ? (
+              <p className="text-[11px] text-red-600 mt-1">{getFieldError("step3.accountType")}</p>
+            ) : null}
+          </div>
         </div>
-        <Input
-          value={step3.accountHolderName || ""}
-          onChange={(e) =>
-            setStep3({ ...step3, accountHolderName: e.target.value })
-          }
-          className="bg-white text-sm"
-          placeholder="Account holder name"
-        />
+        <div>
+          <Input
+            value={step3.accountHolderName || ""}
+            onChange={(e) => {
+              const v = e.target.value
+              const nextState = { ...step3, accountHolderName: v }
+              setStep3(nextState)
+              if (touched["step3.accountHolderName"]) {
+                setFieldError("step3.accountHolderName", validateField("step3.accountHolderName", v, { step1, step2, step3: nextState, step4 }))
+              } else {
+                clearFieldError("step3.accountHolderName")
+              }
+            }}
+            onBlur={(e) => {
+              const v = normalizeTextValue(e.target.value)
+              const nextState = { ...step3, accountHolderName: v }
+              if (v !== e.target.value) setStep3(nextState)
+              markTouched("step3.accountHolderName")
+              setFieldError("step3.accountHolderName", validateField("step3.accountHolderName", v, { step1, step2, step3: nextState, step4 }))
+            }}
+            className={`bg-white text-sm ${getFieldError("step3.accountHolderName") ? "border-red-500" : ""}`}
+            placeholder="Account holder name"
+          />
+          {getFieldError("step3.accountHolderName") ? (
+            <p className="text-[11px] text-red-600 mt-1">{getFieldError("step3.accountHolderName")}</p>
+          ) : null}
+        </div>
       </section>
     </div>
   )
@@ -2180,20 +2859,58 @@ export default function RestaurantOnboarding() {
           <Label className="text-xs text-gray-700">Estimated Delivery Time*</Label>
           <Input
             value={step4.estimatedDeliveryTime || ""}
-            onChange={(e) => setStep4({ ...step4, estimatedDeliveryTime: e.target.value })}
-            className="mt-1 bg-white text-sm"
+            onChange={(e) => {
+              const v = e.target.value
+              const nextState = { ...step4, estimatedDeliveryTime: v }
+              setStep4(nextState)
+              if (touched["step4.estimatedDeliveryTime"]) {
+                setFieldError("step4.estimatedDeliveryTime", validateField("step4.estimatedDeliveryTime", v, { step1, step2, step3, step4: nextState }))
+              } else {
+                clearFieldError("step4.estimatedDeliveryTime")
+              }
+            }}
+            onBlur={(e) => {
+              const v = normalizeTextValue(e.target.value)
+              const nextState = { ...step4, estimatedDeliveryTime: v }
+              if (v !== e.target.value) setStep4(nextState)
+              markTouched("step4.estimatedDeliveryTime")
+              setFieldError("step4.estimatedDeliveryTime", validateField("step4.estimatedDeliveryTime", v, { step1, step2, step3, step4: nextState }))
+            }}
+            className={`mt-1 bg-white text-sm ${getFieldError("step4.estimatedDeliveryTime") ? "border-red-500" : ""}`}
             placeholder="e.g., 25-30 mins"
           />
+          {getFieldError("step4.estimatedDeliveryTime") ? (
+            <p className="text-[11px] text-red-600 mt-1">{getFieldError("step4.estimatedDeliveryTime")}</p>
+          ) : null}
         </div>
 
         <div>
           <Label className="text-xs text-gray-700">Featured Dish Name*</Label>
           <Input
             value={step4.featuredDish || ""}
-            onChange={(e) => setStep4({ ...step4, featuredDish: e.target.value })}
-            className="mt-1 bg-white text-sm"
+            onChange={(e) => {
+              const v = e.target.value
+              const nextState = { ...step4, featuredDish: v }
+              setStep4(nextState)
+              if (touched["step4.featuredDish"]) {
+                setFieldError("step4.featuredDish", validateField("step4.featuredDish", v, { step1, step2, step3, step4: nextState }))
+              } else {
+                clearFieldError("step4.featuredDish")
+              }
+            }}
+            onBlur={(e) => {
+              const v = normalizeTextValue(e.target.value)
+              const nextState = { ...step4, featuredDish: v }
+              if (v !== e.target.value) setStep4(nextState)
+              markTouched("step4.featuredDish")
+              setFieldError("step4.featuredDish", validateField("step4.featuredDish", v, { step1, step2, step3, step4: nextState }))
+            }}
+            className={`mt-1 bg-white text-sm ${getFieldError("step4.featuredDish") ? "border-red-500" : ""}`}
             placeholder="e.g., Butter Chicken Special"
           />
+          {getFieldError("step4.featuredDish") ? (
+            <p className="text-[11px] text-red-600 mt-1">{getFieldError("step4.featuredDish")}</p>
+          ) : null}
         </div>
 
         <div>
@@ -2201,21 +2918,59 @@ export default function RestaurantOnboarding() {
           <Input
             type="number"
             value={step4.featuredPrice || ""}
-            onChange={(e) => setStep4({ ...step4, featuredPrice: e.target.value })}
-            className="mt-1 bg-white text-sm"
+            onChange={(e) => {
+              const v = e.target.value
+              const nextState = { ...step4, featuredPrice: v }
+              setStep4(nextState)
+              if (touched["step4.featuredPrice"]) {
+                setFieldError("step4.featuredPrice", validateField("step4.featuredPrice", v, { step1, step2, step3, step4: nextState }))
+              } else {
+                clearFieldError("step4.featuredPrice")
+              }
+            }}
+            onBlur={(e) => {
+              const v = normalizeTextValue(e.target.value)
+              const nextState = { ...step4, featuredPrice: v }
+              if (v !== e.target.value) setStep4(nextState)
+              markTouched("step4.featuredPrice")
+              setFieldError("step4.featuredPrice", validateField("step4.featuredPrice", v, { step1, step2, step3, step4: nextState }))
+            }}
+            className={`mt-1 bg-white text-sm ${getFieldError("step4.featuredPrice") ? "border-red-500" : ""}`}
             placeholder="e.g., 249"
             min="0"
           />
+          {getFieldError("step4.featuredPrice") ? (
+            <p className="text-[11px] text-red-600 mt-1">{getFieldError("step4.featuredPrice")}</p>
+          ) : null}
         </div>
 
         <div>
           <Label className="text-xs text-gray-700">Special Offer/Promotion*</Label>
           <Input
             value={step4.offer || ""}
-            onChange={(e) => setStep4({ ...step4, offer: e.target.value })}
-            className="mt-1 bg-white text-sm"
+            onChange={(e) => {
+              const v = e.target.value
+              const nextState = { ...step4, offer: v }
+              setStep4(nextState)
+              if (touched["step4.offer"]) {
+                setFieldError("step4.offer", validateField("step4.offer", v, { step1, step2, step3, step4: nextState }))
+              } else {
+                clearFieldError("step4.offer")
+              }
+            }}
+            onBlur={(e) => {
+              const v = normalizeTextValue(e.target.value)
+              const nextState = { ...step4, offer: v }
+              if (v !== e.target.value) setStep4(nextState)
+              markTouched("step4.offer")
+              setFieldError("step4.offer", validateField("step4.offer", v, { step1, step2, step3, step4: nextState }))
+            }}
+            className={`mt-1 bg-white text-sm ${getFieldError("step4.offer") ? "border-red-500" : ""}`}
             placeholder="e.g., Flat ₹50 OFF above ₹199"
           />
+          {getFieldError("step4.offer") ? (
+            <p className="text-[11px] text-red-600 mt-1">{getFieldError("step4.offer")}</p>
+          ) : null}
         </div>
 
         <div>
