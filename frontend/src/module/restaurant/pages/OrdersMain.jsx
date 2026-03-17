@@ -2607,6 +2607,9 @@ function PreparingOrders({ onSelectOrder, onCancel }) {
         </h2>
         <span className="text-xs text-gray-500">{orders.length} active</span>
       </div>
+      <p className="mb-3 text-xs text-gray-600">
+        The last four digits of the order ID are the OTP to share with the delivery partner.
+      </p>
       {orders.length === 0 ? (
         <div className="text-center py-8 text-gray-500 text-sm">
           No orders in preparation
