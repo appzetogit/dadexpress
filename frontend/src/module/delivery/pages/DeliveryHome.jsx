@@ -4872,6 +4872,14 @@ export default function DeliveryHome() {
         estimatedEarnings: effectiveEarnings,
         deliveryFee,
         amount: earnedValue > 0 ? earnedValue : (deliveryFee > 0 ? deliveryFee : 0),
+        deliveryInstruction:
+          newOrder.deliveryInstruction ||
+          newOrder.deliveryInstructions ||
+          newOrder.delivery_instruction ||
+          newOrder.fullOrder?.deliveryInstruction ||
+          newOrder.fullOrder?.deliveryInstructions ||
+          newOrder.fullOrder?.delivery_instruction ||
+          "",
         customerName: newOrder.customerName,
         customerAddress: newOrder.customerLocation?.address || 'Customer address',
         customerPhone: newOrder.customerPhone || newOrder.customer?.phone || newOrder.user?.phone || null,
@@ -10637,6 +10645,29 @@ export default function DeliveryHome() {
                     </div>
                     <p className="text-[10px] text-blue-600 mt-1">Details will be revealed after order pickup confirmation</p>
                   </div>
+
+                  {(() => {
+                    const instructionText =
+                      newOrder?.deliveryInstruction ||
+                      newOrder?.deliveryInstructions ||
+                      newOrder?.delivery_instruction ||
+                      newOrder?.fullOrder?.deliveryInstruction ||
+                      newOrder?.fullOrder?.deliveryInstructions ||
+                      newOrder?.fullOrder?.delivery_instruction ||
+                      selectedRestaurant?.deliveryInstruction ||
+                      selectedRestaurant?.deliveryInstructions ||
+                      selectedRestaurant?.delivery_instruction ||
+                      ""
+                    if (!instructionText) return null
+                    return (
+                    <div className="mb-4 p-3 bg-amber-50 rounded-xl border border-amber-100">
+                      <p className="text-xs font-semibold text-amber-800 mb-1">Delivery instruction</p>
+                      <p className="text-xs text-amber-900 leading-relaxed">
+                        {instructionText}
+                      </p>
+                    </div>
+                    )
+                  })()}
 
                   {/* Pickup Details */}
                   <div className="bg-gray-50 rounded-xl p-4 mb-6">
