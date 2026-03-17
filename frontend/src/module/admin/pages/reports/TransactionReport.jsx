@@ -20,6 +20,7 @@ import exportIcon from "../../assets/Dashboard-icons/image9.png"
 export default function TransactionReport() {
   const location = useLocation()
   const [searchQuery, setSearchQuery] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
   const [transactions, setTransactions] = useState([])
   const [loading, setLoading] = useState(true)
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
@@ -38,17 +39,35 @@ export default function TransactionReport() {
   })
   const [zones, setZones] = useState([])
   const [restaurants, setRestaurants] = useState([])
+  const [metricView, setMetricView] = useState({
+    key: null,
+    amount: null,
+  })
 
   // Initialize time filter from URL (e.g., ?time=Today) when coming from dashboard
   useEffect(() => {
     const params = new URLSearchParams(location.search)
     const urlTime = params.get("time")
+    const urlMetric = params.get("metric")
+    const urlAmount = params.get("amount")
     const validTimes = ["All Time", "Today", "This Week", "This Month"]
+    const validMetrics = ["gross", "total"]
     if (urlTime && validTimes.includes(urlTime)) {
       setFilters(prev => ({
         ...prev,
         time: urlTime,
       }))
+    }
+    if (urlMetric && validMetrics.includes(urlMetric)) {
+      setMetricView({
+        key: urlMetric,
+        amount: Number(urlAmount || 0),
+      })
+    } else {
+      setMetricView({
+        key: null,
+        amount: null,
+      })
     }
   }, [location.search])
 
@@ -73,6 +92,15 @@ export default function TransactionReport() {
     }
     fetchFilterData()
   }, [])
+
+  // Debounce search to avoid firing API on every key stroke
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch((searchQuery || "").trim())
+      setCurrentPage(1)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
 
   // Fetch transaction report data
   useEffect(() => {
@@ -103,6 +131,7 @@ export default function TransactionReport() {
           restaurant: filters.restaurant !== "All restaurants" ? filters.restaurant : undefined,
           fromDate: fromDate ? fromDate.toISOString() : undefined,
           toDate: toDate ? toDate.toISOString() : undefined,
+          search: debouncedSearch || undefined,
           limit: 1000
         }
 
@@ -134,7 +163,7 @@ export default function TransactionReport() {
     }
 
     fetchTransactionReport()
-  }, [filters])
+  }, [filters, debouncedSearch])
 
   const filteredTransactions = useMemo(() => {
     // Backend already applies filters; additionally do a safe, case-insensitive
@@ -277,6 +306,25 @@ export default function TransactionReport() {
         </div>
 
         {/* Summary Cards */}
+        {metricView.key ? (
+          <div className="grid grid-cols-1 gap-3 mb-3">
+            <div className="rounded-lg shadow-sm border border-slate-200 p-4 bg-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-slate-600 mb-1">
+                    {metricView.key === "gross" ? "Gross Revenue" : "Total Revenue"}
+                  </p>
+                  <p className="text-xl font-bold text-slate-900">
+                    {formatCurrency(metricView.amount || 0)}
+                  </p>
+                </div>
+                <div className="w-12 h-12 rounded-lg bg-green-100 flex items-center justify-center">
+                  <BarChart3 className="w-6 h-6 text-green-600" />
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
           {/* Left Column - Large Cards */}
           <div className="space-y-3">
@@ -370,6 +418,7 @@ export default function TransactionReport() {
             </div>
           </div>
         </div>
+        )}
 
         {/* Order Transactions Section */}
         <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-3">

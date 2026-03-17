@@ -10564,8 +10564,9 @@ export default function DeliveryHome() {
                         <p className="text-gray-500 text-sm mb-1">Estimated earnings</p>
                         <p className="text-4xl font-bold text-gray-900 mb-2">
                           ₹{(() => {
-                            const earnings = newOrder?.estimatedEarnings || selectedRestaurant?.estimatedEarnings || 0;
-                            const fallback = newOrder?.deliveryFee ?? selectedRestaurant?.deliveryFee ?? 0;
+                            // Prefer currently selected order values to avoid stale popup amounts.
+                            const earnings = selectedRestaurant?.estimatedEarnings ?? newOrder?.estimatedEarnings ?? 0;
+                            const fallback = selectedRestaurant?.deliveryFee ?? newOrder?.deliveryFee ?? 0;
                             let value = 0;
 
                             false && console.log('💰 Display earnings calculation:', {
@@ -10581,6 +10582,8 @@ export default function DeliveryHome() {
                                 // Handle earnings object
                                 if (earnings.totalEarning != null) {
                                   value = Number(earnings.totalEarning) || 0;
+                                } else if (earnings.amount != null) {
+                                  value = Number(earnings.amount) || 0;
                                 } else if (earnings.basePayout != null) {
                                   // If only basePayout is available, use it
                                   value = Number(earnings.basePayout) || 0;
@@ -10601,7 +10604,7 @@ export default function DeliveryHome() {
                         </p>
                         {/* Earnings Breakdown */}
                         {(() => {
-                          const earnings = newOrder?.estimatedEarnings || selectedRestaurant?.estimatedEarnings || 0;
+                          const earnings = selectedRestaurant?.estimatedEarnings ?? newOrder?.estimatedEarnings ?? 0;
                           if (typeof earnings === 'object' && earnings.breakdown) {
                             return (
                               <div className="bg-green-50 rounded-lg p-3 mb-2">

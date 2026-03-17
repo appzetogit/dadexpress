@@ -2,6 +2,7 @@ import Admin from "../models/Admin.js";
 import Order from "../../order/models/Order.js";
 import Restaurant from "../../restaurant/models/Restaurant.js";
 import Delivery from "../../delivery/models/Delivery.js";
+import DeliveryWallet from "../../delivery/models/DeliveryWallet.js";
 import Offer from "../../restaurant/models/Offer.js";
 import AdminCommission from "../models/AdminCommission.js";
 import OrderSettlement from "../../order/models/OrderSettlement.js";
@@ -136,6 +137,42 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
 
     const last30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
+    const getDeliveryEarningFromWallets = async (startDate = null, endDate = null) => {
+      const pipeline = [
+        { $unwind: "$transactions" },
+        {
+          $addFields: {
+            effectiveTransactionDate: {
+              $ifNull: ["$transactions.createdAt", "$transactions.processedAt"],
+            },
+          },
+        },
+        {
+          $match: {
+            "transactions.type": "payment",
+            "transactions.status": "Completed",
+            ...(startDate
+              ? {
+                  effectiveTransactionDate: {
+                    $gte: startDate,
+                    $lte: endDate || now,
+                  },
+                }
+              : {}),
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: { $ifNull: ["$transactions.amount", 0] } },
+          },
+        },
+      ];
+
+      const result = await DeliveryWallet.aggregate(pipeline);
+      return Number(result?.[0]?.total || 0);
+    };
+
     // Get total revenue (sum of all completed orders filtered by period)
     const revenueStats = await Order.aggregate([
       {
@@ -225,7 +262,9 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     totalPlatformFee = Math.round(totalPlatformFee * 100) / 100;
     totalDeliveryFee = Math.round(totalDeliveryFee * 100) / 100;
     totalGST = Math.round(totalGST * 100) / 100;
-    totalDeliveryEarning = Math.round(totalDeliveryEarning * 100) / 100;
+    totalDeliveryEarning = Math.round(
+      (await getDeliveryEarningFromWallets(periodStart, now)) * 100,
+    ) / 100;
 
     console.log(
       `💰 Final calculated totals - Commission: ₹${totalCommission}, Platform Fee: ₹${totalPlatformFee}, Delivery Fee: ₹${totalDeliveryFee}, GST: ₹${totalGST}`,
@@ -251,9 +290,9 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       (sum, s) => sum + Number(s.adminEarning?.gst ?? s.userPayment?.gst ?? 0),
       0,
     );
-    const last30DaysDeliveryEarning = last30DaysSettlements.reduce(
-      (sum, s) => sum + Number(s.deliveryPartnerEarning?.totalEarning || 0),
-      0,
+    const last30DaysDeliveryEarning = await getDeliveryEarningFromWallets(
+      last30Days,
+      now,
     );
 
     // Get order statistics aligned with the selected period using each status event timestamp.
@@ -342,11 +381,20 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       status: "pending",
     });
 
-    // Total foods (Menu items) - Count all individual menu items from active menus
+    // Shared scope for dashboard list parity:
+    // only active restaurants, then their menus.
+    const activeRestaurantIds = await Restaurant.find({ isActive: true })
+      .select("_id")
+      .lean();
+
+    // Total foods (Menu items) - Count all individual menu items from active restaurant menus
     // Count ALL items (including disabled sections, unavailable items, pending/approved, excluding only rejected)
     const Menu = (await import("../../restaurant/models/Menu.js")).default;
     // Get all active menus and count items in sections and subsections
-    const activeMenus = await Menu.find({ isActive: true })
+    const activeMenus = await Menu.find({
+      isActive: true,
+      restaurant: { $in: activeRestaurantIds.map((r) => r._id) },
+    })
       .select("sections")
       .lean();
     let totalFoods = 0;
@@ -381,10 +429,13 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       }
     });
 
-    // Total addons - Count all addons from active menus
-    // Count ALL addons (including unavailable, pending/approved, excluding only rejected)
+    // Total addons - align with /admin/addons list scope
+    // (active restaurants only, then count addons from their active menus)
     let totalAddons = 0;
-    const menusWithAddons = await Menu.find({ isActive: true })
+    const menusWithAddons = await Menu.find({
+      isActive: true,
+      restaurant: { $in: activeRestaurantIds.map((r) => r._id) },
+    })
       .select("addons")
       .lean();
     menusWithAddons.forEach((menu) => {

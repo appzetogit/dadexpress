@@ -133,6 +133,8 @@ export default function AdminHome() {
   }
   const transactionTime = transactionTimeMap[selectedPeriod] || "All Time"
   const transactionReportPath = `/admin/transaction-report?time=${encodeURIComponent(transactionTime)}`
+  const grossRevenueReportPath = `/admin/transaction-report?time=${encodeURIComponent(transactionTime)}&metric=gross&amount=${encodeURIComponent(revenueTotal.toFixed(2))}`
+  const totalRevenueReportPath = `/admin/transaction-report?time=${encodeURIComponent(transactionTime)}&metric=total&amount=${encodeURIComponent(totalAdminEarnings.toFixed(2))}`
   const periodLabelMap = {
     overall: "All time",
     today: "Today",
@@ -186,7 +188,7 @@ export default function AdminHome() {
               helper={selectedPeriodLabel}
               icon={<ShoppingBag className="h-5 w-5 text-emerald-600" />}
               accent="bg-emerald-200/40"
-              path={transactionReportPath}
+              path={grossRevenueReportPath}
               isLoading={isLoading && !hasLoadedOnce}
             />
             <MetricCard
@@ -240,7 +242,7 @@ export default function AdminHome() {
               helper={`Commission ₹${commissionTotal.toFixed(2)} + Platform ₹${platformFeeTotal.toFixed(2)} + Delivery Earning ₹${deliveryEarningTotal.toFixed(2)} + GST ₹${gstTotal.toFixed(2)}`}
               icon={<DollarSign className="h-5 w-5 text-green-600" />}
               accent="bg-green-200/40"
-              path={transactionReportPath}
+              path={totalRevenueReportPath}
               isLoading={isLoading && !hasLoadedOnce}
             />
             <MetricCard
