@@ -2740,9 +2740,15 @@ export default function RestaurantDetails() {
                     {/* Item Name and Indicator */}
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-2 flex-1">
-                        <div className="h-5 w-5 rounded border-2 border-amber-700 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0">
-                          <div className="h-2.5 w-2.5 rounded-full bg-amber-700 dark:bg-amber-600" />
-                        </div>
+                        {(selectedItem?.foodType === "Veg" || selectedItem?.isVeg === true) ? (
+                          <div className="h-5 w-5 rounded border-2 border-green-600 dark:border-green-500 bg-green-50 dark:bg-green-900/30 flex items-center justify-center flex-shrink-0">
+                            <div className="h-2.5 w-2.5 rounded-full bg-green-600 dark:bg-green-500" />
+                          </div>
+                        ) : (
+                          <div className="h-5 w-5 rounded border-2 border-orange-600 dark:border-orange-500 bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center flex-shrink-0">
+                            <div className="h-2.5 w-2.5 rounded-full bg-orange-600 dark:bg-orange-500" />
+                          </div>
+                        )}
                         <h2 className="text-xl font-bold text-gray-900 dark:text-white">
                           {selectedItem.name}
                         </h2>
