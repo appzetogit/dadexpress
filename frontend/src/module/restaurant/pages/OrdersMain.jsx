@@ -1751,6 +1751,27 @@ export default function OrdersMain() {
                     </AnimatePresence>
                   </div>
 
+                  {/* Note */}
+                  {(() => {
+                    const order = popupOrder || newOrder
+                    const noteText =
+                      order?.note ||
+                      order?.restaurantInstruction ||
+                      order?.restaurantInstructions ||
+                      order?.specialInstruction ||
+                      order?.specialInstructions ||
+                      order?.instructions ||
+                      order?.restaurantNote ||
+                      ""
+                    if (!noteText) return null
+                    return (
+                      <div className="mb-4 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                        <p className="text-xs text-yellow-800 font-medium mb-1">Note</p>
+                        <p className="text-sm text-yellow-900">{noteText}</p>
+                      </div>
+                    )
+                  })()}
+
                   {/* Send cutlery */}
                   {(popupOrder || newOrder)?.sendCutlery && (
                     <div className="mb-4 flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
