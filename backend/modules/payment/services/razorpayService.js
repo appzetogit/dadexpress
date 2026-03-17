@@ -15,10 +15,12 @@ const logger = winston.createLogger({
 
 // Initialize Razorpay instance
 let razorpayInstance = null;
+let initializedKeyId = null;
+let initializedKeySecret = null;
 
-const initializeRazorpay = async () => {
+const initializeRazorpay = async (providedCredentials = null) => {
   try {
-    const credentials = await getRazorpayCredentials();
+    const credentials = providedCredentials || await getRazorpayCredentials();
     const keyId = credentials.keyId;
     const keySecret = credentials.keySecret;
 
@@ -34,6 +36,9 @@ const initializeRazorpay = async () => {
         keyId: keyId ? 'present' : 'missing',
         keySecret: keySecret ? 'present' : 'missing'
       });
+      razorpayInstance = null;
+      initializedKeyId = null;
+      initializedKeySecret = null;
       return null;
     }
 
@@ -42,6 +47,8 @@ const initializeRazorpay = async () => {
         key_id: keyId,
         key_secret: keySecret
       });
+      initializedKeyId = keyId;
+      initializedKeySecret = keySecret;
       logger.info('Razorpay initialized successfully');
       return razorpayInstance;
     } catch (error) {
@@ -62,8 +69,19 @@ const initializeRazorpay = async () => {
 
 // Get Razorpay instance
 const getRazorpayInstance = async () => {
-  if (!razorpayInstance) {
-    return await initializeRazorpay();
+  const credentials = await getRazorpayCredentials();
+  const keyId = credentials?.keyId || null;
+  const keySecret = credentials?.keySecret || null;
+
+  // Reinitialize when credentials are changed at runtime (e.g. test -> live switch in admin env setup).
+  const credentialsChanged =
+    initializedKeyId !== keyId || initializedKeySecret !== keySecret;
+
+  if (!razorpayInstance || credentialsChanged) {
+    if (credentialsChanged && initializedKeyId) {
+      logger.info('Razorpay credentials changed. Reinitializing instance.');
+    }
+    return await initializeRazorpay(credentials);
   }
   return razorpayInstance;
 };
