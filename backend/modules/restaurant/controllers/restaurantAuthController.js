@@ -212,6 +212,8 @@ export const verifyOTP = asyncHandler(async (req, res) => {
 
   try {
     let restaurant;
+    let existingRestaurantFoundForLogin = false;
+    let createdNewRestaurantInLoginFlow = false;
     // Normalize phone number if provided
     const normalizedPhone = phone ? normalizePhoneNumber(phone) : null;
     if (phone && !normalizedPhone) {
@@ -436,6 +438,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         : { email: email?.toLowerCase().trim() };
       const candidateRestaurants = await Restaurant.find(findQuery);
       restaurant = pickBestRestaurantForOtpLogin(candidateRestaurants);
+      existingRestaurantFoundForLogin = !!restaurant;
 
       // If restaurant not found, we will auto-register with a placeholder name
       const restaurantName = name || (normalizedPhone || email || 'New Restaurant');
@@ -532,6 +535,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
             [identifierType]: identifier,
             restaurantId: restaurant._id
           });
+          createdNewRestaurantInLoginFlow = true;
         } catch (createError) {
           logger.error(`Error creating restaurant (auto-register): ${createError.message}`, {
             code: createError.code,
@@ -577,6 +581,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
                     [identifierType]: identifier,
                     restaurantId: restaurant._id
                   });
+                  createdNewRestaurantInLoginFlow = true;
                 } catch (retryError) {
                   logger.error(`Failed to create restaurant after email null fix: ${retryError.message}`, {
                     code: retryError.code,
@@ -629,6 +634,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
                   restaurantId: restaurant._id,
                   slug: uniqueSlug
                 });
+                createdNewRestaurantInLoginFlow = true;
               } catch (retryError) {
                 // If still fails, check if restaurant exists
                   const findQuery = phone
@@ -696,7 +702,25 @@ export const verifyOTP = asyncHandler(async (req, res) => {
     );
 
     // Return access token and restaurant info
-    const isProfileCompleted = computeIsProfileCompleted(restaurant);
+    let isProfileCompleted = computeIsProfileCompleted(restaurant);
+
+    // Permanent safeguard:
+    // If this is phone OTP login for an already registered restaurant,
+    // always land on dashboard (not onboarding).
+    const shouldForceDashboardForRegisteredPhoneLogin =
+      purpose === 'login' &&
+      !!normalizedPhone &&
+      existingRestaurantFoundForLogin === true &&
+      createdNewRestaurantInLoginFlow === false;
+
+    if (shouldForceDashboardForRegisteredPhoneLogin && isProfileCompleted !== true) {
+      isProfileCompleted = true;
+      if (restaurant.isProfileCompleted !== true) {
+        restaurant.isProfileCompleted = true;
+        await restaurant.save();
+      }
+    }
+
     return successResponse(res, 200, 'Authentication successful', {
       accessToken: tokens.accessToken,
       user: {
