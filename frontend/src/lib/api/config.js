@@ -51,7 +51,21 @@ const normalizeApiBaseUrl = (inputUrl) => {
     }
 
     // Keep origin + non-/api path and enforce a single /api suffix.
-    const cleanPath = parsed.pathname.replace(/\/+$/, "").replace(/\/api$/i, "");
+    // Also clean malformed duplicated-host paths like:
+    // https://dadexpress.in/.dadexpress.in/api
+    // https://dadexpress.in/dadexpress.in/api
+    let sanitizedPath = parsed.pathname || "";
+    const escapedHost = normalizedHost.replace(/\./g, "\\.");
+    sanitizedPath = sanitizedPath.replace(
+      new RegExp(`^\\/(?:\\.)?${escapedHost}(?=\\/|$)`, "i"),
+      "",
+    );
+    // Generic fallback for host-like first path segment.
+    sanitizedPath = sanitizedPath.replace(
+      /^\/(?:\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+(?=\/|$)/i,
+      "",
+    );
+    const cleanPath = sanitizedPath.replace(/\/+$/, "").replace(/\/api$/i, "");
     const normalizedOrigin = `${parsed.protocol}//${normalizedHost}${
       parsed.port ? `:${parsed.port}` : ""
     }`;
