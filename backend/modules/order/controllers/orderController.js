@@ -617,7 +617,9 @@ export const createOrder = async (req, res) => {
               id: order._id.toString(),
               orderId: order.orderId,
               status: order.status,
-              total: pricing.total
+              total: order.pricing?.total ?? pricing.total,
+              totalAmount: order.pricing?.totalAmount ?? order.pricing?.total ?? pricing.total,
+              platformFee: order.pricing?.platformFee ?? 0,
             },
             razorpay: null,
             wallet: {
@@ -709,7 +711,9 @@ export const createOrder = async (req, res) => {
             id: order._id.toString(),
             orderId: order.orderId,
             status: order.status,
-            total: pricing.total
+            total: order.pricing?.total ?? pricing.total,
+            totalAmount: order.pricing?.totalAmount ?? order.pricing?.total ?? pricing.total,
+            platformFee: order.pricing?.platformFee ?? 0,
           },
           razorpay: null
         }
@@ -771,7 +775,9 @@ export const createOrder = async (req, res) => {
           id: order._id.toString(),
           orderId: order.orderId,
           status: order.status,
-          total: pricing.total
+          total: order.pricing?.total ?? pricing.total,
+          totalAmount: order.pricing?.totalAmount ?? order.pricing?.total ?? pricing.total,
+          platformFee: order.pricing?.platformFee ?? 0,
         },
         razorpay: razorpayOrder ? {
           orderId: razorpayOrder.id,

@@ -1592,7 +1592,7 @@ export const getRestaurantReport = asyncHandler(async (req, res) => {
           return `₹${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         };
 
-        return {
+        const report = {
           sl: 0, // Will be set in frontend
           id: restaurantId,
           restaurantName: restaurant.name,
@@ -1606,11 +1606,20 @@ export const getRestaurantReport = asyncHandler(async (req, res) => {
           averageRatings: parseFloat(averageRatings.toFixed(1)),
           reviews
         };
+
+        // Keep report focused on restaurants that actually have order activity.
+        // This prevents newly onboarded but non-transacting restaurants from showing in report table.
+        const hasReportActivity = report.totalOrder > 0;
+        if (!hasReportActivity) {
+          return null;
+        }
+
+        return report;
       })
     );
 
     // Filter by type (Commission/Subscription) if needed
-    let filteredReports = restaurantReports;
+    let filteredReports = restaurantReports.filter(Boolean);
     if (type && type !== 'All types') {
       // This would require checking restaurant subscription status
       // For now, we'll return all restaurants

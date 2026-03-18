@@ -16,6 +16,13 @@ import { useOrders } from "../../context/OrdersContext"
 import { userAPI, orderAPI } from "@/lib/api"
 import { toast } from "sonner"
 
+const calculatePlatformFeeFromPercentage = (subtotal = 0, percentage = 0) => {
+  const safeSubtotal = Number(subtotal) || 0
+  const safePercentage = Number(percentage) || 0
+  if (safeSubtotal <= 0 || safePercentage <= 0) return 0
+  return (safeSubtotal * safePercentage) / 100
+}
+
 export default function Checkout() {
   const navigate = useNavigate()
   const { cart, clearCart } = useCart()
@@ -38,6 +45,7 @@ export default function Checkout() {
   const [calculations, setCalculations] = useState({
     subtotal: 0,
     deliveryFee: 0,
+    platformFee: 0,
     tax: 0,
     total: 0,
     rewardDiscount: 0
@@ -93,6 +101,7 @@ export default function Checkout() {
           setCalculations({
             subtotal: data.pricing?.subtotal || 0,
             deliveryFee: data.pricing?.deliveryFee || 0,
+            platformFee: data.pricing?.platformFee || 0,
             tax: data.pricing?.tax || 0,
             total: data.pricing?.total || 0,
             rewardDiscount: data.pricing?.rewardDiscount || 0
@@ -103,6 +112,7 @@ export default function Checkout() {
         // Fallback to local calculation if API fails
         const sub = cart.reduce((sum, item) => sum + item.price * item.quantity * 83, 0)
         const df = 2.99 * 83
+        const pf = calculatePlatformFeeFromPercentage(sub, 0)
         const tx = sub * 0.08
         const maxRedeem = sub * (referralSettings.maxRedemptionPercentage / 100)
         const disc = useRewards ? Math.min(rewardBalance * coinsToInr, maxRedeem) : 0
@@ -110,8 +120,9 @@ export default function Checkout() {
         setCalculations({
           subtotal: sub,
           deliveryFee: df,
+          platformFee: pf,
           tax: tx,
-          total: sub + df + tx - disc,
+          total: sub + df + pf + tx - disc,
           rewardDiscount: disc
         })
       } finally {
@@ -126,7 +137,7 @@ export default function Checkout() {
   const defaultPayment = paymentMethods.find(pm => pm.id === selectedPayment) || getDefaultPaymentMethod()
 
   // Destructure calculations for ease of use
-  const { subtotal, deliveryFee, tax, total, rewardDiscount } = calculations
+  const { subtotal, deliveryFee, platformFee, tax, total, rewardDiscount } = calculations
   const actualRewardDiscount = rewardDiscount
 
   const handlePlaceOrder = async () => {
@@ -414,6 +425,10 @@ export default function Checkout() {
                     <div className="flex justify-between text-sm md:text-base">
                       <span className="text-muted-foreground">Delivery Fee</span>
                       <span className="dark:text-gray-200">₹{deliveryFee.toFixed(0)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs md:text-sm">
+                      <span className="text-muted-foreground">Platform Fee</span>
+                      <span className="dark:text-white">₹{platformFee.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-xs md:text-sm">
                       <span className="text-muted-foreground">Tax</span>

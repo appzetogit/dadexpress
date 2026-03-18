@@ -23,6 +23,7 @@ const getFeeSettings = async () => {
       deliveryFeePerKm: 0,
       freeDeliveryThreshold: 149,
       platformFee: 5,
+      platformFeePercentage: 0,
       platformCommissionPercent: 0,
       gstRate: 5,
     };
@@ -34,6 +35,7 @@ const getFeeSettings = async () => {
       deliveryFeePerKm: 0,
       freeDeliveryThreshold: 149,
       platformFee: 5,
+      platformFeePercentage: 0,
       platformCommissionPercent: 0,
       gstRate: 5,
     };
@@ -113,14 +115,20 @@ export const calculateDeliveryFee = async (orderValue, restaurant, deliveryAddre
 /**
  * Calculate platform fee
  */
+export const calculatePlatformFeeFromPercentage = (subtotal = 0, percentage = 0) => {
+  const safeSubtotal = Number(subtotal) || 0;
+  const safePercentage = Number(percentage) || 0;
+  if (safeSubtotal <= 0 || safePercentage <= 0) return 0;
+  return roundCurrency((safeSubtotal * safePercentage) / 100);
+};
+
 export const calculatePlatformFee = async (subtotal = 0) => {
   const feeSettings = await getFeeSettings();
-  const fixedPlatformFee = Number(feeSettings.platformFee || 0);
-  const commissionPercent = Number(feeSettings.platformCommissionPercent || 0);
-  const commissionAmount = subtotal > 0 && commissionPercent > 0
-    ? (subtotal * commissionPercent) / 100
-    : 0;
-  return roundCurrency(fixedPlatformFee + commissionAmount);
+  const percentage =
+    feeSettings?.platformFeePercentage !== undefined && feeSettings?.platformFeePercentage !== null
+      ? Number(feeSettings.platformFeePercentage)
+      : Number(feeSettings?.platformCommissionPercent || 0);
+  return calculatePlatformFeeFromPercentage(subtotal, percentage);
 };
 
 /**
@@ -308,8 +316,14 @@ export const calculateOrderPricing = async ({
     // Apply free delivery from coupon
     const finalDeliveryFee = appliedCoupon?.freeDelivery ? 0 : deliveryFee;
 
-    // Calculate platform fee
-    const platformFee = await calculatePlatformFee(subtotal);
+    // Calculate platform fee based on configured percentage (fallback to legacy percent, then 0).
+    const feeSettings = await getFeeSettings();
+    const platformFeePercentage = Number(
+      feeSettings?.platformFeePercentage ??
+      feeSettings?.platformCommissionPercent ??
+      0,
+    );
+    const platformFee = calculatePlatformFeeFromPercentage(subtotal, platformFeePercentage);
 
     // Calculate GST on subtotal after discount
     const gst = await calculateGST(subtotal, discount);
@@ -336,6 +350,9 @@ export const calculateOrderPricing = async ({
       }
     }
 
+    // Gross total before any discount/rewards (additive field, keeps existing total behavior intact).
+    const totalAmount = subtotal + finalDeliveryFee + platformFee + gst;
+
     // Calculate total
     const total = subtotal - discount + finalDeliveryFee + platformFee + gst - referralDiscount;
 
@@ -348,8 +365,10 @@ export const calculateOrderPricing = async ({
       referralDiscount: Math.round(referralDiscount),
       deliveryFee: Math.round(finalDeliveryFee),
       platformFee: Math.round(platformFee),
+      platformFeePercentage,
       tax: gst, // Already rounded in calculateGST
       total: Math.max(0, Math.round(total)),
+      totalAmount: Math.max(0, Math.round(totalAmount)),
       savings: Math.round(savings),
       appliedCoupon: appliedCoupon ? {
         code: appliedCoupon.code,
