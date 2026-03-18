@@ -13,7 +13,15 @@ import winston from 'winston';
  * This handles both old data (without country code) and new data (with country code)
  */
 const buildPhoneQuery = (normalizedPhone) => {
-  return buildPhoneInQuery(normalizedPhone, 'phone');
+  const phoneQuery = buildPhoneInQuery(normalizedPhone, 'phone');
+  const ownerPhoneQuery = buildPhoneInQuery(normalizedPhone, 'ownerPhone');
+  const primaryContactQuery = buildPhoneInQuery(normalizedPhone, 'primaryContactNumber');
+
+  const orConditions = [phoneQuery, ownerPhoneQuery, primaryContactQuery].filter(Boolean);
+  if (!orConditions.length) return null;
+  if (orConditions.length === 1) return orConditions[0];
+
+  return { $or: orConditions };
 };
 
 const computeIsProfileCompleted = (restaurant) => {
