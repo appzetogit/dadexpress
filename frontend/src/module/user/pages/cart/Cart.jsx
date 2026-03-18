@@ -150,21 +150,37 @@ export default function Cart() {
   const cartCount = getCartCount()
   const savedAddress = getDefaultAddress()
   // Priority: Use live location if available, otherwise use saved address
-  const defaultAddress = currentLocation?.formattedAddress && currentLocation.formattedAddress !== "Select location"
-    ? {
-      ...savedAddress,
-      formattedAddress: currentLocation.formattedAddress,
-      address: currentLocation.address || currentLocation.formattedAddress,
-      street: currentLocation.street || currentLocation.address,
-      city: currentLocation.city,
-      state: currentLocation.state,
-      zipCode: currentLocation.postalCode,
-      area: currentLocation.area,
-      location: currentLocation.latitude && currentLocation.longitude ? {
-        coordinates: [currentLocation.longitude, currentLocation.latitude]
-      } : savedAddress?.location
+  // Memoized so downstream effects don't re-run on every render (prevents UI flicker/blinking).
+  const defaultAddress = useMemo(() => {
+    if (currentLocation?.formattedAddress && currentLocation.formattedAddress !== "Select location") {
+      return {
+        ...(savedAddress || {}),
+        formattedAddress: currentLocation.formattedAddress,
+        address: currentLocation.address || currentLocation.formattedAddress,
+        street: currentLocation.street || currentLocation.address,
+        city: currentLocation.city,
+        state: currentLocation.state,
+        zipCode: currentLocation.postalCode,
+        area: currentLocation.area,
+        location: currentLocation.latitude && currentLocation.longitude ? {
+          coordinates: [currentLocation.longitude, currentLocation.latitude]
+        } : savedAddress?.location
+      }
     }
-    : savedAddress
+
+    return savedAddress
+  }, [
+    savedAddress,
+    currentLocation?.formattedAddress,
+    currentLocation?.address,
+    currentLocation?.street,
+    currentLocation?.city,
+    currentLocation?.state,
+    currentLocation?.postalCode,
+    currentLocation?.area,
+    currentLocation?.latitude,
+    currentLocation?.longitude,
+  ])
   const defaultPayment = getDefaultPaymentMethod()
 
   // Get restaurant ID from cart or restaurant data

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useLocation as useRouterLocation } from "react-router-dom"
 import { ChevronLeft, Search, ChevronRight, Plus, MapPin, MoreHorizontal, Navigation, Home, Building2, Briefcase, Phone, X, Crosshair } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -42,6 +42,16 @@ const getAddressIcon = (address) => {
 
 export default function LocationSelectorOverlay({ isOpen, onClose }) {
   const navigate = useNavigate()
+  const routerLocation = useRouterLocation()
+
+  const pathname = routerLocation?.pathname || "/"
+  const isCartPath =
+    pathname === "/cart" ||
+    pathname === "/user/cart" ||
+    pathname === "/usermain/cart" ||
+    pathname.startsWith("/cart/") ||
+    pathname.startsWith("/user/cart/") ||
+    pathname.startsWith("/usermain/cart/")
   const inputRef = useRef(null)
   const [searchValue, setSearchValue] = useState("")
   const { location, loading, requestLocation } = useGeoLocation()
@@ -890,7 +900,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       // Wait 2 seconds then redirect to home page
       setTimeout(() => {
         onClose()
-        navigate("/")
+        if (!isCartPath) navigate("/")
       }, 2000)
     } catch (error) {
       // Handle permission denied or other errors
@@ -1858,7 +1868,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
 
       // Close overlay and redirect to home page
       onClose()
-      navigate("/")
+      if (!isCartPath) navigate("/")
     } catch (error) {
       console.error("❌ Error saving address:", error)
       console.error("❌ Error details:", {
@@ -1894,7 +1904,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       label: "Home",
       phone: "",
     })
-    navigate("/")
+    if (!isCartPath) navigate("/")
   }
 
   const handleSelectSavedAddress = async (address) => {
@@ -2244,7 +2254,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
               size="icon"
               onClick={() => {
                 onClose()
-                navigate("/")
+                if (!isCartPath) navigate("/")
               }}
               className="rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 -ml-2"
             >
