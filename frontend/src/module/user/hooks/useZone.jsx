@@ -13,6 +13,24 @@ export function useZone(location) {
   const [error, setError] = useState(null)
   const prevCoordsRef = useRef({ latitude: null, longitude: null })
 
+  const toNumber = (value) => {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+
+  const calculateDistanceKm = (lat1, lng1, lat2, lng2) => {
+    const R = 6371
+    const dLat = ((lat2 - lat1) * Math.PI) / 180
+    const dLng = ((lng2 - lng1) * Math.PI) / 180
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) * Math.sin(dLng / 2)
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+    return R * c
+  }
+
   // Detect zone when location is available
   const detectZone = useCallback(async (lat, lng) => {
     if (!lat || !lng) {
@@ -39,6 +57,10 @@ export function useZone(location) {
           // Store in localStorage for persistence
           localStorage.setItem('userZoneId', data.zoneId)
           localStorage.setItem('userZone', JSON.stringify(data.zone))
+          localStorage.setItem(
+            'userZoneDetectedCoords',
+            JSON.stringify({ latitude: lat, longitude: lng, detectedAt: Date.now() }),
+          )
         } else {
           // OUT_OF_SERVICE
           setZoneId(null)
@@ -57,9 +79,30 @@ export function useZone(location) {
       setZoneId(null)
       setZone(null)
       
-      // Try to use cached zone if available
+      // Try to use cached zone only when current coordinates are unavailable
+      // OR when current location is very close to cached-detection location.
       const cachedZoneId = localStorage.getItem('userZoneId')
-      if (cachedZoneId) {
+      const cachedCoordsRaw = localStorage.getItem('userZoneDetectedCoords')
+      const currentLat = toNumber(lat)
+      const currentLng = toNumber(lng)
+      let canUseCachedZone = !currentLat || !currentLng
+
+      if (!canUseCachedZone && cachedCoordsRaw) {
+        try {
+          const parsed = JSON.parse(cachedCoordsRaw)
+          const cachedLat = toNumber(parsed?.latitude)
+          const cachedLng = toNumber(parsed?.longitude)
+          if (cachedLat && cachedLng) {
+            const distance = calculateDistanceKm(currentLat, currentLng, cachedLat, cachedLng)
+            // Reuse cached zone only if user is still near the previous detected location.
+            canUseCachedZone = distance <= 1
+          }
+        } catch (_parseError) {
+          canUseCachedZone = false
+        }
+      }
+
+      if (cachedZoneId && canUseCachedZone) {
         const cachedZone = localStorage.getItem('userZone')
         setZoneId(cachedZoneId)
         setZone(cachedZone ? JSON.parse(cachedZone) : null)

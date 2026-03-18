@@ -7,6 +7,7 @@ import { toast } from "sonner"
 export default function SignupStep1() {
   const alphaWithSpacesRegex = /^[A-Za-z]+(?:\s+[A-Za-z]+)*$/
   const vehicleNumberRegex = /^[A-Z]{2}\d{1,2}[A-Z]{1,2}\d{4}$/
+  const pincodeRegex = /^\d{6}$/
 
   const navigate = useNavigate()
   const [formData, setFormData] = useState(() => {
@@ -24,6 +25,9 @@ export default function SignupStep1() {
       address: "",
       city: "",
       state: "",
+      pincode: "",
+      latitude: null,
+      longitude: null,
       vehicleType: "bike",
       vehicleName: "",
       vehicleNumber: "",
@@ -33,6 +37,8 @@ export default function SignupStep1() {
   })
   const [errors, setErrors] = useState({})
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isFetchingGps, setIsFetchingGps] = useState(false)
+  const isBicycle = formData.vehicleType === "bicycle"
 
   // Save data to session storage whenever formData changes
   useEffect(() => {
@@ -63,15 +69,24 @@ export default function SignupStep1() {
       updatedValue = value.replace(/\D/g, "").slice(0, 12)
     }
 
+    // Restrict pincode to 6 numeric digits
+    if (name === "pincode") {
+      updatedValue = value.replace(/\D/g, "").slice(0, 6)
+    }
+
     setFormData(prev => ({
       ...prev,
-      [name]: updatedValue
+      [name]: updatedValue,
+      ...(name === "vehicleType" && updatedValue === "bicycle"
+        ? { vehicleNumber: "" }
+        : {}),
     }))
     // Clear error for this field
-    if (errors[name]) {
+    if (errors[name] || (name === "vehicleType" && updatedValue === "bicycle" && errors.vehicleNumber)) {
       setErrors(prev => ({
         ...prev,
-        [name]: ""
+        [name]: "",
+        ...(name === "vehicleType" && updatedValue === "bicycle" ? { vehicleNumber: "" } : {}),
       }))
     }
   }
@@ -110,10 +125,18 @@ export default function SignupStep1() {
       newErrors.state = "State should contain alphabet characters only"
     }
 
-    if (!formData.vehicleNumber.trim()) {
-      newErrors.vehicleNumber = "Vehicle number is required"
-    } else if (!vehicleNumberRegex.test(normalizedVehicleNumber)) {
-      newErrors.vehicleNumber = "Invalid Indian vehicle number format (e.g., MH12AB1234)"
+    if (!formData.pincode.trim()) {
+      newErrors.pincode = "Pincode is required"
+    } else if (!pincodeRegex.test(formData.pincode.trim())) {
+      newErrors.pincode = "Pincode must be 6 digits"
+    }
+
+    if (!isBicycle) {
+      if (!formData.vehicleNumber.trim()) {
+        newErrors.vehicleNumber = "Vehicle number is required"
+      } else if (!vehicleNumberRegex.test(normalizedVehicleNumber)) {
+        newErrors.vehicleNumber = "Invalid Indian vehicle number format (e.g., MH12AB1234)"
+      }
     }
 
     if (!formData.panNumber.trim()) {
@@ -130,6 +153,52 @@ export default function SignupStep1() {
 
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
+  }
+
+  const handleUseGpsLocation = () => {
+    if (!navigator?.geolocation) {
+      toast.error("GPS is not supported on this device")
+      return
+    }
+
+    setIsFetchingGps(true)
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const latitude = Number(position.coords.latitude)
+        const longitude = Number(position.coords.longitude)
+        const gpsAddress = `GPS: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
+
+        setFormData((prev) => ({
+          ...prev,
+          latitude,
+          longitude,
+          address: prev.address?.trim() ? prev.address : gpsAddress,
+        }))
+
+        setErrors((prev) => ({
+          ...prev,
+          address: "",
+        }))
+
+        toast.success("GPS location captured successfully")
+        setIsFetchingGps(false)
+      },
+      (error) => {
+        const message =
+          error?.code === 1
+            ? "Location permission denied"
+            : error?.code === 2
+              ? "Unable to get current location"
+              : "Location request timed out"
+        toast.error(message)
+        setIsFetchingGps(false)
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 5000,
+      },
+    )
   }
 
   const handleSubmit = async (e) => {
@@ -149,9 +218,12 @@ export default function SignupStep1() {
         address: formData.address.trim(),
         city: formData.city.trim(),
         state: formData.state.trim(),
+        pincode: formData.pincode.trim(),
+        latitude: Number.isFinite(Number(formData.latitude)) ? Number(formData.latitude) : undefined,
+        longitude: Number.isFinite(Number(formData.longitude)) ? Number(formData.longitude) : undefined,
         vehicleType: formData.vehicleType,
         vehicleName: formData.vehicleName.trim() || null,
-        vehicleNumber: formData.vehicleNumber.trim(),
+        vehicleNumber: isBicycle ? null : formData.vehicleNumber.trim(),
         panNumber: formData.panNumber.trim().toUpperCase(),
         aadharNumber: formData.aadharNumber.replace(/\s/g, "")
       })
@@ -229,6 +301,20 @@ export default function SignupStep1() {
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Address <span className="text-red-500">*</span>
             </label>
+            <div className="mb-2 flex justify-end">
+              <button
+                type="button"
+                onClick={handleUseGpsLocation}
+                disabled={isFetchingGps}
+                className={`text-xs font-medium px-3 py-1 rounded-md border transition-colors ${
+                  isFetchingGps
+                    ? "border-gray-300 text-gray-400 cursor-not-allowed"
+                    : "border-green-500 text-green-700 hover:bg-green-50"
+                }`}
+              >
+                {isFetchingGps ? "Fetching GPS..." : "Autofill from GPS"}
+              </button>
+            </div>
             <textarea
               name="address"
               value={formData.address}
@@ -239,6 +325,11 @@ export default function SignupStep1() {
               placeholder="Enter your address"
             />
             {errors.address && <p className="text-red-500 text-sm mt-1">{errors.address}</p>}
+            {(formData.latitude && formData.longitude) ? (
+              <p className="text-green-600 text-xs mt-1">
+                GPS: {Number(formData.latitude).toFixed(6)}, {Number(formData.longitude).toFixed(6)}
+              </p>
+            ) : null}
           </div>
 
           {/* City and State */}
@@ -275,6 +366,26 @@ export default function SignupStep1() {
             </div>
           </div>
 
+          {/* Pincode */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Pincode <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              name="pincode"
+              value={formData.pincode}
+              onChange={handleChange}
+              maxLength={6}
+              inputMode="numeric"
+              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${
+                errors.pincode ? "border-red-500" : "border-gray-300"
+              }`}
+              placeholder="302017"
+            />
+            {errors.pincode && <p className="text-red-500 text-sm mt-1">{errors.pincode}</p>}
+          </div>
+
           {/* Vehicle Type */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -309,25 +420,27 @@ export default function SignupStep1() {
           </div>
 
           {/* Vehicle Number */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Vehicle Number <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              name="vehicleNumber"
-              value={formData.vehicleNumber}
-              onChange={handleChange}
-              autoCapitalize="characters"
-              autoCorrect="off"
-              spellCheck="false"
-              translate="no"
-              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${errors.vehicleNumber ? "border-red-500" : "border-gray-300"
-                }`}
-              placeholder="e.g., MH12AB1234"
-            />
-            {errors.vehicleNumber && <p className="text-red-500 text-sm mt-1">{errors.vehicleNumber}</p>}
-          </div>
+          {!isBicycle ? (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Vehicle Number <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                name="vehicleNumber"
+                value={formData.vehicleNumber}
+                onChange={handleChange}
+                autoCapitalize="characters"
+                autoCorrect="off"
+                spellCheck="false"
+                translate="no"
+                className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${errors.vehicleNumber ? "border-red-500" : "border-gray-300"
+                  }`}
+                placeholder="e.g., MH12AB1234"
+              />
+              {errors.vehicleNumber && <p className="text-red-500 text-sm mt-1">{errors.vehicleNumber}</p>}
+            </div>
+          ) : null}
 
           {/* PAN Number */}
           <div>
@@ -379,7 +492,8 @@ export default function SignupStep1() {
               !formData.address.trim() ||
               !formData.city.trim() ||
               !formData.state.trim() ||
-              !formData.vehicleNumber.trim() ||
+              !formData.pincode.trim() ||
+              (!isBicycle && !formData.vehicleNumber.trim()) ||
               !formData.panNumber.trim() ||
               !formData.aadharNumber.trim() ||
               Object.keys(errors).length > 0
@@ -389,7 +503,8 @@ export default function SignupStep1() {
               !formData.address.trim() ||
               !formData.city.trim() ||
               !formData.state.trim() ||
-              !formData.vehicleNumber.trim() ||
+              !formData.pincode.trim() ||
+              (!isBicycle && !formData.vehicleNumber.trim()) ||
               !formData.panNumber.trim() ||
               !formData.aadharNumber.trim() ||
               Object.keys(errors).length > 0

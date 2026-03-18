@@ -11,7 +11,9 @@ export default function SignupStep2() {
     aadharPhoto: null,
     aadharBackPhoto: null,
     panPhoto: null,
-    drivingLicensePhoto: null
+    drivingLicensePhoto: null,
+    vehicleRCPhoto: null,
+    vehicleRCBackPhoto: null
   })
   const [uploadedDocs, setUploadedDocs] = useState(() => {
     const saved = sessionStorage.getItem("deliverySignupDocs")
@@ -27,7 +29,9 @@ export default function SignupStep2() {
       aadharPhoto: null,
       aadharBackPhoto: null,
       panPhoto: null,
-      drivingLicensePhoto: null
+      drivingLicensePhoto: null,
+      vehicleRCPhoto: null,
+      vehicleRCBackPhoto: null
     }
   })
   const [uploading, setUploading] = useState({
@@ -35,7 +39,9 @@ export default function SignupStep2() {
     aadharPhoto: false,
     aadharBackPhoto: false,
     panPhoto: false,
-    drivingLicensePhoto: false
+    drivingLicensePhoto: false,
+    vehicleRCPhoto: false,
+    vehicleRCBackPhoto: false
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -180,7 +186,9 @@ export default function SignupStep2() {
         aadharPhoto: uploadedDocs.aadharPhoto,
         aadharBackPhoto: uploadedDocs.aadharBackPhoto,
         panPhoto: uploadedDocs.panPhoto,
-        drivingLicensePhoto: uploadedDocs.drivingLicensePhoto
+        drivingLicensePhoto: uploadedDocs.drivingLicensePhoto,
+        vehicleRCPhoto: uploadedDocs.vehicleRCPhoto,
+        vehicleRCBackPhoto: uploadedDocs.vehicleRCBackPhoto
       })
 
       if (response?.data?.success) {
@@ -302,6 +310,8 @@ export default function SignupStep2() {
           <DocumentUpload docType="aadharBackPhoto" label="Aadhar Card Photo (Back)" required={true} />
           <DocumentUpload docType="panPhoto" label="PAN Card Photo" required={true} />
           <DocumentUpload docType="drivingLicensePhoto" label="Driving License Photo" required={true} />
+          <DocumentUpload docType="vehicleRCPhoto" label="Vehicle RC Photo (Front)" required={false} />
+          <DocumentUpload docType="vehicleRCBackPhoto" label="Vehicle RC Photo (Back)" required={false} />
 
           {/* Submit Button */}
           <button

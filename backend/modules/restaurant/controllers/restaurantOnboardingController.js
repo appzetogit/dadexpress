@@ -190,7 +190,13 @@ export const upsertOnboarding = async (req, res) => {
           updateData.primaryContactNumber = step1.primaryContactNumber;
         }
         if (step1.location) {
-          updateData.location = step1.location;
+          const lat = Number(step1.location?.latitude);
+          const lng = Number(step1.location?.longitude);
+          const hasGpsCoordinates = Number.isFinite(lat) && Number.isFinite(lng);
+          updateData.location = {
+            ...step1.location,
+            ...(hasGpsCoordinates ? { latitude: lat, longitude: lng, coordinates: [lng, lat] } : {}),
+          };
         }
 
         if (Object.keys(updateData).length > 0) {
@@ -201,6 +207,31 @@ export const upsertOnboarding = async (req, res) => {
             "✅ Restaurant schema updated with step1 data:",
             Object.keys(updateData),
           );
+
+          // Sync GPS lat/lng to Firebase Realtime Database (non-blocking).
+          const lat = Number(step1.location?.latitude);
+          const lng = Number(step1.location?.longitude);
+          if (Number.isFinite(lat) && Number.isFinite(lng)) {
+            try {
+              const { syncUserRealtime } = await import("../../delivery/services/firebaseTrackingService.js");
+              await syncUserRealtime({
+                userId: restaurantId.toString(),
+                lat,
+                lng,
+                address:
+                  step1.location?.address ||
+                  step1.location?.addressLine1 ||
+                  step1.location?.formattedAddress ||
+                  "",
+                area: step1.location?.area || "",
+                city: step1.location?.city || "",
+                state: step1.location?.state || "",
+                formattedAddress: step1.location?.formattedAddress || "",
+              });
+            } catch (firebaseSyncError) {
+              console.warn(`Failed to sync restaurant onboarding GPS to Firebase: ${firebaseSyncError.message}`);
+            }
+          }
         }
       } catch (step1UpdateError) {
         console.error(

@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { useLocation as useGeoLocation } from "../hooks/useLocation"
 import { useProfile } from "../context/ProfileContext"
 import { toast } from "sonner"
-import { locationAPI, userAPI } from "@/lib/api"
+import { userAPI } from "@/lib/api"
 import { Loader } from '@googlemaps/js-api-loader'
 
 // Google Maps implementation - Leaflet components removed
@@ -54,8 +54,8 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
     pathname.startsWith("/usermain/cart/")
   const inputRef = useRef(null)
   const [searchValue, setSearchValue] = useState("")
-  const { location, loading, requestLocation } = useGeoLocation()
-  const { addresses = [], addAddress, updateAddress, userProfile } = useProfile()
+  const { location, loading } = useGeoLocation()
+  const { addresses = [], addAddress, userProfile } = useProfile()
   const [showAddressForm, setShowAddressForm] = useState(false)
   const [mapPosition, setMapPosition] = useState([22.7196, 75.8577]) // Default Indore coordinates [lat, lng]
   const [addressFormData, setAddressFormData] = useState({
@@ -68,6 +68,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
     phone: "",
   })
   const [loadingAddress, setLoadingAddress] = useState(false)
+  const [isSavingAddress, setIsSavingAddress] = useState(false)
   const [mapLoading, setMapLoading] = useState(false)
   const mapContainerRef = useRef(null)
   const googleMapRef = useRef(null) // Google Maps instance
@@ -91,6 +92,25 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
   }, [])
   const reverseGeocodeTimeoutRef = useRef(null) // Debounce timeout for reverse geocoding
   const lastReverseGeocodeCoordsRef = useRef(null) // Track last coordinates to avoid duplicate calls
+
+  const getCurrentGpsCoordinates = (options = {}) =>
+    new Promise((resolve, reject) => {
+      if (!navigator?.geolocation) {
+        reject(new Error("Location services are not supported"))
+        return
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => resolve(position),
+        (error) => reject(error),
+        {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 0,
+          ...options,
+        },
+      )
+    })
 
   // Debug: Log API key status (only first few characters for security)
   useEffect(() => {
@@ -700,199 +720,72 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       toast.loading("Fetching your current location...", {
         id: "location-request",
       })
+      const position = await getCurrentGpsCoordinates()
+      const latitude = Number(position?.coords?.latitude)
+      const longitude = Number(position?.coords?.longitude)
+      const accuracy = Number(position?.coords?.accuracy || 0)
 
-      // Request location - this will automatically prompt for permission if needed
-      // Clear any cached location first to ensure fresh coordinates
-      console.log("🔄 Requesting fresh location (clearing cache and forcing fresh GPS)...")
-
-      // Increase timeout to 15 seconds to allow GPS to get accurate fix
-      // The getLocation function already has a 15-second timeout, so we match it
-      const locationPromise = requestLocation()
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Location request is taking longer than expected. Please check your GPS settings.")), 15000)
-      )
-
-      let locationData
-      try {
-        locationData = await Promise.race([locationPromise, timeoutPromise])
-
-        // Check if we got valid location data
-        if (!locationData || (!locationData.latitude || !locationData.longitude)) {
-          throw new Error("Invalid location data received")
-        }
-      } catch (raceError) {
-        console.warn("⚠️ Location request failed or timed out:", raceError.message)
-
-        // If timeout or error, try to use cached location as fallback
-        const stored = localStorage.getItem("userLocation")
-        if (stored) {
-          try {
-            const cachedLocation = JSON.parse(stored)
-            if (cachedLocation?.latitude && cachedLocation?.longitude) {
-              console.log("📍 Using cached location as fallback:", cachedLocation)
-              locationData = cachedLocation
-
-              // Show info toast that we're using cached location
-              toast.info("Using your last known location", {
-                id: "location-request",
-                duration: 2000,
-              })
-            } else {
-              throw new Error("Invalid cached location")
-            }
-          } catch (cacheErr) {
-            console.error("❌ Failed to parse cached location:", cacheErr)
-            // Determine specific error message
-            let errorMessage = "Could not get location. Please try again."
-            if (raceError.message.includes("permission") || raceError.message.includes("denied")) {
-              errorMessage = "Location permission denied. Please enable location access in your browser settings."
-            } else if (raceError.message.includes("timeout") || raceError.message.includes("longer")) {
-              errorMessage = "Location request timed out. Please check your GPS settings and try again."
-            } else if (raceError.message.includes("unavailable")) {
-              errorMessage = "Location information is unavailable. Please check your device settings."
-            }
-
-            toast.error(errorMessage, {
-              id: "location-request",
-              duration: 5000,
-            })
-            return
-          }
-        } else {
-          // No cached location available
-          let errorMessage = "Could not get location. Please try again."
-          if (raceError.message.includes("permission") || raceError.message.includes("denied")) {
-            errorMessage = "Location permission denied. Please enable location access in your browser settings."
-          } else if (raceError.message.includes("timeout") || raceError.message.includes("longer")) {
-            errorMessage = "Location request timed out. Please check your GPS settings and try again."
-          } else if (raceError.message.includes("unavailable")) {
-            errorMessage = "Location information is unavailable. Please check your device settings."
-          }
-
-          toast.error(errorMessage, {
-            id: "location-request",
-            duration: 5000,
-          })
-          return
-        }
-      }
-
-      // Validate location data
-      if (!locationData) {
-        toast.error("Could not get location. Please try again.", { id: "location-request" })
-        return
-      }
-
-      if (!locationData.latitude || !locationData.longitude) {
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
         toast.error("Invalid location data received. Please try again.", { id: "location-request" })
         return
       }
 
-      console.log("✅ Fresh location received:", {
-        formattedAddress: locationData?.formattedAddress,
-        address: locationData?.address,
-        city: locationData?.city,
-        state: locationData?.state,
-        area: locationData?.area,
-        coordinates: locationData?.latitude && locationData?.longitude ?
-          `${locationData.latitude.toFixed(8)}, ${locationData.longitude.toFixed(8)}` : "N/A",
-        hasCompleteAddress: locationData?.formattedAddress &&
-          locationData.formattedAddress.split(',').length >= 4
-      })
-
-      // Verify we got complete address (but don't fail if incomplete - still use the location)
-      if (!locationData?.formattedAddress ||
-        locationData.formattedAddress === "Select location" ||
-        locationData.formattedAddress.split(',').length < 4) {
-        console.warn("⚠️ Location received but address is incomplete. Will try to get better address from map...")
-        // Don't retry immediately - let the map handle address fetching
-        // The address will be fetched when map moves to the location
+      const gpsLocationData = {
+        latitude,
+        longitude,
+        accuracy: Number.isFinite(accuracy) ? accuracy : undefined,
+        address: "",
+        city: "",
+        state: "",
+        area: "",
+        formattedAddress: "",
       }
 
-      // CRITICAL: Ensure location state is updated in the hook
-      // The requestLocation function already updates the state, but we verify here
-      console.log("✅✅✅ Final location data to be saved:", {
-        formattedAddress: locationData?.formattedAddress,
-        address: locationData?.address,
-        mainTitle: locationData?.mainTitle,
-        hasCompleteAddress: locationData?.formattedAddress &&
-          locationData.formattedAddress.split(',').length >= 4
-      })
+      localStorage.setItem("userLocation", JSON.stringify(gpsLocationData))
 
-      // Save location to backend with ALL fields
-      if (locationData?.latitude && locationData?.longitude) {
-        try {
-          await userAPI.updateLocation({
-            latitude: locationData.latitude,
-            longitude: locationData.longitude,
-            address: locationData.address || locationData.formattedAddress || "",
-            city: locationData.city || "",
-            state: locationData.state || "",
-            area: locationData.area || "",
-            formattedAddress: locationData.formattedAddress || locationData.address || "",
-            accuracy: locationData.accuracy,
-            postalCode: locationData.postalCode,
-            street: locationData.street,
-            streetNumber: locationData.streetNumber
-          })
-          console.log("✅ Location saved to backend successfully")
-        } catch (backendError) {
-          // Only log non-network errors (network errors are handled by axios interceptor)
-          if (backendError.code !== 'ERR_NETWORK' && backendError.message !== 'Network Error') {
-            console.error("Error saving location to backend:", backendError)
-          }
-          // Don't fail the whole operation if backend save fails
-        }
-      }
+      // Save GPS coordinates to backend (Firebase sync happens on backend).
+      await userAPI.updateLocation({
+        latitude,
+        longitude,
+        address: "",
+        city: "",
+        state: "",
+        area: "",
+        formattedAddress: "",
+        accuracy: gpsLocationData.accuracy,
+      })
 
       // Update map position - don't automatically show address form
       // User can manually open address form if needed
-      if (locationData?.latitude && locationData?.longitude) {
-        setMapPosition([locationData.latitude, locationData.longitude])
+      if (latitude && longitude) {
+        setMapPosition([latitude, longitude])
         // Don't automatically show address form - keep user on same page
         // setShowAddressForm(true)
-
-        // Update address form data with complete address (for when user opens form)
-        if (locationData.formattedAddress) {
-          setCurrentAddress(locationData.formattedAddress)
-          setAddressFormData(prev => ({
-            ...prev,
-            street: locationData.street || locationData.area || prev.street,
-            city: locationData.city || prev.city,
-            state: locationData.state || prev.state,
-            zipCode: locationData.postalCode || prev.zipCode,
-            additionalDetails: locationData.formattedAddress || prev.additionalDetails,
-          }))
-        }
 
         // Update map if it's initialized
         if (googleMapRef.current && window.google && window.google.maps) {
           try {
-            googleMapRef.current.panTo({ lat: locationData.latitude, lng: locationData.longitude })
+            googleMapRef.current.panTo({ lat: latitude, lng: longitude })
             googleMapRef.current.setZoom(17)
 
             if (greenMarkerRef.current) {
-              greenMarkerRef.current.setPosition({ lat: locationData.latitude, lng: locationData.longitude })
+              greenMarkerRef.current.setPosition({ lat: latitude, lng: longitude })
             }
 
-            // Fetch detailed address using Places API
             setTimeout(async () => {
-              await handleMapMoveEnd(locationData.latitude, locationData.longitude)
+              await handleMapMoveEnd(latitude, longitude)
             }, 500)
           } catch (mapError) {
             console.error("Error updating map:", mapError)
           }
         } else {
-          // Map not initialized, fetch address directly
           setTimeout(async () => {
-            await handleMapMoveEnd(locationData.latitude, locationData.longitude)
+            await handleMapMoveEnd(latitude, longitude)
           }, 300)
         }
       }
 
-      // Success toast with address preview
-      const addressPreview = locationData?.formattedAddress || locationData?.address || "Location updated"
-      toast.success(`Location updated: ${addressPreview.split(',').slice(0, 2).join(', ')}`, {
+      toast.success("Location updated successfully", {
         id: "location-request",
         duration: 2000,
       })
@@ -901,7 +794,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       setTimeout(() => {
         onClose()
         if (!isCartPath) navigate("/")
-      }, 2000)
+      }, 1200)
     } catch (error) {
       // Handle permission denied or other errors
       if (error.code === 1 || error.message?.includes("denied") || error.message?.includes("permission")) {
@@ -945,6 +838,15 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
   }
 
   const handleAddressFormChange = (e) => {
+    if (e.target.name === "zipCode") {
+      const nextZip = String(e.target.value || "").replace(/\D/g, "").slice(0, 6)
+      setAddressFormData({
+        ...addressFormData,
+        zipCode: nextZip,
+      })
+      return
+    }
+
     setAddressFormData({
       ...addressFormData,
       [e.target.name]: e.target.value,
@@ -1586,56 +1488,42 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       }
 
       toast.loading("Getting your fresh location...", { id: "current-location" })
-
-      // Use Promise.race to get location within 2 seconds
-      const locationPromise = requestLocation(true, true) // forceFresh = true, updateDB = true
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Location timeout")), 2000)
-      )
-
-      let locationData
-      try {
-        locationData = await Promise.race([locationPromise, timeoutPromise])
-      } catch (raceError) {
-        // If timeout, try to use cached location immediately
-        const stored = localStorage.getItem("userLocation")
-        if (stored) {
-          try {
-            const cachedLocation = JSON.parse(stored)
-            if (cachedLocation?.latitude && cachedLocation?.longitude) {
-              console.log("📍 Using cached location (2s timeout):", cachedLocation)
-              locationData = cachedLocation
-            } else {
-              throw new Error("Invalid cached location")
-            }
-          } catch (cacheErr) {
-            toast.error("Could not get location. Please try again.", { id: "current-location" })
-            return
-          }
-        } else {
-          toast.error("Could not get location. Please try again.", { id: "current-location" })
-          return
-        }
-      }
-
-      console.log("📍 Current location data received:", locationData)
-
-      if (!locationData?.latitude || !locationData?.longitude) {
-        toast.error("Could not get your location. Please try again.", { id: "current-location" })
-        return
-      }
-
-      const lat = parseFloat(locationData.latitude)
-      const lng = parseFloat(locationData.longitude)
+      const position = await getCurrentGpsCoordinates()
+      const lat = Number(position?.coords?.latitude)
+      const lng = Number(position?.coords?.longitude)
+      const accuracy = Number(position?.coords?.accuracy || 0)
 
       if (isNaN(lat) || isNaN(lng)) {
         toast.error("Invalid location coordinates", { id: "current-location" })
         return
       }
 
+      const gpsLocationData = {
+        latitude: lat,
+        longitude: lng,
+        accuracy: Number.isFinite(accuracy) ? accuracy : undefined,
+        address: "",
+        city: "",
+        state: "",
+        area: "",
+        formattedAddress: "",
+      }
+      localStorage.setItem("userLocation", JSON.stringify(gpsLocationData))
+
+      await userAPI.updateLocation({
+        latitude: lat,
+        longitude: lng,
+        address: "",
+        city: "",
+        state: "",
+        area: "",
+        formattedAddress: "",
+        accuracy: gpsLocationData.accuracy,
+      })
+
       console.log("📍 Setting map position to:", [lat, lng])
-      console.log("📍 Location accuracy:", locationData.accuracy ? `${locationData.accuracy}m` : "unknown")
-      console.log("📍 Location timestamp:", locationData.timestamp || new Date().toISOString())
+      console.log("📍 Location accuracy:", gpsLocationData.accuracy ? `${gpsLocationData.accuracy}m` : "unknown")
+      console.log("📍 Location timestamp:", new Date().toISOString())
       setMapPosition([lat, lng])
 
       // Update Google Maps to new location
@@ -1690,12 +1578,12 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
           if (blueDotCircleRef.current) {
             blueDotCircleRef.current.setCenter({ lat, lng })
             // Update radius if accuracy is available
-            const accuracyRadius = Math.max(locationData?.accuracy || 50, 20)
+            const accuracyRadius = Math.max(gpsLocationData?.accuracy || 50, 20)
             blueDotCircleRef.current.setRadius(accuracyRadius)
             console.log("✅ Updated blue dot accuracy circle position and radius:", accuracyRadius)
           } else if (googleMapRef.current && window.google) {
             // Create accuracy circle if it doesn't exist
-            const accuracyRadius = Math.max(locationData?.accuracy || 50, 20)
+            const accuracyRadius = Math.max(gpsLocationData?.accuracy || 50, 20)
             const blueDot = new window.google.maps.Circle({
               strokeColor: "#4285F4",
               strokeOpacity: 0.5,
@@ -1788,19 +1676,13 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
   const handleAddressFormSubmit = async (e) => {
     e.preventDefault()
 
-    // Validate required fields (zipCode is optional)
-    if (!addressFormData.street || !addressFormData.city || !addressFormData.state) {
-      toast.error("Please fill in all required fields (Street, City, State)")
-      return
-    }
-
     // Validate that we have coordinates
     if (!mapPosition || mapPosition.length !== 2 || !mapPosition[0] || !mapPosition[1]) {
       toast.error("Please select a location on the map")
       return
     }
 
-    setLoadingAddress(true)
+    setIsSavingAddress(true)
     try {
       // Prepare address data matching backend format
       // Backend expects: label, street, additionalDetails, city, state, zipCode, latitude, longitude
@@ -1816,16 +1698,13 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
         normalizedLabel = "Other" // Fallback to Other if invalid
       }
 
-      // Validate that trimmed fields are not empty
-      const trimmedStreet = addressFormData.street.trim()
-      const trimmedCity = addressFormData.city.trim()
-      const trimmedState = addressFormData.state.trim()
-
-      if (!trimmedStreet || !trimmedCity || !trimmedState) {
-        toast.error("Street, City, and State cannot be empty")
-        setLoadingAddress(false)
-        return
-      }
+      // GPS-first fallback values so save works without geocoding/manual full address.
+      const lat = Number(mapPosition[0])
+      const lng = Number(mapPosition[1])
+      const fallbackStreet = `${lat.toFixed(6)}, ${lng.toFixed(6)}`
+      const trimmedStreet = (addressFormData.street || "").trim() || fallbackStreet
+      const trimmedCity = (addressFormData.city || "").trim() || location?.city || "Unknown City"
+      const trimmedState = (addressFormData.state || "").trim() || location?.state || "Unknown State"
 
       const addressToSave = {
         label: normalizedLabel,
@@ -1838,20 +1717,10 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
         longitude: mapPosition[1], // longitude from mapPosition[1]
       }
 
-      // Check if an address with the same label already exists
-      const existingAddressWithSameLabel = addresses.find(addr => addr.label === normalizedLabel)
-
-      if (existingAddressWithSameLabel) {
-        // Update existing address instead of creating a new one
-        console.log("🔄 Updating existing address with label:", normalizedLabel)
-        await updateAddress(existingAddressWithSameLabel.id, addressToSave)
-        toast.success(`Address updated for ${normalizedLabel}!`)
-      } else {
-        // Create new address
-        console.log("💾 Saving new address:", addressToSave)
-        await addAddress(addressToSave)
-        toast.success(`Address saved as ${normalizedLabel}!`)
-      }
+      // Always create a new address entry (even if label is same like Home/Office).
+      console.log("💾 Saving new address:", addressToSave)
+      await addAddress(addressToSave)
+      toast.success(`Address saved as ${normalizedLabel}!`)
 
       // Reset form
       setAddressFormData({
@@ -1864,7 +1733,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
         phone: "",
       })
       setShowAddressForm(false)
-      setLoadingAddress(false)
+      setIsSavingAddress(false)
 
       // Close overlay and redirect to home page
       onClose()
@@ -1889,7 +1758,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       }
 
       toast.error(errorMessage)
-      setLoadingAddress(false)
+      setIsSavingAddress(false)
     }
   }
 
@@ -2016,6 +1885,32 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
     toast.info("To edit address, please delete and add a new one")
   }
 
+  const deliveryDetailsText = (() => {
+    const zipCode = String(addressFormData.zipCode || "").trim()
+    const formattedCityState = [addressFormData.city, addressFormData.state]
+      .filter(Boolean)
+      .join(", ")
+    const cityStateZip = [formattedCityState, zipCode].filter(Boolean).join(", ")
+
+    const normalizedCurrentAddress = String(currentAddress || "").trim()
+    const isCoordinateText = /^-?\d+\.\d+,\s*-?\d+\.\d+$/.test(normalizedCurrentAddress)
+
+    // Prefer explicitly typed/manual autofill fields so pincode reflects immediately.
+    if (cityStateZip) {
+      return cityStateZip
+    }
+
+    if (!normalizedCurrentAddress || normalizedCurrentAddress === "Select location" || isCoordinateText) {
+      return normalizedCurrentAddress || "Select location on map"
+    }
+
+    if (zipCode && !normalizedCurrentAddress.includes(zipCode)) {
+      return `${normalizedCurrentAddress}, ${zipCode}`
+    }
+
+    return normalizedCurrentAddress
+  })()
+
   if (!isOpen) return null
 
   // If showing address form, render full-screen address form
@@ -2109,17 +2004,20 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
               <Label className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 block">
                 Delivery details
               </Label>
-              <div className="bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-700 rounded-lg p-3 flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleUseCurrentLocationForAddress}
+                disabled={mapLoading || isSavingAddress}
+                className="w-full text-left bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-700 rounded-lg p-3 flex items-center gap-3 disabled:opacity-60"
+              >
                 <MapPin className="h-5 w-5 text-orange-600 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                    {loadingAddress ? "Locating..." : (currentAddress || addressFormData.city && addressFormData.state
-                      ? `${addressFormData.city}, ${addressFormData.state}`
-                      : "Select location on map")}
+                    {loadingAddress ? "Locating..." : deliveryDetailsText}
                   </p>
                 </div>
                 <ChevronRight className="h-5 w-5 text-gray-400 flex-shrink-0" />
-              </div>
+              </button>
             </div>
 
             {/* Address Details */}
@@ -2213,6 +2111,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
                 value={addressFormData.zipCode || ""}
                 onChange={handleAddressFormChange}
                 className="bg-white dark:bg-[#1a1a1a] border-gray-200 dark:border-gray-700"
+                inputMode="numeric"
               />
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 Tip: Use map/current location for auto-detection, or type details manually.
@@ -2227,15 +2126,34 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
             <Button
               type="submit"
               className="w-full bg-orange-600 hover:bg-orange-700 text-white h-12 text-base font-semibold"
-              disabled={loadingAddress}
+              disabled={isSavingAddress}
             >
-              {loadingAddress ? "Loading..." : "Save address"}
+              {isSavingAddress ? "Saving..." : "Save address"}
             </Button>
           </form>
         </div>
       </div>
     )
   }
+
+  const filteredSavedAddresses = addresses
+    .filter((address) => {
+      const query = (searchValue || "").trim().toLowerCase()
+      if (!query) return true
+      const searchableText = [
+        address.label,
+        address.additionalDetails,
+        address.street,
+        address.city,
+        address.state,
+        address.zipCode,
+        address.phone,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+      return searchableText.includes(query)
+    })
 
   return (
     <div
@@ -2333,12 +2251,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
                 </h2>
               </div>
               <div className="bg-white dark:bg-[#1a1a1a]">
-                {addresses
-                  .filter((address, index, self) => {
-                    // Filter out duplicate addresses with same label - keep only first occurrence
-                    const firstIndex = self.findIndex(addr => addr.label === address.label)
-                    return index === firstIndex
-                  })
+                {filteredSavedAddresses
                   .map((address, index) => {
                     const IconComponent = getAddressIcon(address)
                     return (
@@ -2381,6 +2294,11 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
                       </div>
                     )
                   })}
+                {searchValue.trim() && filteredSavedAddresses.length === 0 && (
+                  <div className="px-4 sm:px-6 lg:px-8 py-6 text-sm text-gray-500 dark:text-gray-400">
+                    No matching saved addresses found.
+                  </div>
+                )}
               </div>
             </div>
           )}

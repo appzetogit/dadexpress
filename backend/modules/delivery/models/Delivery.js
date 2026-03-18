@@ -53,6 +53,7 @@ const documentsSchema = new mongoose.Schema({
   vehicleRC: {
     number: String,
     document: String,
+    documentBack: String,
     verified: {
       type: Boolean,
       default: false

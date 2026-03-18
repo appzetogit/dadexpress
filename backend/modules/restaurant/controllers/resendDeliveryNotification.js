@@ -45,16 +45,46 @@ export const resendDeliveryNotification = asyncHandler(async (req, res) => {
       return errorResponse(res, 400, `Cannot resend notification. Order status must be 'preparing' or 'ready'. Current status: ${order.status}`);
     }
 
-    // Get restaurant location
-    const restaurantDoc = await Restaurant.findById(restaurantId)
-      .select('location')
-      .lean();
+    // Resolve restaurant document robustly (supports both Mongo _id and custom restaurantId).
+    let restaurantDoc = null;
+    if (mongoose.Types.ObjectId.isValid(restaurantId)) {
+      restaurantDoc = await Restaurant.findById(restaurantId).select('restaurantId location').lean();
+    }
+    if (!restaurantDoc) {
+      restaurantDoc = await Restaurant.findOne({
+        $or: [
+          { restaurantId: restaurantId },
+          { _id: restaurantId },
+          { restaurantId: order.restaurantId },
+          { _id: order.restaurantId },
+        ],
+      }).select('restaurantId location').lean();
+    }
 
-    if (!restaurantDoc || !restaurantDoc.location || !restaurantDoc.location.coordinates) {
+    const coordinates = (() => {
+      const coords = restaurantDoc?.location?.coordinates;
+      if (Array.isArray(coords) && coords.length >= 2) {
+        const lng = Number(coords[0]);
+        const lat = Number(coords[1]);
+        if (Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0)) {
+          return [lng, lat];
+        }
+      }
+
+      const lat = Number(restaurantDoc?.location?.latitude);
+      const lng = Number(restaurantDoc?.location?.longitude);
+      if (Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0)) {
+        return [lng, lat];
+      }
+
+      return null;
+    })();
+
+    if (!restaurantDoc || !coordinates) {
       return errorResponse(res, 400, 'Restaurant location not found. Please update restaurant location.');
     }
 
-    const [restaurantLng, restaurantLat] = restaurantDoc.location.coordinates;
+    const [restaurantLng, restaurantLat] = coordinates;
 
     // Find nearest delivery boys
     const priorityDeliveryBoys = await findNearestDeliveryBoys(
