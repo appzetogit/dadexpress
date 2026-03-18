@@ -103,6 +103,10 @@ if (missingEnvVars.length > 0) {
 const app = express();
 const httpServer = createServer(app);
 
+// Allow all Dad Express Vercel preview deployments without listing each URL manually.
+const isDadExpressVercelPreviewOrigin = (origin = '') =>
+  /^https:\/\/dadexpress-[a-z0-9-]+\.vercel\.app$/i.test(origin);
+
 // Initialize Socket.IO with proper CORS configuration
 const allowedSocketOrigins = [
   process.env.CORS_ORIGIN,
@@ -127,7 +131,10 @@ const io = new Server(httpServer, {
       }
 
       // Check if origin is in allowed list
-      if (allowedSocketOrigins.includes(origin)) {
+      if (
+        allowedSocketOrigins.includes(origin) ||
+        isDadExpressVercelPreviewOrigin(origin)
+      ) {
         console.log(`✅ Socket.IO: Allowing connection from: ${origin}`);
         callback(null, true);
       } else {
@@ -460,7 +467,11 @@ app.use(cors({
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
 
-    if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV === 'development') {
+    if (
+      allowedOrigins.indexOf(origin) !== -1 ||
+      isDadExpressVercelPreviewOrigin(origin) ||
+      process.env.NODE_ENV === 'development'
+    ) {
       callback(null, true);
     } else {
       console.warn(`⚠️ CORS blocked origin: ${origin}`);
