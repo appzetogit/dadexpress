@@ -19,6 +19,8 @@ const buildPhoneQuery = (normalizedPhone) => {
 const computeIsProfileCompleted = (restaurant) => {
   if (!restaurant) return false;
   if (restaurant.isProfileCompleted === true) return true;
+  // Active restaurants should land on dashboard (legacy-safe).
+  if (restaurant?.isActive === true) return true;
   // Google sign-in restaurants should not be forced back to onboarding.
   if (restaurant?.signupMethod === 'google' || !!restaurant?.googleId) return true;
 

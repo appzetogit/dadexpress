@@ -93,7 +93,19 @@ export const requestFcmToken = async () => {
       token = await getToken(messaging, { vapidKey });
       false && console.log('[PUSH-NOTIFICATION] FCM Token generated with VAPID key');
     } catch (fallbackErr) {
-      console.error('[PUSH-NOTIFICATION] Token generation failed:', fallbackErr);
+      // Non-blocking: token may fail in unsupported/ephemeral browser storage contexts.
+      const errorName = String(fallbackErr?.name || "");
+      const errorMessage = String(fallbackErr?.message || "");
+      const isExpectedStorageIssue =
+        errorName === "DOMException" ||
+        errorMessage.includes("closed database") ||
+        errorMessage.includes("IDBDatabase.transaction");
+
+      if (isExpectedStorageIssue) {
+        console.warn('[PUSH-NOTIFICATION] Token generation skipped (non-blocking):', errorMessage || fallbackErr);
+      } else {
+        console.warn('[PUSH-NOTIFICATION] Token generation failed:', fallbackErr);
+      }
     }
 
     if (token) {
