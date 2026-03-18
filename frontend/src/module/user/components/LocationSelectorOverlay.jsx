@@ -55,7 +55,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
   const inputRef = useRef(null)
   const [searchValue, setSearchValue] = useState("")
   const { location, loading } = useGeoLocation()
-  const { addresses = [], addAddress, userProfile, setDefaultAddress } = useProfile()
+  const { addresses = [], addAddress, updateAddress, userProfile, setDefaultAddress } = useProfile()
   const [showAddressForm, setShowAddressForm] = useState(false)
   const [mapPosition, setMapPosition] = useState([22.7196, 75.8577]) // Default Indore coordinates [lat, lng]
   const [addressFormData, setAddressFormData] = useState({
@@ -756,6 +756,36 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
         formattedAddress: "",
         accuracy: gpsLocationData.accuracy,
       })
+
+      // On cart flow, keep a selected delivery address in sync with latest GPS.
+      // This prevents checkout from staying at "Select Delivery Address".
+      if (isCartPath) {
+        const existingDefaultAddress = addresses.find((addr) => addr.isDefault) || addresses[0] || null
+        const fallbackStreet = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
+        const nextAddressPayload = {
+          label: existingDefaultAddress?.label || "Home",
+          street: (existingDefaultAddress?.street || "").trim() || fallbackStreet,
+          additionalDetails: (existingDefaultAddress?.additionalDetails || "").trim(),
+          city: (existingDefaultAddress?.city || location?.city || "Unknown City").trim(),
+          state: (existingDefaultAddress?.state || location?.state || "Unknown State").trim(),
+          zipCode: String(existingDefaultAddress?.zipCode || "").trim(),
+          latitude,
+          longitude,
+          isDefault: true,
+        }
+
+        const existingAddressId = existingDefaultAddress?.id || existingDefaultAddress?._id
+        if (existingAddressId) {
+          await updateAddress(existingAddressId, nextAddressPayload)
+          setDefaultAddress(existingAddressId)
+        } else {
+          const createdAddress = await addAddress(nextAddressPayload)
+          const createdAddressId = createdAddress?.id || createdAddress?._id
+          if (createdAddressId) {
+            setDefaultAddress(createdAddressId)
+          }
+        }
+      }
 
       // Update map position - don't automatically show address form
       // User can manually open address form if needed
@@ -1784,8 +1814,8 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
     try {
       // Get coordinates from address location
       const coordinates = address.location?.coordinates || []
-      const longitude = Number(coordinates[0])
-      const latitude = Number(coordinates[1])
+      const longitude = Number(coordinates[0] ?? address.longitude)
+      const latitude = Number(coordinates[1] ?? address.latitude)
       const hasValidCoords = Number.isFinite(latitude) && Number.isFinite(longitude)
 
       if (hasValidCoords) {

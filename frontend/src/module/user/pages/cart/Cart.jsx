@@ -789,10 +789,10 @@ export default function Cart() {
 
       // Get coordinates from address location
       const coordinates = address.location?.coordinates || []
-      const longitude = coordinates[0]
-      const latitude = coordinates[1]
+      const longitude = Number(coordinates[0] ?? address.longitude)
+      const latitude = Number(coordinates[1] ?? address.latitude)
 
-      if (!latitude || !longitude) {
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
         toast.error(`Invalid coordinates for ${label} address`)
         return
       }
@@ -1420,7 +1420,7 @@ export default function Cart() {
       </div>
 
       {/* Scrollable Content Area */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden pb-40 md:pb-32">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden pb-44 md:pb-32">
         {/* Savings Banner */}
         {savings > 0 && (
           <div className="bg-blue-100 dark:bg-blue-900/20 px-4 md:px-6 py-2 md:py-3 flex-shrink-0">
@@ -1926,7 +1926,10 @@ export default function Cart() {
       </div>
 
       {/* Bottom Sticky - Place Order */}
-      <div className="bg-white dark:bg-[#1a1a1a] border-t dark:border-gray-800 shadow-lg z-30 flex-shrink-0 fixed bottom-0 left-0 right-0 pb-[env(safe-area-inset-bottom)]">
+      <div
+        className="bg-white dark:bg-[#1a1a1a] border-t dark:border-gray-800 shadow-lg z-[70] flex-shrink-0 fixed bottom-0 left-0 right-0"
+        style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 12px)" }}
+      >
         <div className="max-w-7xl mx-auto">
           <div className="px-4 md:px-6 py-3 md:py-4">
             <div className="w-full max-w-md md:max-w-lg mx-auto">
