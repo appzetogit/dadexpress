@@ -30,7 +30,9 @@ export default function TransactionReport() {
     refundedTransaction: 0,
     adminEarning: 0,
     restaurantEarning: 0,
-    deliverymanEarning: 0
+    deliverymanEarning: 0,
+    grossRevenue: 0,
+    totalRevenue: 0
   })
   const [filters, setFilters] = useState({
     zone: "All Zones",
@@ -115,15 +117,14 @@ export default function TransactionReport() {
 
         if (filters.time === "Today") {
           fromDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-          toDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59)
+          toDate = new Date(now)
         } else if (filters.time === "This Week") {
-          const dayOfWeek = now.getDay()
-          const diff = now.getDate() - dayOfWeek
-          fromDate = new Date(now.getFullYear(), now.getMonth(), diff)
-          toDate = new Date(now.getFullYear(), now.getMonth(), diff + 6, 23, 59, 59)
+          // Keep week behavior aligned with dashboard period logic (last 7 days).
+          fromDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+          toDate = new Date(now)
         } else if (filters.time === "This Month") {
           fromDate = new Date(now.getFullYear(), now.getMonth(), 1)
-          toDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59)
+          toDate = new Date(now)
         }
 
         const params = {
@@ -144,7 +145,9 @@ export default function TransactionReport() {
             refundedTransaction: 0,
             adminEarning: 0,
             restaurantEarning: 0,
-            deliverymanEarning: 0
+            deliverymanEarning: 0,
+            grossRevenue: 0,
+            totalRevenue: 0
           })
           setHasLoadedOnce(true)
         } else {
@@ -212,6 +215,16 @@ export default function TransactionReport() {
   }
 
   const activeFiltersCount = (filters.zone !== "All Zones" ? 1 : 0) + (filters.restaurant !== "All restaurants" ? 1 : 0) + (filters.time !== "All Time" ? 1 : 0)
+
+  const metricDisplayAmount = useMemo(() => {
+    if (metricView.key === "gross") {
+      return Number(summary.grossRevenue ?? summary.completedTransaction ?? metricView.amount ?? 0) || 0
+    }
+    if (metricView.key === "total") {
+      return Number(summary.totalRevenue ?? summary.adminEarning ?? metricView.amount ?? 0) || 0
+    }
+    return Number(metricView.amount || 0) || 0
+  }, [metricView.amount, metricView.key, summary])
 
   const formatCurrency = (amount) => {
     const numericAmount = Number(amount) || 0
@@ -315,7 +328,7 @@ export default function TransactionReport() {
                     {metricView.key === "gross" ? "Gross Revenue" : "Total Revenue"}
                   </p>
                   <p className="text-xl font-bold text-slate-900">
-                    {formatCurrency(metricView.amount || 0)}
+                    {formatCurrency(metricDisplayAmount)}
                   </p>
                 </div>
                 <div className="w-12 h-12 rounded-lg bg-green-100 flex items-center justify-center">

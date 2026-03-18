@@ -11,6 +11,8 @@ import { toast } from "sonner"
 import { userAPI } from "@/lib/api"
 import { Loader } from '@googlemaps/js-api-loader'
 
+const USER_LOCATION_UPDATED_EVENT = "user-location-updated"
+
 // Google Maps implementation - Leaflet components removed
 
 // Google Maps implementation - removed Leaflet components
@@ -771,6 +773,11 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       }
 
       localStorage.setItem("userLocation", JSON.stringify(gpsLocationData))
+      window.dispatchEvent(
+        new CustomEvent(USER_LOCATION_UPDATED_EVENT, {
+          detail: gpsLocationData,
+        }),
+      )
 
       // Save GPS coordinates to backend (Firebase sync happens on backend).
       await userAPI.updateLocation({
@@ -1570,6 +1577,11 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
         formattedAddress: "",
       }
       localStorage.setItem("userLocation", JSON.stringify(gpsLocationData))
+      window.dispatchEvent(
+        new CustomEvent(USER_LOCATION_UPDATED_EVENT, {
+          detail: gpsLocationData,
+        }),
+      )
 
       await userAPI.updateLocation({
         latitude: lat,
@@ -1870,6 +1882,11 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
         formattedAddress: `${address.street}, ${address.city}, ${address.state}`
       }
       localStorage.setItem("userLocation", JSON.stringify(locationData))
+      window.dispatchEvent(
+        new CustomEvent(USER_LOCATION_UPDATED_EVENT, {
+          detail: locationData,
+        }),
+      )
 
       // Update map position to show selected address
       if (hasValidCoords) {

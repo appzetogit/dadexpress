@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { useLocation } from "react-router-dom"
 import { Download, ChevronDown, RefreshCw, FileText, DollarSign, Settings, FileSpreadsheet, Code } from "lucide-react"
 import { adminAPI } from "@/lib/api"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -6,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { exportReportsToCSV, exportReportsToExcel, exportReportsToPDF, exportReportsToJSON } from "../../components/reports/reportsExportUtils"
 
 export default function TaxReport() {
+  const location = useLocation()
   const [filters, setFilters] = useState({
     dateRangeType: "Select Date Range",
     calculateTax: "Select Calculate Tax",
@@ -86,6 +88,22 @@ export default function TaxReport() {
     }
   }
 
+  const getDashboardPeriodFromDateRangeType = (dateRangeType) => {
+    switch (dateRangeType) {
+      case "Today":
+        return "today"
+      case "This Week":
+        return "week"
+      case "This Month":
+        return "month"
+      case "This Year":
+        return "year"
+      case "Select Date Range":
+      default:
+        return undefined
+    }
+  }
+
   const fetchTaxReport = async (activeFilters = filters) => {
     try {
       const params = getDateRangeFromType(activeFilters.dateRangeType)
@@ -125,10 +143,35 @@ export default function TaxReport() {
         0,
       )
 
+      // Keep GST summary aligned with dashboard GST card source for standard periods.
+      // For custom ranges, keep transaction-derived totals.
+      const isCustomRange = activeFilters.dateRangeType === "Custom Range"
+      const isManualTaxCalculation =
+        activeFilters.calculateTax &&
+        activeFilters.calculateTax !== "Select Calculate Tax"
+
+      let summaryTotalIncome = totalIncome
+      let summaryTotalTax = totalTax
+
+      if (!isCustomRange && !isManualTaxCalculation) {
+        try {
+          const dashboardPeriod = getDashboardPeriodFromDateRangeType(activeFilters.dateRangeType)
+          const dashboardResponse = await adminAPI.getDashboardStats(
+            dashboardPeriod ? { period: dashboardPeriod } : {}
+          )
+          const dashboardData = dashboardResponse?.data?.data || {}
+
+          summaryTotalIncome = Number(dashboardData?.revenue?.total || totalIncome)
+          summaryTotalTax = Number(dashboardData?.gst?.total || totalTax)
+        } catch (dashboardError) {
+          console.error("Failed to fetch dashboard GST summary:", dashboardError)
+        }
+      }
+
       setReportRows(mappedRows)
       setSummaryStats({
-        totalIncome,
-        totalTax,
+        totalIncome: summaryTotalIncome,
+        totalTax: summaryTotalTax,
       })
     } catch (error) {
       console.error("Failed to fetch tax report:", error)
@@ -143,6 +186,31 @@ export default function TaxReport() {
   useEffect(() => {
     fetchTaxReport(filters)
   }, [])
+
+  // Read optional time filter from URL when opened from dashboard GST card.
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    const urlTime = params.get("time")
+    const timeMap = {
+      "All Time": "Select Date Range",
+      "Today": "Today",
+      "This Week": "This Week",
+      "This Month": "This Month",
+      "This Year": "This Year",
+    }
+    const nextDateRangeType = timeMap[urlTime]
+    if (!nextDateRangeType) return
+
+    setFilters((prev) => {
+      if (prev.dateRangeType === nextDateRangeType) return prev
+      const nextFilters = {
+        ...prev,
+        dateRangeType: nextDateRangeType,
+      }
+      fetchTaxReport(nextFilters)
+      return nextFilters
+    })
+  }, [location.search])
 
   const handleReset = () => {
     const resetFilters = {

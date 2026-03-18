@@ -1196,10 +1196,37 @@ export const getTransactionReport = asyncHandler(async (req, res) => {
       .populate('restaurantId', 'name')
       .lean();
 
-    // Calculate completed transactions (delivered orders)
-    const completedOrders = allOrdersForSummary.filter(order =>
-      order.status === 'delivered' && order.payment?.status === 'completed'
-    );
+    // For payment-driven financial metrics (gross/total revenue and earnings),
+    // date filtering should follow payment completion lifecycle (deliveredAt)
+    // instead of order creation time.
+    const financialBaseQuery = { ...query };
+    delete financialBaseQuery.createdAt;
+
+    if (fromDate || toDate) {
+      financialBaseQuery.deliveredAt = {};
+      if (fromDate) {
+        const startDate = new Date(fromDate);
+        startDate.setHours(0, 0, 0, 0);
+        financialBaseQuery.deliveredAt.$gte = startDate;
+      }
+      if (toDate) {
+        const endDate = new Date(toDate);
+        endDate.setHours(23, 59, 59, 999);
+        financialBaseQuery.deliveredAt.$lte = endDate;
+      }
+    }
+
+    const completedOrdersRaw = await Order.find({
+      ...financialBaseQuery,
+      status: 'delivered',
+      'payment.status': 'completed'
+    })
+      .populate('userId', 'name')
+      .populate('restaurantId', 'name')
+      .lean();
+
+    // Calculate completed transactions (delivered + paid orders)
+    const completedOrders = completedOrdersRaw;
     const completedTransaction = completedOrders.reduce((sum, order) =>
       sum + (order.pricing?.total || 0), 0
     );
@@ -1309,6 +1336,32 @@ export const getTransactionReport = asyncHandler(async (req, res) => {
       return sum + (Number(order.pricing?.deliveryFee) || 0) * 0.8;
     }, 0);
 
+    // Gross revenue: total value of completed paid transactions.
+    const grossRevenue = completedTransaction;
+
+    // Total revenue: admin-side earning total (commission + platform fee + delivery fee + GST).
+    const totalRevenue = completedOrders.reduce((sum, order) => {
+      const orderId = order._id?.toString();
+      const settlement = settlementByOrderId.get(orderId);
+
+      if (settlement?.adminEarning) {
+        const commission = Number(settlement.adminEarning.commission) || 0;
+        const platformFee = Number(settlement.adminEarning.platformFee) || 0;
+        const deliveryFee = Number(settlement.adminEarning.deliveryFee) || 0;
+        const gst = Number(settlement.adminEarning.gst) || 0;
+        return sum + commission + platformFee + deliveryFee + gst;
+      }
+
+      // Fallback to existing admin earning calculation when full settlement split is unavailable.
+      const commission = commissionByOrderId.get(orderId);
+      const earningFromCommission = Number(commission?.commissionAmount);
+      if (Number.isFinite(earningFromCommission)) {
+        return sum + earningFromCommission;
+      }
+
+      return sum;
+    }, 0);
+
     // Transform orders to match frontend format
     const transformedTransactions = orders.map((order, index) => {
       const subtotal = order.pricing?.subtotal || 0;
@@ -1356,7 +1409,9 @@ export const getTransactionReport = asyncHandler(async (req, res) => {
         refundedTransaction,
         adminEarning,
         restaurantEarning,
-        deliverymanEarning
+        deliverymanEarning,
+        grossRevenue,
+        totalRevenue
       },
       transactions: transformedTransactions,
       pagination: {

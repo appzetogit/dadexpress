@@ -20,6 +20,7 @@ import {
   MapPin,
   ChefHat,
   Phone,
+  MessageSquare,
   X,
   TargetIcon,
   Play,
@@ -462,6 +463,7 @@ export default function DeliveryHome() {
   const lastRouteRecalculationRef = useRef(null) // Track last route recalculation time (API cost optimization)
   const lastBikePositionRef = useRef(null) // Track last bike position for deviation detection
   const acceptedOrderIdsRef = useRef(new Set()) // Track accepted order IDs to prevent duplicate notifications
+  const rejectedOrderIdsRef = useRef(new Set()) // Track rejected order IDs to prevent duplicate notifications
   const incomingOrderNoticeIdsRef = useRef(new Set()) // Prevent duplicate banner notifications for the same order
   // Live tracking polyline refs
   const liveTrackingPolylineRef = useRef(null) // Google Maps Polyline instance for live tracking
@@ -619,6 +621,8 @@ export default function DeliveryHome() {
     return hotspots
   })
   const [selectedRestaurant, setSelectedRestaurant] = useState(null)
+  const [isRefreshingPickupDetails, setIsRefreshingPickupDetails] = useState(false)
+  const lastAutoPickupRefreshOrderRef = useRef(null)
   const [bottomSheetExpanded, setBottomSheetExpanded] = useState(false)
   const [acceptButtonProgress, setAcceptButtonProgress] = useState(0)
   const [isAnimatingToComplete, setIsAnimatingToComplete] = useState(false)
@@ -895,6 +899,149 @@ export default function DeliveryHome() {
     )
   }, [])
 
+  const resolveEstimatedEarningsValue = useCallback((orderLike) => {
+    if (!orderLike) return 0
+
+    const estimated = orderLike?.estimatedEarnings
+    const deliveryStateEstimated = orderLike?.deliveryState?.estimatedEarnings
+
+    const candidates = [
+      estimated?.totalEarning,
+      estimated?.amount,
+      deliveryStateEstimated?.totalEarning,
+      deliveryStateEstimated?.amount,
+      typeof estimated === "number" ? estimated : null,
+      typeof deliveryStateEstimated === "number" ? deliveryStateEstimated : null,
+      orderLike?.amount,
+      orderLike?.deliveryFee,
+    ]
+
+    for (const candidate of candidates) {
+      const value = Number(candidate)
+      if (Number.isFinite(value) && value > 0) return value
+    }
+
+    return 0
+  }, [])
+
+  const getRestaurantProfilePhotoUrl = useCallback((orderLike, fallbackValue = null) => {
+    if (!orderLike) return fallbackValue
+
+    const fullOrder =
+      orderLike?.fullOrder && typeof orderLike.fullOrder === "object"
+        ? orderLike.fullOrder
+        : null
+    const restaurantFromOrder =
+      (orderLike?.restaurantId && typeof orderLike.restaurantId === "object" ? orderLike.restaurantId : null) ||
+      (orderLike?.restaurant && typeof orderLike.restaurant === "object" ? orderLike.restaurant : null) ||
+      (fullOrder?.restaurantId && typeof fullOrder.restaurantId === "object" ? fullOrder.restaurantId : null) ||
+      (fullOrder?.restaurant && typeof fullOrder.restaurant === "object" ? fullOrder.restaurant : null)
+
+    const candidates = [
+      orderLike?.restaurantProfilePhoto,
+      orderLike?.restaurantImage,
+      orderLike?.restaurantLogo,
+      fullOrder?.restaurantProfilePhoto,
+      fullOrder?.restaurantImage,
+      fullOrder?.restaurantLogo,
+      restaurantFromOrder?.profileImage,
+      restaurantFromOrder?.image,
+      restaurantFromOrder?.logo,
+      restaurantFromOrder?.onboarding?.step2?.profileImageUrl?.url,
+      restaurantFromOrder?.onboarding?.step2?.menuImageUrls?.[0]?.url,
+      fallbackValue
+    ]
+
+    for (const candidate of candidates) {
+      if (typeof candidate === "string" && candidate.trim()) {
+        return candidate.trim()
+      }
+    }
+
+    return null
+  }, [])
+
+  const refreshReachedPickupDetails = useCallback(async () => {
+    const { mongoId, orderId } = getOrderIdCandidates(selectedRestaurant, newOrder)
+    const targetOrderId = mongoId || orderId
+
+    if (!targetOrderId) {
+      toast.error("Order details not available to update")
+      return
+    }
+
+    setIsRefreshingPickupDetails(true)
+    try {
+      const response = await deliveryAPI.getOrderDetails(targetOrderId)
+      const order =
+        response?.data?.data?.order ||
+        response?.data?.order ||
+        response?.data?.data ||
+        null
+
+      if (!order) {
+        toast.error("Unable to fetch latest order details")
+        return
+      }
+
+      const restaurantObj =
+        order?.restaurantId && typeof order.restaurantId === "object"
+          ? order.restaurantId
+          : null
+      const restLocation = restaurantObj?.location || {}
+
+      const restaurantName =
+        (typeof order?.restaurantName === "string" && order.restaurantName.trim()) ||
+        (typeof restaurantObj?.name === "string" && restaurantObj.name.trim()) ||
+        selectedRestaurant?.name ||
+        "Restaurant"
+
+      const restaurantAddress =
+        order?.restaurantAddress ||
+        restaurantObj?.address ||
+        restLocation?.formattedAddress ||
+        restLocation?.address ||
+        [
+          restLocation?.addressLine1,
+          restLocation?.addressLine2,
+          restLocation?.area,
+          restLocation?.city,
+          restLocation?.state,
+          restLocation?.pincode || restLocation?.zipCode || restLocation?.postalCode
+        ].filter(Boolean).join(", ") ||
+        selectedRestaurant?.address ||
+        ""
+
+      const profilePhoto = getRestaurantProfilePhotoUrl(order, selectedRestaurant?.restaurantProfilePhoto)
+      const items = Array.isArray(order?.items) ? order.items : []
+      const coords = Array.isArray(restLocation?.coordinates) ? restLocation.coordinates : []
+      const lat = Number(coords[1])
+      const lng = Number(coords[0])
+
+      setSelectedRestaurant((prev) => ({
+        ...(prev || {}),
+        orderId: order?.orderId || prev?.orderId,
+        orderMongoId: order?._id || prev?.orderMongoId || null,
+        name: restaurantName,
+        address: restaurantAddress,
+        customerId: resolveCustomerId(order) || prev?.customerId || null,
+        restaurantProfilePhoto: profilePhoto || prev?.restaurantProfilePhoto || null,
+        items: items.length ? items : (prev?.items || []),
+        paymentMethod: order?.paymentMethod ?? order?.payment?.method ?? prev?.paymentMethod,
+        phone: restaurantObj?.phone || restaurantObj?.ownerPhone || prev?.phone || null,
+        ownerPhone: restaurantObj?.ownerPhone || prev?.ownerPhone || null,
+        ...(Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : {})
+      }))
+
+      toast.success("Pickup details updated")
+    } catch (error) {
+      console.error("❌ Error refreshing reached pickup details:", error)
+      toast.error("Failed to update pickup details")
+    } finally {
+      setIsRefreshingPickupDetails(false)
+    }
+  }, [getRestaurantProfilePhotoUrl, newOrder, selectedRestaurant])
+
   const showIncomingOrderBanner = useCallback((orderData) => {
     if (!orderData) return
 
@@ -906,13 +1053,7 @@ export default function DeliveryHome() {
       incomingOrderNoticeIdsRef.current.add(String(incomingOrderKey))
     }
 
-    const earningsValue = Number(
-      orderData?.amount ??
-      orderData?.estimatedEarnings?.totalEarning ??
-      orderData?.estimatedEarnings ??
-      orderData?.deliveryFee ??
-      0
-    ) || 0
+    const earningsValue = resolveEstimatedEarningsValue(orderData)
 
     setIncomingOrderBanner({
       ...orderData,
@@ -930,7 +1071,7 @@ export default function DeliveryHome() {
     toast.success(`New order request from ${orderData?.name || "restaurant"}`, {
       duration: 3500
     })
-  }, [])
+  }, [resolveEstimatedEarningsValue])
 
   const shouldKeepActiveOrderVisible = useCallback((incomingOrderData) => {
     if (!selectedRestaurant) return false
@@ -1742,6 +1883,12 @@ export default function DeliveryHome() {
   }
 
   const handleRejectConfirm = () => {
+    const { mongoId, orderId: orderIdString } = getOrderIdCandidates(selectedRestaurant, newOrder)
+    const rejectedOrderId = mongoId || orderIdString
+    if (rejectedOrderId) {
+      rejectedOrderIdsRef.current.add(rejectedOrderId)
+    }
+
     if (alertAudioRef.current) {
       alertAudioRef.current.pause()
       alertAudioRef.current.currentTime = 0
@@ -1752,6 +1899,8 @@ export default function DeliveryHome() {
     setNewOrderDragY(0) // Reset drag position
     setRejectReason("")
     setCountdownSeconds(300)
+    setIncomingOrderBanner(null)
+    clearNewOrder()
     // Here you would typically send the rejection to your backend
     false && console.log("Order rejected with reason:", rejectReason)
     // 🔔 Real-time notification: Order Rejected
@@ -2845,9 +2994,11 @@ export default function DeliveryHome() {
               });
 
               restaurantInfo = {
+                orderMongoId: order?._id || selectedRestaurant?.orderMongoId || null,
                 id: order._id || order.orderId,
                 orderId: order.orderId, // Correct order ID from backend
                 name: restaurantName, // Restaurant name from backend (priority: restaurantName > restaurantId.name)
+                restaurantProfilePhoto: getRestaurantProfilePhotoUrl(order, selectedRestaurant?.restaurantProfilePhoto),
                 address: restaurantAddress, // Restaurant address from backend
                 lat: restaurantLat || selectedRestaurant?.lat,
                 lng: restaurantLng || selectedRestaurant?.lng,
@@ -2858,6 +3009,7 @@ export default function DeliveryHome() {
                 estimatedEarnings: backendEarnings || selectedRestaurant?.estimatedEarnings || 0,
                 amount: earningsValue, // Also set amount for compatibility
                 customerName: order.userId?.name || selectedRestaurant?.customerName,
+                customerId: resolveCustomerId(order) || selectedRestaurant?.customerId || null,
                 customerAddress: order.address?.formattedAddress ||
                   (order.address?.street ? `${order.address.street}, ${order.address.city || ''}, ${order.address.state || ''}`.trim() : '') ||
                   selectedRestaurant?.customerAddress,
@@ -4218,6 +4370,7 @@ export default function DeliveryHome() {
                 const updatedRestaurant = {
                   ...selectedRestaurant,
                   customerName: order.userId?.name || selectedRestaurant.customerName,
+                  customerId: resolveCustomerId(order) || selectedRestaurant.customerId || null,
                   customerAddress: order.address?.formattedAddress ||
                     (order.address?.street ? `${order.address.street}, ${order.address.city || ''}, ${order.address.state || ''}`.trim() : '') ||
                     selectedRestaurant.customerAddress,
@@ -4387,6 +4540,22 @@ export default function DeliveryHome() {
     return text.replace(/[^\d+]/g, '')
   }
 
+  const normalizeEntityId = (value) => {
+    if (value === null || value === undefined) return ''
+    if (typeof value === 'object') {
+      return normalizeEntityId(
+        value?._id ??
+        value?.id ??
+        value?.userId ??
+        value?.customerId ??
+        null
+      )
+    }
+    const text = String(value).trim()
+    if (!text || text === '[object Object]') return ''
+    return text
+  }
+
   const resolveCustomerPhone = (orderLike) => {
     const candidates = [
       orderLike?.customerPhone,
@@ -4402,6 +4571,27 @@ export default function DeliveryHome() {
     for (const candidate of candidates) {
       const phone = normalizePhoneNumber(candidate)
       if (phone) return phone
+    }
+    return ''
+  }
+
+  const resolveCustomerId = (orderLike) => {
+    const candidates = [
+      orderLike?.customerId,
+      orderLike?.customer?._id,
+      orderLike?.customer?.id,
+      orderLike?.customer?.userId,
+      orderLike?.userId?._id,
+      orderLike?.userId?.id,
+      orderLike?.userId,
+      orderLike?.user?._id,
+      orderLike?.user?.id,
+      orderLike?.user
+    ]
+
+    for (const candidate of candidates) {
+      const id = normalizeEntityId(candidate)
+      if (id) return id
     }
     return ''
   }
@@ -4482,6 +4672,56 @@ export default function DeliveryHome() {
       duration: 2000
     })
     return true
+  }
+
+  const handleOpenCustomerChat = async () => {
+    const localOrderId =
+      normalizeEntityId(selectedRestaurant?.orderMongoId) ||
+      normalizeEntityId(selectedRestaurant?.id) ||
+      normalizeEntityId(selectedRestaurant?.orderId)
+
+    if (!localOrderId) {
+      toast.error('Order details not available')
+      return
+    }
+
+    let customerId = resolveCustomerId(selectedRestaurant)
+    let chatOrderId = localOrderId
+
+    if (!customerId && selectedRestaurant?.orderId) {
+      try {
+        const orderId = selectedRestaurant.orderMongoId || selectedRestaurant.orderId || selectedRestaurant.id
+        const response = await deliveryAPI.getOrderDetails(orderId)
+        const order = response?.data?.data?.order || response?.data?.order || response?.data?.data || null
+
+        if (order) {
+          customerId = resolveCustomerId(order)
+          chatOrderId = normalizeEntityId(order?._id) || chatOrderId
+
+          if (customerId) {
+            setSelectedRestaurant(prev => prev ? {
+              ...prev,
+              customerId,
+              customerName: order?.userId?.name || prev?.customerName
+            } : prev)
+          }
+        }
+      } catch (error) {
+        console.error('❌ [CHAT] Error fetching order details for customer chat:', error)
+      }
+    }
+
+    if (!customerId) {
+      toast.error('Customer chat is not available right now')
+      return
+    }
+
+    const query = new URLSearchParams({
+      orderId: String(chatOrderId),
+      type: 'customer',
+      userId: String(customerId)
+    })
+    navigate(`/delivery/profile/conversation/chat?${query.toString()}`)
   }
 
   // Handle Start Navigation Button - Opens Google Maps app in navigation mode
@@ -4767,9 +5007,9 @@ export default function DeliveryHome() {
     if (newOrder) {
       const orderId = newOrder.orderMongoId || newOrder.orderId;
 
-      // Check if this order has already been accepted
-      if (acceptedOrderIdsRef.current.has(orderId)) {
-        false && console.log('⚠️ Order already accepted, ignoring duplicate notification:', orderId);
+      // Check if this order has already been accepted/rejected
+      if (acceptedOrderIdsRef.current.has(orderId) || rejectedOrderIdsRef.current.has(orderId)) {
+        false && console.log('⚠️ Order already handled, ignoring duplicate notification:', orderId);
         clearNewOrder();
         return;
       }
@@ -4819,6 +5059,11 @@ export default function DeliveryHome() {
 
       // Use calculated earnings if available, otherwise fallback to deliveryFee
       const effectiveEarnings = earnedValue > 0 ? earned : (deliveryFee > 0 ? deliveryFee : 0);
+      const normalizedEarningAmount = resolveEstimatedEarningsValue({
+        estimatedEarnings: effectiveEarnings,
+        amount: earnedValue,
+        deliveryFee
+      });
 
       false && console.log('💰 Earnings from notification:', {
         earned,
@@ -4862,6 +5107,7 @@ export default function DeliveryHome() {
         id: newOrder.orderMongoId || newOrder._id || newOrder.id || newOrder.orderId,
         orderId: newOrder.orderId,
         name: newOrder.restaurantName,
+        restaurantProfilePhoto: getRestaurantProfilePhotoUrl(newOrder, selectedRestaurant?.restaurantProfilePhoto),
         address: restaurantAddress,
         lat: newOrder.restaurantLocation?.latitude,
         lng: newOrder.restaurantLocation?.longitude,
@@ -4871,7 +5117,7 @@ export default function DeliveryHome() {
         pickupDistance: pickupDistance,
         estimatedEarnings: effectiveEarnings,
         deliveryFee,
-        amount: earnedValue > 0 ? earnedValue : (deliveryFee > 0 ? deliveryFee : 0),
+        amount: normalizedEarningAmount,
         deliveryInstruction:
           newOrder.deliveryInstruction ||
           newOrder.deliveryInstructions ||
@@ -4881,6 +5127,7 @@ export default function DeliveryHome() {
           newOrder.fullOrder?.delivery_instruction ||
           "",
         customerName: newOrder.customerName,
+        customerId: resolveCustomerId(newOrder) || resolveCustomerId(newOrder?.fullOrder) || null,
         customerAddress: newOrder.customerLocation?.address || 'Customer address',
         customerPhone: newOrder.customerPhone || newOrder.customer?.phone || newOrder.user?.phone || null,
         customerLat: newOrder.customerLocation?.latitude,
@@ -5356,6 +5603,7 @@ export default function DeliveryHome() {
             id: firstOrder._id?.toString() || firstOrder.orderId,
             orderId: firstOrder.orderId,
             name: firstOrder.restaurantId?.name || 'Restaurant',
+            restaurantProfilePhoto: getRestaurantProfilePhotoUrl(firstOrder),
             address: restaurantAddress,
             lat: firstOrder.restaurantId?.location?.coordinates?.[1],
             lng: firstOrder.restaurantId?.location?.coordinates?.[0],
@@ -5365,10 +5613,13 @@ export default function DeliveryHome() {
               ? 'Calculating...'
               : '0 km',
             pickupDistance: pickupDistance,
-            estimatedEarnings: firstOrder.deliveryState?.estimatedEarnings?.totalEarning ||
+            estimatedEarnings:
+              firstOrder.estimatedEarnings ||
               firstOrder.deliveryState?.estimatedEarnings ||
-              firstOrder.pricing?.deliveryFee || 0,
+              firstOrder.pricing?.deliveryFee ||
+              0,
             customerName: firstOrder.userId?.name || 'Customer',
+            customerId: resolveCustomerId(firstOrder) || null,
             customerAddress: firstOrder.address?.formattedAddress ||
               (firstOrder.address?.street
                 ? `${firstOrder.address.street}, ${firstOrder.address.city || ''}, ${firstOrder.address.state || ''}`.trim()
@@ -5381,7 +5632,14 @@ export default function DeliveryHome() {
             // Keep both keys for backward-compatibility; UI should prefer paymentMethod.
             paymentMethod: firstOrder.paymentMethod ?? firstOrder.payment?.method ?? null,
             payment: firstOrder.paymentMethod ?? firstOrder.payment?.method ?? null,
-            amount: firstOrder.pricing?.total || 0
+            amount: resolveEstimatedEarningsValue({
+              estimatedEarnings:
+                firstOrder.estimatedEarnings ||
+                firstOrder.deliveryState?.estimatedEarnings ||
+                firstOrder.pricing?.deliveryFee ||
+                0,
+              deliveryFee: firstOrder.pricing?.deliveryFee
+            })
           }
 
           if (shouldKeepActiveOrderVisible(restaurantData)) {
@@ -5391,10 +5649,10 @@ export default function DeliveryHome() {
 
           setSelectedRestaurant(restaurantData)
 
-          // CRITICAL: Re-check if order was accepted AFTER the async operations above
-          // User might have swiped to accept while this function was running
-          if (acceptedOrderIdsRef.current.has(orderId)) {
-            false && console.log('⚠️ [fetchAssignedOrders] Order was accepted while fetching, not showing popup:', orderId)
+          // CRITICAL: Re-check if order was already handled AFTER async operations above
+          // User might have accepted/rejected while this function was running
+          if (acceptedOrderIdsRef.current.has(orderId) || rejectedOrderIdsRef.current.has(orderId)) {
+            false && console.log('⚠️ [fetchAssignedOrders] Order already handled while fetching, not showing popup:', orderId)
             return
           }
 
@@ -7788,12 +8046,24 @@ export default function DeliveryHome() {
       return
     }
 
-    // Always fetch to ensure we have the latest address (even if one exists, it might be incomplete)
-    // Only skip if we have a valid non-default address
-    if (selectedRestaurant?.address &&
+    // Skip only when all pickup-card essentials are already present.
+    const hasValidAddress =
+      !!selectedRestaurant?.address &&
       selectedRestaurant.address !== 'Restaurant Address' &&
-      selectedRestaurant.address.length > 20) { // Valid address should be longer than default
-      false && console.log('⏭️ Skipping fetch - address already exists and seems valid:', selectedRestaurant.address)
+      selectedRestaurant.address !== 'Restaurant address' &&
+      selectedRestaurant.address.length > 20
+    const hasRestaurantName =
+      !!selectedRestaurant?.name &&
+      selectedRestaurant.name !== 'Restaurant' &&
+      String(selectedRestaurant.name).trim().length > 0
+    const hasOrderItems =
+      Array.isArray(selectedRestaurant?.items) &&
+      selectedRestaurant.items.length > 0
+    const hasProfilePhoto =
+      !!getRestaurantProfilePhotoUrl(selectedRestaurant, null)
+
+    if (hasValidAddress && hasRestaurantName && hasOrderItems && hasProfilePhoto) {
+      false && console.log('⏭️ Skipping fetch - pickup details already available')
       return
     }
 
@@ -7806,6 +8076,16 @@ export default function DeliveryHome() {
         if (response.data?.success && response.data.data) {
           const orderData = response.data.data
           const order = orderData.order || orderData
+          const orderRestaurant =
+            (order?.restaurantId && typeof order.restaurantId === 'object' ? order.restaurantId : null) ||
+            (order?.restaurant && typeof order.restaurant === 'object' ? order.restaurant : null)
+          const resolvedRestaurantName =
+            (typeof order?.restaurantName === 'string' && order.restaurantName.trim()) ||
+            (typeof orderRestaurant?.name === 'string' && orderRestaurant.name.trim()) ||
+            selectedRestaurant?.name ||
+            'Restaurant'
+          const resolvedProfilePhoto = getRestaurantProfilePhotoUrl(order, selectedRestaurant?.restaurantProfilePhoto)
+          const resolvedItems = Array.isArray(order?.items) ? order.items : []
 
           // Debug: Log full order structure
           false && console.log('🔍 Full order structure:', JSON.stringify(order, null, 2))
@@ -7868,12 +8148,15 @@ export default function DeliveryHome() {
             false && console.log('✅ Fetched order.restaurant.location.address:', restaurantAddress)
           }
 
-          // Update selectedRestaurant with fetched address
+          // Update selectedRestaurant with fetched details
           if (restaurantAddress && restaurantAddress !== 'Restaurant Address') {
             setSelectedRestaurant(prev => {
               const updated = {
                 ...prev,
-                address: restaurantAddress
+                address: restaurantAddress,
+                name: resolvedRestaurantName,
+                restaurantProfilePhoto: resolvedProfilePhoto || prev?.restaurantProfilePhoto || null,
+                items: resolvedItems.length ? resolvedItems : (prev?.items || [])
               }
               false && console.log('✅ Updated selectedRestaurant with fetched address:', {
                 oldAddress: prev?.address,
@@ -7939,10 +8222,26 @@ export default function DeliveryHome() {
                     false && console.log('✅ Built address from restaurant fields:', fetchedAddress)
                   }
 
-                  // Update selectedRestaurant with fetched address and phone
+                  // Update selectedRestaurant with fetched pickup card details
                   const updates = {}
                   if (fetchedAddress && fetchedAddress !== 'Restaurant Address') {
                     updates.address = fetchedAddress
+                  }
+
+                  const fetchedName =
+                    (typeof restaurant?.name === 'string' && restaurant.name.trim()) ||
+                    resolvedRestaurantName
+                  if (fetchedName) {
+                    updates.name = fetchedName
+                  }
+
+                  const fetchedProfilePhoto = getRestaurantProfilePhotoUrl(restaurant, resolvedProfilePhoto)
+                  if (fetchedProfilePhoto) {
+                    updates.restaurantProfilePhoto = fetchedProfilePhoto
+                  }
+
+                  if (resolvedItems.length) {
+                    updates.items = resolvedItems
                   }
 
                   // Also fetch phone number from restaurant data
@@ -10563,44 +10862,12 @@ export default function DeliveryHome() {
                       <div>
                         <p className="text-gray-500 text-sm mb-1">Estimated earnings</p>
                         <p className="text-4xl font-bold text-gray-900 mb-2">
-                          ₹{(() => {
-                            // Prefer currently selected order values to avoid stale popup amounts.
-                            const earnings = selectedRestaurant?.estimatedEarnings ?? newOrder?.estimatedEarnings ?? 0;
-                            const fallback = selectedRestaurant?.deliveryFee ?? newOrder?.deliveryFee ?? 0;
-                            let value = 0;
-
-                            false && console.log('💰 Display earnings calculation:', {
-                              earnings,
-                              earningsType: typeof earnings,
-                              newOrderEarnings: newOrder?.estimatedEarnings,
-                              selectedRestaurantEarnings: selectedRestaurant?.estimatedEarnings,
-                              fallback
-                            });
-
-                            if (earnings) {
-                              if (typeof earnings === 'object') {
-                                // Handle earnings object
-                                if (earnings.totalEarning != null) {
-                                  value = Number(earnings.totalEarning) || 0;
-                                } else if (earnings.amount != null) {
-                                  value = Number(earnings.amount) || 0;
-                                } else if (earnings.basePayout != null) {
-                                  // If only basePayout is available, use it
-                                  value = Number(earnings.basePayout) || 0;
-                                }
-                              } else if (typeof earnings === 'number') {
-                                value = earnings > 0 ? earnings : 0;
-                              }
-                            }
-
-                            // If value is still 0, try fallback
-                            if (value <= 0 && fallback > 0) {
-                              value = Number(fallback);
-                            }
-
-                            false && console.log('💰 Final earnings value to display:', value);
-                            return value > 0 ? value.toFixed(2) : '0.00';
-                          })()}
+                          ₹{resolveEstimatedEarningsValue({
+                            estimatedEarnings: selectedRestaurant?.estimatedEarnings ?? newOrder?.estimatedEarnings,
+                            amount: selectedRestaurant?.amount ?? newOrder?.amount,
+                            deliveryFee: selectedRestaurant?.deliveryFee ?? newOrder?.deliveryFee,
+                            deliveryState: selectedRestaurant?.deliveryState ?? newOrder?.deliveryState
+                          }).toFixed(2)}
                         </p>
                         {/* Earnings Breakdown */}
                         {(() => {
@@ -10937,9 +11204,51 @@ export default function DeliveryHome() {
 
           {/* Restaurant Info */}
           <div className="mb-6">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">
-              {selectedRestaurant?.name || 'Restaurant Name'}
-            </h2>
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <div className="flex items-center gap-3 min-w-0">
+                {(() => {
+                  const profilePhoto = getRestaurantProfilePhotoUrl(
+                    selectedRestaurant,
+                    getRestaurantProfilePhotoUrl(newOrder, null)
+                  )
+                  const displayName = selectedRestaurant?.name || newOrder?.restaurantName || "Restaurant"
+                  const initial = String(displayName || "R").trim().charAt(0).toUpperCase() || "R"
+
+                  if (profilePhoto) {
+                    return (
+                      <img
+                        src={profilePhoto}
+                        alt={displayName}
+                        className="w-14 h-14 rounded-xl object-cover border border-gray-200 shrink-0"
+                        onError={(e) => {
+                          e.currentTarget.style.display = "none"
+                        }}
+                      />
+                    )
+                  }
+
+                  return (
+                    <div className="w-14 h-14 rounded-xl bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-700 font-bold text-lg shrink-0">
+                      {initial}
+                    </div>
+                  )
+                })()}
+                <h2 className="text-2xl font-bold text-gray-900 truncate">
+                  {selectedRestaurant?.name || newOrder?.restaurantName || 'Restaurant'}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={refreshReachedPickupDetails}
+                disabled={isRefreshingPickupDetails}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${isRefreshingPickupDetails
+                  ? "bg-gray-100 text-gray-500 border-gray-200 cursor-not-allowed"
+                  : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                  }`}
+              >
+                {isRefreshingPickupDetails ? "Updating..." : "Update"}
+              </button>
+            </div>
             <p className="text-gray-600 mb-2 leading-relaxed">
               {(() => {
                 const address = selectedRestaurant?.address;
@@ -10977,6 +11286,42 @@ export default function DeliveryHome() {
                 {(String((selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment ?? '') || '').toLowerCase() === 'cash' || String((selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment ?? '') || '').toLowerCase() === 'cod') ? 'COD' : 'Paid'}
               </div>
             </div>
+            {(() => {
+              const pickupItems = Array.isArray(selectedRestaurant?.items) && selectedRestaurant.items.length
+                ? selectedRestaurant.items
+                : (Array.isArray(newOrder?.items) && newOrder.items.length
+                  ? newOrder.items
+                  : (Array.isArray(newOrder?.fullOrder?.items) ? newOrder.fullOrder.items : []))
+
+              if (!pickupItems.length) return null
+
+              return (
+                <div className="mt-3 bg-gray-50 border border-gray-200 rounded-xl p-3">
+                  <p className="text-xs font-semibold text-gray-700 mb-1.5">Order food details</p>
+                  <div className="space-y-1">
+                    {pickupItems.slice(0, 4).map((item, idx) => {
+                      const itemName =
+                        item?.name ||
+                        item?.title ||
+                        item?.foodName ||
+                        item?.itemName ||
+                        "Item"
+                      const qty = Number(item?.quantity ?? item?.qty ?? 1) || 1
+                      return (
+                        <p key={`${itemName}-${idx}`} className="text-sm text-gray-800 leading-snug">
+                          {qty} x {itemName}
+                        </p>
+                      )
+                    })}
+                    {pickupItems.length > 4 ? (
+                      <p className="text-xs text-gray-500">
+                        +{pickupItems.length - 4} more item{pickupItems.length - 4 > 1 ? "s" : ""}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              )
+            })()}
           </div>
 
           {/* Action Buttons */}
@@ -11567,7 +11912,7 @@ export default function DeliveryHome() {
           </div>
 
           {/* Action Buttons */}
-          <div className="flex gap-3 mb-6">
+          <div className="grid grid-cols-3 gap-3 mb-6">
             <button
               onClick={async () => {
                 let customerPhone = resolveCustomerPhone(selectedRestaurant)
@@ -11631,6 +11976,13 @@ export default function DeliveryHome() {
             >
               <MapPin className="w-5 h-5 text-white" />
               <span className="text-white font-medium">Map</span>
+            </button>
+            <button
+              onClick={handleOpenCustomerChat}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <MessageSquare className="w-5 h-5 text-gray-700" />
+              <span className="text-gray-700 font-medium">Chat</span>
             </button>
           </div>
 
