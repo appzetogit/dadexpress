@@ -886,60 +886,131 @@ export default function RestaurantDetails() {
     }
   }
 
-  // Menu categories - dynamically generated from restaurant menu sections
-  const menuCategories = (restaurant?.menuSections && Array.isArray(restaurant.menuSections))
-    ? restaurant.menuSections.map((section, index) => {
-      // Handle section name - check for valid non-empty string
-      let sectionTitle = "Unnamed Section"
-      if (index === 0) {
-        sectionTitle = "Recommended for you"
+  // --- Centralized Filtering & Sorting Logic (`useMemo`) ---
+  const processedMenuData = useMemo(() => {
+    if (!restaurant?.menuSections || !Array.isArray(restaurant.menuSections)) {
+      return { sections: [], categories: [] }
+    }
+
+    const { sortBy, vegNonVeg, highlyReordered } = filters
+
+    const isVegOnly = vegMode === true || vegNonVeg === 'veg' || vegNonVeg === 'pure-veg'
+
+    const processedSections = []
+    let processedCategories = []
+
+    restaurant.menuSections.forEach((section, originalIndex) => {
+      // 1. Process Section Name
+      let sectionTitle = 'Unnamed Section'
+      if (originalIndex === 0) {
+        sectionTitle = 'Recommended for you'
       } else if (section?.name && typeof section.name === 'string' && section.name.trim()) {
         sectionTitle = section.name.trim()
       } else if (section?.title && typeof section.title === 'string' && section.title.trim()) {
         sectionTitle = section.title.trim()
       }
 
-      const isVegOnly =
-        vegMode === true ||
-        filters.vegNonVeg === "veg" ||
-        filters.vegNonVeg === "pure-veg"
+      // 2. Process Initial Items & Subsections deeply cloned (so we don't mutate state)
+      const clonedSection = {
+        ...section,
+        name: sectionTitle, // normalized name
+        items: [...(section.items || [])],
+        subsections: (section.subsections || []).map(sub => ({
+          ...sub,
+          name: sub.name || sub.title || 'Subsection',
+          items: [...(sub.items || [])]
+        }))
+      }
 
-      const isVegItem = (item) => item?.foodType === "Veg" || item?.isVeg === true
+      // Helper function to apply all filters to a single item
+      const filterItem = (item) => {
+        // Under 250 filter
+        if (showOnlyUnder250) {
+          if (item.isAvailable === false) return false
+          const finalPrice = getFinalPrice(item)
+          if (finalPrice > 250) return false
+        }
 
-      const itemCount = section?.items?.length || 0
-      const subsectionCount =
-        section?.subsections?.reduce((sum, sub) => sum + (sub?.items?.length || 0), 0) || 0
+        // Search filter
+        if (searchQuery.trim()) {
+          const query = searchQuery.toLowerCase().trim()
+          const itemName = item.name?.toLowerCase() || ''
+          if (!itemName.includes(query)) return false
+        }
+
+        // Veg/Non-veg filtering
+        if (isVegOnly) {
+           if (item.foodType !== 'Veg' && item.isVeg !== true) return false
+        }
+        if (vegNonVeg === 'non-veg') {
+           if (item.foodType === 'Veg' || item.isVeg === true) return false
+        }
+
+        // Highly reordered
+        if (highlyReordered && !item.customisable) {
+          return false
+        }
+
+        return true
+      }
+
+      // Helper function to sort an array of items
+      const sortItems = (items) => {
+        if (!sortBy) return items
+        return items.sort((a, b) => {
+          if (sortBy === 'low-to-high') {
+             return getFinalPrice(a) - getFinalPrice(b)
+          } else if (sortBy === 'high-to-low') {
+             return getFinalPrice(b) - getFinalPrice(a)
+          }
+          return 0
+        })
+      }
+
+      // 3. Apply Filters and Sort
+      clonedSection.items = sortItems(clonedSection.items.filter(filterItem))
+      clonedSection.subsections = clonedSection.subsections.map(sub => {
+        return {
+          ...sub,
+          items: sortItems(sub.items.filter(filterItem))
+        }
+      })
+
+      // 4. Calculate counts directly based on filtered items
+      const itemCount = clonedSection.items.length
+      const subsectionCount = clonedSection.subsections.reduce((sum, sub) => sum + sub.items.length, 0)
       const totalCount = itemCount + subsectionCount
 
-      const vegItemCount = (() => {
-        if (!isVegOnly) return totalCount
-        let count = 0
-        if (section?.items?.length) {
-          count += section.items.filter(isVegItem).length
-        }
-        if (section?.subsections?.length) {
-          section.subsections.forEach((sub) => {
-            if (sub?.items?.length) {
-              count += sub.items.filter(isVegItem).length
-            }
-          })
-        }
-        return count
-      })()
+      // Include the section if it has any items matching OR if it's the "Recommended" section (index 0)
+      // (The recommended section handles its empty state explicitly in the UI)
+      if (totalCount > 0 || originalIndex === 0) {
+         processedSections.push({
+           section: clonedSection,
+           originalIndex
+         })
 
-      return {
-        name: sectionTitle,
-        count: isVegOnly ? vegItemCount : totalCount,
-        sectionIndex: index,
+         // Add to categories
+         if (totalCount > 0) {
+            processedCategories.push({
+              name: sectionTitle,
+              count: totalCount,
+              sectionIndex: originalIndex
+            })
+         }
       }
     })
-      .filter((category) => {
-        if (vegMode === true || filters.vegNonVeg === "veg" || filters.vegNonVeg === "pure-veg") {
-          return category.count > 0
-        }
-        return true
-      })
-    : []
+
+    return {
+      sections: processedSections,
+      categories: processedCategories
+    }
+  }, [
+    restaurant?.menuSections,
+    filters,
+    searchQuery,
+    vegMode,
+    showOnlyUnder250
+  ])
 
   // Count active filters
   const getActiveFilterCount = () => {
@@ -1215,132 +1286,6 @@ export default function RestaurantDetails() {
     return Math.max(0, normalizePrice(item.price));
   };
 
-  // Filter menu items based on active filters
-  const filterMenuItems = (items) => {
-    if (!items) return items
-
-    return items.filter((item) => {
-      // Under 250 filter (when coming from Under 250 page)
-      if (showOnlyUnder250) {
-        const finalPrice = getFinalPrice(item);
-        if (finalPrice > 250) return false;
-      }
-
-      // Search filter
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase().trim()
-        const itemName = item.name?.toLowerCase() || ""
-        if (!itemName.includes(query)) return false
-      }
-
-      // VegMode filter - when vegMode is ON, show only Veg items
-      // When vegMode is false/null/undefined, show all items (Veg and Non-Veg)
-      if (vegMode === true) {
-        if (item.foodType !== "Veg" && item.isVeg !== true) return false
-      }
-
-      // Veg/Non-veg filter (local filter override)
-      if (filters.vegNonVeg === "veg" || filters.vegNonVeg === "pure-veg") {
-        // Show only veg items
-        if (item.foodType !== "Veg" && item.isVeg !== true) return false
-      }
-      if (filters.vegNonVeg === "non-veg") {
-        // Show only non-veg items
-        if (item.foodType === "Veg" || item.isVeg === true) return false
-      }
-
-      // Highly reordered filter (based on item tag used in UI)
-      if (filters.highlyReordered) {
-        if (!item.customisable) return false
-      }
-
-      return true
-    })
-  }
-
-  // Sort items based on sortBy filter
-  const sortMenuItems = (items) => {
-    if (!items) return items
-    if (!filters.sortBy) return items
-
-    const sorted = [...items]
-    if (filters.sortBy === "low-to-high") {
-      return sorted.sort((a, b) => getFinalPrice(a) - getFinalPrice(b))
-    } else if (filters.sortBy === "high-to-low") {
-      return sorted.sort((a, b) => getFinalPrice(b) - getFinalPrice(a))
-    }
-    return sorted
-  }
-
-  // Helper function to check if a section has any items under ₹250
-  const sectionHasItemsUnder250 = (section) => {
-    if (!showOnlyUnder250) return true; // If not filtering, show all sections
-
-    // Check direct items
-    if (section.items && section.items.length > 0) {
-      const hasUnder250Items = section.items.some(item => {
-        if (item.isAvailable === false) return false;
-        const finalPrice = getFinalPrice(item);
-        return finalPrice <= 250;
-      });
-      if (hasUnder250Items) return true;
-    }
-
-    // Check subsection items
-    if (section.subsections && section.subsections.length > 0) {
-      for (const subsection of section.subsections) {
-        if (subsection.items && subsection.items.length > 0) {
-          const hasUnder250Items = subsection.items.some(item => {
-            if (item.isAvailable === false) return false;
-            const finalPrice = getFinalPrice(item);
-            return finalPrice <= 250;
-          });
-          if (hasUnder250Items) return true;
-        }
-      }
-    }
-
-    return false;
-  }
-
-  // Filter sections to only show those with items under ₹250
-  // Returns array of { section, originalIndex } to preserve original index for expanded sections
-  const getFilteredSections = () => {
-    if (!restaurant?.menuSections) return [];
-    const isVegOnly =
-      vegMode === true ||
-      filters.vegNonVeg === "veg" ||
-      filters.vegNonVeg === "pure-veg"
-
-    const sectionHasVegItems = (section) => {
-      if (!isVegOnly) return true
-      const isVegItem = (item) => item?.foodType === "Veg" || item?.isVeg === true
-
-      if (section.items && section.items.length > 0) {
-        if (section.items.some(isVegItem)) return true
-      }
-
-      if (section.subsections && section.subsections.length > 0) {
-        for (const subsection of section.subsections) {
-          if (subsection.items && subsection.items.length > 0) {
-            if (subsection.items.some(isVegItem)) return true
-          }
-        }
-      }
-
-      return false
-    }
-
-    const baseSections = restaurant.menuSections.map((section, index) => ({ section, originalIndex: index }))
-
-    if (!showOnlyUnder250) {
-      return baseSections.filter(({ section }) => sectionHasVegItems(section))
-    }
-
-    return baseSections
-      .filter(({ section }) => sectionHasItemsUnder250(section))
-      .filter(({ section }) => sectionHasVegItems(section))
-  }
 
   // Highlight offers/texts for the blue offer line
   const highlightOffers = [
@@ -1642,9 +1587,9 @@ export default function RestaurantDetails() {
         </div>
 
         {/* Menu Items Section */}
-        {restaurant?.menuSections && Array.isArray(restaurant.menuSections) && restaurant.menuSections.length > 0 && (
+        {processedMenuData.sections.length > 0 && (
           <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-6 sm:py-8 md:py-10 lg:py-12 space-y-6 md:space-y-8 lg:space-y-10">
-            {getFilteredSections().map(({ section, originalIndex }, sectionIndex) => {
+            {processedMenuData.sections.map(({ section, originalIndex }, sectionIndex) => {
               // Handle section name - check for valid non-empty string
               let sectionTitle = "Unnamed Section"
               if (originalIndex === 0) {
@@ -1754,7 +1699,7 @@ export default function RestaurantDetails() {
                   )}
                   {isExpanded && section.items && section.items.length > 0 && (
                     <div className="space-y-0">
-                      {sortMenuItems(filterMenuItems(section.items)).map((item) => {
+                      {section.items.map((item) => {
                         const quantity = quantities[item.id] || 0
                         // Determine veg/non-veg based on foodType
                         const isVeg = item.foodType === "Veg"
@@ -1925,16 +1870,7 @@ export default function RestaurantDetails() {
                   {/* Subsections */}
                   {isExpanded && section.subsections && section.subsections.length > 0 && (
                     <div className="space-y-4">
-                      {section.subsections.filter(subsection => {
-                        // Filter subsections to only show those with items under ₹250
-                        if (!showOnlyUnder250) return true;
-                        if (!subsection.items || subsection.items.length === 0) return false;
-                        return subsection.items.some(item => {
-                          if (item.isAvailable === false) return false;
-                          const finalPrice = getFinalPrice(item);
-                          return finalPrice <= 250;
-                        });
-                      }).map((subsection, subIndex) => {
+                      {section.subsections.filter(subsection => subsection.items && subsection.items.length > 0).map((subsection, subIndex) => {
                         const subsectionKey = `${originalIndex}-${subIndex}`
                         const isSubsectionExpanded = expandedSections.has(subsectionKey)
 
@@ -1970,7 +1906,7 @@ export default function RestaurantDetails() {
                             {/* Subsection Items */}
                             {isSubsectionExpanded && subsection.items && subsection.items.length > 0 && (
                               <div className="space-y-0">
-                                {sortMenuItems(filterMenuItems(subsection.items)).map((item) => {
+                                {subsection.items.map((item) => {
                                   const quantity = quantities[item.id] || 0
                                   // Determine veg/non-veg based on foodType
                                   const isVeg = item.foodType === "Veg"
@@ -2210,7 +2146,7 @@ export default function RestaurantDetails() {
                   {/* Scrollable Content */}
                   <div className="flex-1 overflow-y-auto px-4 py-6">
                     <div className="space-y-1">
-                      {menuCategories.map((category, index) => (
+                      {processedMenuData.categories.map((category, index) => (
                         <button
                           key={index}
                           className="w-full flex items-center justify-between py-3 px-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors text-left"
