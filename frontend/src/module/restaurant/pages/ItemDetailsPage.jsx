@@ -375,25 +375,6 @@ export default function ItemDetailsPage() {
     return result
   }
 
-  const parseGalleryResults = (rawResult) => {
-    let result = rawResult
-
-    if (typeof result === "string") {
-      try {
-        result = JSON.parse(result)
-      } catch {
-        return []
-      }
-    }
-
-    if (Array.isArray(result)) {
-      return result.map((item) => parseCameraResult(item)).filter(Boolean)
-    }
-
-    const single = parseCameraResult(result)
-    return single ? [single] : []
-  }
-
   const convertBase64ToFile = (cameraResult) => {
     const base64Content = cameraResult.base64.includes(",")
       ? cameraResult.base64.split(",").pop()
@@ -411,27 +392,8 @@ export default function ItemDetailsPage() {
     return new File([uint8Array], fileName, { type: mimeType })
   }
 
-  const handleAddImagesClick = async () => {
-    try {
-      if (!window.flutter_inappwebview?.callHandler) {
-        fileInputRef.current?.click()
-        return
-      }
-
-      const rawResult = await window.flutter_inappwebview.callHandler("openGallery")
-      const galleryResults = parseGalleryResults(rawResult)
-
-      if (!galleryResults.length) {
-        toast.error("No image selected")
-        return
-      }
-
-      const galleryFiles = galleryResults.map(convertBase64ToFile)
-      processSelectedFiles(galleryFiles)
-    } catch (error) {
-      console.error("Gallery selection failed:", error)
-      fileInputRef.current?.click()
-    }
+  const handleAddImagesClick = () => {
+    fileInputRef.current?.click()
   }
 
   const handleCameraCapture = async () => {
