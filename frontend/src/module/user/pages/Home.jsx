@@ -59,6 +59,33 @@ const placeholders = [
   "Search \"dosa\""
 ]
 
+const getSafeBackendBaseUrl = () => {
+  try {
+    const parsed = new URL(API_BASE_URL)
+    const normalizedHost = (parsed.hostname || "").replace(/^\.+/, "")
+    const escapedHost = normalizedHost.replace(/\./g, "\\.")
+
+    let sanitizedPath = parsed.pathname || ""
+    sanitizedPath = sanitizedPath.replace(
+      new RegExp(`^\\/(?:\\.)?${escapedHost}(?=\\/|$)`, "i"),
+      "",
+    )
+    sanitizedPath = sanitizedPath.replace(
+      /^\/(?:\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+(?=\/|$)/i,
+      "",
+    )
+
+    const cleanPath = sanitizedPath.replace(/\/+$/, "").replace(/\/api$/i, "")
+    const normalizedOrigin = `${parsed.protocol}//${normalizedHost}${parsed.port ? `:${parsed.port}` : ""}`
+    return `${normalizedOrigin}${cleanPath}`
+  } catch (_error) {
+    if (typeof window !== "undefined" && window.location?.origin) {
+      return window.location.origin
+    }
+    return API_BASE_URL.replace(/\/api\/?$/i, "")
+  }
+}
+
 // Restaurant Image Carousel Component
 const RestaurantImageCarousel = React.memo(({ restaurant, priority = false }) => {
   const images = useMemo(() => restaurant.images || [restaurant.image], [restaurant])
@@ -626,8 +653,8 @@ export default function Home() {
 
       // First, test backend connection
       try {
-        // Use API_BASE_URL from config (supports both dev and production)
-        const backendUrl = API_BASE_URL.replace('/api', '')
+        // Use normalized backend URL and guard against malformed domain-in-path values.
+        const backendUrl = getSafeBackendBaseUrl()
         const healthCheck = await fetch(`${backendUrl}/health`)
         if (!healthCheck.ok) {
           throw new Error(`Backend health check failed: ${healthCheck.status}`)
