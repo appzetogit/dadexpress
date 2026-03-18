@@ -54,7 +54,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
     pathname.startsWith("/usermain/cart/")
   const inputRef = useRef(null)
   const [searchValue, setSearchValue] = useState("")
-  const { location, loading } = useGeoLocation()
+  const { location } = useGeoLocation()
   const { addresses = [], addAddress, updateAddress, userProfile, setDefaultAddress } = useProfile()
   const [showAddressForm, setShowAddressForm] = useState(false)
   const [mapPosition, setMapPosition] = useState([22.7196, 75.8577]) // Default Indore coordinates [lat, lng]
@@ -112,6 +112,33 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
         },
       )
     })
+
+  const getCurrentGpsCoordinatesWithRetry = async () => {
+    try {
+      // Try strict GPS first.
+      return await getCurrentGpsCoordinates({
+        enableHighAccuracy: true,
+        timeout: 20000,
+        maximumAge: 0,
+      })
+    } catch (firstError) {
+      // On timeout/unavailable, retry with relaxed settings to avoid frequent false failures.
+      const shouldRetry =
+        firstError?.code === 2 ||
+        firstError?.code === 3 ||
+        String(firstError?.message || "").toLowerCase().includes("timeout")
+
+      if (!shouldRetry) {
+        throw firstError
+      }
+
+      return await getCurrentGpsCoordinates({
+        enableHighAccuracy: false,
+        timeout: 30000,
+        maximumAge: 180000, // allow recent cached fix from device GPS provider
+      })
+    }
+  }
 
   // Debug: Log API key status (only first few characters for security)
   useEffect(() => {
@@ -722,7 +749,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       toast.loading("Fetching your current location...", {
         id: "location-request",
       })
-      const position = await getCurrentGpsCoordinates()
+      const position = await getCurrentGpsCoordinatesWithRetry()
       const latitude = Number(position?.coords?.latitude)
       const longitude = Number(position?.coords?.longitude)
       const accuracy = Number(position?.coords?.accuracy || 0)
@@ -1522,7 +1549,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       }
 
       toast.loading("Getting your fresh location...", { id: "current-location" })
-      const position = await getCurrentGpsCoordinates()
+      const position = await getCurrentGpsCoordinatesWithRetry()
       const lat = Number(position?.coords?.latitude)
       const lng = Number(position?.coords?.longitude)
       const accuracy = Number(position?.coords?.accuracy || 0)
@@ -2269,7 +2296,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
                 <div className="text-left">
                   <p className="font-semibold text-orange-700 dark:text-orange-400">Use current location</p>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {(loading || isRequestingCurrentLocation) ? "Getting location..." : currentLocationText}
+                    {isRequestingCurrentLocation ? "Getting location..." : currentLocationText}
                   </p>
                 </div>
               </div>
