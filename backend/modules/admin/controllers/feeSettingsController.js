@@ -32,6 +32,7 @@ export const getFeeSettings = asyncHandler(async (req, res) => {
         freeDeliveryThreshold: 149,
         platformFee: 5,
         platformCommissionPercent: 0,
+        platformFeePercentage: 0,
         gstRate: 5,
         isActive: true,
         createdBy: req.admin?._id || null,
@@ -63,6 +64,7 @@ export const createOrUpdateFeeSettings = asyncHandler(async (req, res) => {
       freeDeliveryThreshold,
       platformFee,
       platformCommissionPercent,
+      platformFeePercentage,
       gstRate,
       isActive
     } = req.body;
@@ -78,6 +80,9 @@ export const createOrUpdateFeeSettings = asyncHandler(async (req, res) => {
 
     if (platformCommissionPercent !== undefined && (Number(platformCommissionPercent) < 0 || Number(platformCommissionPercent) > 100)) {
       return errorResponse(res, 400, 'Platform commission must be between 0 and 100');
+    }
+    if (platformFeePercentage !== undefined && (Number(platformFeePercentage) < 0 || Number(platformFeePercentage) > 100)) {
+      return errorResponse(res, 400, 'Platform fee percentage must be between 0 and 100');
     }
 
     if (gstRate === undefined || gstRate < 0 || gstRate > 100) {
@@ -117,6 +122,7 @@ export const createOrUpdateFeeSettings = asyncHandler(async (req, res) => {
       freeDeliveryThreshold: freeDeliveryThreshold ? Number(freeDeliveryThreshold) : 149,
       platformFee: Number(platformFee),
       platformCommissionPercent: platformCommissionPercent !== undefined ? Number(platformCommissionPercent) : 0,
+      platformFeePercentage: platformFeePercentage !== undefined ? Number(platformFeePercentage) : 0,
       gstRate: Number(gstRate),
       isActive: isActive !== false,
       createdBy: req.admin?._id || null,
@@ -159,6 +165,7 @@ export const updateFeeSettings = asyncHandler(async (req, res) => {
       freeDeliveryThreshold,
       platformFee,
       platformCommissionPercent,
+      platformFeePercentage,
       gstRate,
       isActive
     } = req.body;
@@ -233,6 +240,13 @@ export const updateFeeSettings = asyncHandler(async (req, res) => {
       feeSettings.platformCommissionPercent = Number(platformCommissionPercent);
     }
 
+    if (platformFeePercentage !== undefined) {
+      if (Number(platformFeePercentage) < 0 || Number(platformFeePercentage) > 100) {
+        return errorResponse(res, 400, 'Platform fee percentage must be between 0 and 100');
+      }
+      feeSettings.platformFeePercentage = Number(platformFeePercentage);
+    }
+
     if (gstRate !== undefined) {
       if (gstRate < 0 || gstRate > 100) {
         return errorResponse(res, 400, 'GST rate must be between 0 and 100');
@@ -293,7 +307,7 @@ export const getPublicFeeSettings = asyncHandler(async (req, res) => {
   try {
     const feeSettings = await FeeSettings.findOne({ isActive: true })
       .sort({ createdAt: -1 })
-      .select('deliveryFee deliveryFeeRanges deliveryFeePerKm freeDeliveryThreshold platformFee platformCommissionPercent gstRate')
+      .select('deliveryFee deliveryFeeRanges deliveryFeePerKm freeDeliveryThreshold platformFee platformCommissionPercent platformFeePercentage gstRate')
       .lean();
 
     // If no active settings, return default values
@@ -306,6 +320,7 @@ export const getPublicFeeSettings = asyncHandler(async (req, res) => {
           freeDeliveryThreshold: 149,
           platformFee: 5,
           platformCommissionPercent: 0,
+          platformFeePercentage: 0,
           gstRate: 5,
         },
       });

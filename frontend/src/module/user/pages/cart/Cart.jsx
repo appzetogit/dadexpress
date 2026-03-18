@@ -63,6 +63,13 @@ const debugWarn = (...args) => {
   if (isDev) console.warn(...args)
 }
 
+const calculatePlatformFeeFromPercentage = (subtotal = 0, percentage = 0) => {
+  const safeSubtotal = Number(subtotal) || 0
+  const safePercentage = Number(percentage) || 0
+  if (safeSubtotal <= 0 || safePercentage <= 0) return 0
+  return Math.round(((safeSubtotal * safePercentage) / 100) * 100) / 100
+}
+
 export default function Cart() {
   const navigate = useNavigate()
 
@@ -142,7 +149,7 @@ export default function Cart() {
     deliveryFee: 25,
     deliveryFeeRanges: [],
     freeDeliveryThreshold: 149,
-    platformFee: 5,
+    platformFeePercentage: 0,
     gstRate: 5,
   })
 
@@ -674,7 +681,9 @@ export default function Cart() {
             deliveryFee: response.data.data.feeSettings.deliveryFee || 25,
             deliveryFeeRanges: response.data.data.feeSettings.deliveryFeeRanges || [],
             freeDeliveryThreshold: response.data.data.feeSettings.freeDeliveryThreshold || 149,
-            platformFee: response.data.data.feeSettings.platformFee || 5,
+            platformFeePercentage: response.data.data.feeSettings.platformFeePercentage
+              ?? response.data.data.feeSettings.platformCommissionPercent
+              ?? 0,
             gstRate: response.data.data.feeSettings.gstRate || 5,
           })
           lastFetchRef.current = Date.now()
@@ -741,7 +750,7 @@ export default function Cart() {
     return Number(feeSettings.deliveryFee || 0)
   })()
   const deliveryFee = pricing?.deliveryFee ?? fallbackDeliveryFee
-  const platformFee = pricing?.platformFee || feeSettings.platformFee
+  const platformFee = pricing?.platformFee ?? calculatePlatformFeeFromPercentage(subtotal, feeSettings.platformFeePercentage)
   const gstCharges = pricing?.tax || Math.round(subtotal * (feeSettings.gstRate / 100))
   const discount = pricing?.discount || (appliedCoupon ? Math.min(appliedCoupon.discount, subtotal * 0.5) : 0)
   const totalBeforeDiscount = subtotal + deliveryFee + platformFee + gstCharges

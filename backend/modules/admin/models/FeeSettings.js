@@ -56,6 +56,13 @@ const feeSettingsSchema = new mongoose.Schema(
       max: 100,
       comment: 'Additional platform commission percentage applied on order subtotal'
     },
+    platformFeePercentage: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100,
+      comment: 'Platform fee percentage applied on order subtotal'
+    },
     gstRate: {
       type: Number,
       required: [true, 'GST rate is required'],

@@ -18,7 +18,38 @@ export default function TaxReport() {
     totalTax: 0,
   })
 
-  const formatCurrency = (value) => `$ ${Number(value || 0).toFixed(2)}`
+  const formatCurrency = (value) => {
+    const amount = Number(value || 0)
+    return `₹${amount.toLocaleString("en-IN", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`
+  }
+
+  const parseTaxRate = (taxRateValue) => {
+    if (!taxRateValue || taxRateValue === "Select Tax Rate") return null
+    const parsed = Number(String(taxRateValue).replace("%", "").trim())
+    return Number.isFinite(parsed) ? parsed : null
+  }
+
+  const calculateTaxForRow = ({ income, backendTax, calculateTax, taxRate }) => {
+    const safeIncome = Number(income || 0)
+    const safeBackendTax = Number(backendTax || 0)
+
+    // Default and safest behavior: use backend-calculated GST from order pricing.
+    if (!calculateTax || calculateTax === "Select Calculate Tax") {
+      return safeBackendTax
+    }
+
+    if (calculateTax === "Percentage") {
+      const parsedRate = parseTaxRate(taxRate)
+      if (parsedRate === null) return safeBackendTax
+      return (safeIncome * parsedRate) / 100
+    }
+
+    // For Fixed Amount / Tiered, keep backend GST to avoid changing existing tax logic.
+    return safeBackendTax
+  }
 
   const getDateRangeFromType = (dateRangeType) => {
     const now = new Date()
@@ -55,25 +86,42 @@ export default function TaxReport() {
     }
   }
 
-  const fetchTaxReport = async (dateRangeType) => {
+  const fetchTaxReport = async (activeFilters = filters) => {
     try {
-      const params = getDateRangeFromType(dateRangeType)
+      const params = getDateRangeFromType(activeFilters.dateRangeType)
       const response = await adminAPI.getTransactionReport(params)
       const transactions = response?.data?.data?.transactions || []
 
-      const mappedRows = transactions.map((txn, index) => ({
-        sl: index + 1,
-        incomeSource: txn.orderId || "N/A",
-        totalIncome: formatCurrency(txn.orderAmount || 0),
-        totalTax: formatCurrency(txn.vatTax || 0),
-      }))
+      const mappedRows = transactions.map((txn, index) => {
+        const totalIncome = Number(txn.orderAmount || 0)
+        const totalTax = calculateTaxForRow({
+          income: totalIncome,
+          backendTax: txn.vatTax || 0,
+          calculateTax: activeFilters.calculateTax,
+          taxRate: activeFilters.taxRate,
+        })
+
+        return {
+          sl: index + 1,
+          incomeSource: txn.orderId || "N/A",
+          totalIncome: formatCurrency(totalIncome),
+          totalTax: formatCurrency(totalTax),
+        }
+      })
 
       const totalIncome = transactions.reduce(
         (sum, txn) => sum + Number(txn.orderAmount || 0),
         0,
       )
       const totalTax = transactions.reduce(
-        (sum, txn) => sum + Number(txn.vatTax || 0),
+        (sum, txn) =>
+          sum +
+          calculateTaxForRow({
+            income: Number(txn.orderAmount || 0),
+            backendTax: txn.vatTax || 0,
+            calculateTax: activeFilters.calculateTax,
+            taxRate: activeFilters.taxRate,
+          }),
         0,
       )
 
@@ -93,7 +141,7 @@ export default function TaxReport() {
   }
 
   useEffect(() => {
-    fetchTaxReport(filters.dateRangeType)
+    fetchTaxReport(filters)
   }, [])
 
   const handleReset = () => {
@@ -103,11 +151,11 @@ export default function TaxReport() {
       taxRate: "Select Tax Rate",
     }
     setFilters(resetFilters)
-    fetchTaxReport(resetFilters.dateRangeType)
+    fetchTaxReport(resetFilters)
   }
 
   const handleSubmit = () => {
-    fetchTaxReport(filters.dateRangeType)
+    fetchTaxReport(filters)
   }
 
   const handleExport = (format) => {

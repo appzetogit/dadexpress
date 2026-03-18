@@ -13,6 +13,7 @@ export default function FeeSettings() {
     freeDeliveryThreshold: 149,
     platformFee: 5,
     platformCommissionPercent: 0,
+    platformFeePercentage: 0,
     gstRate: 5,
   })
   const [loadingFeeSettings, setLoadingFeeSettings] = useState(false)
@@ -33,6 +34,7 @@ export default function FeeSettings() {
           freeDeliveryThreshold: response.data.data.feeSettings.freeDeliveryThreshold ?? 149,
           platformFee: response.data.data.feeSettings.platformFee ?? 5,
           platformCommissionPercent: response.data.data.feeSettings.platformCommissionPercent ?? 0,
+          platformFeePercentage: response.data.data.feeSettings.platformFeePercentage ?? 0,
           gstRate: response.data.data.feeSettings.gstRate ?? 5,
         })
       }
@@ -60,6 +62,7 @@ export default function FeeSettings() {
         freeDeliveryThreshold: Number(feeSettings.freeDeliveryThreshold),
         platformFee: Number(feeSettings.platformFee),
         platformCommissionPercent: Number(feeSettings.platformCommissionPercent),
+        platformFeePercentage: Number(feeSettings.platformFeePercentage),
         gstRate: Number(feeSettings.gstRate),
         isActive: true,
       })
@@ -448,6 +451,25 @@ export default function FeeSettings() {
                   />
                   <p className="text-xs text-slate-500">
                     This commission percentage is added with the fixed platform fee on the order subtotal.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-slate-700">
+                    Platform Fee Percentage (%)
+                  </label>
+                  <input
+                    type="number"
+                    value={feeSettings.platformFeePercentage}
+                    onChange={(e) => setFeeSettings({ ...feeSettings, platformFeePercentage: e.target.value })}
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
+                    placeholder="0"
+                  />
+                  <p className="text-xs text-slate-500">
+                    Dynamic platform fee calculated as (subtotal * percentage) / 100.
                   </p>
                 </div>
               </div>
