@@ -760,11 +760,12 @@ export default function Home() {
         params.trusted = 'true'
       }
 
-              // Dietary filter for Home restaurants.
-              // Veg mode ON: filter veg/pure-veg based on selection.
-              // Veg mode OFF: do not apply dietary filter (show all).
-      if (vegMode === true) {
-        params.dietary = vegModeOption === "all" ? "veg" : "pure-veg"
+      // Dietary filter for Home restaurants.
+      // Veg mode ON + "Pure Veg": apply dietary filter.
+      // Veg mode ON + "All restaurants": do not apply dietary filter.
+      // Veg mode OFF: do not apply dietary filter (show all).
+      if (vegMode === true && vegModeOption === "pure-veg") {
+        params.dietary = "pure-veg"
       }
 
       // Optional: Add zoneId if available (for sorting/filtering, but show all restaurants)
