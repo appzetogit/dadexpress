@@ -768,11 +768,9 @@ export default function Home() {
         params.dietary = "pure-veg"
       }
 
-      // Optional: Add zoneId if available (for sorting/filtering, but show all restaurants)
-      if (zoneId) {
-        params.zoneId = zoneId
-      }
-      // Note: We show all restaurants regardless of zone, but apply grayscale styling if user is out of service
+      // Do not send zoneId from Home listing.
+      // Requirement: "All restaurants" should show all active restaurants from DB.
+      // Veg filtering is handled only by dietary param above.
       const response = await restaurantAPI.getRestaurants(params)
 
       if (response.data && response.data.success && response.data.data && response.data.data.restaurants) {
