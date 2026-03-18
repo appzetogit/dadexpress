@@ -139,7 +139,7 @@ export const calculateGST = async (subtotal, discount = 0) => {
   const taxableAmount = subtotal - discount;
   const feeSettings = await getFeeSettings();
   const gstRate = (feeSettings.gstRate || 5) / 100; // Convert percentage to decimal
-  return Math.round(taxableAmount * gstRate);
+  return roundCurrency(taxableAmount * gstRate);
 };
 
 /**
@@ -360,28 +360,28 @@ export const calculateOrderPricing = async ({
     const savings = discount + (deliveryFee > finalDeliveryFee ? deliveryFee - finalDeliveryFee : 0) + referralDiscount;
 
     return {
-      subtotal: Math.round(subtotal),
-      discount: Math.round(discount),
-      referralDiscount: Math.round(referralDiscount),
-      deliveryFee: Math.round(finalDeliveryFee),
-      platformFee: Math.round(platformFee),
+      subtotal: roundCurrency(subtotal),
+      discount: roundCurrency(discount),
+      referralDiscount: roundCurrency(referralDiscount),
+      deliveryFee: roundCurrency(finalDeliveryFee),
+      platformFee: roundCurrency(platformFee),
       platformFeePercentage,
-      tax: gst, // Already rounded in calculateGST
-      total: Math.max(0, Math.round(total)),
-      totalAmount: Math.max(0, Math.round(totalAmount)),
-      savings: Math.round(savings),
+      tax: gst, // Already using roundCurrency in calculateGST
+      total: Math.max(0, roundCurrency(total)),
+      totalAmount: Math.max(0, roundCurrency(totalAmount)),
+      savings: roundCurrency(savings),
       appliedCoupon: appliedCoupon ? {
         code: appliedCoupon.code,
-        discount: discount,
+        discount: roundCurrency(discount),
         freeDelivery: appliedCoupon.freeDelivery || false
       } : null,
       breakdown: {
-        itemTotal: Math.round(subtotal),
-        discountAmount: Math.round(discount),
-        deliveryFee: Math.round(finalDeliveryFee),
-        platformFee: Math.round(platformFee),
+        itemTotal: roundCurrency(subtotal),
+        discountAmount: roundCurrency(discount),
+        deliveryFee: roundCurrency(finalDeliveryFee),
+        platformFee: roundCurrency(platformFee),
         gst: gst,
-        total: Math.round(total)
+        total: roundCurrency(total)
       }
     };
   } catch (error) {

@@ -313,7 +313,7 @@ export default function FeeSettings() {
                         value={newRange.min}
                         onChange={(e) => setNewRange({ ...newRange, min: e.target.value })}
                         min="0"
-                        step="1"
+                        step="0.01"
                         className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
                         placeholder="0"
                       />
@@ -325,7 +325,7 @@ export default function FeeSettings() {
                         value={newRange.max}
                         onChange={(e) => setNewRange({ ...newRange, max: e.target.value })}
                         min="0"
-                        step="1"
+                        step="0.01"
                         className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
                         placeholder="150"
                       />
@@ -337,7 +337,7 @@ export default function FeeSettings() {
                         value={newRange.fee}
                         onChange={(e) => setNewRange({ ...newRange, fee: e.target.value })}
                         min="0"
-                        step="1"
+                        step="0.01"
                         className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
                         placeholder="25"
                       />
@@ -386,7 +386,7 @@ export default function FeeSettings() {
                     value={feeSettings.deliveryFee}
                     onChange={(e) => setFeeSettings({ ...feeSettings, deliveryFee: e.target.value })}
                     min="0"
-                    step="1"
+                    step="0.01"
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
                     placeholder="25"
                   />
@@ -426,7 +426,7 @@ export default function FeeSettings() {
                     value={feeSettings.platformFee}
                     onChange={(e) => setFeeSettings({ ...feeSettings, platformFee: e.target.value })}
                     min="0"
-                    step="1"
+                    step="0.01"
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
                     placeholder="5"
                   />
@@ -487,7 +487,7 @@ export default function FeeSettings() {
                     onChange={(e) => setFeeSettings({ ...feeSettings, gstRate: e.target.value })}
                     min="0"
                     max="100"
-                    step="0.1"
+                    step="0.01"
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
                     placeholder="5"
                   />

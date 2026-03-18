@@ -368,7 +368,7 @@ export default function Checkout() {
                   </div>
                   <div className="flex items-center gap-3">
                     {useRewards && (
-                      <span className="text-xs font-black text-green-600">-₹{actualRewardDiscount.toFixed(0)}</span>
+                      <span className="text-xs font-black text-green-600">-₹{actualRewardDiscount.toFixed(2)}</span>
                     )}
                     <Switch
                       checked={useRewards}
@@ -407,11 +407,11 @@ export default function Checkout() {
                         <div className="flex-1">
                           <p className="font-medium text-sm md:text-base dark:text-gray-200">{item.name}</p>
                           <p className="text-xs md:text-sm text-muted-foreground">
-                            ₹{(item.price * 83).toFixed(0)} × {item.quantity}
+                            ₹{(item.price * 83).toFixed(2)} × {item.quantity}
                           </p>
                         </div>
                         <p className="font-semibold text-sm md:text-base dark:text-gray-200">
-                          ₹{(item.price * 83 * item.quantity).toFixed(0)}
+                          ₹{(item.price * 83 * item.quantity).toFixed(2)}
                         </p>
                       </div>
                     ))}
@@ -420,11 +420,11 @@ export default function Checkout() {
                   <div className="space-y-2 md:space-y-3 pt-4 md:pt-6 border-t dark:border-gray-700">
                     <div className="flex justify-between text-sm md:text-base">
                       <span className="text-muted-foreground">Subtotal</span>
-                      <span className="dark:text-gray-200">₹{subtotal.toFixed(0)}</span>
+                      <span className="dark:text-gray-200">₹{subtotal.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-sm md:text-base">
                       <span className="text-muted-foreground">Delivery Fee</span>
-                      <span className="dark:text-gray-200">₹{deliveryFee.toFixed(0)}</span>
+                      <span className="dark:text-gray-200">₹{deliveryFee.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-xs md:text-sm">
                       <span className="text-muted-foreground">Platform Fee</span>
