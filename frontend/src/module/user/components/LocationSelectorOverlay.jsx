@@ -55,7 +55,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
   const inputRef = useRef(null)
   const [searchValue, setSearchValue] = useState("")
   const { location, loading } = useGeoLocation()
-  const { addresses = [], addAddress, userProfile } = useProfile()
+  const { addresses = [], addAddress, userProfile, setDefaultAddress } = useProfile()
   const [showAddressForm, setShowAddressForm] = useState(false)
   const [mapPosition, setMapPosition] = useState([22.7196, 75.8577]) // Default Indore coordinates [lat, lng]
   const [addressFormData, setAddressFormData] = useState({
@@ -69,6 +69,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
   })
   const [loadingAddress, setLoadingAddress] = useState(false)
   const [isSavingAddress, setIsSavingAddress] = useState(false)
+  const [isRequestingCurrentLocation, setIsRequestingCurrentLocation] = useState(false)
   const [mapLoading, setMapLoading] = useState(false)
   const mapContainerRef = useRef(null)
   const googleMapRef = useRef(null) // Google Maps instance
@@ -708,6 +709,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
 
   const handleUseCurrentLocation = async () => {
     try {
+      setIsRequestingCurrentLocation(true)
       // Check if geolocation is supported
       if (!navigator.geolocation) {
         toast.error("Location services are not supported in your browser", {
@@ -819,6 +821,8 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
         })
       }
       // Don't close the selector if there's an error, so user can try other options
+    } finally {
+      setIsRequestingCurrentLocation(false)
     }
   }
 
@@ -1780,10 +1784,11 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
     try {
       // Get coordinates from address location
       const coordinates = address.location?.coordinates || []
-      const longitude = coordinates[0]
-      const latitude = coordinates[1]
+      const longitude = Number(coordinates[0])
+      const latitude = Number(coordinates[1])
+      const hasValidCoords = Number.isFinite(latitude) && Number.isFinite(longitude)
 
-      if (latitude && longitude) {
+      if (hasValidCoords) {
         // Update location in backend
         await userAPI.updateLocation({
           latitude,
@@ -1803,14 +1808,22 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
         address: `${address.street}, ${address.city}`,
         area: address.additionalDetails || "",
         zipCode: address.zipCode,
-        latitude,
-        longitude,
+        latitude: hasValidCoords ? latitude : null,
+        longitude: hasValidCoords ? longitude : null,
         formattedAddress: `${address.street}, ${address.city}, ${address.state}`
       }
       localStorage.setItem("userLocation", JSON.stringify(locationData))
 
       // Update map position to show selected address
-      setMapPosition([latitude, longitude])
+      if (hasValidCoords) {
+        setMapPosition([latitude, longitude])
+      }
+
+      // Update selected/default address so checkout reflects selection immediately.
+      const selectedAddressId = address.id || address._id
+      if (selectedAddressId) {
+        setDefaultAddress(selectedAddressId)
+      }
 
       // Update address form data with selected address
       setAddressFormData({
@@ -1826,34 +1839,43 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       // Update Google Maps to show selected address
       if (googleMapRef.current && window.google && window.google.maps) {
         try {
-          googleMapRef.current.panTo({ lat: latitude, lng: longitude })
-          googleMapRef.current.setZoom(17)
+          if (hasValidCoords) {
+            googleMapRef.current.panTo({ lat: latitude, lng: longitude })
+            googleMapRef.current.setZoom(17)
+          }
 
           // Update green marker position
-          if (greenMarkerRef.current) {
+          if (greenMarkerRef.current && hasValidCoords) {
             greenMarkerRef.current.setPosition({ lat: latitude, lng: longitude })
           }
 
           // Fetch and update address details
-          setTimeout(async () => {
-            await handleMapMoveEnd(latitude, longitude)
-            toast.success("Location updated!", { id: "saved-address" })
-          }, 500)
+          if (hasValidCoords) {
+            setTimeout(async () => {
+              await handleMapMoveEnd(latitude, longitude)
+              toast.success("Location updated!", { id: "saved-address" })
+            }, 500)
+          } else {
+            toast.success("Address selected!", { id: "saved-address" })
+          }
         } catch (mapError) {
           console.error("Error updating map:", mapError)
           toast.success("Location updated!", { id: "saved-address" })
         }
       } else {
         // Map not initialized yet, just fetch address
-        setTimeout(async () => {
-          await handleMapMoveEnd(latitude, longitude)
-          toast.success("Location updated!", { id: "saved-address" })
-        }, 300)
+        if (hasValidCoords) {
+          setTimeout(async () => {
+            await handleMapMoveEnd(latitude, longitude)
+            toast.success("Location updated!", { id: "saved-address" })
+          }, 300)
+        } else {
+          toast.success("Address selected!", { id: "saved-address" })
+        }
       }
 
-      // Don't close overlay - keep user on select location page
-      // onClose()
-      // window.location.reload()
+      onClose()
+      if (!isCartPath) navigate("/")
     } catch (error) {
       console.error("Error selecting saved address:", error)
       toast.error("Failed to update location. Please try again.")
@@ -2207,7 +2229,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
           >
             <button
               onClick={handleUseCurrentLocation}
-              disabled={loading}
+              disabled={isRequestingCurrentLocation}
               className="w-full flex items-center justify-between py-4 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors group"
             >
               <div className="flex items-center gap-4">
@@ -2217,7 +2239,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
                 <div className="text-left">
                   <p className="font-semibold text-orange-700 dark:text-orange-400">Use current location</p>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {loading ? "Getting location..." : currentLocationText}
+                    {(loading || isRequestingCurrentLocation) ? "Getting location..." : currentLocationText}
                   </p>
                 </div>
               </div>

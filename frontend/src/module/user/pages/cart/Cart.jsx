@@ -1420,7 +1420,7 @@ export default function Cart() {
       </div>
 
       {/* Scrollable Content Area */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden pb-24 md:pb-32">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden pb-40 md:pb-32">
         {/* Savings Banner */}
         {savings > 0 && (
           <div className="bg-blue-100 dark:bg-blue-900/20 px-4 md:px-6 py-2 md:py-3 flex-shrink-0">
@@ -1926,7 +1926,7 @@ export default function Cart() {
       </div>
 
       {/* Bottom Sticky - Place Order */}
-      <div className="bg-white dark:bg-[#1a1a1a] border-t dark:border-gray-800 shadow-lg z-30 flex-shrink-0 fixed bottom-0 left-0 right-0">
+      <div className="bg-white dark:bg-[#1a1a1a] border-t dark:border-gray-800 shadow-lg z-30 flex-shrink-0 fixed bottom-0 left-0 right-0 pb-[env(safe-area-inset-bottom)]">
         <div className="max-w-7xl mx-auto">
           <div className="px-4 md:px-6 py-3 md:py-4">
             <div className="w-full max-w-md md:max-w-lg mx-auto">
