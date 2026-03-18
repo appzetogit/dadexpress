@@ -5,6 +5,7 @@ import firebaseAuthService from '../../auth/services/firebaseAuthService.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import { buildPhoneInQuery, normalizePhoneNumber, normalizePhoneNumberE164 } from '../../../shared/utils/phoneUtils.js';
+import { getRefreshCookieOptions } from '../../../shared/utils/cookieOptions.js';
 import winston from 'winston';
 
 /**
@@ -649,12 +650,13 @@ export const verifyOTP = asyncHandler(async (req, res) => {
     });
 
     // Set refresh token in httpOnly cookie
-    res.cookie('restaurant_refreshToken', tokens.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
-    });
+    res.cookie(
+      'restaurant_refreshToken',
+      tokens.refreshToken,
+      getRefreshCookieOptions({
+        maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
+      })
+    );
 
     // Return access token and restaurant info
     const isProfileCompleted = computeIsProfileCompleted(restaurant);
@@ -775,12 +777,13 @@ export const register = asyncHandler(async (req, res) => {
   });
 
   // Set refresh token in httpOnly cookie
-  res.cookie('restaurant_refreshToken', tokens.refreshToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
-  });
+  res.cookie(
+    'restaurant_refreshToken',
+    tokens.refreshToken,
+    getRefreshCookieOptions({
+      maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
+    })
+  );
 
   logger.info(`New restaurant registered via email: ${restaurant._id}`, { email, restaurantId: restaurant._id });
 
@@ -869,12 +872,13 @@ export const login = asyncHandler(async (req, res) => {
   });
 
   // Set refresh token in httpOnly cookie
-  res.cookie('restaurant_refreshToken', tokens.refreshToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
-  });
+  res.cookie(
+    'restaurant_refreshToken',
+    tokens.refreshToken,
+    getRefreshCookieOptions({
+      maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
+    })
+  );
 
   logger.info(`Restaurant logged in via email: ${restaurant._id}`, { email, restaurantId: restaurant._id });
 
@@ -942,7 +946,7 @@ export const resetPassword = asyncHandler(async (req, res) => {
  */
 export const refreshToken = asyncHandler(async (req, res) => {
   // Get refresh token from cookie
-  const refreshToken = req.cookies?.restaurant_refreshToken || req.cookies?.refreshToken;
+  const refreshToken = req.cookies?.restaurant_refreshToken;
 
   if (!refreshToken) {
     return errorResponse(res, 401, 'Refresh token not found');
@@ -988,11 +992,7 @@ export const refreshToken = asyncHandler(async (req, res) => {
  */
 export const logout = asyncHandler(async (req, res) => {
   // Clear refresh token cookies
-  const cookieOptions = {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax'
-  };
+  const cookieOptions = getRefreshCookieOptions();
 
   res.clearCookie('restaurant_refreshToken', cookieOptions);
   res.clearCookie('refreshToken', cookieOptions);
@@ -1341,12 +1341,13 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
     });
 
     // Set refresh token in httpOnly cookie
-    res.cookie('restaurant_refreshToken', tokens.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
-    });
+    res.cookie(
+      'restaurant_refreshToken',
+      tokens.refreshToken,
+      getRefreshCookieOptions({
+        maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
+      })
+    );
 
     const isProfileCompleted = computeIsProfileCompleted(restaurant);
     return successResponse(res, 200, 'Firebase Google authentication successful', {

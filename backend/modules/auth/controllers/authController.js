@@ -11,6 +11,7 @@ import { asyncHandler } from "../../../shared/middleware/asyncHandler.js";
 import BusinessSettings from "../../admin/models/BusinessSettings.js";
 import ReferralLog from "../../admin/models/ReferralLog.js";
 import { normalizePhoneNumber } from "../../../shared/utils/phoneUtils.js";
+import { getRefreshCookieOptions } from "../../../shared/utils/cookieOptions.js";
 import winston from "winston";
 
 const logger = winston.createLogger({
@@ -445,12 +446,13 @@ export const verifyOTP = asyncHandler(async (req, res) => {
     // Set refresh token in httpOnly cookie
     // Set refresh token in httpOnly cookie - using role-specific name to avoid collisions
     const cookieName = userRole === 'admin' ? 'admin_refreshToken' : 'user_refreshToken';
-    res.cookie(cookieName, tokens.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 365 * 24 * 60 * 60 * 1000, // 365 days
-    });
+    res.cookie(
+      cookieName,
+      tokens.refreshToken,
+      getRefreshCookieOptions({
+        maxAge: 365 * 24 * 60 * 60 * 1000, // 365 days
+      }),
+    );
 
     // Return access token and user info
     return successResponse(res, 200, "Authentication successful", {
@@ -477,12 +479,11 @@ export const verifyOTP = asyncHandler(async (req, res) => {
  * POST /api/auth/refresh-token
  */
 export const refreshToken = asyncHandler(async (req, res) => {
-  // Check for role-specific cookies or the legacy generic one
+  // User auth refresh endpoint should only use user refresh cookies.
+  // This avoids cross-module cookie mix-ups (admin/restaurant/delivery)
+  // causing unintended auto-logout in parallel sessions.
   const refreshToken =
     req.cookies?.user_refreshToken ||
-    req.cookies?.admin_refreshToken ||
-    req.cookies?.delivery_refreshToken ||
-    req.cookies?.restaurant_refreshToken ||
     req.cookies?.refreshToken;
 
   if (!refreshToken) {
@@ -492,6 +493,10 @@ export const refreshToken = asyncHandler(async (req, res) => {
   try {
     // Verify refresh token
     const decoded = jwtService.verifyRefreshToken(refreshToken);
+
+    if (decoded?.role !== "user") {
+      return errorResponse(res, 401, "Invalid token for user");
+    }
 
     // Get user
     const user = await User.findById(decoded.userId).select("-password");
@@ -521,11 +526,7 @@ export const refreshToken = asyncHandler(async (req, res) => {
  */
 export const logout = asyncHandler(async (req, res) => {
   // Clear all potential refresh token cookies
-  const cookieOptions = {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-  };
+  const cookieOptions = getRefreshCookieOptions();
 
   res.clearCookie("user_refreshToken", cookieOptions);
   res.clearCookie("admin_refreshToken", cookieOptions);
@@ -641,12 +642,13 @@ export const register = asyncHandler(async (req, res) => {
 
   // Set refresh token in httpOnly cookie
   const cookieName = userRole === 'admin' ? 'admin_refreshToken' : 'user_refreshToken';
-  res.cookie(cookieName, tokens.refreshToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 365 * 24 * 60 * 60 * 1000, // 365 days
-  });
+  res.cookie(
+    cookieName,
+    tokens.refreshToken,
+    getRefreshCookieOptions({
+      maxAge: 365 * 24 * 60 * 60 * 1000, // 365 days
+    }),
+  );
 
   logger.info(`New user registered via email: ${user._id}`, {
     email,
@@ -752,13 +754,22 @@ export const login = asyncHandler(async (req, res) => {
     email: user.email,
   });
 
-  // Set refresh token in httpOnly cookie
-  res.cookie("refreshToken", tokens.refreshToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 365 * 24 * 60 * 60 * 1000, // 365 days
-  });
+  // Set role-specific refresh token cookie
+  const cookieName =
+    user.role === "admin"
+      ? "admin_refreshToken"
+      : user.role === "restaurant"
+        ? "restaurant_refreshToken"
+        : user.role === "delivery"
+          ? "delivery_refreshToken"
+          : "user_refreshToken";
+  res.cookie(
+    cookieName,
+    tokens.refreshToken,
+    getRefreshCookieOptions({
+      maxAge: 365 * 24 * 60 * 60 * 1000, // 365 days
+    }),
+  );
 
   logger.info(`User logged in via email: ${user._id}`, {
     email,
@@ -1095,12 +1106,21 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
       email: user.email,
     });
 
-    res.cookie("refreshToken", tokens.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 365 * 24 * 60 * 60 * 1000,
-    });
+    const cookieName =
+      user.role === "admin"
+        ? "admin_refreshToken"
+        : user.role === "restaurant"
+          ? "restaurant_refreshToken"
+          : user.role === "delivery"
+            ? "delivery_refreshToken"
+            : "user_refreshToken";
+    res.cookie(
+      cookieName,
+      tokens.refreshToken,
+      getRefreshCookieOptions({
+        maxAge: 365 * 24 * 60 * 60 * 1000, // 365 days
+      }),
+    );
 
     return successResponse(res, 200, "Authentication successful", {
       accessToken: tokens.accessToken,
@@ -1281,12 +1301,13 @@ export const googleCallback = asyncHandler(async (req, res) => {
     const cookieName = userRole === 'admin' ? 'admin_refreshToken' :
       userRole === 'restaurant' ? 'restaurant_refreshToken' :
         userRole === 'delivery' ? 'delivery_refreshToken' : 'user_refreshToken';
-    res.cookie(cookieName, jwtTokens.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 365 * 24 * 60 * 60 * 1000, // 365 days
-    });
+    res.cookie(
+      cookieName,
+      jwtTokens.refreshToken,
+      getRefreshCookieOptions({
+        maxAge: 365 * 24 * 60 * 60 * 1000, // 365 days
+      }),
+    );
 
     // Clear OAuth state cookie
     res.clearCookie("oauth_state");
