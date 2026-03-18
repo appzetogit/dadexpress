@@ -60,6 +60,32 @@ const pickBestRestaurantForGoogleLogin = (restaurants = [], email, firebaseUid) 
   return [...restaurants].sort((a, b) => score(b) - score(a))[0] || null;
 };
 
+const pickBestRestaurantForOtpLogin = (restaurants = []) => {
+  if (!Array.isArray(restaurants) || restaurants.length === 0) return null;
+
+  const score = (restaurant) => {
+    let s = 0;
+    if (computeIsProfileCompleted(restaurant)) s += 200;
+    if (restaurant?.isActive === true) s += 100;
+
+    const completedSteps = Number(restaurant?.onboarding?.completedSteps);
+    if (Number.isFinite(completedSteps)) s += Math.min(completedSteps * 10, 40);
+
+    if (restaurant?.ownerName) s += 10;
+    if (restaurant?.ownerEmail) s += 10;
+    if (restaurant?.ownerPhone) s += 10;
+
+    if (restaurant?.updatedAt) {
+      const updatedAtTime = new Date(restaurant.updatedAt).getTime();
+      if (Number.isFinite(updatedAtTime)) s += Math.min(Math.floor(updatedAtTime / 1e12), 20);
+    }
+
+    return s;
+  };
+
+  return [...restaurants].sort((a, b) => score(b) - score(a))[0] || null;
+};
+
 const logger = winston.createLogger({
   level: 'info',
   format: winston.format.json(),
@@ -398,7 +424,8 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       const findQuery = normalizedPhone
         ? (buildPhoneQuery(normalizedPhone) || { phone: normalizedPhone })
         : { email: email?.toLowerCase().trim() };
-      restaurant = await Restaurant.findOne(findQuery);
+      const candidateRestaurants = await Restaurant.find(findQuery);
+      restaurant = pickBestRestaurantForOtpLogin(candidateRestaurants);
 
       // If restaurant not found, we will auto-register with a placeholder name
       const restaurantName = name || (normalizedPhone || email || 'New Restaurant');

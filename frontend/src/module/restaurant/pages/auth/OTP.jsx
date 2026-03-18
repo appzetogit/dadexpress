@@ -19,6 +19,24 @@ export default function RestaurantOTP() {
   const [focusedIndex, setFocusedIndex] = useState(null)
   const inputRefs = useRef([])
 
+  const normalizeRestaurantSessionData = (restaurantData) => {
+    if (!restaurantData || typeof restaurantData !== "object") return restaurantData
+    if (restaurantData.isProfileCompleted === true) return restaurantData
+    if (restaurantData?.signupMethod === "google" || !!restaurantData?.googleId) {
+      return { ...restaurantData, isProfileCompleted: true }
+    }
+
+    const completedSteps = Number(restaurantData?.onboarding?.completedSteps)
+    const hasOnboardingObject =
+      restaurantData?.onboarding !== undefined && restaurantData?.onboarding !== null
+
+    const isProfileCompleted = Number.isFinite(completedSteps)
+      ? completedSteps >= 4
+      : (!hasOnboardingObject && restaurantData?.isActive === true)
+
+    return { ...restaurantData, isProfileCompleted }
+  }
+
   useEffect(() => {
     // Get auth data from sessionStorage
     const stored = sessionStorage.getItem("restaurantAuthData")
@@ -194,7 +212,7 @@ export default function RestaurantOTP() {
 
 
       const accessToken = data?.accessToken
-      const restaurant = data?.restaurant
+      const restaurant = normalizeRestaurantSessionData(data?.restaurant)
 
       if (accessToken && restaurant) {
         // Determine route synchronously before setting tokens that would trigger redirects
