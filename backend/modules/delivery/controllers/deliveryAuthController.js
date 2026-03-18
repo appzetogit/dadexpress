@@ -4,6 +4,7 @@ import jwtService from '../../auth/services/jwtService.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import { normalizePhoneNumber } from '../../../shared/utils/phoneUtils.js';
+import { getRefreshCookieOptions } from '../../../shared/utils/cookieOptions.js';
 import winston from 'winston';
 
 const logger = winston.createLogger({
@@ -275,12 +276,13 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         await delivery.save();
 
         // Set refresh token in httpOnly cookie
-        res.cookie('delivery_refreshToken', tokens.refreshToken, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'lax',
-          maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
-        });
+        res.cookie(
+          'delivery_refreshToken',
+          tokens.refreshToken,
+          getRefreshCookieOptions({
+            maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
+          })
+        );
 
         return successResponse(res, 200, 'OTP verified. Please complete your profile.', {
           accessToken: tokens.accessToken,
@@ -316,12 +318,13 @@ export const verifyOTP = asyncHandler(async (req, res) => {
     await delivery.save();
 
     // Set refresh token in httpOnly cookie
-    res.cookie('delivery_refreshToken', tokens.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
-    });
+    res.cookie(
+      'delivery_refreshToken',
+      tokens.refreshToken,
+      getRefreshCookieOptions({
+        maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
+      })
+    );
 
     // Update last login
     delivery.lastLogin = new Date();
@@ -357,8 +360,8 @@ export const verifyOTP = asyncHandler(async (req, res) => {
  * POST /api/delivery/auth/refresh-token
  */
 export const refreshToken = asyncHandler(async (req, res) => {
-  // Get refresh token from cookie or header
-  const refreshToken = req.cookies?.delivery_refreshToken || req.cookies?.refreshToken;
+  // Get refresh token from delivery module cookie
+  const refreshToken = req.cookies?.delivery_refreshToken;
 
   if (!refreshToken) {
     return errorResponse(res, 401, 'Refresh token not found');
@@ -415,17 +418,8 @@ export const logout = asyncHandler(async (req, res) => {
   }
 
   // Clear refresh token cookie
-  res.cookie('delivery_refreshToken', '', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 0
-  });
-  res.clearCookie('refreshToken', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-  });
+  res.cookie('delivery_refreshToken', '', getRefreshCookieOptions({ maxAge: 0 }));
+  res.clearCookie('refreshToken', getRefreshCookieOptions());
   return successResponse(res, 200, 'Logged out successfully');
 });
 
