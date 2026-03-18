@@ -21,6 +21,8 @@ export const readStoredRestaurantUser = () => {
 const computeIsProfileCompletedFallback = (restaurant) => {
   if (!restaurant) return undefined;
   if (restaurant.isProfileCompleted === true) return true;
+  // Keep Google login flow on home dashboard instead of onboarding.
+  if (restaurant?.signupMethod === "google" || !!restaurant?.googleId) return true;
 
   const completedSteps = restaurant?.onboarding?.completedSteps;
   if (typeof completedSteps === "number") return completedSteps >= 4;

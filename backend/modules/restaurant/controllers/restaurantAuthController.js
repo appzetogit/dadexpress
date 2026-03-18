@@ -18,6 +18,8 @@ const buildPhoneQuery = (normalizedPhone) => {
 const computeIsProfileCompleted = (restaurant) => {
   if (!restaurant) return false;
   if (restaurant.isProfileCompleted === true) return true;
+  // Google sign-in restaurants should not be forced back to onboarding.
+  if (restaurant?.signupMethod === 'google' || !!restaurant?.googleId) return true;
 
   const completedSteps = restaurant?.onboarding?.completedSteps;
   if (typeof completedSteps === 'number') return completedSteps >= 4;

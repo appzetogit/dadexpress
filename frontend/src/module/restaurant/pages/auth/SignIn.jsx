@@ -29,6 +29,9 @@ export default function RestaurantSignIn() {
   const normalizeRestaurantSessionData = (restaurantData) => {
     if (!restaurantData || typeof restaurantData !== "object") return restaurantData
     if (restaurantData.isProfileCompleted === true) return restaurantData
+    if (restaurantData?.signupMethod === "google" || !!restaurantData?.googleId) {
+      return { ...restaurantData, isProfileCompleted: true }
+    }
 
     const completedSteps = Number(restaurantData?.onboarding?.completedSteps)
     const hasOnboardingObject =
