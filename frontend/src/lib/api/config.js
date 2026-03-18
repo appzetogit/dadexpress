@@ -19,6 +19,15 @@ const normalizeApiBaseUrl = (inputUrl) => {
 
   let candidate = inputUrl.trim();
 
+  // Handle malformed host-style values like ".dadexpress.in/api" or "/.dadexpress.in/api"
+  // that can otherwise become same-origin relative paths in runtime usage.
+  if (/^\/?\.[a-z0-9.-]+(\/|$)/i.test(candidate)) {
+    candidate = candidate.replace(/^\/?\./, "");
+  }
+  if (/^\/[a-z0-9.-]+\.[a-z]{2,}(\/|$)/i.test(candidate)) {
+    candidate = candidate.replace(/^\/+/, "");
+  }
+
   // Fix malformed protocols and repeated protocol prefixes.
   candidate = candidate.replace(/^(https?):\/(?!\/)/i, "$1://");
   candidate = candidate.replace(/^(https?):\/{3,}/i, "$1://");
@@ -34,14 +43,19 @@ const normalizeApiBaseUrl = (inputUrl) => {
 
   try {
     const parsed = new URL(candidate);
-    const invalidHost = !parsed.hostname || ["http", "https"].includes(parsed.hostname);
+    const normalizedHost = parsed.hostname.replace(/^\.+/, "");
+    const invalidHost =
+      !normalizedHost || ["http", "https"].includes(normalizedHost);
     if (invalidHost) {
       throw new Error("Invalid hostname in API base URL");
     }
 
     // Keep origin + non-/api path and enforce a single /api suffix.
     const cleanPath = parsed.pathname.replace(/\/+$/, "").replace(/\/api$/i, "");
-    return `${parsed.origin}${cleanPath}/api`;
+    const normalizedOrigin = `${parsed.protocol}//${normalizedHost}${
+      parsed.port ? `:${parsed.port}` : ""
+    }`;
+    return `${normalizedOrigin}${cleanPath}/api`;
   } catch (_error) {
     return getSameOriginApiFallback();
   }
