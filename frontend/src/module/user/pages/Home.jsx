@@ -86,13 +86,35 @@ const getSafeBackendBaseUrl = () => {
   }
 }
 
+const FALLBACK_RESTAURANT_IMAGE = "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&h=600&fit=crop"
+
+const normalizeImageUrl = (value) => {
+  if (!value) return ""
+  if (typeof value !== "string") return ""
+  const trimmed = value.trim()
+  if (!trimmed) return ""
+  try {
+    return encodeURI(trimmed)
+  } catch (_error) {
+    return trimmed
+  }
+}
+
 // Restaurant Image Carousel Component
 const RestaurantImageCarousel = React.memo(({ restaurant, priority = false }) => {
   const images = useMemo(() => restaurant.images || [restaurant.image], [restaurant])
   const [currentIndex, setCurrentIndex] = useState(0)
+  const [useFallbackImage, setUseFallbackImage] = useState(false)
   const touchStartX = useRef(0)
   const touchEndX = useRef(0)
   const isSwiping = useRef(false)
+  const failedIndicesRef = useRef(new Set())
+
+  useEffect(() => {
+    setCurrentIndex(0)
+    setUseFallbackImage(false)
+    failedIndicesRef.current = new Set()
+  }, [restaurant?.id, restaurant?.image, restaurant?.images])
 
   if (!images || images.length === 0) {
     return (
@@ -158,18 +180,35 @@ const RestaurantImageCarousel = React.memo(({ restaurant, priority = false }) =>
     >
       <div className="absolute inset-0 transition-transform duration-500 ease-out group-hover:scale-110">
         <OptimizedImage
-          src={images[currentIndex]}
+          src={useFallbackImage ? FALLBACK_RESTAURANT_IMAGE : images[currentIndex]}
           alt={`${restaurant.name} - Image ${currentIndex + 1}`}
           className="w-full h-full"
           priority={priority && currentIndex === 0}
           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
           objectFit="cover"
           placeholder="blur"
+          onError={() => {
+            if (useFallbackImage) return
+            failedIndicesRef.current.add(currentIndex)
+            if (failedIndicesRef.current.size >= images.length) {
+              setUseFallbackImage(true)
+              return
+            }
+            let nextIndex = currentIndex
+            for (let i = 0; i < images.length; i += 1) {
+              nextIndex = (nextIndex + 1) % images.length
+              if (!failedIndicesRef.current.has(nextIndex)) {
+                setCurrentIndex(nextIndex)
+                return
+              }
+            }
+            setUseFallbackImage(true)
+          }}
         />
       </div>
 
       {/* Image Indicators - only show if more than 1 image */}
-      {images.length > 1 && (
+      {images.length > 1 && !useFallbackImage && (
         <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex items-center z-10 -space-x-2">
           {images.map((_, index) => (
             <button
@@ -721,13 +760,11 @@ export default function Home() {
         params.trusted = 'true'
       }
 
-      // Dietary filter for Home restaurants.
-      // Veg mode ON: show veg/pure-veg based on user selection.
-      // Veg mode OFF: show non-veg restaurants.
+              // Dietary filter for Home restaurants.
+              // Veg mode ON: filter veg/pure-veg based on selection.
+              // Veg mode OFF: do not apply dietary filter (show all).
       if (vegMode === true) {
         params.dietary = vegModeOption === "all" ? "veg" : "pure-veg"
-      } else {
-        params.dietary = "non-veg"
       }
 
       // Optional: Add zoneId if available (for sorting/filtering, but show all restaurants)
@@ -805,13 +842,17 @@ export default function Home() {
             : "Multi-cuisine"
 
           // Get cover images (separate from menu images) for carousel
-          const coverImages = restaurant.coverImages && restaurant.coverImages.length > 0
-            ? restaurant.coverImages.map(img => img.url || img)
+                  const coverImages = restaurant.coverImages && restaurant.coverImages.length > 0
+                    ? restaurant.coverImages
+                      .map(img => normalizeImageUrl(img?.url || img))
+                      .filter(Boolean)
             : []
 
           // Fallback to menuImages only if coverImages don't exist (for backward compatibility)
           const fallbackImages = restaurant.menuImages && restaurant.menuImages.length > 0
-            ? restaurant.menuImages.map(img => img.url)
+                    ? restaurant.menuImages
+                      .map(img => normalizeImageUrl(img?.url || img))
+                      .filter(Boolean)
             : []
 
           // Use cover images first, then fallback to menu images, then profile image
@@ -819,9 +860,9 @@ export default function Home() {
             ? coverImages
             : (fallbackImages.length > 0
               ? fallbackImages
-              : (restaurant.profileImage?.url
-                ? [restaurant.profileImage.url]
-                : ["https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&h=600&fit=crop"]))
+                      : (normalizeImageUrl(restaurant.profileImage?.url)
+                        ? [normalizeImageUrl(restaurant.profileImage?.url)]
+                        : [FALLBACK_RESTAURANT_IMAGE]))
 
           // Keep single image for backward compatibility
           const image = allImages[0]
