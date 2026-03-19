@@ -1883,7 +1883,7 @@ export default function Cart() {
                     <div className="flex justify-between text-sm md:text-base">
                       <span className="text-gray-600 dark:text-gray-400">Delivery Fee</span>
                       <span className={deliveryFee === 0 ? "text-[#EB590E] dark:text-[#EB590E]" : "text-gray-800 dark:text-gray-200"}>
-                        {deliveryFee === 0 ? "FREE" : `₹${deliveryFee}`}
+                        {`₹${Number(deliveryFee || 0).toFixed(0)}`}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm md:text-base">
@@ -1924,7 +1924,7 @@ export default function Cart() {
                     <div className="flex justify-between text-sm md:text-base">
                       <span className="text-gray-600 dark:text-gray-400">Delivery Fee</span>
                       <span className={deliveryFee === 0 ? "text-[#EB590E] dark:text-[#EB590E]" : "text-gray-800 dark:text-gray-200"}>
-                        {deliveryFee === 0 ? "FREE" : `₹${deliveryFee}`}
+                        {`₹${Number(deliveryFee || 0).toFixed(0)}`}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm md:text-base">
@@ -1979,11 +1979,13 @@ export default function Cart() {
                   </div>
                 </div>
 
-                <div className="relative">
+                <div className="relative z-[80] pointer-events-auto">
                   <select
                     value={selectedPaymentMethod}
                     onChange={(e) => setSelectedPaymentMethod(e.target.value)}
-                    className="appearance-none bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200 rounded-lg px-3 py-2 pr-9 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-[#EB590E]/40"
+                    onClick={(e) => e.stopPropagation()}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    className="relative z-[80] pointer-events-auto touch-manipulation cursor-pointer appearance-none bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200 rounded-lg px-3 py-2 pr-9 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-[#EB590E]/40"
                   >
                     <option value="razorpay">Razorpay</option>
                     <option value="wallet">Wallet (₹{walletBalance.toFixed(0)})</option>
