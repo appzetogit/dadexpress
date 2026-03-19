@@ -19,9 +19,16 @@ router.post('/signup/details', validate(Joi.object({
   address: Joi.string().trim().required(),
   city: Joi.string().trim().required(),
   state: Joi.string().trim().required(),
+  pincode: Joi.string().trim().pattern(/^\d{6}$/).required(),
+  latitude: Joi.number().min(-90).max(90).optional(),
+  longitude: Joi.number().min(-180).max(180).optional(),
   vehicleType: Joi.string().valid('bike', 'scooter', 'bicycle', 'car').required(),
   vehicleName: Joi.string().trim().optional().allow(null, ''),
-  vehicleNumber: Joi.string().trim().required(),
+  vehicleNumber: Joi.when('vehicleType', {
+    is: 'bicycle',
+    then: Joi.string().trim().optional().allow(null, ''),
+    otherwise: Joi.string().trim().required()
+  }),
   panNumber: Joi.string().trim().required(),
   aadharNumber: Joi.string().trim().required()
 })), submitSignupDetails);
@@ -46,7 +53,15 @@ router.post('/signup/documents', validate(Joi.object({
   aadharBackPhoto: Joi.object({
     url: Joi.string().uri().required(),
     publicId: Joi.string().trim().required()
-  }).required()
+  }).required(),
+  vehicleRCPhoto: Joi.object({
+    url: Joi.string().uri().required(),
+    publicId: Joi.string().trim().required()
+  }).optional().allow(null),
+  vehicleRCBackPhoto: Joi.object({
+    url: Joi.string().uri().required(),
+    publicId: Joi.string().trim().required()
+  }).optional().allow(null)
 })), submitSignupDocuments);
 
 export default router;

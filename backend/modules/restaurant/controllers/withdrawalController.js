@@ -82,11 +82,15 @@ const getCurrentCycleAvailablePayout = async (restaurantId) => {
   };
 
   let deliveredOrders = await Order.find({
-    ...restaurantIdQuery,
     status: "delivered",
-    $or: [
-      { deliveredAt: { $gte: cycleStart, $lte: cycleEnd } },
-      { "tracking.delivered.timestamp": { $gte: cycleStart, $lte: cycleEnd } }
+    $and: [
+      restaurantIdQuery,
+      {
+        $or: [
+          { deliveredAt: { $gte: cycleStart, $lte: cycleEnd } },
+          { "tracking.delivered.timestamp": { $gte: cycleStart, $lte: cycleEnd } }
+        ]
+      }
     ]
   })
     .select("pricing")

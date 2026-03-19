@@ -21,6 +21,8 @@ export const readStoredRestaurantUser = () => {
 const computeIsProfileCompletedFallback = (restaurant) => {
   if (!restaurant) return undefined;
   if (restaurant.isProfileCompleted === true) return true;
+  // Active restaurants should stay on dashboard in legacy data scenarios.
+  if (restaurant?.isActive === true) return true;
   // Keep Google login flow on home dashboard instead of onboarding.
   if (restaurant?.signupMethod === "google" || !!restaurant?.googleId) return true;
 

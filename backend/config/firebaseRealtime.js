@@ -1,6 +1,7 @@
 import admin from 'firebase-admin';
 import fs from 'fs';
 import path from 'path';
+import { getFirebaseCredentials } from '../shared/utils/envService.js';
 
 const REALTIME_APP_NAME = 'realtime-tracking';
 let realtimeDb = null;
@@ -8,18 +9,14 @@ let initialized = false;
 const isRealtimeEnabled = process.env.FIREBASE_REALTIME_ENABLED === 'true';
 
 function resolveServiceAccountFromFile() {
-  const configPath = path.resolve(
-    process.cwd(),
-    'config',
-    'dad-express-firebase-adminsdk-fbsvc-b5eadad2f5.json'
-  );
-  const rootPath = path.resolve(process.cwd(), 'firebaseconfig.json');
+  const candidatePaths = [
+    path.resolve(process.cwd(), 'config', 'dad-express-firebase-adminsdk-fbsvc-b5eadad2f5.json'),
+    path.resolve(process.cwd(), 'config', 'serviceAccountKey.json'),
+    path.resolve(process.cwd(), 'config', 'zomato-607fa-firebase-adminsdk-fbsvc-f5f782c2cc.json'),
+    path.resolve(process.cwd(), 'firebaseconfig.json')
+  ];
 
-  const targetPath = fs.existsSync(configPath)
-    ? configPath
-    : fs.existsSync(rootPath)
-      ? rootPath
-      : null;
+  const targetPath = candidatePaths.find((candidatePath) => fs.existsSync(candidatePath)) || null;
 
   if (!targetPath) return null;
 
@@ -70,18 +67,34 @@ function resolveFirebaseCredentials() {
   return { projectId, clientEmail, privateKey, databaseURL };
 }
 
-export function initializeFirebaseRealtime() {
-  if (initialized && realtimeDb) {
-    return realtimeDb;
+function cleanCredentialValue(val) {
+  if (!val || typeof val !== 'string') return val;
+  let v = val.trim();
+  if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+    v = v.slice(1, -1).trim();
+  }
+  return v;
+}
+
+function normalizeResolvedCredentials({ projectId, clientEmail, privateKey, databaseURL }) {
+  const normalizedProjectId = cleanCredentialValue(projectId);
+  const normalizedClientEmail = cleanCredentialValue(clientEmail);
+  let normalizedPrivateKey = cleanCredentialValue(privateKey);
+  const normalizedDatabaseURL = cleanCredentialValue(databaseURL);
+
+  if (normalizedPrivateKey && normalizedPrivateKey.includes('\\n')) {
+    normalizedPrivateKey = normalizedPrivateKey.replace(/\\n/g, '\n');
   }
 
-  if (!isRealtimeEnabled) {
-    console.warn('⚠️ Firebase Realtime Database disabled via FIREBASE_REALTIME_ENABLED env flag.');
-    return null;
-  }
+  return {
+    projectId: normalizedProjectId,
+    clientEmail: normalizedClientEmail,
+    privateKey: normalizedPrivateKey,
+    databaseURL: normalizedDatabaseURL
+  };
+}
 
-  const { projectId, clientEmail, privateKey, databaseURL } = resolveFirebaseCredentials();
-
+function initializeRealtimeWithCredentials({ projectId, clientEmail, privateKey, databaseURL }) {
   if (!projectId || !clientEmail || !privateKey || !databaseURL) {
     console.warn('⚠️ Firebase Realtime Database not initialized. Missing FIREBASE_PROJECT_ID/FIREBASE_CLIENT_EMAIL/FIREBASE_PRIVATE_KEY/FIREBASE_DATABASE_URL.');
     return null;
@@ -113,6 +126,56 @@ export function initializeFirebaseRealtime() {
     console.warn(`⚠️ Firebase Realtime Database not initialized. ${error.message}`);
     realtimeDb = null;
     initialized = false;
+    return null;
+  }
+}
+
+export function initializeFirebaseRealtime() {
+  if (initialized && realtimeDb) {
+    return realtimeDb;
+  }
+
+  if (!isRealtimeEnabled) {
+    console.warn('⚠️ Firebase Realtime Database disabled via FIREBASE_REALTIME_ENABLED env flag.');
+    return null;
+  }
+
+  const resolvedCredentials = normalizeResolvedCredentials(resolveFirebaseCredentials());
+  return initializeRealtimeWithCredentials(resolvedCredentials);
+}
+
+export async function initializeFirebaseRealtimeAsync() {
+  if (initialized && realtimeDb) {
+    return realtimeDb;
+  }
+
+  if (!isRealtimeEnabled) {
+    console.warn('⚠️ Firebase Realtime Database disabled via FIREBASE_REALTIME_ENABLED env flag.');
+    return null;
+  }
+
+  const syncCredentials = normalizeResolvedCredentials(resolveFirebaseCredentials());
+  if (
+    syncCredentials.projectId &&
+    syncCredentials.clientEmail &&
+    syncCredentials.privateKey &&
+    syncCredentials.databaseURL
+  ) {
+    return initializeRealtimeWithCredentials(syncCredentials);
+  }
+
+  try {
+    const dbCredentials = await getFirebaseCredentials();
+    const mergedCredentials = normalizeResolvedCredentials({
+      projectId: syncCredentials.projectId || dbCredentials?.projectId,
+      clientEmail: syncCredentials.clientEmail || dbCredentials?.clientEmail,
+      privateKey: syncCredentials.privateKey || dbCredentials?.privateKey,
+      databaseURL: syncCredentials.databaseURL || dbCredentials?.databaseURL
+    });
+
+    return initializeRealtimeWithCredentials(mergedCredentials);
+  } catch (error) {
+    console.warn(`⚠️ Firebase Realtime Database not initialized from DB credentials. ${error.message}`);
     return null;
   }
 }

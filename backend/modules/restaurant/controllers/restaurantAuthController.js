@@ -13,12 +13,22 @@ import winston from 'winston';
  * This handles both old data (without country code) and new data (with country code)
  */
 const buildPhoneQuery = (normalizedPhone) => {
-  return buildPhoneInQuery(normalizedPhone, 'phone');
+  const phoneQuery = buildPhoneInQuery(normalizedPhone, 'phone');
+  const ownerPhoneQuery = buildPhoneInQuery(normalizedPhone, 'ownerPhone');
+  const primaryContactQuery = buildPhoneInQuery(normalizedPhone, 'primaryContactNumber');
+
+  const orConditions = [phoneQuery, ownerPhoneQuery, primaryContactQuery].filter(Boolean);
+  if (!orConditions.length) return null;
+  if (orConditions.length === 1) return orConditions[0];
+
+  return { $or: orConditions };
 };
 
 const computeIsProfileCompleted = (restaurant) => {
   if (!restaurant) return false;
   if (restaurant.isProfileCompleted === true) return true;
+  // Active restaurants should land on dashboard (legacy-safe).
+  if (restaurant?.isActive === true) return true;
   // Google sign-in restaurants should not be forced back to onboarding.
   if (restaurant?.signupMethod === 'google' || !!restaurant?.googleId) return true;
 
@@ -54,6 +64,32 @@ const pickBestRestaurantForGoogleLogin = (restaurants = [], email, firebaseUid) 
       s += 30;
     }
     if (restaurant?.phone) s += 10;
+    return s;
+  };
+
+  return [...restaurants].sort((a, b) => score(b) - score(a))[0] || null;
+};
+
+const pickBestRestaurantForOtpLogin = (restaurants = []) => {
+  if (!Array.isArray(restaurants) || restaurants.length === 0) return null;
+
+  const score = (restaurant) => {
+    let s = 0;
+    if (computeIsProfileCompleted(restaurant)) s += 200;
+    if (restaurant?.isActive === true) s += 100;
+
+    const completedSteps = Number(restaurant?.onboarding?.completedSteps);
+    if (Number.isFinite(completedSteps)) s += Math.min(completedSteps * 10, 40);
+
+    if (restaurant?.ownerName) s += 10;
+    if (restaurant?.ownerEmail) s += 10;
+    if (restaurant?.ownerPhone) s += 10;
+
+    if (restaurant?.updatedAt) {
+      const updatedAtTime = new Date(restaurant.updatedAt).getTime();
+      if (Number.isFinite(updatedAtTime)) s += Math.min(Math.floor(updatedAtTime / 1e12), 20);
+    }
+
     return s;
   };
 
@@ -176,6 +212,8 @@ export const verifyOTP = asyncHandler(async (req, res) => {
 
   try {
     let restaurant;
+    let existingRestaurantFoundForLogin = false;
+    let createdNewRestaurantInLoginFlow = false;
     // Normalize phone number if provided
     const normalizedPhone = phone ? normalizePhoneNumber(phone) : null;
     if (phone && !normalizedPhone) {
@@ -398,7 +436,9 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       const findQuery = normalizedPhone
         ? (buildPhoneQuery(normalizedPhone) || { phone: normalizedPhone })
         : { email: email?.toLowerCase().trim() };
-      restaurant = await Restaurant.findOne(findQuery);
+      const candidateRestaurants = await Restaurant.find(findQuery);
+      restaurant = pickBestRestaurantForOtpLogin(candidateRestaurants);
+      existingRestaurantFoundForLogin = !!restaurant;
 
       // If restaurant not found, we will auto-register with a placeholder name
       const restaurantName = name || (normalizedPhone || email || 'New Restaurant');
@@ -495,6 +535,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
             [identifierType]: identifier,
             restaurantId: restaurant._id
           });
+          createdNewRestaurantInLoginFlow = true;
         } catch (createError) {
           logger.error(`Error creating restaurant (auto-register): ${createError.message}`, {
             code: createError.code,
@@ -540,6 +581,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
                     [identifierType]: identifier,
                     restaurantId: restaurant._id
                   });
+                  createdNewRestaurantInLoginFlow = true;
                 } catch (retryError) {
                   logger.error(`Failed to create restaurant after email null fix: ${retryError.message}`, {
                     code: retryError.code,
@@ -592,6 +634,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
                   restaurantId: restaurant._id,
                   slug: uniqueSlug
                 });
+                createdNewRestaurantInLoginFlow = true;
               } catch (retryError) {
                 // If still fails, check if restaurant exists
                   const findQuery = phone
@@ -659,7 +702,25 @@ export const verifyOTP = asyncHandler(async (req, res) => {
     );
 
     // Return access token and restaurant info
-    const isProfileCompleted = computeIsProfileCompleted(restaurant);
+    let isProfileCompleted = computeIsProfileCompleted(restaurant);
+
+    // Permanent safeguard:
+    // If this is phone OTP login for an already registered restaurant,
+    // always land on dashboard (not onboarding).
+    const shouldForceDashboardForRegisteredPhoneLogin =
+      purpose === 'login' &&
+      !!normalizedPhone &&
+      existingRestaurantFoundForLogin === true &&
+      createdNewRestaurantInLoginFlow === false;
+
+    if (shouldForceDashboardForRegisteredPhoneLogin && isProfileCompleted !== true) {
+      isProfileCompleted = true;
+      if (restaurant.isProfileCompleted !== true) {
+        restaurant.isProfileCompleted = true;
+        await restaurant.save();
+      }
+    }
+
     return successResponse(res, 200, 'Authentication successful', {
       accessToken: tokens.accessToken,
       user: {

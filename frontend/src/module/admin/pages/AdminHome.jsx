@@ -133,6 +133,7 @@ export default function AdminHome() {
   }
   const transactionTime = transactionTimeMap[selectedPeriod] || "All Time"
   const transactionReportPath = `/admin/transaction-report?time=${encodeURIComponent(transactionTime)}`
+  const taxReportPath = `/admin/tax-report?time=${encodeURIComponent(transactionTime)}`
   const grossRevenueReportPath = `/admin/transaction-report?time=${encodeURIComponent(transactionTime)}&metric=gross&amount=${encodeURIComponent(revenueTotal.toFixed(2))}`
   const totalRevenueReportPath = `/admin/transaction-report?time=${encodeURIComponent(transactionTime)}&metric=total&amount=${encodeURIComponent(totalAdminEarnings.toFixed(2))}`
   const periodLabelMap = {
@@ -233,7 +234,7 @@ export default function AdminHome() {
               helper="Total GST collected"
               icon={<Receipt className="h-5 w-5 text-orange-600" />}
               accent="bg-orange-200/40"
-              path="/admin/tax-report"
+              path={taxReportPath}
               isLoading={isLoading && !hasLoadedOnce}
             />
             <MetricCard

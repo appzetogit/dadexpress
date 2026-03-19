@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { uploadAPI, api, locationAPI } from "@/lib/api"
+import { uploadAPI, api } from "@/lib/api"
 import { MobileTimePicker } from "@mui/x-date-pickers/MobileTimePicker"
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider"
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns"
@@ -249,6 +249,7 @@ export default function RestaurantOnboarding() {
       addressLine2: "",
       area: "",
       city: "",
+      pincode: "",
       landmark: "",
       latitude: null,
       longitude: null,
@@ -671,73 +672,21 @@ export default function RestaurantOnboarding() {
 
     setLocating(true)
     navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        try {
-          const { latitude, longitude } = position.coords
-          const response = await locationAPI.reverseGeocode(latitude, longitude)
-          
-          if (response?.data?.success) {
-            const data = response.data.data
-            const results = data.results || []
-            if (results.length > 0) {
-              const result = results[0]
-              const addressComponents = result.address_components || {}
-              
-              let extractedArea = ""
-              let extractedCity = ""
-              
-              if (Array.isArray(addressComponents)) {
-                const sublocality = addressComponents.find(c => 
-                  c.types?.includes('sublocality') || 
-                  c.types?.includes('sublocality_level_1') || 
-                  c.types?.includes('neighborhood')
-                )
-                extractedArea = sublocality?.long_name || ""
-                
-                const cityComp = addressComponents.find(c => c.types?.includes('locality'))
-                extractedCity = cityComp?.long_name || ""
-              } else {
-                extractedArea = addressComponents.area || ""
-                extractedCity = addressComponents.city || ""
-              }
+      (position) => {
+        const latitude = Number(position.coords.latitude)
+        const longitude = Number(position.coords.longitude)
 
-              setStep1(prev => ({
-                ...prev,
-                location: {
-                  ...prev.location,
-                  area: extractedArea || prev.location.area,
-                  city: extractedCity || prev.location.city,
-                  latitude,
-                  longitude
-                }
-              }))
-              toast.success("Location updated successfully")
-            }
-          } else {
-            setStep1(prev => ({
-              ...prev,
-              location: {
-                ...prev.location,
-                latitude,
-                longitude
-              }
-            }))
-            toast.success("Location coordinates updated")
-          }
-        } catch (err) {
-          console.error("Error getting location address:", err)
-          toast.error("Failed to get address. Coordinates saved.")
-          setStep1(prev => ({
-            ...prev,
-            location: {
-              ...prev.location,
-              latitude: position.coords.latitude,
-              longitude: position.coords.longitude
-            }
-          }))
-        } finally {
-          setLocating(false)
-        }
+        setStep1((prev) => ({
+          ...prev,
+          location: {
+            ...prev.location,
+            latitude,
+            longitude,
+          },
+        }))
+
+        toast.success("Location updated successfully")
+        setLocating(false)
       },
       (error) => {
         setLocating(false)
@@ -828,6 +777,7 @@ export default function RestaurantOnboarding() {
             addressLine2: localData.step1.location?.addressLine2 || "",
             area: localData.step1.location?.area || "",
             city: localData.step1.location?.city || "",
+            pincode: localData.step1.location?.pincode || "",
             landmark: localData.step1.location?.landmark || "",
             latitude: localData.step1.location?.latitude || null,
             longitude: localData.step1.location?.longitude || null,
@@ -940,6 +890,7 @@ export default function RestaurantOnboarding() {
                 addressLine2: data.step1.location?.addressLine2 || "",
                 area: data.step1.location?.area || "",
                 city: data.step1.location?.city || "",
+                pincode: data.step1.location?.pincode || "",
                 landmark: data.step1.location?.landmark || "",
                 latitude: data.step1.location?.latitude || null,
                 longitude: data.step1.location?.longitude || null,
@@ -1090,6 +1041,7 @@ export default function RestaurantOnboarding() {
           addressLine2: "Building A, Floor 2",
           area: "Downtown",
           city: "Mumbai",
+          pincode: "400001",
           landmark: "Near Central Park",
         },
       })
@@ -1203,8 +1155,26 @@ export default function RestaurantOnboarding() {
             addressLine2: normalizeTextValue(step1.location?.addressLine2),
             area: normalizeTextValue(step1.location?.area),
             city: normalizeTextValue(step1.location?.city),
+            pincode: normalizeDigits(step1.location?.pincode).slice(0, 6),
             landmark: normalizeTextValue(step1.location?.landmark),
+            latitude:
+              Number.isFinite(Number(step1.location?.latitude))
+                ? Number(step1.location.latitude)
+                : null,
+            longitude:
+              Number.isFinite(Number(step1.location?.longitude))
+                ? Number(step1.location.longitude)
+                : null,
           },
+        }
+        if (
+          Number.isFinite(cleanedStep1.location.latitude) &&
+          Number.isFinite(cleanedStep1.location.longitude)
+        ) {
+          cleanedStep1.location.coordinates = [
+            cleanedStep1.location.longitude,
+            cleanedStep1.location.latitude,
+          ]
         }
         const payload = {
           step1: cleanedStep1,
@@ -1862,6 +1832,25 @@ export default function RestaurantOnboarding() {
           />
           {getFieldError("step1.location.city") ? (
             <p className="text-[11px] text-red-600 mt-1">{getFieldError("step1.location.city")}</p>
+          ) : null}
+          <Input
+            value={step1.location?.pincode || ""}
+            onChange={(e) => {
+              const v = e.target.value.replace(/\D/g, "").slice(0, 6)
+              setStep1({
+                ...step1,
+                location: { ...step1.location, pincode: v },
+              })
+            }}
+            className="bg-white text-sm"
+            inputMode="numeric"
+            placeholder="Pincode (optional)"
+          />
+          {(Number.isFinite(Number(step1.location?.latitude)) &&
+            Number.isFinite(Number(step1.location?.longitude))) ? (
+            <p className="text-[11px] text-green-600 mt-1">
+              GPS: {Number(step1.location.latitude).toFixed(6)}, {Number(step1.location.longitude).toFixed(6)}
+            </p>
           ) : null}
           <p className="text-[11px] text-gray-500 mt-1">
             Please ensure that this address is the same as mentioned on your FSSAI license.

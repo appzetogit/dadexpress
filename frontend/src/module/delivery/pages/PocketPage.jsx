@@ -312,14 +312,24 @@ export default function PocketPage() {
       .reduce((sum, t) => sum + (t.amount || 0), 0)
   }
 
-  // Earnings Guarantee - Use active earning addon if available, otherwise show 0
-  // When no offer is active, show 0 of 0 and ₹0
-  const earningsGuaranteeTarget = activeEarningAddon?.earningAmount || 0
-  const earningsGuaranteeOrdersTarget = activeEarningAddon?.requiredOrders || 0
-  // Only show current orders/earnings if there's an active offer
-  const earningsGuaranteeCurrentOrders = activeEarningAddon ? (activeEarningAddon.currentOrders ?? weeklyOrders) : 0
-  // Show only bonus earnings from the offer, not total weekly earnings
-  const earningsGuaranteeCurrentEarnings = activeEarningAddon ? calculateBonusEarnings() : 0
+  // Earnings Guarantee:
+  // - If active offer exists: show offer progress.
+  // - If no active offer: show live weekly DB earnings/orders so card never stays static at 0.
+  const hasActiveOffer = !!activeEarningAddon
+  const earningsGuaranteeTarget = hasActiveOffer
+    ? Number(activeEarningAddon?.earningAmount || 0)
+    : Number(weeklyEarnings || 0)
+  const earningsGuaranteeOrdersTarget = hasActiveOffer
+    ? Number(activeEarningAddon?.requiredOrders || 0)
+    : Number(weeklyOrders || 0)
+  const earningsGuaranteeCurrentOrders = hasActiveOffer
+    ? Number(activeEarningAddon?.currentOrders ?? weeklyOrders ?? 0)
+    : Number(weeklyOrders || 0)
+  // For active offers, bonus tracks credited earning_addon amount.
+  // Without active offer, mirror live weekly earnings from backend.
+  const earningsGuaranteeCurrentEarnings = hasActiveOffer
+    ? Number(calculateBonusEarnings() || 0)
+    : Number(weeklyEarnings || 0)
   const ordersProgress = earningsGuaranteeOrdersTarget > 0
     ? Math.min(earningsGuaranteeCurrentOrders / earningsGuaranteeOrdersTarget, 1)
     : 0

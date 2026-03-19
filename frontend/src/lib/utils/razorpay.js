@@ -100,6 +100,22 @@ export const initRazorpayPayment = async (options) => {
       }
     };
 
+    if (options.method && typeof options.method === 'object') {
+      razorpayOptions.method = options.method;
+    }
+
+    if (options.config && typeof options.config === 'object') {
+      razorpayOptions.config = options.config;
+    }
+
+    if (typeof options.send_sms_hash === 'boolean') {
+      razorpayOptions.send_sms_hash = options.send_sms_hash;
+    }
+
+    if (typeof options.allow_rotation === 'boolean') {
+      razorpayOptions.allow_rotation = options.allow_rotation;
+    }
+
     const razorpay = new window.Razorpay(razorpayOptions);
     
     // Handle payment failures

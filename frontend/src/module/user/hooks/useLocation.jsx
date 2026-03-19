@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react"
 import { locationAPI, userAPI } from "@/lib/api"
 
+const USER_LOCATION_UPDATED_EVENT = "user-location-updated"
+
 export function useLocation() {
   const [location, setLocation] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -14,21 +16,15 @@ export function useLocation() {
   /* ===================== DB UPDATE (LIVE LOCATION TRACKING) ===================== */
   const updateLocationInDB = async (locationData) => {
     try {
-      // Check if location has placeholder values - don't save placeholders
-      const hasPlaceholder =
+      const latNum = Number(locationData?.latitude)
+      const lngNum = Number(locationData?.longitude)
+      const hasValidCoords = Number.isFinite(latNum) && Number.isFinite(lngNum)
+      if (!hasValidCoords) return
+
+      const hasPlaceholderText =
         locationData?.city === "Current Location" ||
         locationData?.address === "Select location" ||
-        locationData?.formattedAddress === "Select location" ||
-        (!locationData?.city && !locationData?.address && !locationData?.formattedAddress);
-
-      if (hasPlaceholder) {
-        false && console.log("⚠️ Skipping DB update - location contains placeholder values:", {
-          city: locationData?.city,
-          address: locationData?.address,
-          formattedAddress: locationData?.formattedAddress
-        });
-        return;
-      }
+        locationData?.formattedAddress === "Select location"
 
       // Check if user is authenticated before trying to update DB
       const userToken = localStorage.getItem('user_accessToken') || localStorage.getItem('accessToken')
@@ -40,13 +36,13 @@ export function useLocation() {
 
       // Prepare complete location data for database storage
       const locationPayload = {
-        latitude: locationData.latitude,
-        longitude: locationData.longitude,
-        address: locationData.address || "",
-        city: locationData.city || "",
-        state: locationData.state || "",
-        area: locationData.area || "",
-        formattedAddress: locationData.formattedAddress || locationData.address || "",
+        latitude: latNum,
+        longitude: lngNum,
+        address: hasPlaceholderText ? "" : (locationData.address || ""),
+        city: hasPlaceholderText ? "" : (locationData.city || ""),
+        state: hasPlaceholderText ? "" : (locationData.state || ""),
+        area: hasPlaceholderText ? "" : (locationData.area || ""),
+        formattedAddress: hasPlaceholderText ? "" : (locationData.formattedAddress || locationData.address || ""),
       }
 
       // Add optional fields if available
@@ -1495,9 +1491,8 @@ export function useLocation() {
                 (!finalLoc.city && !finalLoc.address && !finalLoc.formattedAddress && !finalLoc.area);
 
               if (hasPlaceholder) {
-                false && console.warn("⚠️ Skipping save - location contains placeholder values:", finalLoc)
-                // Don't save placeholder values to localStorage or DB
-                // Just set in state for display but don't persist
+                false && console.warn("⚠️ Placeholder address detected, saving coordinates-only location")
+                // Keep GPS coordinates persisted and synced even when address text is placeholder.
                 const coordOnlyLoc = {
                   latitude,
                   longitude,
@@ -1506,10 +1501,14 @@ export function useLocation() {
                   address: finalLoc.address,
                   formattedAddress: finalLoc.formattedAddress
                 }
+                localStorage.setItem("userLocation", JSON.stringify(coordOnlyLoc))
                 setLocation(coordOnlyLoc)
                 setPermissionGranted(true)
                 if (showLoading) setLoading(false)
                 setError(null)
+                if (updateDB) {
+                  await updateLocationInDB(coordOnlyLoc).catch(() => { })
+                }
                 resolve(coordOnlyLoc)
                 return
               }
@@ -1792,7 +1791,7 @@ export function useLocation() {
 
             // Build location object with ALL fields from reverse geocoding
             // NEVER include coordinates in formattedAddress or address
-            const loc = {
+            let loc = {
               ...addr, // This includes: city, state, area, street, streetNumber, postalCode
               latitude,
               longitude,
@@ -1838,8 +1837,22 @@ export function useLocation() {
               (!loc.city && !loc.address && !loc.formattedAddress && !loc.area);
 
             if (hasPlaceholder) {
-              false && console.warn("⚠️ Skipping live location update - contains placeholder values:", loc)
-              return // Don't update location or save to DB
+              false && console.warn("⚠️ Live update has placeholder address, syncing coordinates-only")
+              const stableAddress =
+                location &&
+                location.formattedAddress &&
+                location.formattedAddress !== "Select location" &&
+                location.city !== "Current Location"
+                  ? location
+                  : null
+              loc = {
+                ...loc,
+                address: stableAddress?.address || "",
+                formattedAddress: stableAddress?.formattedAddress || "",
+                city: stableAddress?.city || "",
+                state: stableAddress?.state || "",
+                area: stableAddress?.area || "",
+              }
             }
 
             // Check if coordinates have changed significantly (threshold: ~10 meters)
@@ -2119,11 +2132,21 @@ export function useLocation() {
           (currentLocation.formattedAddress === "Select location" ||
             currentLocation.city === "Current Location")
 
-        const shouldFetch = shouldForceRefresh || !hasInitialLocation || hasPlaceholder
+        // When permission is already granted, refresh GPS once in background
+        // so stale DB/localStorage coordinates do not keep showing far-away restaurants.
+        const hasExistingCoords =
+          Number.isFinite(Number(currentLocation?.latitude)) &&
+          Number.isFinite(Number(currentLocation?.longitude))
+        const shouldFetch = shouldForceRefresh || !hasInitialLocation || hasPlaceholder || hasExistingCoords
+        const shouldUseFreshGps =
+          shouldForceRefresh ||
+          !hasInitialLocation ||
+          hasPlaceholder ||
+          hasExistingCoords
 
         if (shouldFetch) {
           false && console.log("🔄 Fetching location - shouldForceRefresh:", shouldForceRefresh, "hasInitialLocation:", hasInitialLocation, "hasPlaceholder:", hasPlaceholder)
-          getLocation(true, shouldForceRefresh) // forceFresh = true if cached location is incomplete
+          getLocation(true, shouldUseFreshGps) // forceFresh = true so GPS replaces stale DB/localStorage coords
             .then((location) => {
               if (location &&
                 location.formattedAddress !== "Select location" &&
@@ -2176,22 +2199,44 @@ export function useLocation() {
       }
     };
 
-    // Only check permissions/start watching if we already have a saved location
-    // This avoids "Requests geolocation permission on page load" warnings on fresh visits
-    // New users must explicitly click "Use Current Location" first
-    const hasStoredLocation = localStorage.getItem("userLocation");
-    if (hasStoredLocation) {
-      checkPermissionAndStart();
-    } else {
-      false && console.log("📍 Fresh visit - skipping auto-geolocation check (waiting for user action)");
-      setLoading(false);
-    }
+    // Safe to run on every load because this path checks permission state first
+    // and avoids triggering a browser prompt for fresh visitors.
+    checkPermissionAndStart();
 
     // Cleanup timeout and watcher
     return () => {
       clearTimeout(loadingTimeout)
       false && console.log("🧹 Cleaning up location watcher")
       stopWatchingLocation()
+    }
+  }, [])
+
+  // Allow other screens/components to push fresh GPS coordinates immediately
+  // so zone detection and UI update in real time without waiting for watcher cycles.
+  useEffect(() => {
+    const handleExternalLocationUpdate = (event) => {
+      const payload = event?.detail || {}
+      const latitude = Number(payload?.latitude)
+      const longitude = Number(payload?.longitude)
+
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return
+
+      const nextLocation = {
+        ...payload,
+        latitude,
+        longitude,
+      }
+
+      prevLocationCoordsRef.current = { latitude, longitude }
+      setLocation(nextLocation)
+      setPermissionGranted(true)
+      setLoading(false)
+      setError(null)
+    }
+
+    window.addEventListener(USER_LOCATION_UPDATED_EVENT, handleExternalLocationUpdate)
+    return () => {
+      window.removeEventListener(USER_LOCATION_UPDATED_EVENT, handleExternalLocationUpdate)
     }
   }, [])
 

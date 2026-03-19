@@ -790,10 +790,10 @@ export default function Cart() {
 
       // Get coordinates from address location
       const coordinates = address.location?.coordinates || []
-      const longitude = coordinates[0]
-      const latitude = coordinates[1]
+      const longitude = Number(coordinates[0] ?? address.longitude)
+      const latitude = Number(coordinates[1] ?? address.latitude)
 
-      if (!latitude || !longitude) {
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
         toast.error(`Invalid coordinates for ${label} address`)
         return
       }
@@ -967,9 +967,9 @@ export default function Cart() {
       console.log("🔑 Authentication token present:", !!localStorage.getItem('accessToken') || !!localStorage.getItem('user_accessToken'))
 
       // CRITICAL: Validate restaurant ID before placing order
-      // Ensure we're using the correct restaurant from restaurantData (most reliable)
-      const finalRestaurantId = restaurantData?.restaurantId || restaurantData?._id || null;
-      const finalRestaurantName = restaurantData?.name || null;
+      // Prefer restaurantData; fallback to cart when restaurantData not yet loaded.
+      const finalRestaurantId = restaurantData?.restaurantId || restaurantData?._id || cart[0]?.restaurantId || null;
+      const finalRestaurantName = restaurantData?.name || cart[0]?.restaurant || null;
 
       if (!finalRestaurantId) {
         console.error('❌ CRITICAL: Cannot place order - Restaurant ID is missing!');
@@ -991,6 +991,31 @@ export default function Cart() {
         alert('Error: Restaurant information is missing. Please refresh the page and try again.');
         setIsPlacingOrder(false);
         return;
+      }
+
+      // Always verify latest restaurant online/offline state from backend before placing order.
+      // This avoids stale cart page data incorrectly showing/using an old offline state.
+      try {
+        const latestRestaurantResponse = await restaurantAPI.getRestaurantById(finalRestaurantId)
+        const latestRestaurant =
+          latestRestaurantResponse?.data?.data?.restaurant ||
+          latestRestaurantResponse?.data?.restaurant ||
+          null
+
+        if (latestRestaurant) {
+          setRestaurantData((prev) => ({
+            ...(prev || {}),
+            ...latestRestaurant,
+          }))
+        }
+
+        if (latestRestaurant?.isAcceptingOrders === false) {
+          toast.error("Restaurant is currently not accepting orders")
+          setIsPlacingOrder(false)
+          return
+        }
+      } catch (statusError) {
+        console.warn("⚠️ Failed to refresh latest restaurant status before placing order:", statusError)
       }
 
       // CRITICAL: Validate that ALL cart items belong to the SAME restaurant
@@ -1352,6 +1377,9 @@ export default function Cart() {
       else if (error.response) {
         // Server responded with error status
         errorMessage = error.response.data?.message || `Server error: ${error.response.status}`
+        if (error.response.status === 403 && /not accepting orders/i.test(errorMessage)) {
+          toast.error("Restaurant is currently not accepting orders")
+        }
       }
       // Handle other errors
       else if (error.message) {
@@ -1421,7 +1449,7 @@ export default function Cart() {
       </div>
 
       {/* Scrollable Content Area */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden pb-24 md:pb-32">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden pb-44 md:pb-32">
         {/* Savings Banner */}
         {savings > 0 && (
           <div className="bg-blue-100 dark:bg-blue-900/20 px-4 md:px-6 py-2 md:py-3 flex-shrink-0">
@@ -1860,7 +1888,7 @@ export default function Cart() {
                     <div className="flex justify-between text-sm md:text-base">
                       <span className="text-gray-600 dark:text-gray-400">Delivery Fee</span>
                       <span className={deliveryFee === 0 ? "text-[#EB590E] dark:text-[#EB590E]" : "text-gray-800 dark:text-gray-200"}>
-                        {deliveryFee === 0 ? "FREE" : `₹${deliveryFee}`}
+                        {`₹${Number(deliveryFee || 0).toFixed(0)}`}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm md:text-base">
@@ -1901,7 +1929,7 @@ export default function Cart() {
                     <div className="flex justify-between text-sm md:text-base">
                       <span className="text-gray-600 dark:text-gray-400">Delivery Fee</span>
                       <span className={deliveryFee === 0 ? "text-[#EB590E] dark:text-[#EB590E]" : "text-gray-800 dark:text-gray-200"}>
-                        {deliveryFee === 0 ? "FREE" : `₹${deliveryFee}`}
+                        {`₹${Number(deliveryFee || 0).toFixed(0)}`}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm md:text-base">
@@ -1931,7 +1959,10 @@ export default function Cart() {
       </div>
 
       {/* Bottom Sticky - Place Order */}
-      <div className="bg-white dark:bg-[#1a1a1a] border-t dark:border-gray-800 shadow-lg z-30 flex-shrink-0 fixed bottom-0 left-0 right-0">
+      <div
+        className="bg-white dark:bg-[#1a1a1a] border-t dark:border-gray-800 shadow-lg z-[70] flex-shrink-0 fixed bottom-0 left-0 right-0"
+        style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 12px)" }}
+      >
         <div className="max-w-7xl mx-auto">
           <div className="px-4 md:px-6 py-3 md:py-4">
             <div className="w-full max-w-md md:max-w-lg mx-auto">
@@ -1953,11 +1984,13 @@ export default function Cart() {
                   </div>
                 </div>
 
-                <div className="relative">
+                <div className="relative z-[80] pointer-events-auto">
                   <select
                     value={selectedPaymentMethod}
                     onChange={(e) => setSelectedPaymentMethod(e.target.value)}
-                    className="appearance-none bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200 rounded-lg px-3 py-2 pr-9 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-[#EB590E]/40"
+                    onClick={(e) => e.stopPropagation()}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    className="relative z-[80] pointer-events-auto touch-manipulation cursor-pointer appearance-none bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200 rounded-lg px-3 py-2 pr-9 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-[#EB590E]/40"
                   >
                     <option value="razorpay">Razorpay</option>
                     <option value="wallet">Wallet (₹{walletBalance.toFixed(0)})</option>

@@ -639,9 +639,46 @@ export default function OrdersMain() {
   const [showReferrerCard, setShowReferrerCard] = useState(false)
   const [showReferredCard, setShowReferredCard] = useState(false)
   const [isAccepting, setIsAccepting] = useState(false)
+  const [isRestaurantOnline, setIsRestaurantOnline] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY) || "false") === true
+    } catch {
+      return false
+    }
+  })
 
   // Restaurant notifications hook for real-time orders
   const { newOrder, clearNewOrder, isConnected } = useRestaurantNotifications()
+
+  // Keep online/offline flag synced with RestaurantStatus toggle.
+  useEffect(() => {
+    const syncFromStorage = () => {
+      try {
+        const nextStatus = JSON.parse(localStorage.getItem(STORAGE_KEY) || "false") === true
+        setIsRestaurantOnline(nextStatus)
+      } catch {
+        setIsRestaurantOnline(false)
+      }
+    }
+
+    const handleStatusChanged = (event) => {
+      const next = event?.detail?.isOnline
+      if (typeof next === "boolean") {
+        setIsRestaurantOnline(next)
+        return
+      }
+      syncFromStorage()
+    }
+
+    syncFromStorage()
+    window.addEventListener("restaurantStatusChanged", handleStatusChanged)
+    window.addEventListener("storage", syncFromStorage)
+
+    return () => {
+      window.removeEventListener("restaurantStatusChanged", handleStatusChanged)
+      window.removeEventListener("storage", syncFromStorage)
+    }
+  }, [])
 
   const rejectReasons = [
     "Restaurant is too busy",
@@ -785,6 +822,7 @@ export default function OrdersMain() {
 
   // Show new order popup when real order notification arrives from Socket.IO
   useEffect(() => {
+    if (!isRestaurantOnline) return
     if (newOrder) {
       debugLog('📦 New order received via Socket.IO:', newOrder)
       const orderId = newOrder.orderId || newOrder.orderMongoId
@@ -795,7 +833,7 @@ export default function OrdersMain() {
         setCountdown(240) // Reset countdown to 4 minutes
       }
     }
-  }, [newOrder])
+  }, [isRestaurantOnline, newOrder])
 
   // Track popup state with ref to avoid stale closures
   const showNewOrderPopupRef = useRef(showNewOrderPopup)
@@ -813,6 +851,7 @@ export default function OrdersMain() {
   // Check for confirmed orders that haven't been shown in popup yet (fallback if Socket.IO fails)
   useEffect(() => {
     const checkConfirmedOrders = async () => {
+      if (!isRestaurantOnline) return
       // Do not poll orders until restaurant status is loaded and active.
       // Inactive/unapproved accounts are blocked by backend on orders APIs (401).
       if (restaurantStatus.isLoading || restaurantStatus.isActive !== true) return
@@ -881,7 +920,7 @@ export default function OrdersMain() {
     checkConfirmedOrders()
 
     return () => clearInterval(interval)
-  }, [restaurantStatus.isLoading, restaurantStatus.isActive])
+  }, [isRestaurantOnline, restaurantStatus.isLoading, restaurantStatus.isActive])
 
   // Play audio when popup opens
   useEffect(() => {
@@ -1794,7 +1833,23 @@ export default function OrdersMain() {
                       <span className="text-sm font-semibold text-gray-900">Total bill</span>
                     </div>
                     <span className="text-base font-bold text-gray-900">
-                      ₹{(popupOrder || newOrder)?.total || 0}
+                      ₹{(() => {
+                        const order = popupOrder || newOrder
+                        const items = Array.isArray(order?.items) ? order.items : []
+                        const itemTotal = items.reduce((sum, item) => {
+                          const quantity = Number(item?.quantity ?? item?.qty ?? 1) || 1
+                          const unitPrice = Number(
+                            item?.price ??
+                            item?.unitPrice ??
+                            item?.basePrice ??
+                            item?.finalPrice ??
+                            0
+                          ) || 0
+                          return sum + (quantity * unitPrice)
+                        }, 0)
+                        const amount = itemTotal > 0 ? itemTotal : (Number(order?.total) || 0)
+                        return Number.isInteger(amount) ? String(amount) : amount.toFixed(2)
+                      })()}
                     </span>
                   </div>
 

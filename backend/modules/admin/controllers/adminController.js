@@ -136,9 +136,20 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     if (periodStart) baseOrderMatch.deliveredAt = { $gte: periodStart, $lte: now };
 
     const last30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const existingDeliveryPartnerIds = await Delivery.find({})
+      .distinct("_id")
+      .catch(() => []);
 
     const getDeliveryEarningFromWallets = async (startDate = null, endDate = null) => {
       const pipeline = [
+        {
+          $match: {
+            ...(Array.isArray(existingDeliveryPartnerIds) &&
+            existingDeliveryPartnerIds.length > 0
+              ? { deliveryId: { $in: existingDeliveryPartnerIds } }
+              : {}),
+          },
+        },
         { $unwind: "$transactions" },
         {
           $addFields: {
@@ -471,21 +482,8 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       $or: [{ role: "user" }, { role: { $exists: false } }, { role: null }],
     });
 
-    // Pending orders should reflect all active/in-progress orders, not just literal "pending".
-    const terminalStatuses = new Set([
-      "delivered",
-      "cancelled",
-      "canceled",
-      "refunded",
-      "payment-failed",
-      "failed",
-      "rejected",
-    ]);
-    const pendingOrders = Object.entries(orderStatusMap).reduce(
-      (sum, [status, count]) =>
-        terminalStatuses.has(status) ? sum : sum + (Number(count) || 0),
-      0,
-    );
+    // Keep dashboard "Pending orders" aligned with /admin/orders/pending list.
+    const pendingOrders = orderStatusMap.pending || 0;
 
     // Completed orders (delivered orders)
     const completedOrders = orderStatusMap.delivered || 0;

@@ -115,7 +115,8 @@ export const getRestaurants = async (req, res) => {
       // Validate zone exists and is active
       userZone = await Zone.findById(zoneId).lean();
       if (!userZone || !userZone.isActive) {
-        return errorResponse(res, 400, 'Invalid or inactive zone. Please detect your zone again.');
+        console.warn(`⚠️ Ignoring invalid/inactive zoneId on restaurant list: ${zoneId}`);
+        userZone = null;
       }
     }
     
@@ -236,16 +237,46 @@ export const getRestaurants = async (req, res) => {
       }
     }
     
-    // Fetch restaurants - Show ALL restaurants regardless of zone
+    const parseCoordinate = (value) => {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+
+    const getRestaurantCoords = (restaurantDoc) => {
+      const coords = restaurantDoc?.location?.coordinates;
+      if (Array.isArray(coords) && coords.length >= 2) {
+        const lng = parseCoordinate(coords[0]);
+        const lat = parseCoordinate(coords[1]);
+        if (lat !== null && lng !== null) return { lat, lng };
+      }
+      const lat = parseCoordinate(restaurantDoc?.location?.latitude);
+      const lng = parseCoordinate(restaurantDoc?.location?.longitude);
+      if (lat !== null && lng !== null) return { lat, lng };
+      return null;
+    };
+
+    const isRestaurantInsideZone = (restaurantDoc, zoneDoc) => {
+      if (!zoneDoc?.coordinates || zoneDoc.coordinates.length < 3) return true;
+      const coords = getRestaurantCoords(restaurantDoc);
+      if (!coords) return false;
+      return isPointInZone(coords.lat, coords.lng, zoneDoc.coordinates);
+    };
+
+    // Fetch restaurants
     let restaurants = await Restaurant.find(query)
       .select('-owner -createdAt -updatedAt -password')
       .sort(sortObj)
-      .limit(parseInt(limit))
-      .skip(parseInt(offset))
       .lean();
-    
-    // Note: We show all restaurants regardless of zone. Zone-based filtering is removed.
-    // Users in any zone will see all restaurants.
+
+    // When user zone is available, show only restaurants inside that zone.
+    if (userZone) {
+      restaurants = restaurants.filter((restaurantDoc) => isRestaurantInsideZone(restaurantDoc, userZone));
+    }
+
+    // Apply pagination after all filters (including zone polygon filter).
+    const offsetValue = parseInt(offset);
+    const limitValue = parseInt(limit);
+    restaurants = restaurants.slice(offsetValue, offsetValue + limitValue);
     
     // Apply string-based filters that can't be done in MongoDB query
     if (maxDeliveryTime) {
@@ -269,7 +300,15 @@ export const getRestaurants = async (req, res) => {
     // Get total count (before filtering by string fields)
     const totalQuery = { ...query };
     delete totalQuery.$or; // Remove $or for count
-    const total = await Restaurant.countDocuments(totalQuery);
+    let total = await Restaurant.countDocuments(totalQuery);
+    if (userZone) {
+      const allCandidateRestaurants = await Restaurant.find(query)
+        .select('location')
+        .lean();
+      total = allCandidateRestaurants.filter((restaurantDoc) =>
+        isRestaurantInsideZone(restaurantDoc, userZone),
+      ).length;
+    }
     
     console.log(`Fetched ${restaurants.length} restaurants from database with filters:`, {
       sortBy,
@@ -279,7 +318,8 @@ export const getRestaurants = async (req, res) => {
       maxDistance,
       maxPrice,
       hasOffers,
-      dietary
+      dietary,
+      zoneId
     });
 
     return successResponse(res, 200, 'Restaurants retrieved successfully', {
@@ -876,7 +916,8 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
       // Validate zone exists and is active
       userZone = await Zone.findById(zoneId).lean();
       if (!userZone || !userZone.isActive) {
-        return errorResponse(res, 400, 'Invalid or inactive zone. Please detect your zone again.');
+        console.warn(`⚠️ Ignoring invalid/inactive zoneId on under-250 list: ${zoneId}`);
+        userZone = null;
       }
     }
 
@@ -982,14 +1023,41 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
       }
     };
 
-    // Get all active restaurants - Show ALL restaurants regardless of zone
+    const parseCoordinate = (value) => {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+
+    const getRestaurantCoords = (restaurantDoc) => {
+      const coords = restaurantDoc?.location?.coordinates;
+      if (Array.isArray(coords) && coords.length >= 2) {
+        const lng = parseCoordinate(coords[0]);
+        const lat = parseCoordinate(coords[1]);
+        if (lat !== null && lng !== null) return { lat, lng };
+      }
+      const lat = parseCoordinate(restaurantDoc?.location?.latitude);
+      const lng = parseCoordinate(restaurantDoc?.location?.longitude);
+      if (lat !== null && lng !== null) return { lat, lng };
+      return null;
+    };
+
+    const isRestaurantInsideZone = (restaurantDoc, zoneDoc) => {
+      if (!zoneDoc?.coordinates || zoneDoc.coordinates.length < 3) return true;
+      const coords = getRestaurantCoords(restaurantDoc);
+      if (!coords) return false;
+      return isPointInZone(coords.lat, coords.lng, zoneDoc.coordinates);
+    };
+
+    // Get all active restaurants
     let restaurants = await Restaurant.find({ isActive: true })
       .select('-owner -createdAt -updatedAt')
       .lean()
       .limit(100); // Limit to first 100 restaurants for performance
 
-    // Note: We show all restaurants regardless of zone. Zone-based filtering is removed.
-    // Users in any zone will see all restaurants.
+    // When zone is detected, restrict to restaurants inside the same zone.
+    if (userZone) {
+      restaurants = restaurants.filter((restaurantDoc) => isRestaurantInsideZone(restaurantDoc, userZone));
+    }
 
     // Process restaurants in parallel (batch processing for better performance)
     const batchSize = 10; // Process 10 restaurants at a time

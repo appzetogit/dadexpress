@@ -690,19 +690,13 @@ export default function Home() {
     try {
       setLoadingRestaurants(true)
 
-      // First, test backend connection
+      // Health endpoint can be intermittently blocked/slow on some networks.
+      // Do not hard-stop restaurant listing on health-check failure.
       try {
-        // Use normalized backend URL and guard against malformed domain-in-path values.
         const backendUrl = getSafeBackendBaseUrl()
-        const healthCheck = await fetch(`${backendUrl}/health`)
-        if (!healthCheck.ok) {
-          throw new Error(`Backend health check failed: ${healthCheck.status}`)
-        }
-      } catch (healthError) {
-        // Backend connection error - handled silently, toast notifications shown via axios interceptor
-        setRestaurantsData([])
-        setLoadingRestaurants(false)
-        return
+        await fetch(`${backendUrl}/health`)
+      } catch (_healthError) {
+        // Ignore and continue with real restaurants API call below.
       }
 
       // Build query parameters from filters
@@ -760,18 +754,20 @@ export default function Home() {
         params.trusted = 'true'
       }
 
-              // Dietary filter for Home restaurants.
-              // Veg mode ON: filter veg/pure-veg based on selection.
-              // Veg mode OFF: do not apply dietary filter (show all).
-      if (vegMode === true) {
-        params.dietary = vegModeOption === "all" ? "veg" : "pure-veg"
+      // Dietary filter for Home restaurants.
+      // Veg mode ON + "Pure Veg": apply dietary filter.
+      // Veg mode ON + "All restaurants": do not apply dietary filter.
+      // Veg mode OFF: do not apply dietary filter (show all).
+      if (vegMode === true && vegModeOption === "pure-veg") {
+        params.dietary = "pure-veg"
       }
 
-      // Optional: Add zoneId if available (for sorting/filtering, but show all restaurants)
-      if (zoneId) {
+      // When GPS-based zone is available, restrict listing to that zone.
+      // This prevents stale far-away restaurants from appearing for the user.
+      if (zoneId && isInService) {
         params.zoneId = zoneId
       }
-      // Note: We show all restaurants regardless of zone, but apply grayscale styling if user is out of service
+
       const response = await restaurantAPI.getRestaurants(params)
 
       if (response.data && response.data.success && response.data.data && response.data.data.restaurants) {
@@ -917,12 +913,12 @@ export default function Home() {
     } finally {
       setLoadingRestaurants(false)
     }
-  }, [zoneId, vegMode, vegModeOption])
+  }, [vegMode, vegModeOption, zoneId, isInService, location?.latitude, location?.longitude])
 
-  // Fetch restaurants when appliedFilters change
+  // Refetch restaurants when filters or GPS zone changes
   useEffect(() => {
     fetchRestaurants(appliedFilters)
-  }, [appliedFilters, fetchRestaurants])
+  }, [appliedFilters, fetchRestaurants, zoneId, isInService, location?.latitude, location?.longitude])
 
   // Recalculate distances when user location updates
   useEffect(() => {

@@ -70,6 +70,18 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
       // Still proceed but log warning
     }
 
+    // Do not push real-time new-order notifications when restaurant is Duty Off.
+    if (restaurant?.isAcceptingOrders === false) {
+      console.log(`⏸️ Skipping new-order notification for offline restaurant ${restaurantId} (${restaurant?.name || 'unknown'})`);
+      return {
+        success: false,
+        restaurantId,
+        orderId: order.orderId,
+        skipped: true,
+        reason: 'restaurant_offline'
+      };
+    }
+
     // Resolve payment method: override > order.payment > Payment collection (COD fallback)
     let resolvedPaymentMethod = paymentMethodOverride ?? order.payment?.method ?? 'razorpay';
     if (resolvedPaymentMethod !== 'cash') {

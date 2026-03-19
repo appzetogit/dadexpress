@@ -291,27 +291,29 @@ export default function RestaurantStatus() {
 
       // Update backend
       try {
-        await restaurantAPI.updateDeliveryStatus(checked)
-        debugLog('✅ Delivery status updated in backend:', checked)
+        const updateResponse = await restaurantAPI.updateDeliveryStatus(checked)
+        const backendIsOnline =
+          updateResponse?.data?.data?.restaurant?.isAcceptingOrders ??
+          checked
+        debugLog('✅ Delivery status updated in backend:', backendIsOnline)
+
+        // Keep local state strictly aligned with backend-confirmed value.
+        setDeliveryStatus(backendIsOnline)
+        localStorage.setItem('restaurant_online_status', JSON.stringify(backendIsOnline))
+        window.dispatchEvent(new CustomEvent('restaurantStatusChanged', {
+          detail: { isOnline: backendIsOnline }
+        }))
       } catch (apiError) {
         console.error('Error updating delivery status in backend:', apiError)
 
-        // Revert local state on authorization failures or hard errors
-        const shouldRevert =
-          apiError.response?.status === 401 ||
-          apiError.response?.status === 403
-
-        if (shouldRevert) {
-          setDeliveryStatus(previousStatus)
-          localStorage.setItem('restaurant_online_status', JSON.stringify(previousStatus))
-          toast.error(apiError.response?.data?.message || 'Your restaurant is not approved/active to go online yet.')
-        }
+        // Revert local state on ANY backend failure to avoid false "Online" UI.
+        setDeliveryStatus(previousStatus)
+        localStorage.setItem('restaurant_online_status', JSON.stringify(previousStatus))
+        window.dispatchEvent(new CustomEvent('restaurantStatusChanged', {
+          detail: { isOnline: previousStatus }
+        }))
+        toast.error(apiError.response?.data?.message || 'Failed to update restaurant status. Please try again.')
       }
-      
-      // Dispatch custom event for navbar to listen
-      window.dispatchEvent(new CustomEvent('restaurantStatusChanged', { 
-        detail: { isOnline: checked } 
-      }))
     } catch (error) {
       console.error("Error saving delivery status:", error)
     }

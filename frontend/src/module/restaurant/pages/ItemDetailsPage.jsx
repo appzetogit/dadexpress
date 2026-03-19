@@ -375,6 +375,35 @@ export default function ItemDetailsPage() {
     return result
   }
 
+  const parseGalleryResult = (rawResult) => {
+    let result = rawResult
+
+    if (typeof result === "string") {
+      try {
+        result = JSON.parse(result)
+      } catch {
+        return []
+      }
+    }
+
+    if (!result) return []
+
+    // Some bridges return [file1, file2] directly.
+    if (Array.isArray(result)) {
+      return result
+    }
+
+    // Common wrapped formats.
+    if (Array.isArray(result.images)) return result.images
+    if (Array.isArray(result.files)) return result.files
+    if (Array.isArray(result.data)) return result.data
+
+    // Single image shape (same as camera payload).
+    if (result.base64) return [result]
+
+    return []
+  }
+
   const convertBase64ToFile = (cameraResult) => {
     const base64Content = cameraResult.base64.includes(",")
       ? cameraResult.base64.split(",").pop()
@@ -392,7 +421,40 @@ export default function ItemDetailsPage() {
     return new File([uint8Array], fileName, { type: mimeType })
   }
 
-  const handleAddImagesClick = () => {
+  const tryOpenGalleryFromBridge = async () => {
+    if (!window.flutter_inappwebview?.callHandler) return false
+
+    const handlerNames = ["openGallery", "openImagePicker", "pickImageFromGallery"]
+
+    for (const handlerName of handlerNames) {
+      try {
+        const rawResult = await window.flutter_inappwebview.callHandler(handlerName)
+        const galleryEntries = parseGalleryResult(rawResult)
+        if (!galleryEntries.length) continue
+
+        const files = galleryEntries
+          .map((entry) => {
+            if (entry instanceof File) return entry
+            if (entry?.base64) return convertBase64ToFile(entry)
+            return null
+          })
+          .filter(Boolean)
+
+        if (files.length) {
+          processSelectedFiles(files)
+          return true
+        }
+      } catch (_err) {
+        // Try next handler name.
+      }
+    }
+
+    return false
+  }
+
+  const handleAddImagesClick = async () => {
+    const openedFromBridge = await tryOpenGalleryFromBridge()
+    if (openedFromBridge) return
     fileInputRef.current?.click()
   }
 

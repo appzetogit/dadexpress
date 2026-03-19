@@ -17,6 +17,15 @@ export const useRestaurantNotifications = () => {
   const [restaurantId, setRestaurantId] = useState(null);
   const lastConnectErrorLogRef = useRef(0);
   const CONNECT_ERROR_LOG_THROTTLE_MS = 10000;
+  const STATUS_STORAGE_KEY = 'restaurant_online_status';
+
+  const isRestaurantOnlineNow = () => {
+    try {
+      return JSON.parse(localStorage.getItem(STATUS_STORAGE_KEY) || 'false') === true;
+    } catch {
+      return false;
+    }
+  };
 
   // Get restaurant ID from API
   useEffect(() => {
@@ -286,6 +295,10 @@ export const useRestaurantNotifications = () => {
 
     // Listen for new order notifications
     socketRef.current.on('new_order', (orderData) => {
+      if (!isRestaurantOnlineNow()) {
+        false && console.log('⏸️ Ignoring new_order socket event while restaurant is offline');
+        return;
+      }
       false && console.log('📦 New order received:', orderData);
       setNewOrder(orderData);
       

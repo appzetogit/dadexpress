@@ -346,6 +346,34 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       return errorResponse(res, 403, 'You must be an approved delivery partner to accept orders');
     }
 
+    // HARD GATE: Block accepting new orders when available cash limit is exhausted.
+    // Rider must deposit cash first to free up limit, then can accept next order.
+    try {
+      const BusinessSettings = (await import('../../admin/models/BusinessSettings.js')).default;
+      const settings = await BusinessSettings.getSettings();
+      const totalCashLimit = Math.max(0, Number(settings?.deliveryCashLimit) || 0);
+      const wallet = await DeliveryWallet.findOrCreateByDeliveryId(delivery._id);
+      const cashInHand = Math.max(0, Number(wallet?.cashInHand) || 0);
+      const availableCashLimit = Math.max(0, totalCashLimit - cashInHand);
+
+      if (availableCashLimit <= 0) {
+        console.warn(`⚠️ Cash limit exhausted for delivery ${delivery._id}. Blocking accept.`, {
+          totalCashLimit,
+          cashInHand,
+          availableCashLimit,
+          orderId
+        });
+        return errorResponse(
+          res,
+          403,
+          `Cash limit exhausted. Please deposit cash first to accept next order. (Cash in hand: ₹${cashInHand.toFixed(2)}, Limit: ₹${totalCashLimit.toFixed(2)})`
+        );
+      }
+    } catch (cashLimitCheckError) {
+      console.error('❌ Cash limit check failed during acceptOrder:', cashLimitCheckError);
+      return errorResponse(res, 500, 'Unable to validate cash limit. Please try again.');
+    }
+
     console.log(`📦 Delivery partner ${delivery._id} attempting to accept order ${orderId}`);
     console.log(`📍 Location provided: lat=${currentLat}, lng=${currentLng}`);
 

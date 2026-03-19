@@ -132,11 +132,15 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
     // Query orders that were delivered in the current cycle
     // First try with deliveredAt, if not found, use tracking.delivered.timestamp as fallback
     let currentCycleOrders = await Order.find({
-      ...restaurantIdQuery,
       status: 'delivered',
-      $or: [
-        { deliveredAt: { $gte: currentCycleStart, $lte: currentCycleEnd } },
-        { 'tracking.delivered.timestamp': { $gte: currentCycleStart, $lte: currentCycleEnd } }
+      $and: [
+        restaurantIdQuery,
+        {
+          $or: [
+            { deliveredAt: { $gte: currentCycleStart, $lte: currentCycleEnd } },
+            { 'tracking.delivered.timestamp': { $gte: currentCycleStart, $lte: currentCycleEnd } }
+          ]
+        }
       ]
     })
     .populate('userId', 'name phone email')
@@ -328,11 +332,15 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
       // Query orders that were delivered in the past cycle
       // First try with deliveredAt, if not found, use tracking.delivered.timestamp as fallback
       let pastCycleOrders = await Order.find({
-        ...restaurantIdQuery,
         status: 'delivered',
-        $or: [
-          { deliveredAt: { $gte: start, $lte: end } },
-          { 'tracking.delivered.timestamp': { $gte: start, $lte: end } }
+        $and: [
+          restaurantIdQuery,
+          {
+            $or: [
+              { deliveredAt: { $gte: start, $lte: end } },
+              { 'tracking.delivered.timestamp': { $gte: start, $lte: end } }
+            ]
+          }
         ]
       })
       .populate('userId', 'name phone email')

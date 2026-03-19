@@ -4,6 +4,7 @@ import Delivery from '../models/Delivery.js';
 import { validate } from '../../../shared/middleware/validate.js';
 import Joi from 'joi';
 import winston from 'winston';
+import { syncDeliveryPartnerRealtime } from '../services/firebaseTrackingService.js';
 
 const logger = winston.createLogger({
   level: 'info',
@@ -25,9 +26,16 @@ const signupDetailsSchema = Joi.object({
   address: Joi.string().trim().required(),
   city: Joi.string().trim().required(),
   state: Joi.string().trim().required(),
+  pincode: Joi.string().trim().pattern(/^\d{6}$/).required(),
+  latitude: Joi.number().min(-90).max(90).optional(),
+  longitude: Joi.number().min(-180).max(180).optional(),
   vehicleType: Joi.string().valid('bike', 'scooter', 'bicycle', 'car').required(),
   vehicleName: Joi.string().trim().optional().allow(null, ''),
-  vehicleNumber: Joi.string().trim().required(),
+  vehicleNumber: Joi.when('vehicleType', {
+    is: 'bicycle',
+    then: Joi.string().trim().optional().allow(null, ''),
+    otherwise: Joi.string().trim().required()
+  }),
   panNumber: Joi.string().trim().required(),
   aadharNumber: Joi.string().trim().required()
 });
@@ -41,6 +49,9 @@ export const submitSignupDetails = asyncHandler(async (req, res) => {
       address,
       city,
       state,
+      pincode,
+      latitude,
+      longitude,
       vehicleType,
       vehicleName,
       vehicleNumber,
@@ -55,17 +66,36 @@ export const submitSignupDetails = asyncHandler(async (req, res) => {
     }
 
     // Update delivery profile with signup details
+    const hasValidCoordinates =
+      Number.isFinite(Number(latitude)) &&
+      Number.isFinite(Number(longitude));
+
     const updateData = {
       name: name.trim(),
       email: email ? email.trim().toLowerCase() : null,
       location: {
+        latitude: hasValidCoordinates ? Number(latitude) : delivery?.location?.latitude,
+        longitude: hasValidCoordinates ? Number(longitude) : delivery?.location?.longitude,
         addressLine1: address.trim(),
         city: city.trim(),
-        state: state.trim()
+        state: state.trim(),
+        zipCode: pincode.trim()
       },
+      ...(hasValidCoordinates
+        ? {
+            availability: {
+              ...(delivery?.availability || {}),
+              currentLocation: {
+                type: 'Point',
+                coordinates: [Number(longitude), Number(latitude)]
+              },
+              lastLocationUpdate: new Date()
+            }
+          }
+        : {}),
       vehicle: {
         type: vehicleType,
-        number: vehicleNumber.trim(),
+        number: vehicleType === 'bicycle' ? null : vehicleNumber.trim(),
         model: vehicleName ? vehicleName.trim() : null,
         brand: vehicleName ? vehicleName.trim() : null // Use vehicleName as brand if provided
       },
@@ -90,6 +120,20 @@ export const submitSignupDetails = asyncHandler(async (req, res) => {
 
     if (!updatedDelivery) {
       return errorResponse(res, 404, 'Delivery partner not found');
+    }
+
+    // Keep GPS coordinates in Firebase Realtime DB without geocoding dependency.
+    if (hasValidCoordinates) {
+      try {
+        await syncDeliveryPartnerRealtime({
+          deliveryPartnerId: updatedDelivery._id,
+          lat: Number(latitude),
+          lng: Number(longitude),
+          isOnline: updatedDelivery?.availability?.isOnline === true
+        });
+      } catch (firebaseSyncError) {
+        logger.warn(`Failed to sync signup GPS location to Firebase: ${firebaseSyncError.message}`);
+      }
     }
 
     return successResponse(res, 200, 'Signup details saved successfully', {
@@ -132,7 +176,15 @@ const signupDocumentsSchema = Joi.object({
   aadharBackPhoto: Joi.object({
     url: Joi.string().uri().required(),
     publicId: Joi.string().trim().required()
-  }).required()
+  }).required(),
+  vehicleRCPhoto: Joi.object({
+    url: Joi.string().uri().required(),
+    publicId: Joi.string().trim().required()
+  }).optional().allow(null),
+  vehicleRCBackPhoto: Joi.object({
+    url: Joi.string().uri().required(),
+    publicId: Joi.string().trim().required()
+  }).optional().allow(null)
 });
 
 export const submitSignupDocuments = asyncHandler(async (req, res) => {
@@ -143,7 +195,9 @@ export const submitSignupDocuments = asyncHandler(async (req, res) => {
       aadharPhoto,
       panPhoto,
       drivingLicensePhoto,
-      aadharBackPhoto
+      aadharBackPhoto,
+      vehicleRCPhoto,
+      vehicleRCBackPhoto
     } = req.body;
 
     // Validate input
@@ -196,6 +250,13 @@ export const submitSignupDocuments = asyncHandler(async (req, res) => {
           ...delivery.documents?.drivingLicense,
           document: drivingLicensePhoto.url,
           verified: false // Will be verified by admin later
+        },
+        // Vehicle RC document (optional front/back upload)
+        vehicleRC: {
+          ...delivery.documents?.vehicleRC,
+          document: vehicleRCPhoto?.url || delivery.documents?.vehicleRC?.document || null,
+          documentBack: vehicleRCBackPhoto?.url || delivery.documents?.vehicleRC?.documentBack || null,
+          verified: false // Will be verified by admin later
         }
       },
       // Mark signup as complete - status remains pending until admin approval
@@ -218,7 +279,9 @@ export const submitSignupDocuments = asyncHandler(async (req, res) => {
       hasProfileImage: !!updatedDelivery.profileImage?.url,
       hasAadhar: !!updatedDelivery.documents?.aadhar?.document,
       hasPan: !!updatedDelivery.documents?.pan?.document,
-      hasDrivingLicense: !!updatedDelivery.documents?.drivingLicense?.document
+      hasDrivingLicense: !!updatedDelivery.documents?.drivingLicense?.document,
+      hasVehicleRCFront: !!updatedDelivery.documents?.vehicleRC?.document,
+      hasVehicleRCBack: !!updatedDelivery.documents?.vehicleRC?.documentBack
     });
 
     return successResponse(res, 200, 'Documents uploaded successfully', {

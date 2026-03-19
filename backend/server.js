@@ -9,7 +9,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cron from 'node-cron';
 import mongoose from 'mongoose';
-import { initializeFirebaseRealtime } from './config/firebaseRealtime.js';
+import { initializeFirebaseRealtime, initializeFirebaseRealtimeAsync } from './config/firebaseRealtime.js';
 import { syncActiveOrderRealtime } from './modules/delivery/services/firebaseTrackingService.js';
 import { getFirebaseRealtimeDb, isFirebaseRealtimeAvailable } from './config/firebaseRealtime.js';
 
@@ -436,6 +436,8 @@ import { initializeCloudinary } from './config/cloudinary.js';
 
 // Connect to databases
 connectDB().then(() => {
+  // Retry realtime init after DB connection so admin-saved Firebase creds can be used too.
+  initializeFirebaseRealtimeAsync().catch(err => console.error('Failed to initialize Firebase Realtime Database:', err));
   // Initialize Cloudinary after DB connection
   initializeCloudinary().catch(err => console.error('Failed to initialize Cloudinary:', err));
 });
