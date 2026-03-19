@@ -919,6 +919,11 @@ export default function Cart() {
       return
     }
 
+    if (restaurantData?.isAcceptingOrders === false) {
+      toast.error("Restaurant is currently not accepting orders")
+      return
+    }
+
     setIsPlacingOrder(true)
 
     // Use API_BASE_URL from config (supports both dev and production)
@@ -1351,6 +1356,9 @@ export default function Cart() {
       else if (error.response) {
         // Server responded with error status
         errorMessage = error.response.data?.message || `Server error: ${error.response.status}`
+        if (error.response.status === 403 && /not accepting orders/i.test(errorMessage)) {
+          toast.error("Restaurant is currently not accepting orders")
+        }
       }
       // Handle other errors
       else if (error.message) {
@@ -1968,7 +1976,7 @@ export default function Cart() {
               <Button
                 size="lg"
                 onClick={handlePlaceOrder}
-                disabled={isPlacingOrder || !defaultAddress || (selectedPaymentMethod === "wallet" && walletBalance < total)}
+                disabled={isPlacingOrder || !defaultAddress || restaurantData?.isAcceptingOrders === false || (selectedPaymentMethod === "wallet" && walletBalance < total)}
                 className="w-full bg-[#EB590E] hover:bg-[#D94F0C] dark:bg-[#EB590E] dark:hover:bg-[#D94F0C] text-white px-6 md:px-10 h-14 md:h-16 rounded-lg md:rounded-xl text-base md:text-lg font-bold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {(selectedPaymentMethod === "razorpay" || selectedPaymentMethod === "wallet") && (
@@ -1982,6 +1990,8 @@ export default function Cart() {
                     ? "Processing..."
                     : !defaultAddress
                       ? "Select Delivery Address"
+                      : restaurantData?.isAcceptingOrders === false
+                        ? "Restaurant Offline"
                       : selectedPaymentMethod === "razorpay"
                         ? "Select Payment"
                         : selectedPaymentMethod === "wallet"
