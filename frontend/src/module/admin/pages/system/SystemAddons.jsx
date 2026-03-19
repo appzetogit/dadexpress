@@ -52,6 +52,7 @@ export default function SystemAddons() {
     MEASUREMENT_ID: "",
     FIREBASE_PROJECT_ID: "",
     FIREBASE_CLIENT_EMAIL: "",
+    FIREBASE_DATABASE_URL: "",
     FIREBASE_PRIVATE_KEY: "",
 
     // SMTP
@@ -271,6 +272,12 @@ export default function SystemAddons() {
                 value={envData.FIREBASE_CLIENT_EMAIL}
                 onChange={(e) => handleInputChange("FIREBASE_CLIENT_EMAIL", e.target.value)}
                 type="email"
+              />
+              <InputField
+                label="Firebase Database URL"
+                value={envData.FIREBASE_DATABASE_URL}
+                onChange={(e) => handleInputChange("FIREBASE_DATABASE_URL", e.target.value)}
+                placeholder="https://your-project-id-default-rtdb.firebaseio.com"
               />
               <div className="md:col-span-2">
                 <InputField
