@@ -115,7 +115,8 @@ export const getRestaurants = async (req, res) => {
       // Validate zone exists and is active
       userZone = await Zone.findById(zoneId).lean();
       if (!userZone || !userZone.isActive) {
-        return errorResponse(res, 400, 'Invalid or inactive zone. Please detect your zone again.');
+        console.warn(`⚠️ Ignoring invalid/inactive zoneId on restaurant list: ${zoneId}`);
+        userZone = null;
       }
     }
     
@@ -915,7 +916,8 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
       // Validate zone exists and is active
       userZone = await Zone.findById(zoneId).lean();
       if (!userZone || !userZone.isActive) {
-        return errorResponse(res, 400, 'Invalid or inactive zone. Please detect your zone again.');
+        console.warn(`⚠️ Ignoring invalid/inactive zoneId on under-250 list: ${zoneId}`);
+        userZone = null;
       }
     }
 
