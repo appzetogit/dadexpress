@@ -966,9 +966,9 @@ export default function Cart() {
       console.log("🔑 Authentication token present:", !!localStorage.getItem('accessToken') || !!localStorage.getItem('user_accessToken'))
 
       // CRITICAL: Validate restaurant ID before placing order
-      // Ensure we're using the correct restaurant from restaurantData (most reliable)
-      const finalRestaurantId = restaurantData?.restaurantId || restaurantData?._id || null;
-      const finalRestaurantName = restaurantData?.name || null;
+      // Prefer restaurantData; fallback to cart when restaurantData not yet loaded.
+      const finalRestaurantId = restaurantData?.restaurantId || restaurantData?._id || cart[0]?.restaurantId || null;
+      const finalRestaurantName = restaurantData?.name || cart[0]?.restaurant || null;
 
       if (!finalRestaurantId) {
         console.error('❌ CRITICAL: Cannot place order - Restaurant ID is missing!');
