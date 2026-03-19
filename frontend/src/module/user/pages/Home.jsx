@@ -762,10 +762,8 @@ export default function Home() {
         params.dietary = "pure-veg"
       }
 
-      // Send detected zoneId so customer sees restaurants from current GPS zone only.
-      if (isInService && zoneId) {
-        params.zoneId = zoneId
-      }
+      // Home listing should show all active restaurants from DB.
+      // Do not restrict the main list by detected zone here.
 
       const response = await restaurantAPI.getRestaurants(params)
 
@@ -912,7 +910,7 @@ export default function Home() {
     } finally {
       setLoadingRestaurants(false)
     }
-  }, [zoneId, isInService, vegMode, vegModeOption])
+  }, [vegMode, vegModeOption])
 
   // Fetch restaurants when appliedFilters change
   useEffect(() => {
