@@ -762,8 +762,11 @@ export default function Home() {
         params.dietary = "pure-veg"
       }
 
-      // Home listing should show all active restaurants from DB.
-      // Do not restrict the main list by detected zone here.
+      // When GPS-based zone is available, restrict listing to that zone.
+      // This prevents stale far-away restaurants from appearing for the user.
+      if (zoneId && isInService) {
+        params.zoneId = zoneId
+      }
 
       const response = await restaurantAPI.getRestaurants(params)
 
@@ -910,12 +913,12 @@ export default function Home() {
     } finally {
       setLoadingRestaurants(false)
     }
-  }, [vegMode, vegModeOption])
+  }, [vegMode, vegModeOption, zoneId, isInService, location?.latitude, location?.longitude])
 
-  // Fetch restaurants when appliedFilters change
+  // Refetch restaurants when filters or GPS zone changes
   useEffect(() => {
     fetchRestaurants(appliedFilters)
-  }, [appliedFilters, fetchRestaurants])
+  }, [appliedFilters, fetchRestaurants, zoneId, isInService, location?.latitude, location?.longitude])
 
   // Recalculate distances when user location updates
   useEffect(() => {

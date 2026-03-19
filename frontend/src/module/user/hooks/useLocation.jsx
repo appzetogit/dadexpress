@@ -2132,11 +2132,21 @@ export function useLocation() {
           (currentLocation.formattedAddress === "Select location" ||
             currentLocation.city === "Current Location")
 
-        const shouldFetch = shouldForceRefresh || !hasInitialLocation || hasPlaceholder
+        // When permission is already granted, refresh GPS once in background
+        // so stale DB/localStorage coordinates do not keep showing far-away restaurants.
+        const hasExistingCoords =
+          Number.isFinite(Number(currentLocation?.latitude)) &&
+          Number.isFinite(Number(currentLocation?.longitude))
+        const shouldFetch = shouldForceRefresh || !hasInitialLocation || hasPlaceholder || hasExistingCoords
+        const shouldUseFreshGps =
+          shouldForceRefresh ||
+          !hasInitialLocation ||
+          hasPlaceholder ||
+          hasExistingCoords
 
         if (shouldFetch) {
           false && console.log("🔄 Fetching location - shouldForceRefresh:", shouldForceRefresh, "hasInitialLocation:", hasInitialLocation, "hasPlaceholder:", hasPlaceholder)
-          getLocation(true, shouldForceRefresh) // forceFresh = true if cached location is incomplete
+          getLocation(true, shouldUseFreshGps) // forceFresh = true so GPS replaces stale DB/localStorage coords
             .then((location) => {
               if (location &&
                 location.formattedAddress !== "Select location" &&
@@ -2189,16 +2199,9 @@ export function useLocation() {
       }
     };
 
-    // Only check permissions/start watching if we already have a saved location
-    // This avoids "Requests geolocation permission on page load" warnings on fresh visits
-    // New users must explicitly click "Use Current Location" first
-    const hasStoredLocation = localStorage.getItem("userLocation");
-    if (hasStoredLocation) {
-      checkPermissionAndStart();
-    } else {
-      false && console.log("📍 Fresh visit - skipping auto-geolocation check (waiting for user action)");
-      setLoading(false);
-    }
+    // Safe to run on every load because this path checks permission state first
+    // and avoids triggering a browser prompt for fresh visitors.
+    checkPermissionAndStart();
 
     // Cleanup timeout and watcher
     return () => {
