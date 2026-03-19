@@ -157,7 +157,6 @@ export default function AdminRouter() {
           {/* ORDER MANAGEMENT */}
           {/* Orders */}
           <Route path="orders/all" element={<OrdersPage statusKey="all" />} />
-          <Route path="orders/scheduled" element={<OrdersPage statusKey="scheduled" />} />
           <Route path="orders/pending" element={<OrdersPage statusKey="pending" />} />
           <Route path="orders/accepted" element={<OrdersPage statusKey="accepted" />} />
           <Route path="orders/processing" element={<OrdersPage statusKey="processing" />} />
