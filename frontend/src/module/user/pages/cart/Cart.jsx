@@ -919,11 +919,6 @@ export default function Cart() {
       return
     }
 
-    if (restaurantData?.isAcceptingOrders === false) {
-      toast.error("Restaurant is currently not accepting orders")
-      return
-    }
-
     setIsPlacingOrder(true)
 
     // Use API_BASE_URL from config (supports both dev and production)
@@ -995,6 +990,31 @@ export default function Cart() {
         alert('Error: Restaurant information is missing. Please refresh the page and try again.');
         setIsPlacingOrder(false);
         return;
+      }
+
+      // Always verify latest restaurant online/offline state from backend before placing order.
+      // This avoids stale cart page data incorrectly showing/using an old offline state.
+      try {
+        const latestRestaurantResponse = await restaurantAPI.getRestaurantById(finalRestaurantId)
+        const latestRestaurant =
+          latestRestaurantResponse?.data?.data?.restaurant ||
+          latestRestaurantResponse?.data?.restaurant ||
+          null
+
+        if (latestRestaurant) {
+          setRestaurantData((prev) => ({
+            ...(prev || {}),
+            ...latestRestaurant,
+          }))
+        }
+
+        if (latestRestaurant?.isAcceptingOrders === false) {
+          toast.error("Restaurant is currently not accepting orders")
+          setIsPlacingOrder(false)
+          return
+        }
+      } catch (statusError) {
+        console.warn("⚠️ Failed to refresh latest restaurant status before placing order:", statusError)
       }
 
       // CRITICAL: Validate that ALL cart items belong to the SAME restaurant
@@ -1976,7 +1996,7 @@ export default function Cart() {
               <Button
                 size="lg"
                 onClick={handlePlaceOrder}
-                disabled={isPlacingOrder || !defaultAddress || restaurantData?.isAcceptingOrders === false || (selectedPaymentMethod === "wallet" && walletBalance < total)}
+                disabled={isPlacingOrder || !defaultAddress || (selectedPaymentMethod === "wallet" && walletBalance < total)}
                 className="w-full bg-[#EB590E] hover:bg-[#D94F0C] dark:bg-[#EB590E] dark:hover:bg-[#D94F0C] text-white px-6 md:px-10 h-14 md:h-16 rounded-lg md:rounded-xl text-base md:text-lg font-bold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {(selectedPaymentMethod === "razorpay" || selectedPaymentMethod === "wallet") && (
@@ -1990,8 +2010,6 @@ export default function Cart() {
                     ? "Processing..."
                     : !defaultAddress
                       ? "Select Delivery Address"
-                      : restaurantData?.isAcceptingOrders === false
-                        ? "Restaurant Offline"
                       : selectedPaymentMethod === "razorpay"
                         ? "Select Payment"
                         : selectedPaymentMethod === "wallet"
