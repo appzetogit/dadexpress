@@ -690,19 +690,13 @@ export default function Home() {
     try {
       setLoadingRestaurants(true)
 
-      // First, test backend connection
+      // Health endpoint can be intermittently blocked/slow on some networks.
+      // Do not hard-stop restaurant listing on health-check failure.
       try {
-        // Use normalized backend URL and guard against malformed domain-in-path values.
         const backendUrl = getSafeBackendBaseUrl()
-        const healthCheck = await fetch(`${backendUrl}/health`)
-        if (!healthCheck.ok) {
-          throw new Error(`Backend health check failed: ${healthCheck.status}`)
-        }
-      } catch (healthError) {
-        // Backend connection error - handled silently, toast notifications shown via axios interceptor
-        setRestaurantsData([])
-        setLoadingRestaurants(false)
-        return
+        await fetch(`${backendUrl}/health`)
+      } catch (_healthError) {
+        // Ignore and continue with real restaurants API call below.
       }
 
       // Build query parameters from filters
