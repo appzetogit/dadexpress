@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import io from 'socket.io-client';
 import { API_BASE_URL } from '@/lib/api/config';
 import bikeLogo from '@/assets/bikelogo.png';
-import { RouteBasedAnimationController } from '@/module/user/utils/routeBasedAnimation';
+import { RouteBasedAnimationController, animateMarkerSmoothly } from '@/module/user/utils/routeBasedAnimation';
 import { decodePolyline, extractPolylineFromDirections, findNearestPointOnPolyline } from '@/module/delivery/utils/liveTrackingPolyline';
 import './DeliveryTrackingMap.css';
 
@@ -44,6 +44,8 @@ const DeliveryTrackingMap = ({
   const routePolylineRef = useRef(null);
   const routePolylinePointsRef = useRef(null); // Store decoded polyline points for route-based animation
   const animationControllerRef = useRef(null); // Route-based animation controller
+  const rawAnimationInProgressRef = useRef(false);
+  const rawAnimationPendingRef = useRef(null);
   const lastRouteUpdateRef = useRef(null);
   const userHasInteractedRef = useRef(false);
   const isProgrammaticChangeRef = useRef(false);
@@ -393,6 +395,38 @@ const DeliveryTrackingMap = ({
     return { start: restaurantCoords, end: customerCoords };
   }, [order, deliveryBoyLocation, restaurantCoords, customerCoords]);
 
+  const queueRawMarkerAnimation = useCallback((targetPos) => {
+    if (!bikeMarkerRef.current || !targetPos) return;
+
+    if (rawAnimationInProgressRef.current) {
+      rawAnimationPendingRef.current = targetPos;
+      return;
+    }
+
+    const currentPos = bikeMarkerRef.current.getPosition();
+    if (!currentPos) {
+      bikeMarkerRef.current.setPosition(targetPos);
+      return;
+    }
+
+    rawAnimationInProgressRef.current = true;
+
+    animateMarkerSmoothly(
+      bikeMarkerRef.current,
+      { lat: currentPos.lat(), lng: currentPos.lng() },
+      targetPos,
+      900,
+      () => {
+        rawAnimationInProgressRef.current = false;
+        const pending = rawAnimationPendingRef.current;
+        rawAnimationPendingRef.current = null;
+        if (pending) {
+          queueRawMarkerAnimation(pending);
+        }
+      }
+    );
+  }, []);
+
   // Move bike smoothly with rotation
   const moveBikeSmoothly = useCallback((lat, lng, heading) => {
     if (!mapInstance.current || !isMapLoaded) {
@@ -545,6 +579,19 @@ const DeliveryTrackingMap = ({
           const nearest = findNearestPointOnPolyline(routePolylinePointsRef.current, { lat, lng });
 
           if (nearest && nearest.nearestPoint) {
+            const markerPos = bikeMarkerRef.current?.getPosition?.();
+            if (markerPos) {
+              const distanceToTarget = calculateHaversineDistance(
+                markerPos.lat(),
+                markerPos.lng(),
+                nearest.nearestPoint.lat,
+                nearest.nearestPoint.lng
+              );
+              if (distanceToTarget < 5) {
+                return;
+              }
+            }
+
             // Calculate progress on route (0 to 1) based on distance traveled
             const totalPoints = routePolylinePointsRef.current.length;
 
@@ -633,17 +680,21 @@ const DeliveryTrackingMap = ({
           }
         } else {
           // Fallback to raw GPS when no route/polyline is available so live tracking never freezes.
-          const fallbackPosition = new window.google.maps.LatLng(lat, lng);
-          bikeMarkerRef.current.setPosition(fallbackPosition);
-          if (typeof bikeMarkerRef.current.setRotation === 'function') {
-            bikeMarkerRef.current.setRotation(heading || 0);
-          } else if (typeof bikeMarkerRef.current.getIcon === 'function' && typeof bikeMarkerRef.current.setIcon === 'function') {
-            const icon = bikeMarkerRef.current.getIcon();
-            if (icon && typeof icon === 'object') {
-              bikeMarkerRef.current.setIcon({ ...icon, rotation: heading || 0 });
+          const currentPos = bikeMarkerRef.current?.getPosition?.();
+          if (currentPos) {
+            const distanceToTarget = calculateHaversineDistance(
+              currentPos.lat(),
+              currentPos.lng(),
+              lat,
+              lng
+            );
+            if (distanceToTarget < 5) {
+              return;
             }
           }
-          console.log('📍 Updated bike marker using raw GPS fallback');
+
+          queueRawMarkerAnimation({ lat, lng });
+          console.log('📍 Updated bike marker using raw GPS fallback (animated)');
         }
 
         // Ensure bike is visible
@@ -661,7 +712,7 @@ const DeliveryTrackingMap = ({
     } catch (error) {
       console.error('❌ Error moving bike:', error);
     }
-  }, [isMapLoaded, bikeLogo]);
+  }, [isMapLoaded, bikeLogo, queueRawMarkerAnimation]);
 
   // Initialize Socket.io connection
   useEffect(() => {
@@ -1514,3 +1565,4 @@ const DeliveryTrackingMap = ({
 };
 
 export default DeliveryTrackingMap;
+

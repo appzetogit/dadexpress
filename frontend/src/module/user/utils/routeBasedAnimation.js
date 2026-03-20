@@ -284,6 +284,7 @@ export class RouteBasedAnimationController {
     this.lastKnownPosition = null;
     this.isAnimating = false;
     this.lastProgress = 0; // Track last progress to prevent backward movement
+    this.pendingUpdate = null;
   }
   
   /**
@@ -293,6 +294,11 @@ export class RouteBasedAnimationController {
    */
   updatePosition(progress, bearing) {
     if (!this.polylinePoints || this.polylinePoints.length === 0) return;
+
+    if (this.isAnimating) {
+      this.pendingUpdate = { progress, bearing };
+      return;
+    }
     
     const pointInfo = getPointOnPolylineByProgress(this.polylinePoints, progress);
     if (!pointInfo) return;
@@ -320,6 +326,11 @@ export class RouteBasedAnimationController {
         1200, // 1.2 seconds
         () => {
           this.isAnimating = false;
+          if (this.pendingUpdate) {
+            const pending = this.pendingUpdate;
+            this.pendingUpdate = null;
+            this.updatePosition(pending.progress, pending.bearing);
+          }
         }
       );
     } else {
@@ -327,6 +338,11 @@ export class RouteBasedAnimationController {
       this.marker.setPosition(targetPos);
       if (bearing !== undefined) {
         setMarkerRotation(this.marker, bearing);
+      }
+      if (this.pendingUpdate) {
+        const pending = this.pendingUpdate;
+        this.pendingUpdate = null;
+        this.updatePosition(pending.progress, pending.bearing);
       }
     }
     
@@ -390,4 +406,3 @@ export class RouteBasedAnimationController {
     this.polylinePoints = null;
   }
 }
-
