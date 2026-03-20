@@ -93,6 +93,14 @@ export default function DepositPopup({ onSuccess, cashInHand = 0 }) {
         order_id: rp.orderId,
         name: companyName,
         description: `Cash limit deposit - ₹${amt.toFixed(2)}`,
+        // Explicitly enable UPI in Razorpay checkout so UPI icons show on iOS/Google WebView.
+        // Keep other methods also enabled to avoid changing existing payment behavior.
+        method: {
+          upi: true,
+          card: true,
+          netbanking: true,
+          wallet: true
+        },
         prefill: {
           name: name,
           email: email,
