@@ -261,6 +261,12 @@ export const sidebarMenuData = [
       },
       {
         type: "link",
+        label: "Chat",
+        path: "/admin/chattings",
+        icon: "MessageSquare",
+      },
+      {
+        type: "link",
         label: "Safety Emergency Reports",
         path: "/admin/safety-emergency-reports",
         icon: "AlertTriangle",

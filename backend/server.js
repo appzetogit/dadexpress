@@ -932,10 +932,45 @@ io.on('connection', (socket) => {
 
       appendChatRoomMessage(room, message);
       io.to(room).emit('new-message', { room, message });
+
+      // Notify admin inbox if it's a support message
+      if (room.startsWith('support:admin:user:')) {
+        io.to('admin-support-inbox').emit('incoming-support-message', { room, message });
+      }
+
       socket.emit('message-sent', { success: true, message });
     } catch (error) {
       console.error('❌ Error sending message:', error);
       socket.emit('message-sent', { success: false, error: error.message });
+    }
+  });
+
+  socket.on('join-admin-support', () => {
+    socket.join('admin-support-inbox');
+    console.log('🛡️ Admin joined support inbox:', socket.id);
+  });
+
+  socket.on('get-support-conversations', () => {
+    try {
+      const conversations = [];
+      for (const [room, messages] of chatRoomMessages.entries()) {
+        if (room.startsWith('support:admin:user:')) {
+          const userId = room.split(':').pop();
+          const lastMsg = messages[messages.length - 1];
+          conversations.push({
+            id: room,
+            room,
+            userId,
+            lastMessage: lastMsg?.text || '',
+            timestamp: lastMsg?.timestamp || new Date().toISOString(),
+            senderType: lastMsg?.senderType || 'user',
+            unreadCount: 0 // Can be implemented with more complex logic
+          });
+        }
+      }
+      socket.emit('support-conversations-list', conversations);
+    } catch (error) {
+      console.error('❌ Error getting support conversations:', error);
     }
   });
 

@@ -64,14 +64,6 @@ export default function DepositPopup({ onSuccess, cashInHand = 0 }) {
         name: companyName,
         description: `Cash limit deposit - ₹${amt.toFixed(2)}`,
         prefill: { name, email, contact: phone },
-        method: {
-          upi: true,
-          card: true,
-          netbanking: true,
-          wallet: true,
-        },
-        send_sms_hash: true,
-        allow_rotation: true,
         handler: async (res) => {
           try {
             const verifyRes = await deliveryAPI.verifyDepositPayment({
