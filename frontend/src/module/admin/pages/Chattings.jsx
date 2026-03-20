@@ -100,9 +100,14 @@ export default function Chattings() {
         }
       })
 
-      // If this is the active conversation, add message
+      // Active chat: same payload is also delivered via `new-message` (admin is in the room).
+      // Only append here if not already present — avoids duplicate rows.
       if (selectedConversation && selectedConversation.room === payload.room) {
-        setMessages((prev) => [...prev, payload.message])
+        setMessages((prev) => {
+          const id = messageKey(payload.message)
+          if (!id || prev.some((m) => messageKey(m) === id)) return prev
+          return [...prev, payload.message]
+        })
       }
     })
 
