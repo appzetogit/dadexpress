@@ -56,6 +56,26 @@ export default function DepositPopup({ onSuccess, cashInHand = 0 }) {
 
       const companyName = await getCompanyNameAsync()
       setProcessing(true)
+      const isAPKContext = () => {
+        try {
+          if (typeof navigator === 'undefined' || typeof window === 'undefined') return false;
+          const userAgent = navigator.userAgent || '';
+          const isWebView = /wv|WebView/i.test(userAgent);
+          const isStandalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
+          const isIOSStandalone = window.navigator.standalone === true;
+          const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+          const hasNativeBridge = typeof window.flutter_inappwebview !== 'undefined' || typeof window.Android !== 'undefined';
+          return isWebView || isStandalone || isIOSStandalone || (isMobileDevice && hasNativeBridge) || (window.self !== window.top);
+        } catch (e) { return false; }
+      };
+
+      const isInIframe = () => {
+        try { return window.self !== window.top; } catch (e) { return true; }
+      };
+
+      const isAPK = isAPKContext();
+      const inIframe = isInIframe();
+
       await initRazorpayPayment({
         key: rp.key,
         amount: rp.amount,
@@ -73,12 +93,63 @@ export default function DepositPopup({ onSuccess, cashInHand = 0 }) {
           type: "cash_deposit",
           amount: amt.toString()
         },
+        webview_intent: true,
+        config: isAPK || inIframe ? undefined : {
+          display: {
+            blocks: {
+              upi: {
+                name: "UPI",
+                instruments: [
+                  {
+                    method: "upi",
+                    flows: ["qr", "intent"],
+                  },
+                ],
+              },
+              banks: {
+                name: "Other Payment Methods",
+                instruments: [
+                  {
+                    method: "upi",
+                    flows: ["collect"],
+                  },
+                  {
+                    method: "card",
+                  },
+                  {
+                    method: "netbanking",
+                  },
+                  {
+                    method: "wallet",
+                  },
+                ],
+              },
+            },
+            sequence: ["block.upi", "block.banks"],
+            preferences: {
+              show_default_blocks: false,
+            },
+          },
+        },
         handler: async (res) => {
           try {
+            let final_order_id = res?.razorpay_order_id || res?.orderId || res?.order_id || rp.orderId;
+            let final_payment_id = res?.razorpay_payment_id || res?.paymentId || res?.payment_id;
+            let final_signature = res?.razorpay_signature || res?.signature;
+
+            if (typeof res === 'string' && res.includes('?')) {
+              try {
+                const urlParams = Object.fromEntries(new URL(res).searchParams);
+                final_order_id = final_order_id || urlParams.razorpay_order_id || urlParams.orderId;
+                final_payment_id = final_payment_id || urlParams.razorpay_payment_id || urlParams.paymentId;
+                final_signature = final_signature || urlParams.razorpay_signature || urlParams.signature;
+              } catch (e) {}
+            }
+
             const verifyRes = await deliveryAPI.verifyDepositPayment({
-              razorpay_order_id: res.razorpay_order_id,
-              razorpay_payment_id: res.razorpay_payment_id,
-              razorpay_signature: res.razorpay_signature,
+              razorpay_order_id: final_order_id,
+              razorpay_payment_id: final_payment_id,
+              razorpay_signature: final_signature,
               amount: amt
             })
             if (verifyRes?.data?.success) {
