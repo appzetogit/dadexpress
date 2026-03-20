@@ -5,17 +5,17 @@ import {
   ChevronLeft, 
   Search, 
   Power, 
-  Utensils, 
-  Building2, 
-  FileText, 
-  Wallet,
+  Utensils,
   ChevronRight,
+  PhoneCall,
   Languages,
   ClipboardList
 } from "lucide-react"
 import BottomNavOrders from "../components/BottomNavOrders"
 
-const helpTopics = [
+const HELP_CENTRE_PHONE_KEY = "dadexpress_restaurant_help_centre_phone"
+
+const baseHelpTopics = [
   {
     id: 1,
     icon: Power,
@@ -29,33 +29,20 @@ const helpTopics = [
     title: "Order related issues",
     subtitle: "Cancellations & delivery related concerns",
     path: "/restaurant/orders/all"
-  },
-  {
-    id: 3,
-    icon: Building2,
-    title: "Restaurant",
-    subtitle: "Timings, contacts, FSSAI, bank details, location etc.",
-    path: "/restaurant/outlet-info"
-  },
-  {
-    id: 5,
-    icon: FileText,
-    title: "Menu",
-    subtitle: "Items, photos, prices, charges etc.",
-    path: "/restaurant/hub-menu"
-  },
-  {
-    id: 6,
-    icon: Wallet,
-    title: "Payments",
-    subtitle: "Statement of account, invoices etc.",
-    path: "/restaurant/hub-finance"
   }
 ]
 
 export default function HelpCentre() {
   const navigate = useNavigate()
   const [searchQuery, setSearchQuery] = useState("")
+  const [helpCentrePhone] = useState(() => {
+    try {
+      return localStorage.getItem(HELP_CENTRE_PHONE_KEY) ?? ""
+    } catch {
+      return ""
+    }
+  })
+  const helpTopics = baseHelpTopics
 
   const filteredTopics = helpTopics.filter(topic =>
     topic.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -96,22 +83,50 @@ export default function HelpCentre() {
           </h2>
           
           {/* Search Bar */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              type="text"
+           <div className="relative">
+             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+             <input
+               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by issue"
-              className="w-full pl-10 pr-4 py-3 text-sm text-gray-900 placeholder-gray-400 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400"
-            />
-          </div>
-        </div>
+               className="w-full pl-10 pr-4 py-3 text-sm text-gray-900 placeholder-gray-400 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400"
+             />
+           </div>
+         </div>
 
-        {/* Help Topics List */}
-        <div className="space-y-1">
-          {filteredTopics.map((topic, index) => {
-            const IconComponent = topic.icon
+         {/* Help center number */}
+         {helpCentrePhone.trim() ? (
+           <div className="mb-4">
+             <div className="w-full flex items-center gap-4 px-3 py-3 rounded-lg border border-red-200 bg-red-50 text-left">
+               <div className="flex-1 min-w-0">
+                 <h3 className="text-sm font-semibold text-gray-900 mb-1.5">
+                   Help center number
+                 </h3>
+                 <p className="text-xs font-semibold text-red-700">
+                   {helpCentrePhone.trim()}
+                 </p>
+               </div>
+
+               <button
+                 type="button"
+                 onClick={() => {
+                   const normalized = helpCentrePhone.trim().replace(/\s+/g, "")
+                   window.location.href = `tel:${normalized}`
+                 }}
+                 className="flex-shrink-0 p-2 bg-white hover:bg-red-100 rounded-full transition-colors border border-red-200"
+                 aria-label="Call help center"
+               >
+                 <PhoneCall className="w-5 h-5 text-red-700" />
+               </button>
+             </div>
+           </div>
+         ) : null}
+ 
+         {/* Help Topics List */}
+         <div className="space-y-1">
+           {filteredTopics.map((topic, index) => {
+             const IconComponent = topic.icon
             return (
               <motion.button
                 key={topic.id}

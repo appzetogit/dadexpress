@@ -64,6 +64,10 @@ export const sidebarMenuData = [
             path: "/admin/restaurants/commission",
           },
           {
+            label: "Help Center",
+            path: "/admin/restaurants/help-center",
+          },
+          {
             label: "Referral Commission Settings",
             path: "/admin/restaurants/referral-commission",
           },
