@@ -1218,8 +1218,7 @@ export const getTransactionReport = asyncHandler(async (req, res) => {
 
     const completedOrdersRaw = await Order.find({
       ...financialBaseQuery,
-      status: 'delivered',
-      'payment.status': 'completed'
+      status: 'delivered'
     })
       .populate('userId', 'name')
       .populate('restaurantId', 'name')
@@ -1324,7 +1323,7 @@ export const getTransactionReport = asyncHandler(async (req, res) => {
       return sum + Math.max(0, subtotal - discount);
     }, 0);
 
-    const deliverymanEarning = completedOrders.reduce((sum, order) => {
+    const deliverymanEarningFromOrders = completedOrders.reduce((sum, order) => {
       const orderId = order._id?.toString();
       const settlement = settlementByOrderId.get(orderId);
 
@@ -1336,31 +1335,74 @@ export const getTransactionReport = asyncHandler(async (req, res) => {
       return sum + (Number(order.pricing?.deliveryFee) || 0) * 0.8;
     }, 0);
 
+    // Keep delivery earning aligned with dashboard logic: payout transactions from delivery wallets.
+    const DeliveryWallet = (await import('../../delivery/models/DeliveryWallet.js')).default;
+    const deliveryWalletPipeline = [
+      { $unwind: '$transactions' },
+      {
+        $addFields: {
+          effectiveTransactionDate: {
+            $ifNull: ['$transactions.createdAt', '$transactions.processedAt']
+          }
+        }
+      },
+      {
+        $match: {
+          'transactions.type': 'payment',
+          'transactions.status': 'Completed',
+          ...(fromDate || toDate
+            ? {
+                effectiveTransactionDate: {
+                  ...(fromDate ? { $gte: new Date(new Date(fromDate).setHours(0, 0, 0, 0)) } : {}),
+                  ...(toDate ? { $lte: new Date(new Date(toDate).setHours(23, 59, 59, 999)) } : {})
+                }
+              }
+            : {})
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: { $ifNull: ['$transactions.amount', 0] } }
+        }
+      }
+    ];
+    const deliveryWalletResult = await DeliveryWallet.aggregate(deliveryWalletPipeline);
+    const deliverymanEarningFromWallets = Number(deliveryWalletResult?.[0]?.total || 0);
+    const deliverymanEarning =
+      deliverymanEarningFromWallets > 0 ? deliverymanEarningFromWallets : deliverymanEarningFromOrders;
+
     // Gross revenue: total value of completed paid transactions.
     const grossRevenue = completedTransaction;
 
-    // Total revenue: admin-side earning total (commission + platform fee + delivery fee + GST).
-    const totalRevenue = completedOrders.reduce((sum, order) => {
+    // Total revenue aligned with dashboard:
+    // commission + platform fee + GST + delivery earning.
+    const settlementRevenueBreakdown = completedOrders.reduce((sum, order) => {
       const orderId = order._id?.toString();
       const settlement = settlementByOrderId.get(orderId);
 
       if (settlement?.adminEarning) {
-        const commission = Number(settlement.adminEarning.commission) || 0;
-        const platformFee = Number(settlement.adminEarning.platformFee) || 0;
-        const deliveryFee = Number(settlement.adminEarning.deliveryFee) || 0;
-        const gst = Number(settlement.adminEarning.gst) || 0;
-        return sum + commission + platformFee + deliveryFee + gst;
+        sum.commission += Number(settlement.adminEarning.commission) || 0;
+        sum.platformFee += Number(settlement.adminEarning.platformFee) || 0;
+        sum.gst += Number(settlement.adminEarning.gst) || 0;
+        return sum;
       }
 
       // Fallback to existing admin earning calculation when full settlement split is unavailable.
       const commission = commissionByOrderId.get(orderId);
       const earningFromCommission = Number(commission?.commissionAmount);
       if (Number.isFinite(earningFromCommission)) {
-        return sum + earningFromCommission;
+        sum.commission += earningFromCommission;
+        return sum;
       }
 
       return sum;
-    }, 0);
+    }, { commission: 0, platformFee: 0, gst: 0 });
+    const totalRevenue =
+      settlementRevenueBreakdown.commission +
+      settlementRevenueBreakdown.platformFee +
+      settlementRevenueBreakdown.gst +
+      deliverymanEarning;
 
     // Transform orders to match frontend format
     const transformedTransactions = orders.map((order, index) => {
