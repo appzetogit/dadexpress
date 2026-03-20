@@ -10,6 +10,7 @@ import { useProfile } from "../context/ProfileContext"
 import { toast } from "sonner"
 import { userAPI } from "@/lib/api"
 import { Loader } from '@googlemaps/js-api-loader'
+import { setSelectedDeliveryAddress } from "../utils/deliveryAddress"
 
 const USER_LOCATION_UPDATED_EVENT = "user-location-updated"
 
@@ -820,6 +821,8 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
           }
         }
       }
+
+      setSelectedDeliveryAddress({ mode: "current" })
 
       // Update map position - don't automatically show address form
       // User can manually open address form if needed
@@ -1792,8 +1795,14 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
 
       // Always create a new address entry (even if label is same like Home/Office).
       console.log("💾 Saving new address:", addressToSave)
-      await addAddress(addressToSave)
+      const savedAddress = await addAddress(addressToSave)
       toast.success(`Address saved as ${normalizedLabel}!`)
+
+      // Use newly saved address as the active delivery address.
+      const savedAddressId = savedAddress?.id || savedAddress?._id
+      if (savedAddressId) {
+        setSelectedDeliveryAddress({ mode: "saved", addressId: savedAddressId })
+      }
 
       // Reset form
       setAddressFormData({
@@ -1897,6 +1906,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       const selectedAddressId = address.id || address._id
       if (selectedAddressId) {
         setDefaultAddress(selectedAddressId)
+        setSelectedDeliveryAddress({ mode: "saved", addressId: selectedAddressId })
       }
 
       // Update address form data with selected address
@@ -2489,6 +2499,4 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
     </div>
   )
 }
-
-
 

@@ -31,6 +31,101 @@ const logger = winston.createLogger({
 let cachedActiveZones = null;
 let cachedActiveZonesAt = 0;
 const ACTIVE_ZONES_TTL_MS = 30000;
+const toNumber = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+const isValidCoords = (lat, lng) =>
+  Number.isFinite(lat) &&
+  Number.isFinite(lng) &&
+  Math.abs(lat) <= 90 &&
+  Math.abs(lng) <= 180;
+
+const resolveAddressFromPayload = async (payload, userId) => {
+  const deliveryAddressText =
+    typeof payload?.deliveryAddress === 'string'
+      ? payload.deliveryAddress.trim()
+      : null;
+  const addressId = payload?.addressId ?? payload?.address_id ?? null;
+  const latitude = toNumber(payload?.latitude ?? payload?.lat);
+  const longitude = toNumber(payload?.longitude ?? payload?.lng);
+  const payloadHasCoords =
+    payload?.latitude !== undefined ||
+    payload?.longitude !== undefined ||
+    payload?.lat !== undefined ||
+    payload?.lng !== undefined;
+
+  if (payloadHasCoords && !isValidCoords(latitude, longitude)) {
+    return { address: null, error: 'Invalid latitude or longitude' };
+  }
+
+  let address = payload?.address;
+
+  if (!address && addressId && userId) {
+    try {
+      const user = await User.findById(userId).select('addresses').lean();
+      const matched = user?.addresses?.find(addr => String(addr?._id) === String(addressId));
+      if (matched) {
+        address = {
+          ...matched,
+          id: matched._id?.toString?.() || matched.id
+        };
+      }
+    } catch (err) {
+      logger.warn('Failed to resolve address by addressId:', {
+        addressId,
+        userId,
+        error: err.message
+      });
+    }
+  }
+
+  if (!address && deliveryAddressText) {
+    address = {
+      formattedAddress: deliveryAddressText,
+      address: deliveryAddressText
+    };
+  }
+
+  if (address && typeof address === 'string') {
+    address = {
+      formattedAddress: address,
+      address
+    };
+  }
+
+  if (address) {
+    const coordsFromAddress = (() => {
+      if (Array.isArray(address?.location?.coordinates) && address.location.coordinates.length >= 2) {
+        return address.location.coordinates;
+      }
+      const addrLat = toNumber(address?.lat ?? address?.latitude);
+      const addrLng = toNumber(address?.lng ?? address?.longitude);
+      if (isValidCoords(addrLat, addrLng)) {
+        return [addrLng, addrLat];
+      }
+      return null;
+    })();
+
+    const coordsFromPayload = isValidCoords(latitude, longitude) ? [longitude, latitude] : null;
+    const coords = coordsFromPayload || coordsFromAddress;
+
+    if (coords) {
+      address.location = {
+        ...(address.location || {}),
+        type: address.location?.type || 'Point',
+        coordinates: coords
+      };
+    }
+
+    if (deliveryAddressText) {
+      if (!address.formattedAddress) address.formattedAddress = deliveryAddressText;
+      if (!address.address) address.address = deliveryAddressText;
+    }
+  }
+
+  return { address, error: null };
+};
 
 const getActiveZonesCached = async () => {
   const now = Date.now();
@@ -58,7 +153,6 @@ export const createOrder = async (req, res) => {
     const userId = req.user.id;
     const {
       items,
-      address,
       restaurantId,
       restaurantName,
       pricing,
@@ -68,6 +162,7 @@ export const createOrder = async (req, res) => {
       sendCutlery,
       paymentMethod: bodyPaymentMethod
     } = req.body;
+    const { address, error: addressError } = await resolveAddressFromPayload(req.body, userId);
     const normalizedRestaurantInstruction = (() => {
       const restaurantInstructionRaw =
         note ??
@@ -121,6 +216,13 @@ export const createOrder = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Order must have at least one item'
+      });
+    }
+
+    if (addressError) {
+      return res.status(400).json({
+        success: false,
+        message: addressError
       });
     }
 
@@ -1500,7 +1602,7 @@ export const cancelOrder = async (req, res) => {
  */
 export const calculateOrder = async (req, res) => {
   try {
-    const { items, restaurantId, deliveryAddress, couponCode, deliveryFleet, useReferralCoins, coinsToUse } = req.body;
+    const { items, restaurantId, couponCode, deliveryFleet, useReferralCoins, coinsToUse } = req.body;
     // Route is public (no auth middleware) so req.user may be undefined
     const userId = req.user?.id || null;
 
@@ -1509,6 +1611,15 @@ export const calculateOrder = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Order must have at least one item'
+      });
+    }
+
+    const { address: deliveryAddress, error: addressError } = await resolveAddressFromPayload(req.body, userId);
+
+    if (addressError) {
+      return res.status(400).json({
+        success: false,
+        message: addressError
       });
     }
 
