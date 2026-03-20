@@ -2,8 +2,6 @@ import { useState, useEffect, useMemo } from "react"
 import { Search, Plus } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { adminAPI } from "@/lib/api"
-import { isModuleAuthenticated } from "@/lib/utils/auth"
-import { toast } from "sonner"
 
 export default function Coupons() {
   const navigate = useNavigate()
@@ -13,12 +11,7 @@ export default function Coupons() {
   const [error, setError] = useState(null)
 
   const handleAddCouponClick = () => {
-    if (isModuleAuthenticated("restaurant")) {
-      navigate("/restaurant/coupon/new")
-      return
-    }
-
-    toast.error("Add coupon is available in Restaurant app login")
+    navigate("/admin/coupons/new")
   }
 
   // Fetch offers from backend
