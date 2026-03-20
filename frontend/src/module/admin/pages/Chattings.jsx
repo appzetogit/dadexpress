@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react"
-import { Search, Info, Settings, Send, Loader2, User as UserIcon, Trash2 } from "lucide-react"
+import { Search, Info, Send, Loader2, User as UserIcon, Trash2 } from "lucide-react"
 import io from "socket.io-client"
 import { BACKEND_BASE_URL } from "@/lib/api/config"
 import { adminAPI } from "@/lib/api"
@@ -358,18 +358,7 @@ export default function Chattings() {
                             const isMe = msg.senderType === "admin"
                             return (
                                 <div key={msg._id || idx} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
-                                    <div className={`flex items-end gap-1.5 ${isMe ? "flex-row-reverse" : "flex-row"}`}>
-                                      {isMe && (
-                                        <button
-                                          type="button"
-                                          onClick={() => handleDeleteMessage(msg?._id)}
-                                          disabled={!connected || !msg?._id}
-                                          className="p-1 rounded-full hover:bg-slate-200 disabled:opacity-40 transition-colors"
-                                          aria-label="Delete message"
-                                        >
-                                          <Trash2 className="w-3.5 h-3.5 text-slate-400" />
-                                        </button>
-                                      )}
+                                    <div className={`group flex items-end gap-1.5 ${isMe ? "flex-row-reverse" : "flex-row"}`}>
                                       <div className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-sm shadow-sm ${
                                           isMe 
                                           ? "bg-blue-600 text-white rounded-br-none" 
@@ -380,6 +369,15 @@ export default function Chattings() {
                                               {formatTime(msg.timestamp)}
                                           </p>
                                       </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteMessage(msg?._id)}
+                                        disabled={!connected || !msg?._id}
+                                        className="p-1 rounded-full hover:bg-slate-200 disabled:opacity-40 transition-opacity opacity-100 md:opacity-0 md:group-hover:opacity-100 shrink-0"
+                                        aria-label="Delete message"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5 text-slate-400" />
+                                      </button>
                                     </div>
                                 </div>
                             )
@@ -422,11 +420,6 @@ export default function Chattings() {
                   </div>
                 </div>
               )}
-
-              {/* Settings Icon */}
-              <button className="absolute top-4 right-6 p-2 rounded-lg bg-slate-100 hover:bg-slate-200 transition-colors hidden lg:block">
-                <Settings className="w-5 h-5 text-slate-600" />
-              </button>
             </div>
           </div>
         </div>
