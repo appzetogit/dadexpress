@@ -13,7 +13,12 @@ const safeJsonParse = (value) => {
 
 export const readStoredRestaurantUser = () => {
   if (typeof window === "undefined") return null;
-  const raw = localStorage.getItem("restaurant_user");
+  let raw = null;
+  try {
+    raw = localStorage.getItem("restaurant_user");
+  } catch {
+    raw = null;
+  }
   if (!raw) return null;
   return safeJsonParse(raw);
 };

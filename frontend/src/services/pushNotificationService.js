@@ -5,6 +5,17 @@ import api from '../lib/api/axios';
 // VAPID key for dad-express
 const VAPID_KEY = "BLd26y4PbOmBzFABPEfLNhQAsGDKYVpbyUdk_zKRO0Q5jy7tKOMr7IRuri1tLy6jdtVtevqmdZTs1I-psrM96HM";
 
+const safeStorage = {
+    setItem(key, value) {
+        try {
+            localStorage.setItem(key, value);
+            return true;
+        } catch {
+            return false;
+        }
+    }
+};
+
 // Register service worker
 async function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
@@ -23,7 +34,7 @@ async function registerServiceWorker() {
 
 // Request notification permission
 async function requestNotificationPermission() {
-    if ('Notification' in window) {
+    if (typeof window !== 'undefined' && 'Notification' in window && typeof Notification.requestPermission === 'function') {
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
             console.log('✅ Notification permission granted');
@@ -40,6 +51,9 @@ async function requestNotificationPermission() {
 async function getFCMToken() {
     try {
         console.log('🔄 [FCM Service] Initializing FCM...');
+        if (!messaging) {
+            return null;
+        }
         const registration = await registerServiceWorker();
 
         // Ensure SW is up to date
@@ -48,7 +62,7 @@ async function getFCMToken() {
         }
 
         // Check if permission granted
-        if (Notification.permission !== 'granted') {
+        if (typeof Notification === 'undefined' || Notification.permission !== 'granted') {
             console.log('⚠️ [FCM Service] Notification permission not granted yet. Requesting...');
             const granted = await requestNotificationPermission();
             if (!granted) {
@@ -106,7 +120,7 @@ async function registerFCMToken(authType = 'user') {
         });
 
         console.log(`✅ [FCM Service] Backend response:`, response.data);
-        localStorage.setItem(`fcm_token_synced`, 'true');
+        safeStorage.setItem(`fcm_token_synced`, 'true');
         return token;
     } catch (error) {
         console.error(`❌ [FCM Service] Error registering FCM token:`, error.response?.data || error.message);
@@ -135,13 +149,15 @@ let isForegroundHandlerSetup = false;
 // Setup foreground notification handler
 function setupForegroundNotificationHandler(handler) {
     if (isForegroundHandlerSetup) return;
+    if (!messaging) return;
 
-    onMessage(messaging, (payload) => {
-        console.log('📬 [FCM Service] Foreground message received:', payload);
+    try {
+        onMessage(messaging, (payload) => {
+            console.log('📬 [FCM Service] Foreground message received:', payload);
 
         // Show proper full-size Windows/Chrome OS desktop notification via service worker
-        if ('serviceWorker' in navigator && Notification.permission === 'granted') {
-            navigator.serviceWorker.ready.then((registration) => {
+            if ('serviceWorker' in navigator && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+                navigator.serviceWorker.ready.then((registration) => {
                 const title = payload.notification?.title || payload.data?.title || 'DadExpress';
                 const body = payload.notification?.body || payload.data?.body || payload.data?.message || '';
 
@@ -155,14 +171,18 @@ function setupForegroundNotificationHandler(handler) {
                     requireInteraction: true,
                     data: { url: payload.data?.click_action || '/' }
                 });
-            });
-        }
+                });
+            }
 
         // Call custom handler (like toast)
-        if (handler) {
-            handler(payload);
-        }
-    });
+            if (handler) {
+                handler(payload);
+            }
+        });
+    } catch (error) {
+        console.warn('[FCM Service] Foreground handler setup skipped:', error?.message || error);
+        return;
+    }
 
     isForegroundHandlerSetup = true;
 }
