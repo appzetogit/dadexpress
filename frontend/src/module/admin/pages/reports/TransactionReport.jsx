@@ -217,13 +217,18 @@ export default function TransactionReport() {
   const activeFiltersCount = (filters.zone !== "All Zones" ? 1 : 0) + (filters.restaurant !== "All restaurants" ? 1 : 0) + (filters.time !== "All Time" ? 1 : 0)
 
   const metricDisplayAmount = useMemo(() => {
+    const urlMetricAmount = Number(metricView.amount)
+    const hasUrlMetricAmount = Number.isFinite(urlMetricAmount)
+
     if (metricView.key === "gross") {
-      return Number(summary.grossRevenue ?? summary.completedTransaction ?? metricView.amount ?? 0) || 0
+      if (hasUrlMetricAmount) return urlMetricAmount
+      return Number(summary.grossRevenue ?? summary.completedTransaction ?? 0) || 0
     }
     if (metricView.key === "total") {
-      return Number(summary.totalRevenue ?? summary.adminEarning ?? metricView.amount ?? 0) || 0
+      if (hasUrlMetricAmount) return urlMetricAmount
+      return Number(summary.totalRevenue ?? summary.adminEarning ?? 0) || 0
     }
-    return Number(metricView.amount || 0) || 0
+    return hasUrlMetricAmount ? urlMetricAmount : 0
   }, [metricView.amount, metricView.key, summary])
 
   const formatCurrency = (amount) => {
