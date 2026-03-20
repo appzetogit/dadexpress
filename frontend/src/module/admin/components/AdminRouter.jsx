@@ -25,6 +25,7 @@ const AddRestaurant = lazy(() => import("../pages/restaurant/AddRestaurant"));
 const EditRestaurant = lazy(() => import("../pages/restaurant/EditRestaurant"));
 const JoiningRequest = lazy(() => import("../pages/restaurant/JoiningRequest"));
 const RestaurantCommission = lazy(() => import("../pages/restaurant/RestaurantCommission"));
+const RestaurantHelpCenter = lazy(() => import("../pages/restaurant/RestaurantHelpCenter"));
 const RestaurantReferralCommission = lazy(() => import("../pages/restaurant/RestaurantReferralCommission"));
 const RestaurantReferralMapping = lazy(() => import("../pages/restaurant/RestaurantReferralMapping"));
 const RestaurantComplaints = lazy(() => import("../pages/restaurant/RestaurantComplaints"));
@@ -157,7 +158,6 @@ export default function AdminRouter() {
           {/* ORDER MANAGEMENT */}
           {/* Orders */}
           <Route path="orders/all" element={<OrdersPage statusKey="all" />} />
-          <Route path="orders/scheduled" element={<OrdersPage statusKey="scheduled" />} />
           <Route path="orders/pending" element={<OrdersPage statusKey="pending" />} />
           <Route path="orders/accepted" element={<OrdersPage statusKey="accepted" />} />
           <Route path="orders/processing" element={<OrdersPage statusKey="processing" />} />
@@ -186,6 +186,7 @@ export default function AdminRouter() {
           <Route path="restaurants/edit/:id" element={<EditRestaurant />} />
           <Route path="restaurants/joining-request" element={<JoiningRequest />} />
           <Route path="restaurants/commission" element={<RestaurantCommission />} />
+          <Route path="restaurants/help-center" element={<RestaurantHelpCenter />} />
           <Route path="restaurants/referral-commission" element={<RestaurantReferralCommission />} />
           <Route path="restaurants/referral-mapping" element={<RestaurantReferralMapping />} />
           <Route path="restaurants/complaints" element={<RestaurantComplaints />} />

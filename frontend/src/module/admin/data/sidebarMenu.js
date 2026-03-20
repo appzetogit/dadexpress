@@ -64,6 +64,10 @@ export const sidebarMenuData = [
             path: "/admin/restaurants/commission",
           },
           {
+            label: "Help Center",
+            path: "/admin/restaurants/help-center",
+          },
+          {
             label: "Referral Commission Settings",
             path: "/admin/restaurants/referral-commission",
           },
@@ -88,13 +92,12 @@ export const sidebarMenuData = [
         type: "expandable",
         label: "Orders",
         icon: "FileText",
-        subItems: [
-          { label: "All", path: "/admin/orders/all" },
-          { label: "Scheduled", path: "/admin/orders/scheduled" },
-          { label: "Pending", path: "/admin/orders/pending" },
-          { label: "Accepted", path: "/admin/orders/accepted" },
-          { label: "Processing", path: "/admin/orders/processing" },
-          { label: "Food On The Way", path: "/admin/orders/food-on-the-way" },
+          subItems: [
+            { label: "All", path: "/admin/orders/all" },
+            { label: "Pending", path: "/admin/orders/pending" },
+            { label: "Accepted", path: "/admin/orders/accepted" },
+            { label: "Processing", path: "/admin/orders/processing" },
+            { label: "Food On The Way", path: "/admin/orders/food-on-the-way" },
           { label: "Delivered", path: "/admin/orders/delivered" },
           { label: "Cancelled", path: "/admin/orders/canceled" },
           {

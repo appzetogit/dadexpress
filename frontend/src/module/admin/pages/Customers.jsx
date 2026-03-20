@@ -461,8 +461,8 @@ export default function Customers() {
 
       {/* User Details Modal */}
       <Dialog open={showUserDetails} onOpenChange={setShowUserDetails}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto mx-auto">
-          <DialogHeader>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto mx-auto p-6 sm:p-8">
+          <DialogHeader className="mb-4">
             <DialogTitle className="text-xl font-bold text-slate-900">User Details</DialogTitle>
           </DialogHeader>
 
@@ -471,7 +471,7 @@ export default function Customers() {
               <div className="text-sm text-slate-500">Loading user details...</div>
             </div>
           ) : userDetails ? (
-            <div className="space-y-4">
+            <div className="space-y-6">
               {/* Profile Section */}
               <div className="bg-slate-50 rounded-lg p-4">
                 <div className="flex items-start gap-4">

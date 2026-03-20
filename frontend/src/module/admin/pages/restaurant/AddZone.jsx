@@ -22,7 +22,7 @@ export default function AddZone() {
   
   // Form state
   const [formData, setFormData] = useState({
-    country: "India",
+    country: "",
     zoneName: "",
     unit: "kilometer",
   })
@@ -741,6 +741,7 @@ export default function AddZone() {
                       className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                       required
                     >
+                      <option value="" disabled hidden>Select Country</option>
                       <option value="India">India</option>
                     </select>
                   </div>
