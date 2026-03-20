@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef, useMemo } from "react"
-import { Search, Info, Settings, Send, Loader2, User as UserIcon } from "lucide-react"
+import { Search, Info, Settings, Send, Loader2, User as UserIcon, Trash2 } from "lucide-react"
 import io from "socket.io-client"
 import { BACKEND_BASE_URL } from "@/lib/api/config"
 import { adminAPI } from "@/lib/api"
 import { toast } from "sonner"
 
 export default function Chattings() {
-  const [activeTab, setActiveTab] = useState("customer")
   const [searchQuery, setSearchQuery] = useState("")
+  const [searchedUserIds, setSearchedUserIds] = useState(null)
   const [selectedConversation, setSelectedConversation] = useState(null)
   const [conversations, setConversations] = useState([])
   const [messages, setMessages] = useState([])
@@ -122,12 +122,45 @@ export default function Chattings() {
         }
     })
 
+    socketRef.current.on("message-deleted", (payload) => {
+      if (!selectedConversation || payload?.room !== selectedConversation.room || !payload?.messageId) return
+      setMessages((prev) => prev.filter((m) => String(m?._id) !== String(payload.messageId)))
+    })
+
     socketRef.current.on("disconnect", () => setConnected(false))
 
     return () => {
       if (socketRef.current) socketRef.current.disconnect()
     }
   }, [backendUrl, selectedConversation])
+
+  // DB-based search for users in support chat.
+  useEffect(() => {
+    let cancelled = false
+    let timer = null
+
+    const run = async () => {
+      const query = searchQuery.trim()
+      if (!query) {
+        if (!cancelled) setSearchedUserIds(null)
+        return
+      }
+      try {
+        const res = await adminAPI.getUsers({ search: query, limit: 100, offset: 0 })
+        const users = res?.data?.data?.users || []
+        const ids = new Set(users.map((u) => String(u?.id || u?._id)).filter(Boolean))
+        if (!cancelled) setSearchedUserIds(ids)
+      } catch (error) {
+        if (!cancelled) setSearchedUserIds(new Set())
+      }
+    }
+
+    timer = setTimeout(run, 250)
+    return () => {
+      cancelled = true
+      if (timer) clearTimeout(timer)
+    }
+  }, [searchQuery])
 
   useEffect(() => {
     if (selectedConversation && socketRef.current) {
@@ -142,12 +175,16 @@ export default function Chattings() {
   }, [messages])
 
   const filteredConversations = conversations.filter(conv => {
-    if (activeTab === "customer" && conv.type !== "customer") return false
-    if (activeTab === "restaurant" && conv.type !== "restaurant") return false // Future: restaurant chat
-    
+    if (conv.type !== "customer") return false
+
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim()
-      return conv.name?.toLowerCase().includes(query) || conv.phone?.includes(query)
+      const localMatch = conv.name?.toLowerCase().includes(query) || conv.phone?.includes(query)
+      if (localMatch) return true
+      if (searchedUserIds instanceof Set) {
+        return searchedUserIds.has(String(conv.userId))
+      }
+      return false
     }
     
     return true
@@ -167,6 +204,15 @@ export default function Chattings() {
       timestamp: new Date().toISOString(),
     })
     setMessage("")
+  }
+
+  const handleDeleteMessage = (messageId) => {
+    if (!socketRef.current || !connected || !selectedConversation?.room || !messageId) return
+    socketRef.current.emit("delete-chat-message", {
+      room: selectedConversation.room,
+      messageId: String(messageId),
+      deletedBy: adminProfile?._id || adminProfile?.id || null,
+    })
   }
 
   const formatTime = (ts) => {
@@ -200,28 +246,10 @@ export default function Chattings() {
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 </div>
 
-                {/* Tabs */}
                 <div className="flex items-center gap-2 border-b border-slate-200">
-                  <button
-                    onClick={() => setActiveTab("customer")}
-                    className={`px-4 py-2 text-sm font-bold transition-colors border-b-2 ${
-                      activeTab === "customer"
-                        ? "border-blue-600 text-blue-600"
-                        : "border-transparent text-slate-600 hover:text-slate-900"
-                    }`}
-                  >
+                  <span className="px-4 py-2 text-sm font-bold border-b-2 border-blue-600 text-blue-600">
                     Customers
-                  </button>
-                  <button
-                    onClick={() => setActiveTab("restaurant")}
-                    className={`px-4 py-2 text-sm font-bold transition-colors border-b-2 ${
-                      activeTab === "restaurant"
-                        ? "border-blue-600 text-blue-600"
-                        : "border-transparent text-slate-600 hover:text-slate-900"
-                    }`}
-                  >
-                    Restaurants
-                  </button>
+                  </span>
                 </div>
               </div>
 
@@ -330,15 +358,28 @@ export default function Chattings() {
                             const isMe = msg.senderType === "admin"
                             return (
                                 <div key={msg._id || idx} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
-                                    <div className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-sm shadow-sm ${
-                                        isMe 
-                                        ? "bg-blue-600 text-white rounded-br-none" 
-                                        : "bg-white text-slate-800 border border-slate-100 rounded-bl-none"
-                                    }`}>
-                                        <p className="font-medium whitespace-pre-wrap break-words">{msg.text}</p>
-                                        <p className={`text-[10px] mt-1 text-right font-bold ${isMe ? "text-blue-100" : "text-slate-400"}`}>
-                                            {formatTime(msg.timestamp)}
-                                        </p>
+                                    <div className={`flex items-end gap-1.5 ${isMe ? "flex-row-reverse" : "flex-row"}`}>
+                                      {isMe && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleDeleteMessage(msg?._id)}
+                                          disabled={!connected || !msg?._id}
+                                          className="p-1 rounded-full hover:bg-slate-200 disabled:opacity-40 transition-colors"
+                                          aria-label="Delete message"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5 text-slate-400" />
+                                        </button>
+                                      )}
+                                      <div className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-sm shadow-sm ${
+                                          isMe 
+                                          ? "bg-blue-600 text-white rounded-br-none" 
+                                          : "bg-white text-slate-800 border border-slate-100 rounded-bl-none"
+                                      }`}>
+                                          <p className="font-medium whitespace-pre-wrap break-words">{msg.text}</p>
+                                          <p className={`text-[10px] mt-1 text-right font-bold ${isMe ? "text-blue-100" : "text-slate-400"}`}>
+                                              {formatTime(msg.timestamp)}
+                                          </p>
+                                      </div>
                                     </div>
                                 </div>
                             )

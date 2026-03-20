@@ -186,13 +186,13 @@ export default function UserSupportChat() {
             const isMine = msg?.senderType === "user" && String(msg?.senderId) === String(userId)
             return (
               <div key={msg?._id || idx} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
-                <div className={`flex items-end gap-1.5 ${isMine ? "flex-row-reverse" : "flex-row"}`}>
+                <div className={`group flex items-end gap-1.5 ${isMine ? "flex-row-reverse" : "flex-row"}`}>
                  {isMine && (
                     <button
                       type="button"
                       onClick={() => handleDeleteMessage(msg?._id)}
                       disabled={!connected || !msg?._id}
-                      className="opacity-0 group-hover:opacity-100 p-1 rounded-full hover:bg-gray-200 disabled:opacity-40 transition-opacity"
+                      className="opacity-100 md:opacity-0 md:group-hover:opacity-100 p-1 rounded-full hover:bg-gray-200 disabled:opacity-40 transition-opacity"
                       aria-label="Delete message"
                     >
                       <Trash2 className="h-3.5 w-3.5 text-gray-400" />
