@@ -1471,8 +1471,8 @@ export default function Cart() {
                   {cart.map((item) => (
                     <div key={item.id} className="flex items-start gap-3 md:gap-4">
                       {/* Veg/Non-veg indicator */}
-                      <div className={`w-4 h-4 md:w-5 md:h-5 border-2 ${item.isVeg !== false ? 'border-green-600' : 'border-red-600'} flex items-center justify-center mt-1 flex-shrink-0`}>
-                        <div className={`w-2 h-2 md:w-2.5 md:h-2.5 rounded-full ${item.isVeg !== false ? 'bg-green-600' : 'bg-red-600'}`} />
+                      <div className={`w-4 h-4 md:w-5 md:h-5 border-2 ${item.isVeg ? 'border-green-600' : 'border-red-600'} flex items-center justify-center mt-1 flex-shrink-0`}>
+                        <div className={`w-2 h-2 md:w-2.5 md:h-2.5 rounded-full ${item.isVeg ? 'bg-green-600' : 'bg-red-600'}`} />
                       </div>
 
                       <div className="flex-1 min-w-0">

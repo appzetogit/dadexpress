@@ -792,7 +792,7 @@ export default function RestaurantDetails() {
       restaurantId: validRestaurantId, // Use validated restaurantId
       description: item.description,
       originalPrice: item.originalPrice,
-      isVeg: item.isVeg !== false // Add isVeg property
+      isVeg: item.foodType === 'Veg' || item.isVeg === true // Correctly determine isVeg
     }
 
     // Get source position for animation from event target
@@ -1702,8 +1702,8 @@ export default function RestaurantDetails() {
                     <div className="space-y-0">
                       {section.items.map((item) => {
                         const quantity = quantities[item.id] || 0
-                        // Determine veg/non-veg based on foodType
-                        const isVeg = item.foodType === "Veg"
+                        // Determine veg/non-veg based on foodType or isVeg
+                        const isVeg = item.foodType === "Veg" || item.isVeg === true
 
                         // Debug: Log preparationTime for troubleshooting
                         if (item.preparationTime) {
@@ -1725,8 +1725,8 @@ export default function RestaurantDetails() {
                                     <div className="w-2 h-2 bg-green-600 rounded-full"></div>
                                   </div>
                                 ) : (
-                                  <div className="w-4 h-4 border-2 border-orange-600 flex items-center justify-center rounded-sm flex-shrink-0">
-                                    <div className="w-2 h-2 bg-orange-600 rounded-full"></div>
+                                  <div className="w-4 h-4 border-2 border-red-600 flex items-center justify-center rounded-sm flex-shrink-0">
+                                    <div className="w-2 h-2 bg-red-600 rounded-full"></div>
                                   </div>
                                 )}
                                 {item.isSpicy && <span className="text-red-500">🌶️</span>}
@@ -1909,8 +1909,8 @@ export default function RestaurantDetails() {
                               <div className="space-y-0">
                                 {subsection.items.map((item) => {
                                   const quantity = quantities[item.id] || 0
-                                  // Determine veg/non-veg based on foodType
-                                  const isVeg = item.foodType === "Veg"
+                                  // Determine veg/non-veg based on foodType or isVeg
+                                  const isVeg = item.foodType === "Veg" || item.isVeg === true
 
                                   // Debug: Log preparationTime for troubleshooting
                                   if (item.preparationTime) {
@@ -1932,8 +1932,8 @@ export default function RestaurantDetails() {
                                               <div className="w-2 h-2 bg-green-600 rounded-full"></div>
                                             </div>
                                           ) : (
-                                            <div className="w-4 h-4 border-2 border-orange-600 flex items-center justify-center rounded-sm flex-shrink-0">
-                                              <div className="w-2 h-2 bg-orange-600 rounded-full"></div>
+                                            <div className="w-4 h-4 border-2 border-red-600 flex items-center justify-center rounded-sm flex-shrink-0">
+                                              <div className="w-2 h-2 bg-red-600 rounded-full"></div>
                                             </div>
                                           )}
                                           {item.isSpicy && <span className="text-red-500">🌶️</span>}

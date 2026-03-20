@@ -273,7 +273,7 @@ export default function Orders() {
                 price: item.price || 0,
                 image: item.image || null,
                 description: item.description || null,
-                isVeg: item.isVeg !== undefined ? item.isVeg : (item.category === 'veg' || item.type === 'veg'),
+                isVeg: item.isVeg !== undefined ? item.isVeg : (item.foodType === 'Veg' || item.category === 'veg' || item.type === 'veg'),
                 _id: item._id || item.id,
                 id: item.id || item._id
               })),

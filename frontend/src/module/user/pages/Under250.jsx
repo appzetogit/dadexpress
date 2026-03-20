@@ -289,6 +289,7 @@ export default function Under250() {
       restaurant: restaurant,
       description: item.description || "",
       originalPrice: item.originalPrice || item.price,
+      isVeg: item.isVeg === true || item.foodType === 'Veg'
     }
 
     // Get source position for animation from event target
@@ -598,26 +599,22 @@ export default function Under250() {
                                 whileHover={{ opacity: 1 }}
                                 transition={{ duration: 0.3 }}
                               />
-                              {/* Veg Indicator */}
-                              {item.isVeg && (
+                              {/* Veg/Non-veg Indicator */}
                                 <motion.div
-                                  className="absolute top-2 left-2 md:top-3 md:left-3 h-4 w-4 md:h-5 md:w-5 lg:h-6 lg:w-6 rounded border-2 border-green-600 bg-white flex items-center justify-center z-10"
+                                  className={`absolute top-2 left-2 md:top-3 md:left-3 h-4 w-4 md:h-5 md:w-5 lg:h-6 lg:w-6 rounded border-2 ${item.isVeg || item.foodType === 'Veg' ? 'border-green-600' : 'border-red-600'} bg-white flex items-center justify-center z-10`}
                                   whileHover={{ scale: 1.2, rotate: 5 }}
                                   transition={{ duration: 0.2 }}
                                 >
-                                  <div className="h-2 w-2 md:h-2.5 md:w-2.5 lg:h-3 lg:w-3 rounded-full bg-green-600" />
+                                  <div className={`h-2 w-2 md:h-2.5 md:w-2.5 lg:h-3 lg:w-3 rounded-full ${item.isVeg || item.foodType === 'Veg' ? 'bg-green-600' : 'bg-red-600'}`} />
                                 </motion.div>
-                              )}
                             </div>
 
                             {/* Item Details */}
                             <div className="p-3 md:p-4 lg:p-5">
                               <div className="flex items-center gap-1 md:gap-2 mb-1 md:mb-2 lg:mb-3">
-                                {item.isVeg && (
-                                  <div className="h-3 w-3 md:h-4 md:w-4 lg:h-5 lg:w-5 rounded border border-green-600 bg-green-50 dark:bg-green-900/20 flex items-center justify-center">
-                                    <div className="h-1.5 w-1.5 md:h-2 md:w-2 lg:h-2.5 lg:w-2.5 rounded-full bg-green-600" />
-                                  </div>
-                                )}
+                                <div className={`h-3 w-3 md:h-4 md:w-4 lg:h-5 lg:w-5 rounded border ${item.isVeg || item.foodType === 'Veg' ? 'border-green-600 bg-green-50' : 'border-red-600 bg-red-50'} dark:bg-opacity-20 flex items-center justify-center`}>
+                                  <div className={`h-1.5 w-1.5 md:h-2 md:w-2 lg:h-2.5 lg:w-2.5 rounded-full ${item.isVeg || item.foodType === 'Veg' ? 'bg-green-600' : 'bg-red-600'}`} />
+                                </div>
                                 <span className="text-sm md:text-base lg:text-lg font-semibold text-gray-900 dark:text-white">
                                   1 x {item.name}
                                 </span>

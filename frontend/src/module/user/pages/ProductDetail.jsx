@@ -84,6 +84,7 @@ export default function ProductDetail() {
           reviews: typeof item.reviews === "number" ? item.reviews : 0,
           restaurantId: item.restaurant?._id || item.restaurantId || null,
           restaurant: item.restaurant?.name || item.restaurantName || "",
+          isVeg: item.isVeg === true || item.foodType === 'Veg'
         }
 
         const restaurantFromItem = item.restaurant || null
@@ -329,7 +330,10 @@ export default function ProductDetail() {
           <div className="absolute bottom-0 left-0 right-0 bg-white dark:bg-[#1a1a1a] rounded-t-3xl p-4 sm:p-5 md:p-6 lg:p-8">
             <div className="flex items-start gap-4 md:gap-6 lg:gap-8">
               <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between mb-2 md:mb-3">
+                <div className="flex items-center gap-2 mb-2 md:mb-3">
+                  <div className={`w-4 h-4 md:w-5 md:h-5 border-2 ${product.isVeg ? 'border-green-600' : 'border-red-600'} flex items-center justify-center flex-shrink-0`}>
+                    <div className={`w-2 h-2 md:w-2.5 md:h-2.5 rounded-full ${product.isVeg ? 'bg-green-600' : 'bg-red-600'}`} />
+                  </div>
                   <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900 dark:text-white leading-tight break-words">
                     {product.name}
                   </h1>
