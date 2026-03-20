@@ -11,12 +11,14 @@ import { useProfile } from "../../context/ProfileContext"
 import { useOrders } from "../../context/OrdersContext"
 import { useLocation as useUserLocation } from "../../hooks/useLocation"
 import { useZone } from "../../hooks/useZone"
+import { useSelectedDeliveryAddress } from "../../hooks/useSelectedDeliveryAddress"
 import { orderAPI, restaurantAPI, adminAPI, userAPI, API_ENDPOINTS } from "@/lib/api"
 import { API_BASE_URL } from "@/lib/api/config"
 import { initRazorpayPayment } from "@/lib/utils/razorpay"
 import { toast } from "sonner"
 import { getCompanyNameAsync } from "@/lib/utils/businessSettings"
 import LocationSelectorOverlay from "../../components/LocationSelectorOverlay"
+import { resolveDeliveryAddress } from "../../utils/deliveryAddress"
 
 
 // Removed hardcoded suggested items - now fetching approved addons from backend
@@ -102,7 +104,7 @@ export default function Cart() {
   const { getDefaultAddress, getDefaultPaymentMethod, addresses, paymentMethods, userProfile, setDefaultAddress } = useProfile()
   const { createOrder } = useOrders()
   const { location: currentLocation } = useUserLocation() // Get live location address
-  const { zoneId } = useZone(currentLocation) // Get user's zone
+  const { selectedDeliveryAddress, setSelectedDeliveryAddress } = useSelectedDeliveryAddress()
 
   const [showCoupons, setShowCoupons] = useState(false)
   const [appliedCoupon, setAppliedCoupon] = useState(null)
@@ -156,38 +158,25 @@ export default function Cart() {
 
   const cartCount = getCartCount()
   const savedAddress = getDefaultAddress()
-  // Priority: Use live location if available, otherwise use saved address
-  // Memoized so downstream effects don't re-run on every render (prevents UI flicker/blinking).
-  const defaultAddress = useMemo(() => {
-    if (currentLocation?.formattedAddress && currentLocation.formattedAddress !== "Select location") {
-      return {
-        ...(savedAddress || {}),
-        formattedAddress: currentLocation.formattedAddress,
-        address: currentLocation.address || currentLocation.formattedAddress,
-        street: currentLocation.street || currentLocation.address,
-        city: currentLocation.city,
-        state: currentLocation.state,
-        zipCode: currentLocation.postalCode,
-        area: currentLocation.area,
-        location: currentLocation.latitude && currentLocation.longitude ? {
-          coordinates: [currentLocation.longitude, currentLocation.latitude]
-        } : savedAddress?.location
-      }
-    }
-
-    return savedAddress
-  }, [
-    savedAddress,
-    currentLocation?.formattedAddress,
-    currentLocation?.address,
-    currentLocation?.street,
-    currentLocation?.city,
-    currentLocation?.state,
-    currentLocation?.postalCode,
-    currentLocation?.area,
-    currentLocation?.latitude,
-    currentLocation?.longitude,
-  ])
+  const resolvedDelivery = useMemo(
+    () =>
+      resolveDeliveryAddress({
+        selected: selectedDeliveryAddress,
+        addresses,
+        currentLocation,
+        fallbackAddress: savedAddress,
+      }),
+    [selectedDeliveryAddress, addresses, currentLocation, savedAddress],
+  )
+  const defaultAddress = resolvedDelivery.address
+  const deliveryAddressError = resolvedDelivery.error
+  const deliveryAddressSource = resolvedDelivery.source
+  const deliveryCoords = resolvedDelivery.coords
+  const deliveryLocationForZone = useMemo(() => {
+    if (!deliveryCoords) return null
+    return { latitude: deliveryCoords.lat, longitude: deliveryCoords.lng }
+  }, [deliveryCoords])
+  const { zoneId } = useZone(deliveryLocationForZone) // Get user's zone
   const defaultPayment = getDefaultPaymentMethod()
 
   // Get restaurant ID from cart or restaurant data
@@ -605,7 +594,7 @@ export default function Cart() {
   // Calculate pricing from backend whenever cart, address, or coupon changes
   useEffect(() => {
     const calculatePricing = async () => {
-      if (cart.length === 0 || !defaultAddress) {
+      if (cart.length === 0 || !defaultAddress || deliveryAddressError) {
         setPricing(null)
         return
       }
@@ -775,6 +764,12 @@ export default function Cart() {
 
   // Restaurant name from data or cart
   const restaurantName = restaurantData?.name || cart[0]?.restaurant || "Restaurant"
+  const deliverySourceLabel = useMemo(() => {
+    if (!defaultAddress) return "No address selected"
+    if (deliveryAddressSource === "current") return "Using current location"
+    const label = defaultAddress?.label || "Saved"
+    return `Using ${label} address`
+  }, [defaultAddress, deliveryAddressSource])
 
   // Handler to select address by label (Home, Office, Other)
   const handleSelectAddressByLabel = async (label) => {
@@ -824,11 +819,19 @@ export default function Cart() {
           : `${address.street}, ${address.city}, ${address.state}${address.zipCode ? ` ${address.zipCode}` : ''}`
       }
       localStorage.setItem("userLocation", JSON.stringify(locationData))
+      window.dispatchEvent(
+        new CustomEvent("user-location-updated", {
+          detail: locationData,
+        }),
+      )
+
+      const selectedAddressId = address.id || address._id
+      if (selectedAddressId) {
+        setDefaultAddress(selectedAddressId)
+        setSelectedDeliveryAddress({ mode: "saved", addressId: selectedAddressId })
+      }
 
       toast.success(`${label} address selected!`)
-
-      // Force page reload to update location
-      window.location.reload()
     } catch (error) {
       console.error(`Error selecting ${label} address:`, error)
       toast.error(`Failed to select ${label} address. Please try again.`)
@@ -842,7 +845,7 @@ export default function Cart() {
       setShowCoupons(false)
 
       // Recalculate pricing with new coupon
-      if (cart.length > 0 && defaultAddress) {
+      if (cart.length > 0 && defaultAddress && !deliveryAddressError) {
         try {
           const items = cart.map(item => ({
             itemId: item.id,
@@ -878,7 +881,7 @@ export default function Cart() {
     setCouponCode("")
 
     // Recalculate pricing without coupon
-    if (cart.length > 0 && defaultAddress) {
+    if (cart.length > 0 && defaultAddress && !deliveryAddressError) {
       try {
         const items = cart.map(item => ({
           itemId: item.id,
@@ -911,6 +914,10 @@ export default function Cart() {
   const handlePlaceOrder = async () => {
     if (!defaultAddress) {
       alert("Please add a delivery address")
+      return
+    }
+    if (deliveryAddressError) {
+      toast.error(deliveryAddressError)
       return
     }
 
@@ -1148,9 +1155,21 @@ export default function Cart() {
         return;
       }
 
+      const deliveryCoordinates = defaultAddress?.location?.coordinates || []
+      const deliveryLongitude = Number(deliveryCoordinates[0] ?? defaultAddress?.longitude)
+      const deliveryLatitude = Number(deliveryCoordinates[1] ?? defaultAddress?.latitude)
+      const deliveryAddressText =
+        formatFullAddress(defaultAddress) ||
+        defaultAddress?.formattedAddress ||
+        defaultAddress?.address ||
+        ""
+
       const orderPayload = {
         items: orderItems,
         address: defaultAddress,
+        deliveryAddress: deliveryAddressText,
+        latitude: Number.isFinite(deliveryLatitude) ? deliveryLatitude : undefined,
+        longitude: Number.isFinite(deliveryLongitude) ? deliveryLongitude : undefined,
         restaurantId: finalRestaurantId,
         restaurantName: finalRestaurantName,
         pricing: orderPricing,
@@ -1806,6 +1825,16 @@ export default function Cart() {
                       <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400 line-clamp-2">
                         {defaultAddress ? (formatFullAddress(defaultAddress) || defaultAddress?.formattedAddress || defaultAddress?.address || "Add delivery address") : "Tap to select delivery address"}
                       </p>
+                      {defaultAddress && (
+                        <p className="text-[11px] md:text-xs text-gray-400 dark:text-gray-500 mt-1">
+                          {deliverySourceLabel}
+                        </p>
+                      )}
+                      {deliveryAddressError && (
+                        <p className="text-[11px] md:text-xs text-red-600 dark:text-red-400 mt-1">
+                          {deliveryAddressError}
+                        </p>
+                      )}
                       {/* Address Selection Buttons */}
                       <div className="flex gap-2 mt-2">
                         {["Home", "Office", "Other"].map((label) => {
@@ -1817,7 +1846,12 @@ export default function Cart() {
                               onClick={(e) => {
                                 e.preventDefault()
                                 e.stopPropagation()
-                                if (addr) setDefaultAddress(addr.id || addr._id)
+                                if (!addr) return
+                                const selectedId = addr.id || addr._id
+                                if (selectedId) {
+                                  setDefaultAddress(selectedId)
+                                  setSelectedDeliveryAddress({ mode: "saved", addressId: selectedId })
+                                }
                               }}
                               disabled={!addr}
                               className={`text-xs md:text-sm px-2 md:px-3 py-1 md:py-1.5 rounded-md border transition-colors ${isSelected
@@ -1998,7 +2032,7 @@ export default function Cart() {
               <Button
                 size="lg"
                 onClick={handlePlaceOrder}
-                disabled={isPlacingOrder || !defaultAddress || (selectedPaymentMethod === "wallet" && walletBalance < total)}
+                disabled={isPlacingOrder || !defaultAddress || !!deliveryAddressError || (selectedPaymentMethod === "wallet" && walletBalance < total)}
                 className="w-full bg-[#EB590E] hover:bg-[#D94F0C] dark:bg-[#EB590E] dark:hover:bg-[#D94F0C] text-white px-6 md:px-10 h-14 md:h-16 rounded-lg md:rounded-xl text-base md:text-lg font-bold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {(selectedPaymentMethod === "razorpay" || selectedPaymentMethod === "wallet") && (

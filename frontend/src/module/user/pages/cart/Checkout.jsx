@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useNavigate } from "react-router-dom"
 import { CheckCircle, MapPin, CreditCard, ArrowLeft, Coins, Loader2 } from "lucide-react"
 import { Switch } from "@/components/ui/switch"
@@ -13,8 +13,11 @@ import { Badge } from "@/components/ui/badge"
 import { useCart } from "../../context/CartContext"
 import { useProfile } from "../../context/ProfileContext"
 import { useOrders } from "../../context/OrdersContext"
+import { useLocation as useUserLocation } from "../../hooks/useLocation"
+import { useSelectedDeliveryAddress } from "../../hooks/useSelectedDeliveryAddress"
 import { userAPI, orderAPI } from "@/lib/api"
 import { toast } from "sonner"
+import { resolveDeliveryAddress } from "../../utils/deliveryAddress"
 
 const calculatePlatformFeeFromPercentage = (subtotal = 0, percentage = 0) => {
   const safeSubtotal = Number(subtotal) || 0
@@ -28,8 +31,11 @@ export default function Checkout() {
   const { cart, clearCart } = useCart()
   const { userProfile, getDefaultAddress, getDefaultPaymentMethod, addresses, paymentMethods } = useProfile()
   const { createOrder } = useOrders()
+  const { location: currentLocation } = useUserLocation()
+  const { selectedDeliveryAddress, setSelectedDeliveryAddress } = useSelectedDeliveryAddress()
 
-  const [selectedAddress, setSelectedAddress] = useState(getDefaultAddress()?.id || "")
+  const [selectedAddressId, setSelectedAddressId] = useState("")
+  const [selectedAddress, setSelectedAddress] = useState(null)
   const [selectedPayment, setSelectedPayment] = useState(getDefaultPaymentMethod()?.id || "")
   const [isPlacingOrder, setIsPlacingOrder] = useState(false)
   const [useRewards, setUseRewards] = useState(false)
@@ -54,6 +60,58 @@ export default function Checkout() {
   const rewardBalance = userProfile?.wallet?.balance || 0
   const coinsToInr = 1 // 1 Coin = ₹1
 
+  const fallbackAddress = getDefaultAddress()
+  const resolvedDelivery = useMemo(
+    () =>
+      resolveDeliveryAddress({
+        selected: selectedDeliveryAddress,
+        addresses,
+        currentLocation,
+        fallbackAddress,
+      }),
+    [selectedDeliveryAddress, addresses, currentLocation, fallbackAddress],
+  )
+  const deliveryAddress = resolvedDelivery.address
+  const deliveryAddressError = resolvedDelivery.error
+
+  useEffect(() => {
+    if (selectedDeliveryAddress?.mode === "saved" && selectedDeliveryAddress.addressId) {
+      setSelectedAddressId(String(selectedDeliveryAddress.addressId))
+      return
+    }
+    if (selectedDeliveryAddress?.mode === "current") {
+      setSelectedAddressId("__current__")
+      return
+    }
+    if (resolvedDelivery.source === "current") {
+      setSelectedAddressId("__current__")
+      return
+    }
+    const defaultId = fallbackAddress?.id || fallbackAddress?._id || ""
+    if (defaultId) {
+      setSelectedAddressId(String(defaultId))
+    }
+  }, [selectedDeliveryAddress, fallbackAddress, resolvedDelivery.source])
+
+  useEffect(() => {
+    if (!deliveryAddress) {
+      setSelectedAddress(null)
+      return
+    }
+    setSelectedAddress((prev) => {
+      const prevId = prev?.id || prev?._id
+      const nextId = deliveryAddress?.id || deliveryAddress?._id
+      if (prevId && nextId && String(prevId) === String(nextId)) return prev
+
+      const prevCoords = prev?.location?.coordinates || []
+      const nextCoords = deliveryAddress?.location?.coordinates || []
+      if (prevCoords[0] === nextCoords[0] && prevCoords[1] === nextCoords[1]) {
+        return prev
+      }
+      return deliveryAddress
+    })
+  }, [deliveryAddress])
+
   // Fetch referral settings
   useEffect(() => {
     const fetchSettings = async () => {
@@ -75,7 +133,7 @@ export default function Checkout() {
   // Call calculateOrderPricing whenever dependencies change
   useEffect(() => {
     const calculate = async () => {
-      if (cart.length === 0) return
+      if (cart.length === 0 || !deliveryAddress || deliveryAddressError) return
 
       try {
         setRefreshing(true)
@@ -93,7 +151,9 @@ export default function Checkout() {
           items,
           useRewardCoins: useRewards,
           rewardCoins: useRewards ? rewardBalance : 0,
-          addressId: selectedAddress
+          deliveryAddress: deliveryAddress,
+          latitude: deliveryAddress?.location?.coordinates?.[1],
+          longitude: deliveryAddress?.location?.coordinates?.[0],
         })
 
         const data = response?.data?.data || response?.data
@@ -131,9 +191,9 @@ export default function Checkout() {
     }
 
     calculate()
-  }, [cart, useRewards, selectedAddress, rewardBalance, referralSettings])
+  }, [cart, useRewards, deliveryAddress, rewardBalance, referralSettings])
 
-  const defaultAddress = addresses.find(addr => addr.id === selectedAddress) || getDefaultAddress()
+  const defaultAddress = deliveryAddress || fallbackAddress
   const defaultPayment = paymentMethods.find(pm => pm.id === selectedPayment) || getDefaultPaymentMethod()
 
   // Destructure calculations for ease of use
@@ -141,8 +201,12 @@ export default function Checkout() {
   const actualRewardDiscount = rewardDiscount
 
   const handlePlaceOrder = async () => {
-    if (!selectedAddress || !selectedPayment) {
+    if (!deliveryAddress || !selectedPayment) {
       toast.error("Please select a delivery address and payment method")
+      return
+    }
+    if (deliveryAddressError) {
+      toast.error(deliveryAddressError)
       return
     }
 
@@ -163,7 +227,10 @@ export default function Checkout() {
           quantity: item.quantity,
           restaurantId: item.restaurantId
         })),
-        addressId: selectedAddress,
+        address: deliveryAddress,
+        deliveryAddress: deliveryAddress?.formattedAddress || deliveryAddress?.address || "",
+        latitude: deliveryAddress?.location?.coordinates?.[1],
+        longitude: deliveryAddress?.location?.coordinates?.[0],
         paymentMethod: selectedPayment === "cod" ? "cod" : "online",
         useRewardCoins: useRewards,
         rewardCoins: useRewards ? rewardBalance : 0,
@@ -242,10 +309,35 @@ export default function Checkout() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {addresses.length > 0 ? (
+                  {(addresses.length > 0 || currentLocation) ? (
                     <div className="space-y-3">
+                      {currentLocation && (
+                        <div
+                          className={`border-2 rounded-lg p-4 cursor-pointer transition-colors ${selectedAddressId === "__current__"
+                            ? "border-[#EB590E] bg-orange-50"
+                            : "border-gray-200 hover:border-orange-300"
+                            }`}
+                          onClick={() => {
+                            setSelectedAddressId("__current__")
+                            setSelectedDeliveryAddress({ mode: "current" })
+                          }}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <Badge className="mb-2 bg-[#EB590E] text-white">Current Location</Badge>
+                              <p className="text-sm font-medium">
+                                {currentLocation.formattedAddress || currentLocation.address || "Use current location"}
+                              </p>
+                            </div>
+                            {selectedAddressId === "__current__" && (
+                              <CheckCircle className="h-5 w-5 text-[#EB590E]" />
+                            )}
+                          </div>
+                        </div>
+                      )}
                       {addresses.map((address) => {
-                        const isSelected = selectedAddress === address.id
+                        const addressId = address.id || address._id
+                        const isSelected = selectedAddressId === String(addressId)
                         const addressString = [
                           address.street,
                           address.additionalDetails,
@@ -254,12 +346,18 @@ export default function Checkout() {
 
                         return (
                           <div
-                            key={address.id}
+                            key={addressId}
                             className={`border-2 rounded-lg p-4 cursor-pointer transition-colors ${isSelected
                               ? "border-[#EB590E] bg-orange-50"
                               : "border-gray-200 hover:border-orange-300"
                               }`}
-                            onClick={() => setSelectedAddress(address.id)}
+                            onClick={() => {
+                              const nextId = addressId ? String(addressId) : ""
+                              setSelectedAddressId(nextId)
+                              if (nextId) {
+                                setSelectedDeliveryAddress({ mode: "saved", addressId: nextId })
+                              }
+                            }}
                           >
                             <div className="flex items-start justify-between">
                               <div className="flex-1">
@@ -275,6 +373,16 @@ export default function Checkout() {
                           </div>
                         )
                       })}
+                      {deliveryAddressError && (
+                        <p className="text-xs text-red-600">{deliveryAddressError}</p>
+                      )}
+                      {deliveryAddress && !deliveryAddressError && (
+                        <p className="text-xs text-gray-500">
+                          {selectedAddressId === "__current__"
+                            ? "Using current location"
+                            : `Using ${selectedAddress?.label || "saved address"}`}
+                        </p>
+                      )}
                     </div>
                   ) : (
                     <div className="text-center py-8">
@@ -449,7 +557,7 @@ export default function Checkout() {
                   <Button
                     className="w-full bg-[#EB590E] hover:bg-[#D94F0C] text-white mt-4 md:mt-6 h-11 md:h-12 text-sm md:text-base border-none"
                     onClick={handlePlaceOrder}
-                    disabled={isPlacingOrder || !selectedAddress || !selectedPayment}
+                    disabled={isPlacingOrder || !deliveryAddress || !!deliveryAddressError || !selectedPayment}
                   >
                     {isPlacingOrder ? "Placing Order..." : "Place Order"}
                   </Button>
