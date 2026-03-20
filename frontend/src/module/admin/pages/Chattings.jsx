@@ -22,6 +22,8 @@ export default function Chattings() {
   const messagesEndRef = useRef(null)
   const backendUrl = useMemo(() => BACKEND_BASE_URL, [])
 
+  const messageKey = (msg) => msg?._id ?? msg?.id
+
   // Fetch admin profile
   useEffect(() => {
     const fetchProfile = async () => {
@@ -116,7 +118,7 @@ export default function Chattings() {
             // Already handled by incoming-support-message if it's admin/user
             // but just to be sure we don't duplicate:
             setMessages((prev) => {
-                if (prev.some(m => m._id === payload.message._id)) return prev
+                if (prev.some((m) => messageKey(m) === messageKey(payload.message))) return prev
                 return [...prev, payload.message]
             })
         }
@@ -124,7 +126,9 @@ export default function Chattings() {
 
     socketRef.current.on("message-deleted", (payload) => {
       if (!selectedConversation || payload?.room !== selectedConversation.room || !payload?.messageId) return
-      setMessages((prev) => prev.filter((m) => String(m?._id) !== String(payload.messageId)))
+      setMessages((prev) =>
+        prev.filter((m) => String(messageKey(m)) !== String(payload.messageId))
+      )
     })
 
     socketRef.current.on("disconnect", () => setConnected(false))
@@ -357,8 +361,8 @@ export default function Chattings() {
                         messages.map((msg, idx) => {
                             const isMe = msg.senderType === "admin"
                             return (
-                                <div key={msg._id || idx} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
-                                    <div className={`group flex items-end gap-1.5 ${isMe ? "flex-row-reverse" : "flex-row"}`}>
+                                <div key={messageKey(msg) || idx} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
+                                    <div className={`flex items-end gap-1.5 ${isMe ? "flex-row-reverse" : "flex-row"}`}>
                                       <div className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-sm shadow-sm ${
                                           isMe 
                                           ? "bg-blue-600 text-white rounded-br-none" 
@@ -371,9 +375,9 @@ export default function Chattings() {
                                       </div>
                                       <button
                                         type="button"
-                                        onClick={() => handleDeleteMessage(msg?._id)}
-                                        disabled={!connected || !msg?._id}
-                                        className="p-1 rounded-full hover:bg-slate-200 disabled:opacity-40 transition-opacity opacity-100 md:opacity-0 md:group-hover:opacity-100 shrink-0"
+                                        onClick={() => handleDeleteMessage(messageKey(msg))}
+                                        disabled={!connected || !messageKey(msg)}
+                                        className="p-1 rounded-full hover:bg-slate-200 disabled:opacity-40 transition-colors shrink-0"
                                         aria-label="Delete message"
                                       >
                                         <Trash2 className="w-3.5 h-3.5 text-slate-400" />
