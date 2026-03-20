@@ -63,7 +63,16 @@ export default function DepositPopup({ onSuccess, cashInHand = 0 }) {
         order_id: rp.orderId,
         name: companyName,
         description: `Cash limit deposit - ₹${amt.toFixed(2)}`,
-        prefill: { name, email, contact: phone },
+        prefill: {
+          name: name,
+          email: email,
+          contact: phone
+        },
+        notes: {
+          orderId: rp.orderId,
+          type: "cash_deposit",
+          amount: amt.toString()
+        },
         handler: async (res) => {
           try {
             const verifyRes = await deliveryAPI.verifyDepositPayment({
