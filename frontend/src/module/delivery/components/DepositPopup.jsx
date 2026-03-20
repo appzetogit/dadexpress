@@ -76,6 +76,16 @@ export default function DepositPopup({ onSuccess, cashInHand = 0 }) {
       const isAPK = isAPKContext();
       const inIframe = isInIframe();
 
+      const isIOSDevice = (() => {
+        try {
+          if (typeof navigator === "undefined") return false
+          const ua = navigator.userAgent || ""
+          return /iPad|iPhone|iPod/i.test(ua)
+        } catch {
+          return false
+        }
+      })()
+
       await initRazorpayPayment({
         key: rp.key,
         amount: rp.amount,
@@ -93,8 +103,10 @@ export default function DepositPopup({ onSuccess, cashInHand = 0 }) {
           type: "cash_deposit",
           amount: amt.toString()
         },
+        // Enable UPI intent in WebView so UPI selection + redirect works on iOS/Android.
         webview_intent: true,
-        config: isAPK || inIframe ? undefined : {
+        // Always provide explicit UPI block display configuration so UPI icons show.
+        config: {
           display: {
             blocks: {
               upi: {
@@ -110,10 +122,6 @@ export default function DepositPopup({ onSuccess, cashInHand = 0 }) {
                 name: "Other Payment Methods",
                 instruments: [
                   {
-                    method: "upi",
-                    flows: ["collect"],
-                  },
-                  {
                     method: "card",
                   },
                   {
@@ -127,7 +135,7 @@ export default function DepositPopup({ onSuccess, cashInHand = 0 }) {
             },
             sequence: ["block.upi", "block.banks"],
             preferences: {
-              show_default_blocks: false,
+              show_default_blocks: true,
             },
           },
         },
