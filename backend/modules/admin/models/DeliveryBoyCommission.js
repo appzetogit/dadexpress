@@ -1,4 +1,4 @@
-﻿import mongoose from 'mongoose';
+import mongoose from 'mongoose';
 
 const deliveryBoyCommissionSchema = new mongoose.Schema(
   {
@@ -176,7 +176,7 @@ deliveryBoyCommissionSchema.statics.calculateCommission = async function(distanc
   // - Distance = 5 km: commission = ₹10 + (5 × ₹5) = ₹35
   // - Distance = 6 km: commission = ₹10 + (6 × ₹5) = ₹40
   // - Distance = 2 km: commission = ₹10 (base only, 2 < 4)
-  if (distance > applicableRule.minDistance) {
+  if (distance >= applicableRule.minDistance) {
     // Apply per km commission for the entire distance if distance > minDistance
     // Example: If minDistance = 4, commissionPerKm = 5, distance = 5
     // Then: 5 × 5 = ₹25 additional, total = ₹10 + ₹25 = ₹35

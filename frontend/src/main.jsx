@@ -83,7 +83,12 @@ window.__googleMapsLoaded = window.__googleMapsLoaded || false;
 })()
 
 // Apply theme on app initialization
-const savedTheme = localStorage.getItem('appTheme') || 'light'
+let savedTheme = 'light'
+try {
+  savedTheme = localStorage.getItem('appTheme') || 'light'
+} catch {
+  savedTheme = 'light'
+}
 if (savedTheme === 'dark') {
   document.documentElement.classList.add('dark')
 } else {

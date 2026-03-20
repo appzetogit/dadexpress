@@ -3,6 +3,35 @@ import { toast } from "sonner";
 import { API_BASE_URL } from "./config.js";
 import { getRoleFromToken, isTokenExpired, clearModuleAuth } from "../utils/auth.js";
 
+const safeStorage = {
+  getItem(key) {
+    try {
+      if (typeof window === "undefined" || !window.localStorage) return null;
+      return window.localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  setItem(key, value) {
+    try {
+      if (typeof window === "undefined" || !window.localStorage) return false;
+      window.localStorage.setItem(key, value);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+  removeItem(key) {
+    try {
+      if (typeof window === "undefined" || !window.localStorage) return false;
+      window.localStorage.removeItem(key);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+};
+
 // Network error tracking to prevent spam
 const networkErrorState = {
   lastErrorTime: 0,
@@ -133,7 +162,7 @@ const isApiTraceEnabled = () => {
   try {
     return (
       import.meta.env.VITE_API_TRACE === "true" ||
-      localStorage.getItem("api_trace") === "1"
+      safeStorage.getItem("api_trace") === "1"
     );
   } catch {
     return import.meta.env.VITE_API_TRACE === "true";
@@ -266,7 +295,7 @@ function getTokenForCurrentRoute() {
   const path = window.location.pathname;
 
   if (path.startsWith("/admin")) {
-    return localStorage.getItem("admin_accessToken");
+    return safeStorage.getItem("admin_accessToken");
   } else if (
     path.startsWith("/restaurant") &&
     !path.startsWith("/restaurants") &&
@@ -275,9 +304,9 @@ function getTokenForCurrentRoute() {
   ) {
     // /restaurant/* is for restaurant module, /restaurants/* is for user module viewing restaurants
     // Exclude public routes like /restaurant/list and /restaurant/under-250
-    return localStorage.getItem("restaurant_accessToken");
+    return safeStorage.getItem("restaurant_accessToken");
   } else if (path.startsWith("/delivery")) {
-    return localStorage.getItem("delivery_accessToken");
+    return safeStorage.getItem("delivery_accessToken");
   } else if (
     path.startsWith("/user") ||
     path.startsWith("/usermain") ||
@@ -287,11 +316,11 @@ function getTokenForCurrentRoute() {
       !path.startsWith("/delivery"))
   ) {
     // User module includes /restaurants/* and /usermain/* paths
-    return localStorage.getItem("user_accessToken");
+    return safeStorage.getItem("user_accessToken");
   }
 
   // Fallback to legacy token for backward compatibility
-  return localStorage.getItem("accessToken");
+  return safeStorage.getItem("accessToken");
 }
 
 const getAuthContextFromPath = (path = window.location.pathname) => {
@@ -472,7 +501,7 @@ apiClient.interceptors.request.use(
 
     // Fallback to legacy token if module-specific token not found
     if (!accessToken || accessToken.trim() === "") {
-      accessToken = localStorage.getItem("accessToken");
+      accessToken = safeStorage.getItem("accessToken");
     }
 
     // Ensure headers object exists
@@ -557,19 +586,19 @@ apiClient.interceptors.request.use(
               `[API Interceptor] No access token found for authenticated route: ${path}. Request may fail with 401.`,
             );
             false && console.warn(`[API Interceptor] Available tokens:`, {
-              admin: localStorage.getItem("admin_accessToken")
+              admin: safeStorage.getItem("admin_accessToken")
                 ? "exists"
                 : "missing",
-              restaurant: localStorage.getItem("restaurant_accessToken")
+              restaurant: safeStorage.getItem("restaurant_accessToken")
                 ? "exists"
                 : "missing",
-              delivery: localStorage.getItem("delivery_accessToken")
+              delivery: safeStorage.getItem("delivery_accessToken")
                 ? "exists"
                 : "missing",
-              user: localStorage.getItem("user_accessToken")
+              user: safeStorage.getItem("user_accessToken")
                 ? "exists"
                 : "missing",
-              legacy: localStorage.getItem("accessToken")
+              legacy: safeStorage.getItem("accessToken")
                 ? "exists"
                 : "missing",
             });
@@ -700,7 +729,7 @@ apiClient.interceptors.response.use(
       if (!role || role !== expectedRole) {
         clearModuleAuth(tokenKey.replace("_accessToken", ""));
       } else {
-        localStorage.setItem(tokenKey, token);
+        safeStorage.setItem(tokenKey, token);
       }
     }
     return response;
@@ -799,7 +828,7 @@ apiClient.interceptors.response.use(
           }
 
           // Store new access token for the current module
-          localStorage.setItem(tokenKey, accessToken);
+          safeStorage.setItem(tokenKey, accessToken);
 
           // Retry original request with new token
           originalRequest.headers.Authorization = `Bearer ${accessToken}`;
@@ -883,7 +912,7 @@ apiClient.interceptors.response.use(
           currentPath.includes("/landing-page");
 
         // If current module access token is still valid, don't force logout on a transient refresh issue.
-        const existingModuleToken = localStorage.getItem(authContext.tokenKey);
+        const existingModuleToken = safeStorage.getItem(authContext.tokenKey);
         if (existingModuleToken && !isTokenExpired(existingModuleToken)) {
           return Promise.reject(refreshError);
         }
@@ -897,26 +926,26 @@ apiClient.interceptors.response.use(
           };
 
           if (authContext.module === "admin") {
-            localStorage.removeItem("admin_accessToken");
-            localStorage.removeItem("admin_authenticated");
-            localStorage.removeItem("admin_user");
+            safeStorage.removeItem("admin_accessToken");
+            safeStorage.removeItem("admin_authenticated");
+            safeStorage.removeItem("admin_user");
             safeRedirect(authContext.loginPath);
           } else if (authContext.module === "restaurant") {
-            localStorage.removeItem("restaurant_accessToken");
-            localStorage.removeItem("restaurant_authenticated");
-            localStorage.removeItem("restaurant_user");
+            safeStorage.removeItem("restaurant_accessToken");
+            safeStorage.removeItem("restaurant_authenticated");
+            safeStorage.removeItem("restaurant_user");
             safeRedirect(authContext.loginPath);
           } else if (authContext.module === "delivery") {
-            localStorage.removeItem("delivery_accessToken");
-            localStorage.removeItem("delivery_authenticated");
-            localStorage.removeItem("delivery_user");
+            safeStorage.removeItem("delivery_accessToken");
+            safeStorage.removeItem("delivery_authenticated");
+            safeStorage.removeItem("delivery_user");
             safeRedirect(authContext.loginPath);
           } else {
             // User module includes /restaurants/* paths
-            localStorage.removeItem("user_accessToken");
-            localStorage.removeItem("user_authenticated");
-            localStorage.removeItem("user");
-            localStorage.removeItem("user_user");
+            safeStorage.removeItem("user_accessToken");
+            safeStorage.removeItem("user_authenticated");
+            safeStorage.removeItem("user");
+            safeStorage.removeItem("user_user");
             safeRedirect(authContext.loginPath);
           }
         }
