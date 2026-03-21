@@ -197,16 +197,43 @@ export const getCouponsByItemId = asyncHandler(async (req, res) => {
     });
   });
 
-  // Find all active offers that include this item
-  const allOffers = await Offer.find({
+  const offerSelect =
+    'items discountType minOrderValue maxLimit startDate endDate status customerGroup';
+
+  const itemSpecificOffers = await Offer.find({
     restaurant: restaurantId,
     status: 'active',
     'items.itemId': itemId,
   })
-    .select('items discountType minOrderValue startDate endDate status')
+    .select(offerSelect)
     .lean();
 
-  console.log(`[COUPONS] Found ${allOffers.length} active offers with itemId ${itemId}`);
+  const generalOffers = await Offer.find({
+    restaurant: restaurantId,
+    status: 'active',
+    items: {
+      $elemMatch: {
+        couponCode: { $exists: true, $nin: [null, ''] },
+        $or: [
+          { itemId: { $exists: false } },
+          { itemId: null },
+          { itemId: '' },
+        ],
+      },
+    },
+  })
+    .select(offerSelect)
+    .lean();
+
+  const offerById = new Map();
+  [...itemSpecificOffers, ...generalOffers].forEach((o) => {
+    offerById.set(String(o._id), o);
+  });
+  const allOffers = Array.from(offerById.values());
+
+  console.log(
+    `[COUPONS] Found ${allOffers.length} active offers (item + restaurant-wide) for itemId ${itemId}`,
+  );
 
   // Filter by date validity
   const validOffers = allOffers.filter(offer => {
@@ -231,13 +258,22 @@ export const getCouponsByItemId = asyncHandler(async (req, res) => {
 
   console.log(`[COUPONS] Found ${validOffers.length} valid offers after date filtering`);
 
-  // Extract coupons for this specific item
+  const isGeneralCouponItem = (item) =>
+    item == null ||
+    item.itemId == null ||
+    item.itemId === '' ||
+    String(item.itemId).toUpperCase() === 'N/A';
+
+  // Extract coupons for this specific item + restaurant-wide (admin) coupons
   const coupons = [];
   validOffers.forEach(offer => {
     console.log(`[COUPONS] Processing offer ${offer._id} with ${offer.items?.length || 0} items`);
     offer.items.forEach((item, idx) => {
-      console.log(`[COUPONS]   Item ${idx}: itemId="${item.itemId}", searching for="${itemId}", match=${item.itemId === itemId}`);
-      if (item.itemId === itemId) {
+      const general = isGeneralCouponItem(item);
+      console.log(
+        `[COUPONS]   Item ${idx}: itemId="${item.itemId}", searching for="${itemId}", general=${general}, match=${item.itemId === itemId}`,
+      );
+      if (general || item.itemId === itemId) {
         const coupon = {
           couponCode: item.couponCode,
           discountPercentage: item.discountPercentage,
@@ -247,6 +283,8 @@ export const getCouponsByItemId = asyncHandler(async (req, res) => {
           discountType: offer.discountType,
           startDate: offer.startDate,
           endDate: offer.endDate,
+          maxLimit: offer.maxLimit,
+          isGeneral: general,
         };
         console.log(`[COUPONS]   ✅ Adding coupon:`, coupon);
         coupons.push(coupon);
@@ -311,16 +349,43 @@ export const getCouponsByItemIdPublic = asyncHandler(async (req, res) => {
     return errorResponse(res, 500, `Error finding restaurant: ${error.message}`);
   }
 
-  // Find all active offers that include this item for this restaurant
-  const allOffers = await Offer.find({
+  const offerSelectPublic =
+    'items discountType minOrderValue maxLimit startDate endDate status customerGroup';
+
+  const itemSpecificOffers = await Offer.find({
     restaurant: restaurantObjectId,
     status: 'active',
     'items.itemId': itemId,
   })
-    .select('items discountType minOrderValue startDate endDate status')
+    .select(offerSelectPublic)
     .lean();
 
-  console.log(`[COUPONS-PUBLIC] Found ${allOffers.length} active offers with itemId ${itemId} for restaurant ${restaurantId}`);
+  const generalOffers = await Offer.find({
+    restaurant: restaurantObjectId,
+    status: 'active',
+    items: {
+      $elemMatch: {
+        couponCode: { $exists: true, $nin: [null, ''] },
+        $or: [
+          { itemId: { $exists: false } },
+          { itemId: null },
+          { itemId: '' },
+        ],
+      },
+    },
+  })
+    .select(offerSelectPublic)
+    .lean();
+
+  const offerById = new Map();
+  [...itemSpecificOffers, ...generalOffers].forEach((o) => {
+    offerById.set(String(o._id), o);
+  });
+  const allOffers = Array.from(offerById.values());
+
+  console.log(
+    `[COUPONS-PUBLIC] Found ${allOffers.length} active offers (item + restaurant-wide) for itemId ${itemId} for restaurant ${restaurantId}`,
+  );
 
   // Filter by date validity
   const validOffers = allOffers.filter(offer => {
@@ -337,11 +402,17 @@ export const getCouponsByItemIdPublic = asyncHandler(async (req, res) => {
 
   console.log(`[COUPONS-PUBLIC] Found ${validOffers.length} valid offers after date filtering`);
 
-  // Extract coupons for this specific item
+  const isGeneralCouponItem = (item) =>
+    item == null ||
+    item.itemId == null ||
+    item.itemId === '' ||
+    String(item.itemId).toUpperCase() === 'N/A';
+
   const coupons = [];
   validOffers.forEach(offer => {
     offer.items.forEach(item => {
-      if (item.itemId === itemId) {
+      const general = isGeneralCouponItem(item);
+      if (general || item.itemId === itemId) {
         coupons.push({
           couponCode: item.couponCode,
           discountPercentage: item.discountPercentage,
@@ -351,6 +422,8 @@ export const getCouponsByItemIdPublic = asyncHandler(async (req, res) => {
           discountType: offer.discountType,
           startDate: offer.startDate,
           endDate: offer.endDate,
+          maxLimit: offer.maxLimit,
+          isGeneral: general,
         });
       }
     });

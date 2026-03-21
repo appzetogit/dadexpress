@@ -206,6 +206,30 @@ export default function Cart() {
       .join("|")
   }, [cart])
 
+  const couponsForUi = useMemo(() => {
+    const lineSub = cart.reduce(
+      (s, i) => s + (Number(i.price) || 0) * (Number(i.quantity) || 1),
+      0,
+    )
+    return availableCoupons.map((c) => {
+      const pct = Number(c.discountPercentage) || 0
+      const hasFlatDiscount = Number.isFinite(Number(c.discount)) && Number(c.discount) > 0
+      if (pct > 0 && (c.isGeneral || !hasFlatDiscount)) {
+        const raw = Math.round(lineSub * (pct / 100))
+        const cap = c.maxLimit != null && Number(c.maxLimit) > 0 ? Number(c.maxLimit) : null
+        const amt = cap != null ? Math.min(raw, cap) : raw
+        return {
+          ...c,
+          discount: amt,
+          description:
+            amt > 0
+              ? `Save ₹${amt} (${pct}% off) with '${c.code}'`
+              : `${pct}% off with '${c.code}'`,
+        }
+      }
+      return c
+    })
+  }, [availableCoupons, cart])
 
   // Lock body scroll and scroll to top when any full-screen modal opens
   useEffect(() => {
@@ -546,17 +570,33 @@ export default function Cart() {
               ? response.data.data.coupons
               : []
 
-            const mappedCoupons = coupons.map((coupon) => ({
-              code: coupon.couponCode,
-              discount: coupon.originalPrice - coupon.discountedPrice,
-              discountPercentage: coupon.discountPercentage,
-              minOrder: coupon.minOrderValue || 0,
-              description: `Save ₹${coupon.originalPrice - coupon.discountedPrice} with '${coupon.couponCode}'`,
-              originalPrice: coupon.originalPrice,
-              discountedPrice: coupon.discountedPrice,
-              itemId: cartItem.id,
-              itemName: cartItem.name,
-            }))
+            const mappedCoupons = coupons.map((coupon) => {
+              const pct = Number(coupon.discountPercentage) || 0
+              const itemDiscount =
+                coupon.originalPrice != null && coupon.discountedPrice != null
+                  ? Number(coupon.originalPrice) - Number(coupon.discountedPrice)
+                  : NaN
+              const isGeneral = coupon.isGeneral === true
+              const usePct =
+                pct > 0 && (isGeneral || !Number.isFinite(itemDiscount) || itemDiscount <= 0)
+              const flat = Math.max(0, Number.isFinite(itemDiscount) ? itemDiscount : 0)
+              return {
+                code: coupon.couponCode,
+                discount: usePct ? 0 : flat,
+                discountPercentage: coupon.discountPercentage,
+                minOrder: coupon.minOrderValue || 0,
+                description: usePct
+                  ? `${pct}% off with '${coupon.couponCode}'`
+                  : `Save ₹${flat} with '${coupon.couponCode}'`,
+                originalPrice: coupon.originalPrice,
+                discountedPrice: coupon.discountedPrice,
+                itemId: cartItem.id,
+                itemName: cartItem.name,
+                isGeneral,
+                maxLimit: coupon.maxLimit != null ? Number(coupon.maxLimit) : null,
+                discountType: coupon.discountType || "percentage",
+              }
+            })
 
             return { itemId: cartItem.id, coupons: mappedCoupons }
           })
@@ -758,7 +798,27 @@ export default function Cart() {
   const deliveryFee = pricing?.deliveryFee ?? fallbackDeliveryFee
   const platformFee = pricing?.platformFee ?? calculatePlatformFeeFromPercentage(subtotal, feeSettings.platformFeePercentage)
   const gstCharges = pricing?.tax || Math.round(subtotal * (feeSettings.gstRate / 100))
-  const discount = pricing?.discount || (appliedCoupon ? Math.min(appliedCoupon.discount, subtotal * 0.5) : 0)
+  const discount =
+    pricing?.discount ??
+    (appliedCoupon
+      ? (() => {
+          const pct = Number(appliedCoupon.discountPercentage) || 0
+          if (pct > 0) {
+            let d = Math.round(subtotal * (pct / 100))
+            if (
+              appliedCoupon.maxLimit != null &&
+              Number(appliedCoupon.maxLimit) > 0
+            ) {
+              d = Math.min(d, Number(appliedCoupon.maxLimit))
+            }
+            return Math.min(d, subtotal)
+          }
+          return Math.min(
+            Number(appliedCoupon.discount) || 0,
+            subtotal * 0.5,
+          )
+        })()
+      : 0)
   const totalBeforeDiscount = subtotal + deliveryFee + platformFee + gstCharges
   const total = pricing?.total || (totalBeforeDiscount - discount)
   const savings = pricing?.savings || (discount + (subtotal > 500 ? 32 : 0))
@@ -1692,16 +1752,16 @@ export default function Cart() {
                     <Percent className="h-4 w-4 md:h-5 md:w-5 text-gray-600 dark:text-gray-400" />
                     <p className="text-sm md:text-base text-gray-500 dark:text-gray-400">Loading coupons...</p>
                   </div>
-                ) : availableCoupons.length > 0 ? (
+                ) : couponsForUi.length > 0 ? (
                   <div>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 md:gap-3">
                         <Percent className="h-4 w-4 md:h-5 md:w-5 text-gray-600 dark:text-gray-400" />
                         <div>
                           <p className="text-sm md:text-base font-medium text-gray-800 dark:text-gray-200">
-                            Save ₹{availableCoupons[0].discount} with '{availableCoupons[0].code}'
+                            Save ₹{couponsForUi[0].discount} with '{couponsForUi[0].code}'
                           </p>
-                          {availableCoupons.length > 1 && (
+                          {couponsForUi.length > 1 && (
                             <button onClick={() => setShowCoupons(!showCoupons)} className="text-xs md:text-sm text-blue-600 dark:text-blue-400 font-medium">
                               View all coupons →
                             </button>
@@ -1712,10 +1772,10 @@ export default function Cart() {
                         size="sm"
                         variant="outline"
                         className="h-7 md:h-8 text-xs md:text-sm border-[#EB590E] dark:border-[#EB590E]/50 text-[#EB590E] dark:text-[#EB590E] hover:bg-orange-50 dark:hover:bg-orange-900/20"
-                        onClick={() => handleApplyCoupon(availableCoupons[0])}
-                        disabled={subtotal < availableCoupons[0].minOrder}
+                        onClick={() => handleApplyCoupon(couponsForUi[0])}
+                        disabled={subtotal < couponsForUi[0].minOrder}
                       >
-                        {subtotal < availableCoupons[0].minOrder ? `Min ₹${availableCoupons[0].minOrder}` : 'APPLY'}
+                        {subtotal < couponsForUi[0].minOrder ? `Min ₹${couponsForUi[0].minOrder}` : 'APPLY'}
                       </Button>
                     </div>
                   </div>
@@ -1727,9 +1787,9 @@ export default function Cart() {
                 )}
 
                 {/* Coupons List */}
-                {showCoupons && !appliedCoupon && availableCoupons.length > 0 && (
+                {showCoupons && !appliedCoupon && couponsForUi.length > 0 && (
                   <div className="mt-3 md:mt-4 space-y-2 md:space-y-3 border-t dark:border-gray-700 pt-3 md:pt-4">
-                    {availableCoupons.map((coupon) => (
+                    {couponsForUi.map((coupon) => (
                       <div key={coupon.code} className="flex items-center justify-between py-2 md:py-3 border-b border-dashed dark:border-gray-700 last:border-0">
                         <div>
                           <p className="text-sm md:text-base font-medium text-gray-800 dark:text-gray-200">{coupon.code}</p>
