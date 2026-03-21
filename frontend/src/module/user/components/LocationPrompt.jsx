@@ -4,6 +4,24 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useLocation } from "../hooks/useLocation"
 
+const safeStorage = {
+  getItem(key) {
+    try {
+      return localStorage.getItem(key)
+    } catch {
+      return null
+    }
+  },
+  setItem(key, value) {
+    try {
+      localStorage.setItem(key, value)
+      return true
+    } catch {
+      return false
+    }
+  },
+}
+
 export default function LocationPrompt() {
   const { location, loading, permissionGranted, requestLocation } = useLocation()
   const [showPrompt, setShowPrompt] = useState(false)
@@ -11,8 +29,8 @@ export default function LocationPrompt() {
 
   useEffect(() => {
     // Check if location permission was already granted
-    const storedLocation = localStorage.getItem("userLocation")
-    const promptDismissed = localStorage.getItem("locationPromptDismissed")
+    const storedLocation = safeStorage.getItem("userLocation")
+    const promptDismissed = safeStorage.getItem("locationPromptDismissed")
 
     // The useLocation hook will automatically try to get location on app start
     // We only show the prompt if:
@@ -25,7 +43,7 @@ export default function LocationPrompt() {
       // If it fails, we'll show the prompt
       const timer = setTimeout(() => {
         // Check again if location was set (hook might have succeeded)
-        const currentLocation = localStorage.getItem("userLocation")
+        const currentLocation = safeStorage.getItem("userLocation")
         if (!currentLocation && !permissionGranted) {
           setShowPrompt(true)
           // Prevent body scroll when popup is open
@@ -57,7 +75,7 @@ export default function LocationPrompt() {
       const timer = setTimeout(() => {
         setShowPrompt(false)
         document.body.style.overflow = ""
-        localStorage.setItem("locationPromptDismissed", "true")
+        safeStorage.setItem("locationPromptDismissed", "true")
       }, 1000)
       return () => clearTimeout(timer)
     }
@@ -69,14 +87,14 @@ export default function LocationPrompt() {
     setTimeout(() => {
       setShowPrompt(false)
       document.body.style.overflow = ""
-      localStorage.setItem("locationPromptDismissed", "true")
+      safeStorage.setItem("locationPromptDismissed", "true")
     }, 500)
   }
 
   const handleDismiss = () => {
     setShowPrompt(false)
     document.body.style.overflow = ""
-    localStorage.setItem("locationPromptDismissed", "true")
+    safeStorage.setItem("locationPromptDismissed", "true")
   }
 
   // Cleanup on unmount

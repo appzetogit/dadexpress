@@ -2106,8 +2106,10 @@ export function useLocation() {
             false && console.warn("⚠️ Permission query failed:", permErr);
           }
         } else {
-          // Fallback for browsers without permissions API - assume not granted to be safe
-          false && console.log("📍 Permissions API not available - Skipping auto-start");
+          // iOS WebView / in-app browsers may not expose Permissions API.
+          // Fallback to direct geolocation flow so location features still work.
+          permissionGranted = true;
+          false && console.log("📍 Permissions API not available - using direct geolocation fallback");
         }
 
         // If permission NOT granted, and we don't have a specific user request (this is page load),

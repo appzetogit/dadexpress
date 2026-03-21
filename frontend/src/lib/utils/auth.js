@@ -3,6 +3,43 @@
  * Decode and extract information from JWT tokens
  */
 
+const safeStorage = {
+  getItem(key) {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  setItem(key, value) {
+    try {
+      localStorage.setItem(key, value);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+  removeItem(key) {
+    try {
+      localStorage.removeItem(key);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+};
+
+const safeSessionStorage = {
+  removeItem(key) {
+    try {
+      sessionStorage.removeItem(key);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+};
+
 /**
  * Decode JWT token without verification (client-side only)
  * @param {string} token - JWT token
@@ -101,7 +138,7 @@ export function hasModuleAccess(role, module) {
  * @returns {string|null} - Access token or null
  */
 export function getModuleToken(module) {
-  return localStorage.getItem(`${module}_accessToken`);
+  return safeStorage.getItem(`${module}_accessToken`);
 }
 
 /**
@@ -154,11 +191,11 @@ export function isModuleAuthenticated(module) {
  * @param {string} module - Module name (admin, restaurant, delivery, user)
  */
 export function clearModuleAuth(module) {
-  localStorage.removeItem(`${module}_accessToken`);
-  localStorage.removeItem(`${module}_authenticated`);
-  localStorage.removeItem(`${module}_user`);
+  safeStorage.removeItem(`${module}_accessToken`);
+  safeStorage.removeItem(`${module}_authenticated`);
+  safeStorage.removeItem(`${module}_user`);
   // Also clear any sessionStorage data
-  sessionStorage.removeItem(`${module}AuthData`);
+  safeSessionStorage.removeItem(`${module}AuthData`);
 }
 
 /**
@@ -170,8 +207,8 @@ export function clearAuthData() {
     clearModuleAuth(module);
   });
   // Also clear legacy token if it exists
-  localStorage.removeItem('accessToken');
-  localStorage.removeItem('user');
+  safeStorage.removeItem('accessToken');
+  safeStorage.removeItem('user');
 }
 
 /**
@@ -184,7 +221,7 @@ export function clearAuthData() {
 export function setAuthData(module, token, user) {
   try {
     // Check if localStorage is available
-    if (typeof Storage === 'undefined' || !localStorage) {
+    if (typeof Storage === 'undefined') {
       throw new Error('localStorage is not available');
     }
 
@@ -204,12 +241,12 @@ export function setAuthData(module, token, user) {
     const authKey = `${module}_authenticated`;
     const userKey = `${module}_user`;
 
-    localStorage.setItem(tokenKey, token);
-    localStorage.setItem(authKey, 'true');
+    safeStorage.setItem(tokenKey, token);
+    safeStorage.setItem(authKey, 'true');
     
     if (user) {
       try {
-        localStorage.setItem(userKey, JSON.stringify(user));
+        safeStorage.setItem(userKey, JSON.stringify(user));
       } catch (userError) {
         console.warn('Failed to store user data, but token was stored:', userError);
         // Don't throw - token storage is more important
@@ -217,8 +254,8 @@ export function setAuthData(module, token, user) {
     }
 
     // Verify the token was stored correctly
-    const storedToken = localStorage.getItem(tokenKey);
-    const storedAuth = localStorage.getItem(authKey);
+    const storedToken = safeStorage.getItem(tokenKey);
+    const storedAuth = safeStorage.getItem(authKey);
     
     if (storedToken !== token) {
       console.error(`[setAuthData] Token mismatch:`, {
@@ -243,17 +280,17 @@ export function setAuthData(module, token, user) {
       console.warn('localStorage quota exceeded. Attempting to clear old data...');
       // Clear legacy tokens
       try {
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('user');
+        safeStorage.removeItem('accessToken');
+        safeStorage.removeItem('user');
         // Retry storing
-        localStorage.setItem(`${module}_accessToken`, token);
-        localStorage.setItem(`${module}_authenticated`, 'true');
+        safeStorage.setItem(`${module}_accessToken`, token);
+        safeStorage.setItem(`${module}_authenticated`, 'true');
         if (user) {
-          localStorage.setItem(`${module}_user`, JSON.stringify(user));
+          safeStorage.setItem(`${module}_user`, JSON.stringify(user));
         }
         
         // Verify again after retry
-        const storedToken = localStorage.getItem(`${module}_accessToken`);
+        const storedToken = safeStorage.getItem(`${module}_accessToken`);
         if (storedToken !== token) {
           throw new Error('Token storage failed even after clearing space');
         }

@@ -38,6 +38,7 @@ const AddonsList = lazy(() => import("../pages/addons/AddonsList"));
 const BasicCampaign = lazy(() => import("../pages/campaigns/BasicCampaign"));
 const FoodCampaign = lazy(() => import("../pages/campaigns/FoodCampaign"));
 const Coupons = lazy(() => import("../pages/Coupons"));
+const CouponCreate = lazy(() => import("../pages/CouponCreate"));
 const Cashback = lazy(() => import("../pages/Cashback"));
 const Banners = lazy(() => import("../pages/Banners"));
 const PromotionalBanner = lazy(() => import("../pages/PromotionalBanner"));
@@ -82,6 +83,7 @@ const DisbursementReportDeliverymen = lazy(() => import("../pages/reports/Disbur
 const RegularOrderReport = lazy(() => import("../pages/reports/RegularOrderReport"));
 const CampaignOrderReport = lazy(() => import("../pages/reports/CampaignOrderReport"));
 const RestaurantReport = lazy(() => import("../pages/reports/RestaurantReport"));
+const RestaurantFinanceReport = lazy(() => import("../pages/reports/RestaurantFinanceReport"));
 const FeedbackExperienceReport = lazy(() => import("../pages/reports/FeedbackExperienceReport"));
 const TaxReport = lazy(() => import("../pages/reports/TaxReport"));
 const RestaurantVATReport = lazy(() => import("../pages/reports/RestaurantVATReport"));
@@ -209,6 +211,7 @@ export default function AdminRouter() {
           <Route path="campaigns/basic" element={<BasicCampaign />} />
           <Route path="campaigns/food" element={<FoodCampaign />} />
           <Route path="coupons" element={<Coupons />} />
+          <Route path="coupons/new" element={<CouponCreate />} />
           <Route path="cashback" element={<Cashback />} />
           <Route path="banners" element={<Banners />} />
           <Route path="promotional-banner" element={<PromotionalBanner />} />
@@ -264,7 +267,8 @@ export default function AdminRouter() {
           <Route path="order-report/regular" element={<RegularOrderReport />} />
           <Route path="order-report/campaign" element={<CampaignOrderReport />} />
           {/* Restaurant Report */}
-          <Route path="restaurant-report" element={<RestaurantReport />} />
+          <Route path="restaurant-report" element={<RestaurantFinanceReport />} />
+          <Route path="restaurant-report-old" element={<RestaurantReport />} />
           {/* Customer Report */}
           <Route path="customer-report/feedback-experience" element={<FeedbackExperienceReport />} />
           <Route path="tax-report" element={<TaxReport />} />

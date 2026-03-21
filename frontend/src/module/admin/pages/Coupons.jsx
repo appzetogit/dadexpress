@@ -2,8 +2,6 @@ import { useState, useEffect, useMemo } from "react"
 import { Search, Plus } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { adminAPI } from "@/lib/api"
-import { isModuleAuthenticated } from "@/lib/utils/auth"
-import { toast } from "sonner"
 
 export default function Coupons() {
   const navigate = useNavigate()
@@ -13,12 +11,48 @@ export default function Coupons() {
   const [error, setError] = useState(null)
 
   const handleAddCouponClick = () => {
-    if (isModuleAuthenticated("restaurant")) {
-      navigate("/restaurant/coupon/new")
-      return
-    }
+    navigate("/admin/coupons/new")
+  }
 
-    toast.error("Add coupon is available in Restaurant app login")
+  const getUserScopeLabel = (offer) => {
+    const raw =
+      offer?.userScope ??
+      offer?.user_scope ??
+      offer?.userType ??
+      offer?.user_type ??
+      offer?.users
+
+    if (!raw) return "All users"
+    const scope = String(raw).toLowerCase()
+    if (scope === "all" || scope === "all-users" || scope === "all users") return "All users"
+    if (
+      scope === "first-time" ||
+      scope === "first_time" ||
+      scope === "firsttime" ||
+      scope === "first-time-users" ||
+      scope === "first time"
+    )
+      return "First-time users"
+    if (scope === "shared" || scope === "shared-users" || scope === "shared app users") return "Shared app users"
+    return String(raw)
+  }
+
+  const getCheckoutVisibility = (offer) => {
+    const raw =
+      offer?.showOnCheckout ??
+      offer?.show_on_checkout ??
+      offer?.checkoutVisible ??
+      offer?.checkout_visible ??
+      offer?.checkoutVisibility ??
+      offer?.checkout_visibility
+
+    if (raw === undefined || raw === null) return null
+    if (typeof raw === "string") {
+      const normalized = raw.trim().toLowerCase()
+      if (["false", "0", "no", "hidden"].includes(normalized)) return false
+      if (["true", "1", "yes", "visible"].includes(normalized)) return true
+    }
+    return Boolean(raw)
   }
 
   // Fetch offers from backend
@@ -127,9 +161,12 @@ export default function Coupons() {
                     <th className="px-6 py-4 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">Dish</th>
                     <th className="px-6 py-4 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">Coupon Code</th>
                     <th className="px-6 py-4 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">Discount</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">Users</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">Checkout</th>
                     <th className="px-6 py-4 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">Price</th>
                     <th className="px-6 py-4 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">Status</th>
                     <th className="px-6 py-4 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">Valid Until</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">Action</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-slate-100">
@@ -157,6 +194,27 @@ export default function Coupons() {
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="text-sm text-slate-700">{getUserScopeLabel(offer)}</span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {(() => {
+                          const visible = getCheckoutVisibility(offer)
+                          if (visible === null) {
+                            return <span className="text-sm text-slate-500">—</span>
+                          }
+
+                          return (
+                            <span
+                              className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+                                visible ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-700"
+                              }`}
+                            >
+                              {visible ? "Visible" : "Hidden"}
+                            </span>
+                          )
+                        })()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-slate-400 line-through">₹{offer.originalPrice}</span>
                           <span className="text-sm font-semibold text-green-600">₹{offer.discountedPrice}</span>
@@ -177,6 +235,15 @@ export default function Coupons() {
                         <span className="text-sm text-slate-700">
                           {offer.endDate ? new Date(offer.endDate).toLocaleDateString() : 'No expiry'}
                         </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => navigate("/admin/coupons/new", { state: { offer } })}
+                          className="px-4 py-2 rounded-lg text-sm font-medium bg-slate-100 text-slate-800 hover:bg-slate-200 transition-colors"
+                        >
+                          Edit
+                        </button>
                       </td>
                     </tr>
                   ))}

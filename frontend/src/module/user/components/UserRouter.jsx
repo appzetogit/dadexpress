@@ -86,6 +86,7 @@ const AuthCallback = lazy(() => import("../pages/auth/AuthCallback"))
 const Help = lazy(() => import("../pages/help/Help"))
 const OrderHelp = lazy(() => import("../pages/help/OrderHelp"))
 const OrderLiveChat = lazy(() => import("../pages/help/OrderLiveChat"))
+const UserSupportChat = lazy(() => import("../pages/help/UserSupportChat"))
 
 // Notifications
 const Notifications = lazy(() => import("../pages/Notifications"))
@@ -376,6 +377,14 @@ export default function UserRouter() {
             element={
               <ProtectedRoute requiredRole="user" loginPath="/auth/sign-in">
                 <OrderLiveChat />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/support-chat"
+            element={
+              <ProtectedRoute requiredRole="user" loginPath="/auth/sign-in">
+                <UserSupportChat />
               </ProtectedRoute>
             }
           />

@@ -108,6 +108,10 @@ export const initRazorpayPayment = async (options) => {
       razorpayOptions.config = options.config;
     }
 
+    if (options.webview_intent !== undefined) {
+      razorpayOptions.webview_intent = options.webview_intent;
+    }
+
     if (typeof options.send_sms_hash === 'boolean') {
       razorpayOptions.send_sms_hash = options.send_sms_hash;
     }

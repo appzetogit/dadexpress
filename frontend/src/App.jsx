@@ -46,7 +46,6 @@ const AdDetailsPage = lazy(() => import("@/module/restaurant/pages/AdDetailsPage
 const NewAdvertisementPage = lazy(() => import("@/module/restaurant/pages/NewAdvertisementPage"))
 const EditAdvertisementPage = lazy(() => import("@/module/restaurant/pages/EditAdvertisementPage"))
 const CouponListPage = lazy(() => import("@/module/restaurant/pages/CouponListPage"))
-const AddCouponPage = lazy(() => import("@/module/restaurant/pages/AddCouponPage"))
 const EditCouponPage = lazy(() => import("@/module/restaurant/pages/EditCouponPage"))
 const ReviewsPage = lazy(() => import("@/module/restaurant/pages/ReviewsPage"))
 const UpdateReplyPage = lazy(() => import("@/module/restaurant/pages/UpdateReplyPage"))
@@ -326,14 +325,6 @@ export default function App() {
             element={
               <ProtectedRoute requiredRole="restaurant" loginPath="/restaurant/login">
                 <CouponListPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/restaurant/coupon/new"
-            element={
-              <ProtectedRoute requiredRole="restaurant" loginPath="/restaurant/login">
-                <AddCouponPage />
               </ProtectedRoute>
             }
           />

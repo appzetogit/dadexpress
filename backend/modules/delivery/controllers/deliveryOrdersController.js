@@ -2220,19 +2220,34 @@ export const completeDelivery = asyncHandler(async (req, res) => {
 
     // Process restaurant referral reward (single-time, policy-driven)
     try {
-      const restaurantMongoId =
+      const restaurantLookupId =
         order?.restaurantId?._id ||
         order?.restaurantId ||
         updatedOrder?.restaurantId?._id ||
         updatedOrder?.restaurantId ||
         null;
 
-      if (restaurantMongoId && mongoose.Types.ObjectId.isValid(restaurantMongoId)) {
-        const servedRestaurant = await Restaurant.findById(restaurantMongoId)
-          .select('name referredBy referralStatus referralCommission')
+      if (restaurantLookupId) {
+        const servedRestaurantQuery =
+          mongoose.Types.ObjectId.isValid(restaurantLookupId)
+            ? { _id: restaurantLookupId }
+            : {
+              $or: [
+                { restaurantId: String(restaurantLookupId) },
+                { slug: String(restaurantLookupId).toLowerCase() }
+              ]
+            };
+
+        const servedRestaurant = await Restaurant.findOne(servedRestaurantQuery)
+          .select('_id name referredBy referralStatus referralCommission')
           .lean();
 
         if (servedRestaurant?.referredBy) {
+          const servedRestaurantId = servedRestaurant._id?.toString();
+          if (!servedRestaurantId) {
+            throw new Error('Unable to resolve referred restaurant id for referral reward');
+          }
+
           let commissionPercentage = Number(servedRestaurant.referralCommission);
           let applyOn = 'First Order Only';
 
@@ -2250,7 +2265,7 @@ export const completeDelivery = asyncHandler(async (req, res) => {
 
           if (Number.isFinite(commissionPercentage) && commissionPercentage > 0) {
             const deliveredCount = await Order.countDocuments({
-              restaurantId: restaurantMongoId,
+              restaurantId: servedRestaurantId,
               status: 'delivered'
             });
 
@@ -2285,7 +2300,7 @@ export const completeDelivery = asyncHandler(async (req, res) => {
                 }
 
                 await Restaurant.updateOne(
-                  { _id: restaurantMongoId, referralStatus: { $ne: 'completed' } },
+                  { _id: servedRestaurant._id, referralStatus: { $ne: 'completed' } },
                   {
                     $set: {
                       referralStatus: 'completed',
@@ -2295,7 +2310,7 @@ export const completeDelivery = asyncHandler(async (req, res) => {
                 );
 
                 logger.info(`🎁 Restaurant referral reward credited`, {
-                  referredRestaurantId: restaurantMongoId?.toString?.() || restaurantMongoId,
+                  referredRestaurantId: servedRestaurantId,
                   referrerRestaurantId: servedRestaurant.referredBy?.toString?.() || servedRestaurant.referredBy,
                   orderId: orderIdForLog,
                   rewardAmount,

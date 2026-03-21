@@ -1505,6 +1505,37 @@ export const adminAPI = {
     );
   },
 
+  // Settlement Management
+  getRestaurantSettlements: (params = {}) => {
+    return apiClient.get(API_ENDPOINTS.ADMIN.SETTLEMENTS.RESTAURANTS, { params });
+  },
+  getDeliverySettlements: (params = {}) => {
+    return apiClient.get(API_ENDPOINTS.ADMIN.SETTLEMENTS.DELIVERY, { params });
+  },
+  markSettlementsProcessed: (data) => {
+    return apiClient.post(API_ENDPOINTS.ADMIN.SETTLEMENTS.MARK_PROCESSED, data);
+  },
+  getAdminWalletSummary: () => {
+    return apiClient.get(API_ENDPOINTS.ADMIN.SETTLEMENTS.ADMIN_WALLET);
+  },
+  getSettlementStatistics: (params = {}) => {
+    return apiClient.get(API_ENDPOINTS.ADMIN.SETTLEMENTS.STATISTICS, { params });
+  },
+  getOrderSettlementDetails: (orderId) => {
+    return apiClient.get(
+      API_ENDPOINTS.ADMIN.SETTLEMENTS.ORDER_DETAILS.replace(":orderId", orderId),
+    );
+  },
+  getRestaurantSettlementReport: (restaurantId, params = {}) => {
+    return apiClient.get(
+      API_ENDPOINTS.ADMIN.SETTLEMENTS.RESTAURANT_REPORT.replace(
+        ":restaurantId",
+        restaurantId,
+      ),
+      { params },
+    );
+  },
+
   // Withdrawal Request Management
   getWithdrawalRequests: (params = {}) => {
     return apiClient.get(API_ENDPOINTS.ADMIN.WITHDRAWAL_REQUESTS, { params });
