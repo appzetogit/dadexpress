@@ -147,6 +147,8 @@ export function isValidCloudinaryApiSecret(secret) {
 
 /**
  * Get Cloudinary credentials
+ * Never mix cloud_name / api_key / api_secret across sources — that produces HTTP 401 Invalid Signature.
+ * Prefer a complete trio from process.env, then a complete trio from the DB (Admin ENV).
  * @returns {Promise<Object>} { cloudName, apiKey, apiSecret }
  */
 export async function getCloudinaryCredentials() {
@@ -159,33 +161,38 @@ export async function getCloudinaryCredentials() {
   const peKey = normalizeCloudinaryCredential(process.env.CLOUDINARY_API_KEY);
   const peSecret = normalizeCloudinaryCredential(process.env.CLOUDINARY_API_SECRET);
 
-  const envSecretOk = isValidCloudinaryApiSecret(peSecret);
-  const dbSecretOk = isValidCloudinaryApiSecret(dbSecret);
+  const envBundleComplete =
+    Boolean(peCloud) &&
+    Boolean(peKey) &&
+    isValidCloudinaryApiSecret(peSecret);
+  const dbBundleComplete =
+    Boolean(dbCloud) &&
+    Boolean(dbKey) &&
+    isValidCloudinaryApiSecret(dbSecret);
 
-  const apiSecret = envSecretOk
-    ? peSecret
-    : dbSecretOk
-      ? dbSecret
-      : peSecret || dbSecret;
-
-  const cloudName =
-    envSecretOk && peCloud
-      ? peCloud
-      : dbSecretOk && dbCloud
-        ? dbCloud
-        : dbCloud || peCloud;
-
-  const apiKey =
-    envSecretOk && peKey
-      ? peKey
-      : dbSecretOk && dbKey
-        ? dbKey
-        : dbKey || peKey;
+  if (envBundleComplete) {
+    return {
+      cloudName: peCloud,
+      apiKey: peKey,
+      apiSecret: peSecret,
+    };
+  }
+  if (dbBundleComplete) {
+    return {
+      cloudName: dbCloud,
+      apiKey: dbKey,
+      apiSecret: dbSecret,
+    };
+  }
 
   return {
-    cloudName,
-    apiKey,
-    apiSecret,
+    cloudName: peCloud || dbCloud,
+    apiKey: peKey || dbKey,
+    apiSecret: isValidCloudinaryApiSecret(peSecret)
+      ? peSecret
+      : isValidCloudinaryApiSecret(dbSecret)
+        ? dbSecret
+        : peSecret || dbSecret,
   };
 }
 
