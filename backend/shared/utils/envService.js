@@ -123,13 +123,26 @@ export function normalizeCloudinaryCredential(value) {
 }
 
 /**
+ * Strip invisible chars and all whitespace from API key/secret (copy-paste from PDF/dashboard often breaks signatures).
+ * @param {string|undefined|null} value
+ * @returns {string}
+ */
+export function scrubCloudinaryKeyOrSecret(value) {
+  let s = normalizeCloudinaryCredential(value);
+  if (!s) return "";
+  s = s.replace(/[\u200B-\u200D\uFEFF]/g, "");
+  s = s.replace(/\s/g, "");
+  return s;
+}
+
+/**
  * True if value looks like a real Cloudinary API secret (not UI placeholder text).
  * Invalid secrets in Admin ENV Setup must not override a correct process.env secret.
  * @param {string|undefined|null} secret
  * @returns {boolean}
  */
 export function isValidCloudinaryApiSecret(secret) {
-  const s = normalizeCloudinaryCredential(secret);
+  const s = scrubCloudinaryKeyOrSecret(secret);
   if (!s) return false;
   if (s.length < 24) return false;
   const lower = s.toLowerCase().replace(/\s+/g, " ").trim();
@@ -149,17 +162,21 @@ export function isValidCloudinaryApiSecret(secret) {
  * Get Cloudinary credentials
  * Never mix cloud_name / api_key / api_secret across sources — that produces HTTP 401 Invalid Signature.
  * Prefer a complete trio from process.env, then a complete trio from the DB (Admin ENV).
- * @returns {Promise<Object>} { cloudName, apiKey, apiSecret }
+ * @returns {Promise<Object>} { cloudName, apiKey, apiSecret, credentialsSource }
  */
 export async function getCloudinaryCredentials() {
   const envVars = await getAllEnvVars();
-  const dbCloud = normalizeCloudinaryCredential(envVars.CLOUDINARY_CLOUD_NAME);
-  const dbKey = normalizeCloudinaryCredential(envVars.CLOUDINARY_API_KEY);
-  const dbSecret = normalizeCloudinaryCredential(envVars.CLOUDINARY_API_SECRET);
+  const dbCloud = normalizeCloudinaryCredential(
+    envVars.CLOUDINARY_CLOUD_NAME,
+  ).toLowerCase();
+  const dbKey = scrubCloudinaryKeyOrSecret(envVars.CLOUDINARY_API_KEY);
+  const dbSecret = scrubCloudinaryKeyOrSecret(envVars.CLOUDINARY_API_SECRET);
 
-  const peCloud = normalizeCloudinaryCredential(process.env.CLOUDINARY_CLOUD_NAME);
-  const peKey = normalizeCloudinaryCredential(process.env.CLOUDINARY_API_KEY);
-  const peSecret = normalizeCloudinaryCredential(process.env.CLOUDINARY_API_SECRET);
+  const peCloud = normalizeCloudinaryCredential(
+    process.env.CLOUDINARY_CLOUD_NAME,
+  ).toLowerCase();
+  const peKey = scrubCloudinaryKeyOrSecret(process.env.CLOUDINARY_API_KEY);
+  const peSecret = scrubCloudinaryKeyOrSecret(process.env.CLOUDINARY_API_SECRET);
 
   const envBundleComplete =
     Boolean(peCloud) &&
@@ -170,18 +187,46 @@ export async function getCloudinaryCredentials() {
     Boolean(dbKey) &&
     isValidCloudinaryApiSecret(dbSecret);
 
+  const force = String(process.env.CLOUDINARY_CREDENTIALS_SOURCE || "")
+    .trim()
+    .toLowerCase();
+
+  if (force === "env" && envBundleComplete) {
+    return {
+      cloudName: peCloud,
+      apiKey: peKey,
+      apiSecret: peSecret,
+      credentialsSource: "process.env (forced)",
+    };
+  }
+  if (force === "db" && dbBundleComplete) {
+    return {
+      cloudName: dbCloud,
+      apiKey: dbKey,
+      apiSecret: dbSecret,
+      credentialsSource: "database (forced)",
+    };
+  }
+
   if (envBundleComplete) {
     return {
       cloudName: peCloud,
       apiKey: peKey,
       apiSecret: peSecret,
+      credentialsSource: "process.env",
     };
   }
   if (dbBundleComplete) {
+    if (!envBundleComplete && (peCloud || peKey || peSecret)) {
+      logger.warn(
+        "Cloudinary: Admin ENV/DB trio is complete but process.env has partial Cloudinary vars — using database. Set all three in PM2/ecosystem or add CLOUDINARY_CREDENTIALS_SOURCE=env.",
+      );
+    }
     return {
       cloudName: dbCloud,
       apiKey: dbKey,
       apiSecret: dbSecret,
+      credentialsSource: "database",
     };
   }
 
@@ -193,6 +238,7 @@ export async function getCloudinaryCredentials() {
       : isValidCloudinaryApiSecret(dbSecret)
         ? dbSecret
         : peSecret || dbSecret,
+    credentialsSource: "partial-fallback",
   };
 }
 

@@ -1,12 +1,8 @@
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import { uploadToCloudinary } from '../../../shared/utils/cloudinaryService.js';
-import { initializeCloudinary } from '../../../config/cloudinary.js';
 
 export const uploadSingleMedia = async (req, res) => {
   try {
-    // Initialize Cloudinary if not already initialized
-    await initializeCloudinary();
-
     if (!req.file) {
       return errorResponse(res, 400, 'No file provided');
     }

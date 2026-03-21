@@ -3,21 +3,8 @@ import {
   getCloudinaryCredentials,
   isValidCloudinaryApiSecret,
   normalizeCloudinaryCredential,
+  scrubCloudinaryKeyOrSecret,
 } from '../shared/utils/envService.js';
-
-// Normalize env values (trim quotes if present)
-function cleanEnv(value) {
-  if (value == null || value === '') return value;
-  if (typeof value !== 'string') return value;
-  let v = value.trim();
-  if (
-    (v.startsWith('"') && v.endsWith('"')) ||
-    (v.startsWith("'") && v.endsWith("'"))
-  ) {
-    v = v.slice(1, -1).trim();
-  }
-  return v;
-}
 
 // Initialize Cloudinary with database credentials
 let cloudinaryInitialized = false;
@@ -25,21 +12,19 @@ let cloudinaryInitialized = false;
 async function initializeCloudinary() {
   try {
     const credentials = await getCloudinaryCredentials();
-    const cloudName = cleanEnv(
-      credentials.cloudName || process.env.CLOUDINARY_CLOUD_NAME,
-    );
-    const apiKey = cleanEnv(credentials.apiKey || process.env.CLOUDINARY_API_KEY);
-    const apiSecret = cleanEnv(
-      credentials.apiSecret || process.env.CLOUDINARY_API_SECRET,
-    );
+    const cloudName = credentials.cloudName || '';
+    const apiKey = credentials.apiKey || '';
+    const apiSecret = credentials.apiSecret || '';
 
     console.log('🔧 Cloudinary initialization check:', {
+      credentialsSource: credentials.credentialsSource,
       hasCloudName: !!cloudName,
       hasApiKey: !!apiKey,
       hasApiSecret: !!apiSecret,
+      cloudName,
       cloudNameLength: cloudName?.length || 0,
       apiKeyLength: apiKey?.length || 0,
-      apiSecretLength: apiSecret?.length || 0
+      apiSecretLength: apiSecret?.length || 0,
     });
 
     if (!cloudName || !apiKey || !apiSecret) {
@@ -61,7 +46,9 @@ async function initializeCloudinary() {
     });
 
     cloudinaryInitialized = true;
-    console.log('✅ Cloudinary initialized successfully');
+    console.log(
+      `✅ Cloudinary initialized (${credentials.credentialsSource}) cloud_name=${cloudName}`,
+    );
   } catch (error) {
     console.error('❌ Error initializing Cloudinary:', {
       message: error.message,
@@ -74,14 +61,14 @@ async function initializeCloudinary() {
   return cloudinary;
 }
 
-// Initialize on module load (fallback to process.env)
+// Initialize on module load (fallback to process.env; same scrub rules as getCloudinaryCredentials)
 const CLOUDINARY_CLOUD_NAME = normalizeCloudinaryCredential(
   process.env.CLOUDINARY_CLOUD_NAME,
-);
-const CLOUDINARY_API_KEY = normalizeCloudinaryCredential(
+).toLowerCase();
+const CLOUDINARY_API_KEY = scrubCloudinaryKeyOrSecret(
   process.env.CLOUDINARY_API_KEY,
 );
-const CLOUDINARY_API_SECRET = normalizeCloudinaryCredential(
+const CLOUDINARY_API_SECRET = scrubCloudinaryKeyOrSecret(
   process.env.CLOUDINARY_API_SECRET,
 );
 
