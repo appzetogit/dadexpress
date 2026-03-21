@@ -370,6 +370,7 @@ export const calculateOrderPricing = async ({
       total: Math.max(0, roundCurrency(total)),
       totalAmount: Math.max(0, roundCurrency(totalAmount)),
       savings: roundCurrency(savings),
+      couponCode: appliedCoupon ? appliedCoupon.code : null,
       appliedCoupon: appliedCoupon ? {
         code: appliedCoupon.code,
         discount: roundCurrency(discount),
@@ -388,4 +389,3 @@ export const calculateOrderPricing = async ({
     throw new Error(`Failed to calculate order pricing: ${error.message}`);
   }
 };
-
