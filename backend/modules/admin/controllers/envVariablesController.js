@@ -161,6 +161,18 @@ export const saveEnvVariables = asyncHandler(async (req, res) => {
       logger.warn('Error clearing cache:', cacheError.message);
       // Don't fail the request if cache clear fails
     }
+
+    try {
+      const { reinitializeCloudinary } = await import(
+        '../../../config/cloudinary.js',
+      );
+      await reinitializeCloudinary();
+      logger.info('Cloudinary config refreshed from environment variables');
+    } catch (cloudinaryRefreshError) {
+      logger.warn(
+        `Cloudinary refresh after env save: ${cloudinaryRefreshError.message}`,
+      );
+    }
     
     logger.info(`Environment variables updated by admin: ${admin._id}`);
     

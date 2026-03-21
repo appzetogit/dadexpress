@@ -106,14 +106,86 @@ export async function getRazorpayCredentials() {
 }
 
 /**
+ * Trim Cloudinary-related strings (quotes, whitespace)
+ * @param {string|undefined|null} value
+ * @returns {string}
+ */
+export function normalizeCloudinaryCredential(value) {
+  if (value == null || value === "") return "";
+  let v = String(value).trim();
+  if (
+    (v.startsWith('"') && v.endsWith('"')) ||
+    (v.startsWith("'") && v.endsWith("'"))
+  ) {
+    v = v.slice(1, -1).trim();
+  }
+  return v;
+}
+
+/**
+ * True if value looks like a real Cloudinary API secret (not UI placeholder text).
+ * Invalid secrets in Admin ENV Setup must not override a correct process.env secret.
+ * @param {string|undefined|null} secret
+ * @returns {boolean}
+ */
+export function isValidCloudinaryApiSecret(secret) {
+  const s = normalizeCloudinaryCredential(secret);
+  if (!s) return false;
+  if (s.length < 24) return false;
+  const lower = s.toLowerCase().replace(/\s+/g, " ").trim();
+  const placeholders = [
+    "cloudinary api secret",
+    "your api secret",
+    "api secret",
+    "enter api secret",
+    "replace_me",
+  ];
+  if (placeholders.includes(lower)) return false;
+  if (/^(your|enter|replace|todo)[_\s-]/i.test(s)) return false;
+  return true;
+}
+
+/**
  * Get Cloudinary credentials
  * @returns {Promise<Object>} { cloudName, apiKey, apiSecret }
  */
 export async function getCloudinaryCredentials() {
+  const envVars = await getAllEnvVars();
+  const dbCloud = normalizeCloudinaryCredential(envVars.CLOUDINARY_CLOUD_NAME);
+  const dbKey = normalizeCloudinaryCredential(envVars.CLOUDINARY_API_KEY);
+  const dbSecret = normalizeCloudinaryCredential(envVars.CLOUDINARY_API_SECRET);
+
+  const peCloud = normalizeCloudinaryCredential(process.env.CLOUDINARY_CLOUD_NAME);
+  const peKey = normalizeCloudinaryCredential(process.env.CLOUDINARY_API_KEY);
+  const peSecret = normalizeCloudinaryCredential(process.env.CLOUDINARY_API_SECRET);
+
+  const envSecretOk = isValidCloudinaryApiSecret(peSecret);
+  const dbSecretOk = isValidCloudinaryApiSecret(dbSecret);
+
+  const apiSecret = envSecretOk
+    ? peSecret
+    : dbSecretOk
+      ? dbSecret
+      : peSecret || dbSecret;
+
+  const cloudName =
+    envSecretOk && peCloud
+      ? peCloud
+      : dbSecretOk && dbCloud
+        ? dbCloud
+        : dbCloud || peCloud;
+
+  const apiKey =
+    envSecretOk && peKey
+      ? peKey
+      : dbSecretOk && dbKey
+        ? dbKey
+        : dbKey || peKey;
+
   return {
-    cloudName: await getEnvVar("CLOUDINARY_CLOUD_NAME"),
-    apiKey: await getEnvVar("CLOUDINARY_API_KEY"),
-    apiSecret: await getEnvVar("CLOUDINARY_API_SECRET"),
+    cloudName,
+    apiKey,
+    apiSecret,
   };
 }
 

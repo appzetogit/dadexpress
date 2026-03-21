@@ -1,9 +1,14 @@
 import { v2 as cloudinary } from 'cloudinary';
-import { getCloudinaryCredentials } from '../shared/utils/envService.js';
+import {
+  getCloudinaryCredentials,
+  isValidCloudinaryApiSecret,
+  normalizeCloudinaryCredential,
+} from '../shared/utils/envService.js';
 
 // Normalize env values (trim quotes if present)
 function cleanEnv(value) {
-  if (!value || typeof value !== 'string') return value;
+  if (value == null || value === '') return value;
+  if (typeof value !== 'string') return value;
   let v = value.trim();
   if (
     (v.startsWith('"') && v.endsWith('"')) ||
@@ -18,15 +23,15 @@ function cleanEnv(value) {
 let cloudinaryInitialized = false;
 
 async function initializeCloudinary() {
-  if (cloudinaryInitialized) {
-    return cloudinary;
-  }
-
   try {
     const credentials = await getCloudinaryCredentials();
-    const cloudName = cleanEnv(credentials.cloudName || process.env.CLOUDINARY_CLOUD_NAME);
+    const cloudName = cleanEnv(
+      credentials.cloudName || process.env.CLOUDINARY_CLOUD_NAME,
+    );
     const apiKey = cleanEnv(credentials.apiKey || process.env.CLOUDINARY_API_KEY);
-    const apiSecret = cleanEnv(credentials.apiSecret || process.env.CLOUDINARY_API_SECRET);
+    const apiSecret = cleanEnv(
+      credentials.apiSecret || process.env.CLOUDINARY_API_SECRET,
+    );
 
     console.log('🔧 Cloudinary initialization check:', {
       hasCloudName: !!cloudName,
@@ -52,7 +57,7 @@ async function initializeCloudinary() {
     cloudinary.config({
       cloud_name: cloudName,
       api_key: apiKey,
-      api_secret: apiSecret
+      api_secret: apiSecret,
     });
 
     cloudinaryInitialized = true;
@@ -70,15 +75,25 @@ async function initializeCloudinary() {
 }
 
 // Initialize on module load (fallback to process.env)
-const CLOUDINARY_CLOUD_NAME = cleanEnv(process.env.CLOUDINARY_CLOUD_NAME);
-const CLOUDINARY_API_KEY = cleanEnv(process.env.CLOUDINARY_API_KEY);
-const CLOUDINARY_API_SECRET = cleanEnv(process.env.CLOUDINARY_API_SECRET);
+const CLOUDINARY_CLOUD_NAME = normalizeCloudinaryCredential(
+  process.env.CLOUDINARY_CLOUD_NAME,
+);
+const CLOUDINARY_API_KEY = normalizeCloudinaryCredential(
+  process.env.CLOUDINARY_API_KEY,
+);
+const CLOUDINARY_API_SECRET = normalizeCloudinaryCredential(
+  process.env.CLOUDINARY_API_SECRET,
+);
 
-if (CLOUDINARY_CLOUD_NAME && CLOUDINARY_API_KEY && CLOUDINARY_API_SECRET) {
+if (
+  CLOUDINARY_CLOUD_NAME &&
+  CLOUDINARY_API_KEY &&
+  isValidCloudinaryApiSecret(CLOUDINARY_API_SECRET)
+) {
   cloudinary.config({
     cloud_name: CLOUDINARY_CLOUD_NAME,
     api_key: CLOUDINARY_API_KEY,
-    api_secret: CLOUDINARY_API_SECRET
+    api_secret: CLOUDINARY_API_SECRET,
   });
   cloudinaryInitialized = true;
 }
