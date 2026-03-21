@@ -56,6 +56,36 @@ export default function DepositPopup({ onSuccess, cashInHand = 0 }) {
 
       const companyName = await getCompanyNameAsync()
       setProcessing(true)
+      const isAPKContext = () => {
+        try {
+          if (typeof navigator === 'undefined' || typeof window === 'undefined') return false;
+          const userAgent = navigator.userAgent || '';
+          const isWebView = /wv|WebView/i.test(userAgent);
+          const isStandalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
+          const isIOSStandalone = window.navigator.standalone === true;
+          const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+          const hasNativeBridge = typeof window.flutter_inappwebview !== 'undefined' || typeof window.Android !== 'undefined';
+          return isWebView || isStandalone || isIOSStandalone || (isMobileDevice && hasNativeBridge) || (window.self !== window.top);
+        } catch (e) { return false; }
+      };
+
+      const isInIframe = () => {
+        try { return window.self !== window.top; } catch (e) { return true; }
+      };
+
+      const isAPK = isAPKContext();
+      const inIframe = isInIframe();
+
+      const isIOSDevice = (() => {
+        try {
+          if (typeof navigator === "undefined") return false
+          const ua = navigator.userAgent || ""
+          return /iPad|iPhone|iPod/i.test(ua)
+        } catch {
+          return false
+        }
+      })()
+
       await initRazorpayPayment({
         key: rp.key,
         amount: rp.amount,
@@ -63,21 +93,79 @@ export default function DepositPopup({ onSuccess, cashInHand = 0 }) {
         order_id: rp.orderId,
         name: companyName,
         description: `Cash limit deposit - ₹${amt.toFixed(2)}`,
-        prefill: { name, email, contact: phone },
+        // Explicitly enable UPI in Razorpay checkout so UPI icons show on iOS/Google WebView.
+        // Keep other methods also enabled to avoid changing existing payment behavior.
         method: {
           upi: true,
           card: true,
           netbanking: true,
-          wallet: true,
+          wallet: true
         },
-        send_sms_hash: true,
-        allow_rotation: true,
+        prefill: {
+          name: name,
+          email: email,
+          contact: phone
+        },
+        notes: {
+          orderId: rp.orderId,
+          type: "cash_deposit",
+          amount: amt.toString()
+        },
+        // Enable UPI intent in WebView so UPI selection + redirect works on iOS/Android.
+        webview_intent: true,
+        // Always provide explicit UPI block display configuration so UPI icons show.
+        config: {
+          display: {
+            blocks: {
+              upi: {
+                name: "UPI",
+                instruments: [
+                  {
+                    method: "upi",
+                    flows: ["qr", "intent"],
+                  },
+                ],
+              },
+              banks: {
+                name: "Other Payment Methods",
+                instruments: [
+                  {
+                    method: "card",
+                  },
+                  {
+                    method: "netbanking",
+                  },
+                  {
+                    method: "wallet",
+                  },
+                ],
+              },
+            },
+            sequence: ["block.upi", "block.banks"],
+            preferences: {
+              show_default_blocks: true,
+            },
+          },
+        },
         handler: async (res) => {
           try {
+            let final_order_id = res?.razorpay_order_id || res?.orderId || res?.order_id || rp.orderId;
+            let final_payment_id = res?.razorpay_payment_id || res?.paymentId || res?.payment_id;
+            let final_signature = res?.razorpay_signature || res?.signature;
+
+            if (typeof res === 'string' && res.includes('?')) {
+              try {
+                const urlParams = Object.fromEntries(new URL(res).searchParams);
+                final_order_id = final_order_id || urlParams.razorpay_order_id || urlParams.orderId;
+                final_payment_id = final_payment_id || urlParams.razorpay_payment_id || urlParams.paymentId;
+                final_signature = final_signature || urlParams.razorpay_signature || urlParams.signature;
+              } catch (e) {}
+            }
+
             const verifyRes = await deliveryAPI.verifyDepositPayment({
-              razorpay_order_id: res.razorpay_order_id,
-              razorpay_payment_id: res.razorpay_payment_id,
-              razorpay_signature: res.razorpay_signature,
+              razorpay_order_id: final_order_id,
+              razorpay_payment_id: final_payment_id,
+              razorpay_signature: final_signature,
               amount: amt
             })
             if (verifyRes?.data?.success) {

@@ -107,6 +107,19 @@ const httpServer = createServer(app);
 const isDadExpressVercelPreviewOrigin = (origin = '') =>
   /^https:\/\/dadexpress-[a-z0-9-]+\.vercel\.app$/i.test(origin);
 
+const isMobileWebViewOrigin = (origin = '') => {
+  if (!origin || typeof origin !== 'string') return false;
+  const normalized = origin.toLowerCase();
+  return (
+    normalized.startsWith('capacitor://') ||
+    normalized.startsWith('ionic://') ||
+    normalized.startsWith('file://') ||
+    normalized === 'null' ||
+    normalized.startsWith('http://localhost') ||
+    normalized.startsWith('https://localhost')
+  );
+};
+
 // Initialize Socket.IO with proper CORS configuration
 const allowedSocketOrigins = [
   process.env.CORS_ORIGIN,
@@ -133,7 +146,8 @@ const io = new Server(httpServer, {
       // Check if origin is in allowed list
       if (
         allowedSocketOrigins.includes(origin) ||
-        isDadExpressVercelPreviewOrigin(origin)
+        isDadExpressVercelPreviewOrigin(origin) ||
+        isMobileWebViewOrigin(origin)
       ) {
         console.log(`✅ Socket.IO: Allowing connection from: ${origin}`);
         callback(null, true);
@@ -458,6 +472,10 @@ const allowedOrigins = [
   'https://www.dadexpress.in',
   'https://dadexpress-d2sed0c2w-appzetos-projects-70635cc3.vercel.app',
   'http://localhost:3000',
+  'http://localhost',
+  'https://localhost',
+  'capacitor://localhost',
+  'ionic://localhost',
   'http://localhost:5173',
   'http://localhost:5174',
   'http://127.0.0.1:5173',
@@ -472,6 +490,7 @@ app.use(cors({
     if (
       allowedOrigins.indexOf(origin) !== -1 ||
       isDadExpressVercelPreviewOrigin(origin) ||
+      isMobileWebViewOrigin(origin) ||
       process.env.NODE_ENV === 'development'
     ) {
       callback(null, true);
@@ -913,10 +932,45 @@ io.on('connection', (socket) => {
 
       appendChatRoomMessage(room, message);
       io.to(room).emit('new-message', { room, message });
+
+      // Notify admin inbox if it's a support message
+      if (room.startsWith('support:admin:user:')) {
+        io.to('admin-support-inbox').emit('incoming-support-message', { room, message });
+      }
+
       socket.emit('message-sent', { success: true, message });
     } catch (error) {
       console.error('❌ Error sending message:', error);
       socket.emit('message-sent', { success: false, error: error.message });
+    }
+  });
+
+  socket.on('join-admin-support', () => {
+    socket.join('admin-support-inbox');
+    console.log('🛡️ Admin joined support inbox:', socket.id);
+  });
+
+  socket.on('get-support-conversations', () => {
+    try {
+      const conversations = [];
+      for (const [room, messages] of chatRoomMessages.entries()) {
+        if (room.startsWith('support:admin:user:')) {
+          const userId = room.split(':').pop();
+          const lastMsg = messages[messages.length - 1];
+          conversations.push({
+            id: room,
+            room,
+            userId,
+            lastMessage: lastMsg?.text || '',
+            timestamp: lastMsg?.timestamp || new Date().toISOString(),
+            senderType: lastMsg?.senderType || 'user',
+            unreadCount: 0 // Can be implemented with more complex logic
+          });
+        }
+      }
+      socket.emit('support-conversations-list', conversations);
+    } catch (error) {
+      console.error('❌ Error getting support conversations:', error);
     }
   });
 

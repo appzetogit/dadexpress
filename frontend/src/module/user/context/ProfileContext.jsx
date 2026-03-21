@@ -3,10 +3,37 @@ import { authAPI, userAPI } from "@/lib/api"
 
 const ProfileContext = createContext(null)
 
+const safeStorage = {
+  getItem(key) {
+    try {
+      return localStorage.getItem(key)
+    } catch {
+      return null
+    }
+  },
+  setItem(key, value) {
+    try {
+      localStorage.setItem(key, value)
+      return true
+    } catch {
+      return false
+    }
+  },
+}
+
+const safeParse = (value, fallback = null) => {
+  if (!value) return fallback
+  try {
+    return JSON.parse(value)
+  } catch {
+    return fallback
+  }
+}
+
 export function ProfileProvider({ children }) {
   const [userProfile, setUserProfile] = useState(() => {
     // First, try to get from localStorage (user_user from auth)
-    const userStr = localStorage.getItem("user_user")
+    const userStr = safeStorage.getItem("user_user")
     if (userStr) {
       try {
         return JSON.parse(userStr)
@@ -16,7 +43,7 @@ export function ProfileProvider({ children }) {
     }
     
     // Fallback to userProfile from localStorage
-    const saved = localStorage.getItem("userProfile")
+    const saved = safeStorage.getItem("userProfile")
     if (saved) {
       try {
         return JSON.parse(saved)
@@ -34,8 +61,8 @@ export function ProfileProvider({ children }) {
   const [addresses, setAddresses] = useState([])
 
   const [paymentMethods, setPaymentMethods] = useState(() => {
-    const saved = localStorage.getItem("userPaymentMethods")
-    return saved ? JSON.parse(saved) : [
+    const saved = safeStorage.getItem("userPaymentMethods")
+    return safeParse(saved, [
       {
         id: "1",
         cardNumber: "1234",
@@ -56,58 +83,58 @@ export function ProfileProvider({ children }) {
         isDefault: false,
         type: "mastercard",
       },
-    ]
+    ])
   })
 
   const [favorites, setFavorites] = useState(() => {
-    const saved = localStorage.getItem("userFavorites")
-    return saved ? JSON.parse(saved) : []
+    const saved = safeStorage.getItem("userFavorites")
+    return safeParse(saved, [])
   })
 
   // Dish favorites state - stored in localStorage for persistence
   const [dishFavorites, setDishFavorites] = useState(() => {
-    const saved = localStorage.getItem("userDishFavorites")
-    return saved ? JSON.parse(saved) : []
+    const saved = safeStorage.getItem("userDishFavorites")
+    return safeParse(saved, [])
   })
 
   // VegMode state - stored in localStorage for persistence
   const [vegMode, setVegMode] = useState(() => {
-    const saved = localStorage.getItem("userVegMode")
+    const saved = safeStorage.getItem("userVegMode")
     // Default to true (ON) if not set
     return saved !== null ? saved === "true" : true
   })
 
   // Save to localStorage whenever userProfile, addresses or paymentMethods change
   useEffect(() => {
-    localStorage.setItem("userProfile", JSON.stringify(userProfile))
+    safeStorage.setItem("userProfile", JSON.stringify(userProfile))
   }, [userProfile])
 
   useEffect(() => {
-    localStorage.setItem("userAddresses", JSON.stringify(addresses))
+    safeStorage.setItem("userAddresses", JSON.stringify(addresses))
   }, [addresses])
 
   useEffect(() => {
-    localStorage.setItem("userPaymentMethods", JSON.stringify(paymentMethods))
+    safeStorage.setItem("userPaymentMethods", JSON.stringify(paymentMethods))
   }, [paymentMethods])
 
   useEffect(() => {
-    localStorage.setItem("userFavorites", JSON.stringify(favorites))
+    safeStorage.setItem("userFavorites", JSON.stringify(favorites))
   }, [favorites])
 
   useEffect(() => {
-    localStorage.setItem("userDishFavorites", JSON.stringify(dishFavorites))
+    safeStorage.setItem("userDishFavorites", JSON.stringify(dishFavorites))
   }, [dishFavorites])
 
   useEffect(() => {
-    localStorage.setItem("userVegMode", vegMode.toString())
+    safeStorage.setItem("userVegMode", vegMode.toString())
   }, [vegMode])
 
   // Fetch user profile and addresses from API on mount and when authentication changes
   useEffect(() => {
     const fetchUserProfile = async () => {
       // Check if user is authenticated
-      const isAuthenticated = localStorage.getItem("user_authenticated") === "true" || 
-                             localStorage.getItem("user_accessToken")
+      const isAuthenticated = safeStorage.getItem("user_authenticated") === "true" || 
+                             safeStorage.getItem("user_accessToken")
       
       if (!isAuthenticated) {
         setLoading(false)
@@ -124,8 +151,8 @@ export function ProfileProvider({ children }) {
         if (userData) {
           setUserProfile(userData)
           // Update localStorage
-          localStorage.setItem("user_user", JSON.stringify(userData))
-          localStorage.setItem("userProfile", JSON.stringify(userData))
+          safeStorage.setItem("user_user", JSON.stringify(userData))
+          safeStorage.setItem("userProfile", JSON.stringify(userData))
         }
 
         // Fetch addresses
@@ -133,11 +160,11 @@ export function ProfileProvider({ children }) {
           const addressesResponse = await userAPI.getAddresses()
           const addressesData = addressesResponse?.data?.data?.addresses || addressesResponse?.data?.addresses || []
           setAddresses(addressesData)
-          localStorage.setItem("userAddresses", JSON.stringify(addressesData))
+          safeStorage.setItem("userAddresses", JSON.stringify(addressesData))
         } catch (addressError) {
           console.error("Error fetching addresses:", addressError)
           // Try to load from localStorage as fallback
-          const saved = localStorage.getItem("userAddresses")
+          const saved = safeStorage.getItem("userAddresses")
           if (saved) {
             try {
               setAddresses(JSON.parse(saved))
@@ -150,7 +177,7 @@ export function ProfileProvider({ children }) {
         // Silently handle error - use existing profile from localStorage
         console.error("Error fetching user profile:", error)
         // Try to load from localStorage as fallback
-        const saved = localStorage.getItem("userAddresses")
+        const saved = safeStorage.getItem("userAddresses")
         if (saved) {
           try {
             setAddresses(JSON.parse(saved))
@@ -186,7 +213,7 @@ export function ProfileProvider({ children }) {
       if (newAddress) {
         setAddresses((prev) => {
           const updated = [...prev, newAddress]
-          localStorage.setItem("userAddresses", JSON.stringify(updated))
+          safeStorage.setItem("userAddresses", JSON.stringify(updated))
           return updated
         })
         return newAddress
@@ -205,7 +232,7 @@ export function ProfileProvider({ children }) {
       if (updatedAddr) {
         setAddresses((prev) => {
           const updated = prev.map((addr) => (addr.id === id ? { ...updatedAddr, id } : addr))
-          localStorage.setItem("userAddresses", JSON.stringify(updated))
+          safeStorage.setItem("userAddresses", JSON.stringify(updated))
           return updated
         })
         return updatedAddr
@@ -221,7 +248,7 @@ export function ProfileProvider({ children }) {
       await userAPI.deleteAddress(id)
       setAddresses((prev) => {
         const newAddresses = prev.filter((addr) => addr.id !== id)
-        localStorage.setItem("userAddresses", JSON.stringify(newAddresses))
+        safeStorage.setItem("userAddresses", JSON.stringify(newAddresses))
         return newAddresses
       })
     } catch (error) {

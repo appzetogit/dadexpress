@@ -409,7 +409,7 @@ export default function Profile() {
             </motion.div>
           </Link>
 
-          <Link to="/user/help/orders/latest/chat" className="block">
+          <Link to="/user/support-chat" className="block">
             <motion.div
               whileHover={{ x: 4, scale: 1.01 }}
               transition={{ duration: 0.2, type: "spring", stiffness: 300 }}

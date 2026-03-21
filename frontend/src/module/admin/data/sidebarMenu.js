@@ -261,6 +261,12 @@ export const sidebarMenuData = [
       },
       {
         type: "link",
+        label: "Chat",
+        path: "/admin/chattings",
+        icon: "MessageSquare",
+      },
+      {
+        type: "link",
         label: "Safety Emergency Reports",
         path: "/admin/safety-emergency-reports",
         icon: "AlertTriangle",
@@ -289,7 +295,8 @@ export const sidebarMenuData = [
         label: "Restaurant Report",
         icon: "FileText",
         subItems: [
-          { label: "Restaurant Report", path: "/admin/restaurant-report" },
+          { label: "Restaurant Finance Report", path: "/admin/restaurant-report" },
+          { label: "Restaurant Report (Old)", path: "/admin/restaurant-report-old" },
         ],
       },
       {

@@ -17,11 +17,11 @@ const firebaseConfig = {
 // Validate Firebase configuration
 const requiredFields = ['apiKey', 'authDomain', 'projectId', 'appId', 'messagingSenderId'];
 const missingFields = requiredFields.filter(field => !firebaseConfig[field] || firebaseConfig[field] === 'undefined');
+const hasValidFirebaseConfig = missingFields.length === 0;
 
-if (missingFields.length > 0) {
+if (!hasValidFirebaseConfig) {
   console.error('Firebase configuration is missing required fields:', missingFields);
   console.error('Current config:', firebaseConfig);
-  throw new Error(`Firebase configuration error: Missing fields: ${missingFields.join(', ')}`);
 }
 
 // Initialize Firebase app only once
@@ -32,6 +32,10 @@ let messaging;
 
 // Function to ensure Firebase is initialized
 function ensureFirebaseInitialized() {
+  if (!hasValidFirebaseConfig) {
+    return false;
+  }
+
   try {
     const existingApps = getApps();
     if (existingApps.length === 0) {
@@ -63,8 +67,12 @@ function ensureFirebaseInitialized() {
     }
   } catch (error) {
     console.error('Firebase initialization error:', error);
-    throw error;
+    firebaseAuth = null;
+    googleProvider = null;
+    messaging = null;
+    return false;
   }
+  return true;
 }
 
 // Initialize immediately
@@ -78,6 +86,7 @@ export const requestFcmToken = async () => {
 
   try {
     if (!messaging) return null;
+    if (typeof Notification === 'undefined' || typeof Notification.requestPermission !== 'function') return null;
 
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') {
@@ -125,12 +134,13 @@ export const requestFcmToken = async () => {
  * Listen for foreground messages
  */
 export const onForegroundMessage = (callback) => {
-  if (messaging) {
+  if (messaging && typeof onMessage === 'function') {
     return onMessage(messaging, (payload) => {
       false && console.log('[PUSH-NOTIFICATION] Foreground message received:', payload);
       if (callback) callback(payload);
     });
   }
+  return () => {};
 };
 
 export const firebaseApp = app;

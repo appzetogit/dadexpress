@@ -1,7 +1,36 @@
 import axios from "axios";
 import { toast } from "sonner";
 import { API_BASE_URL } from "./config.js";
-import { getRoleFromToken, isTokenExpired, clearModuleAuth } from "../utils/auth.js";
+import { decodeToken, getRoleFromToken } from "../utils/auth.js";
+
+const safeStorage = {
+  getItem(key) {
+    try {
+      if (typeof window === "undefined" || !window.localStorage) return null;
+      return window.localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  setItem(key, value) {
+    try {
+      if (typeof window === "undefined" || !window.localStorage) return false;
+      window.localStorage.setItem(key, value);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+  removeItem(key) {
+    try {
+      if (typeof window === "undefined" || !window.localStorage) return false;
+      window.localStorage.removeItem(key);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+};
 
 // Network error tracking to prevent spam
 const networkErrorState = {
@@ -133,7 +162,7 @@ const isApiTraceEnabled = () => {
   try {
     return (
       import.meta.env.VITE_API_TRACE === "true" ||
-      localStorage.getItem("api_trace") === "1"
+      safeStorage.getItem("api_trace") === "1"
     );
   } catch {
     return import.meta.env.VITE_API_TRACE === "true";
@@ -266,7 +295,7 @@ function getTokenForCurrentRoute() {
   const path = window.location.pathname;
 
   if (path.startsWith("/admin")) {
-    return localStorage.getItem("admin_accessToken");
+    return safeStorage.getItem("admin_accessToken");
   } else if (
     path.startsWith("/restaurant") &&
     !path.startsWith("/restaurants") &&
@@ -275,9 +304,9 @@ function getTokenForCurrentRoute() {
   ) {
     // /restaurant/* is for restaurant module, /restaurants/* is for user module viewing restaurants
     // Exclude public routes like /restaurant/list and /restaurant/under-250
-    return localStorage.getItem("restaurant_accessToken");
+    return safeStorage.getItem("restaurant_accessToken");
   } else if (path.startsWith("/delivery")) {
-    return localStorage.getItem("delivery_accessToken");
+    return safeStorage.getItem("delivery_accessToken");
   } else if (
     path.startsWith("/user") ||
     path.startsWith("/usermain") ||
@@ -287,11 +316,11 @@ function getTokenForCurrentRoute() {
       !path.startsWith("/delivery"))
   ) {
     // User module includes /restaurants/* and /usermain/* paths
-    return localStorage.getItem("user_accessToken");
+    return safeStorage.getItem("user_accessToken");
   }
 
   // Fallback to legacy token for backward compatibility
-  return localStorage.getItem("accessToken");
+  return safeStorage.getItem("accessToken");
 }
 
 const getAuthContextFromPath = (path = window.location.pathname) => {
@@ -387,6 +416,74 @@ const getAuthContextFromRequest = (requestConfig) => {
   return getAuthContextFromPath(window.location.pathname);
 };
 
+/** One in-flight refresh per module endpoint — avoids stampede on many parallel 401s */
+const refreshPromises = new Map();
+
+/**
+ * Refresh access token using httpOnly refresh cookie; updates localStorage for the module.
+ * @returns {Promise<string|null>} new access token or null
+ */
+async function refreshSessionTokens(authContext) {
+  const key = authContext?.refreshEndpoint;
+  if (!key) return null;
+
+  const existing = refreshPromises.get(key);
+  if (existing) return existing;
+
+  const promise = (async () => {
+    try {
+      const response = await axios.post(
+        `${API_BASE_URL}${authContext.refreshEndpoint}`,
+        {},
+        { withCredentials: true },
+      );
+      const { accessToken } = response.data.data || response.data;
+      if (!accessToken) return null;
+
+      const role = getRoleFromToken(accessToken);
+      if (!role || role !== authContext.expectedRole) {
+        throw new Error("Role mismatch on refreshed token");
+      }
+
+      safeStorage.setItem(authContext.tokenKey, accessToken);
+      return accessToken;
+    } finally {
+      refreshPromises.delete(key);
+    }
+  })();
+
+  refreshPromises.set(key, promise);
+  return promise;
+}
+
+const PROACTIVE_REFRESH_INTERVAL_MS = 4 * 60 * 1000;
+const PROACTIVE_REFRESH_WITHIN_MS = 12 * 60 * 1000;
+
+function tokenNeedsProactiveRefresh(token) {
+  if (!token || typeof token !== "string" || !token.trim()) return false;
+  const decoded = decodeToken(token);
+  if (!decoded?.exp) return false;
+  const expMs = decoded.exp * 1000;
+  return expMs <= Date.now() + PROACTIVE_REFRESH_WITHIN_MS;
+}
+
+if (typeof window !== "undefined") {
+  setInterval(() => {
+    try {
+      let token = getTokenForCurrentRoute();
+      if (!token || !token.trim()) {
+        token = safeStorage.getItem("accessToken");
+      }
+      if (!tokenNeedsProactiveRefresh(token)) return;
+
+      const ctx = getAuthContextFromPath();
+      refreshSessionTokens(ctx).catch(() => {});
+    } catch {
+      /* ignore */
+    }
+  }, PROACTIVE_REFRESH_INTERVAL_MS);
+}
+
 /**
  * Request Interceptor
  * Adds authentication token to requests based on current route
@@ -472,7 +569,7 @@ apiClient.interceptors.request.use(
 
     // Fallback to legacy token if module-specific token not found
     if (!accessToken || accessToken.trim() === "") {
-      accessToken = localStorage.getItem("accessToken");
+      accessToken = safeStorage.getItem("accessToken");
     }
 
     // Ensure headers object exists
@@ -557,19 +654,19 @@ apiClient.interceptors.request.use(
               `[API Interceptor] No access token found for authenticated route: ${path}. Request may fail with 401.`,
             );
             false && console.warn(`[API Interceptor] Available tokens:`, {
-              admin: localStorage.getItem("admin_accessToken")
+              admin: safeStorage.getItem("admin_accessToken")
                 ? "exists"
                 : "missing",
-              restaurant: localStorage.getItem("restaurant_accessToken")
+              restaurant: safeStorage.getItem("restaurant_accessToken")
                 ? "exists"
                 : "missing",
-              delivery: localStorage.getItem("delivery_accessToken")
+              delivery: safeStorage.getItem("delivery_accessToken")
                 ? "exists"
                 : "missing",
-              user: localStorage.getItem("user_accessToken")
+              user: safeStorage.getItem("user_accessToken")
                 ? "exists"
                 : "missing",
-              legacy: localStorage.getItem("accessToken")
+              legacy: safeStorage.getItem("accessToken")
                 ? "exists"
                 : "missing",
             });
@@ -696,11 +793,9 @@ apiClient.interceptors.response.use(
       const token = response.data.accessToken;
       const role = getRoleFromToken(token);
 
-      // Only store the token if the role matches the current module
-      if (!role || role !== expectedRole) {
-        clearModuleAuth(tokenKey.replace("_accessToken", ""));
-      } else {
-        localStorage.setItem(tokenKey, token);
+      // Only store the token if the role matches the current module (ignore unrelated payloads)
+      if (role && role === expectedRole) {
+        safeStorage.setItem(tokenKey, token);
       }
     }
     return response;
@@ -773,35 +868,9 @@ apiClient.interceptors.response.use(
 
       try {
         const authContext = getAuthContextFromRequest(originalRequest);
-        const refreshEndpoint = authContext.refreshEndpoint;
-
-        // Try to refresh the token
-        // The refresh token is sent via httpOnly cookie automatically
-        const response = await axios.post(
-          `${API_BASE_URL}${refreshEndpoint}`,
-          {},
-          {
-            withCredentials: true,
-          },
-        );
-
-        const { accessToken } = response.data.data || response.data;
+        const accessToken = await refreshSessionTokens(authContext);
 
         if (accessToken) {
-          const tokenKey = authContext.tokenKey;
-          const expectedRole = authContext.expectedRole;
-
-          const role = getRoleFromToken(accessToken);
-
-          // Only store token if role matches expected module; otherwise treat as invalid for this module
-          if (!role || role !== expectedRole) {
-            throw new Error("Role mismatch on refreshed token");
-          }
-
-          // Store new access token for the current module
-          localStorage.setItem(tokenKey, accessToken);
-
-          // Retry original request with new token
           originalRequest.headers.Authorization = `Bearer ${accessToken}`;
           return apiClient(originalRequest);
         }
@@ -873,55 +942,7 @@ apiClient.interceptors.response.use(
           return Promise.reject(refreshError);
         }
 
-        // Refresh truly failed / token is invalid – clear module token and redirect to login,
-        // except on onboarding or landing-page-management screens which handle errors themselves.
-        const currentPath = window.location.pathname;
-        const authContext = getAuthContextFromRequest(originalRequest);
-        const isOnboardingPage = currentPath.includes("/onboarding");
-        const isLandingPageManagement =
-          currentPath.includes("/hero-banner-management") ||
-          currentPath.includes("/landing-page");
-
-        // If current module access token is still valid, don't force logout on a transient refresh issue.
-        const existingModuleToken = localStorage.getItem(authContext.tokenKey);
-        if (existingModuleToken && !isTokenExpired(existingModuleToken)) {
-          return Promise.reject(refreshError);
-        }
-
-        if (!isOnboardingPage && !isLandingPageManagement) {
-          const safeRedirect = (targetPath) => {
-            // Prevent hard-reload redirect loops when we're already on login page.
-            if (window.location.pathname !== targetPath) {
-              window.location.href = targetPath;
-            }
-          };
-
-          if (authContext.module === "admin") {
-            localStorage.removeItem("admin_accessToken");
-            localStorage.removeItem("admin_authenticated");
-            localStorage.removeItem("admin_user");
-            safeRedirect(authContext.loginPath);
-          } else if (authContext.module === "restaurant") {
-            localStorage.removeItem("restaurant_accessToken");
-            localStorage.removeItem("restaurant_authenticated");
-            localStorage.removeItem("restaurant_user");
-            safeRedirect(authContext.loginPath);
-          } else if (authContext.module === "delivery") {
-            localStorage.removeItem("delivery_accessToken");
-            localStorage.removeItem("delivery_authenticated");
-            localStorage.removeItem("delivery_user");
-            safeRedirect(authContext.loginPath);
-          } else {
-            // User module includes /restaurants/* paths
-            localStorage.removeItem("user_accessToken");
-            localStorage.removeItem("user_authenticated");
-            localStorage.removeItem("user");
-            localStorage.removeItem("user_user");
-            safeRedirect(authContext.loginPath);
-          }
-        }
-
-        // Let calling code know refresh ultimately failed
+        // Session stays until the user explicitly logs out; the failed request surfaces as an error.
         return Promise.reject(refreshError);
       }
     }

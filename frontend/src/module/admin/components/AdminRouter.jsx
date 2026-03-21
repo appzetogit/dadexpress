@@ -83,6 +83,7 @@ const DisbursementReportDeliverymen = lazy(() => import("../pages/reports/Disbur
 const RegularOrderReport = lazy(() => import("../pages/reports/RegularOrderReport"));
 const CampaignOrderReport = lazy(() => import("../pages/reports/CampaignOrderReport"));
 const RestaurantReport = lazy(() => import("../pages/reports/RestaurantReport"));
+const RestaurantFinanceReport = lazy(() => import("../pages/reports/RestaurantFinanceReport"));
 const FeedbackExperienceReport = lazy(() => import("../pages/reports/FeedbackExperienceReport"));
 const TaxReport = lazy(() => import("../pages/reports/TaxReport"));
 const RestaurantVATReport = lazy(() => import("../pages/reports/RestaurantVATReport"));
@@ -266,7 +267,8 @@ export default function AdminRouter() {
           <Route path="order-report/regular" element={<RegularOrderReport />} />
           <Route path="order-report/campaign" element={<CampaignOrderReport />} />
           {/* Restaurant Report */}
-          <Route path="restaurant-report" element={<RestaurantReport />} />
+          <Route path="restaurant-report" element={<RestaurantFinanceReport />} />
+          <Route path="restaurant-report-old" element={<RestaurantReport />} />
           {/* Customer Report */}
           <Route path="customer-report/feedback-experience" element={<FeedbackExperienceReport />} />
           <Route path="tax-report" element={<TaxReport />} />
