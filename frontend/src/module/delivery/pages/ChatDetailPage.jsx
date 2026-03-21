@@ -243,10 +243,10 @@ export default function ChatDetailPage() {
 
   if (fetchingDeliveryId) {
     return (
-      <div className="min-h-screen bg-[#f6e9dc] flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="w-12 h-12 text-[#ff8100] animate-spin mx-auto mb-4" />
-          <p className="text-gray-600">Loading...</p>
+          <Loader2 className="w-12 h-12 text-gray-900 animate-spin mx-auto mb-4" />
+          <p className="text-gray-700">Loading...</p>
         </div>
       </div>
     )
@@ -254,12 +254,12 @@ export default function ChatDetailPage() {
 
   if (!deliveryPartnerId) {
     return (
-      <div className="min-h-screen bg-[#f6e9dc] flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center px-4">
           <p className="text-red-600 mb-4">Failed to load delivery partner information</p>
           <button
             onClick={() => navigate("/delivery/profile/conversation")}
-            className="px-4 py-2 bg-[#ff8100] text-white rounded-lg"
+            className="px-4 py-2 bg-black text-white rounded-lg"
           >
             Go Back
           </button>
@@ -269,7 +269,7 @@ export default function ChatDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f6e9dc] flex flex-col overflow-hidden">
+    <div className="min-h-screen bg-gray-50 flex flex-col overflow-hidden">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-4 py-4 md:py-3 flex items-center gap-4 sticky top-0 z-10">
         <button 
@@ -295,7 +295,7 @@ export default function ChatDetailPage() {
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 text-[#ff8100] animate-spin" />
+            <Loader2 className="w-8 h-8 text-gray-900 animate-spin" />
           </div>
         ) : messages.length === 0 ? (
           <div className="text-center py-12">
@@ -326,8 +326,8 @@ export default function ChatDetailPage() {
                     </button>
                     <div className={`max-w-[75%] md:max-w-[60%] rounded-lg px-4 py-2 ${
                       isMe 
-                        ? 'bg-[#ff8100] text-white' 
-                        : 'bg-white text-gray-900'
+                        ? 'bg-black text-white' 
+                        : 'bg-white text-gray-900 border border-gray-200'
                     } ${msg.isSending ? 'opacity-70' : ''}`}>
                       <p className="text-sm whitespace-pre-wrap break-words">{msg.text}</p>
                       <p className={`text-xs mt-1 ${
@@ -361,13 +361,13 @@ export default function ChatDetailPage() {
               }
             }}
             disabled={!connected}
-            className="flex-1 rounded-full border border-gray-200 focus:border-[#ff8100] focus:ring-1 focus:ring-[#ff8100] disabled:opacity-50"
+            className="flex-1 rounded-full border border-gray-200 focus:border-black focus:ring-1 focus:ring-black disabled:opacity-50"
           />
           <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
             <Button
               onClick={handleSend}
               disabled={!message.trim() || !connected}
-              className="rounded-full bg-[#ff8100] hover:bg-[#e67300] text-white p-2.5 w-10 h-10 flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="rounded-full bg-black hover:bg-gray-900 text-white p-2.5 w-10 h-10 flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Send className="w-5 h-5" />
             </Button>

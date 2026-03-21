@@ -328,6 +328,14 @@ export default function OrderTracking() {
     window.location.href = `tel:${phone}`
   }
 
+  const handleOpenDeliveryChat = () => {
+    if (!hasDeliveryPartner) {
+      toast.info('Delivery partner will be assigned soon')
+      return
+    }
+    navigate(`/help/orders/${orderId}/chat`)
+  }
+
   const handleCallRestaurant = () => {
     if (!restaurantPhone) return
     const phone = String(restaurantPhone).replace(/\s+/g, '')
@@ -1450,6 +1458,20 @@ export default function OrderTracking() {
               ) : null
             }
           />
+          {hasDeliveryPartner && (
+            <SectionItem
+              icon={MessageSquare}
+              title="Chat with delivery partner"
+              subtitle="Message in real time"
+              onClick={handleOpenDeliveryChat}
+              showArrow={false}
+              rightContent={
+                <span className="ml-auto inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold bg-gray-900 text-white">
+                  Chat
+                </span>
+              }
+            />
+          )}
           <SectionItem
             icon={HomeIcon}
             title="Delivery at Location"
