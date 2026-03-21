@@ -41,6 +41,7 @@ export default function CouponCreate() {
   const [restaurants, setRestaurants] = useState([])
   const [isRestaurantsLoading, setIsRestaurantsLoading] = useState(false)
   const [restaurantSearch, setRestaurantSearch] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Fetch restaurants from backend
   useEffect(() => {
@@ -125,6 +126,52 @@ export default function CouponCreate() {
     })
   }
 
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+
+    if (!couponCode) return toast.error("Please enter a coupon code")
+    if (!discountPercent) return toast.error("Please enter discount percentage")
+    if (!startDate) return toast.error("Please select a start date")
+    if (restaurantScope === "some" && selectedRestaurants.size === 0) {
+      return toast.error("Please select at least one restaurant")
+    }
+
+    setIsSubmitting(true)
+    try {
+      const payload = {
+        couponCode,
+        discountPercentage: discountPercent,
+        minOrderValue,
+        maxDiscountLimit,
+        startDate,
+        endDate,
+        restaurantScope,
+        restaurants: Array.from(selectedRestaurants),
+        userScope,
+        showOnCheckout,
+      }
+
+      let response
+      if (isEditMode) {
+        response = await adminAPI.updateOffer(offer.offerId || offer._id, payload)
+      } else {
+        response = await adminAPI.createOffer(payload)
+      }
+
+      if (response.data?.success) {
+        toast.success(isEditMode ? "Coupon updated successfully" : "Coupon created successfully")
+        navigate("/admin/coupons")
+      } else {
+        toast.error(response.data?.message || "Failed to save coupon")
+      }
+    } catch (error) {
+      console.error("Error saving coupon:", error)
+      toast.error(error.response?.data?.message || "Something went wrong")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   return (
     <div className="p-4 lg:p-6 bg-slate-50 min-h-screen">
       <div className="max-w-7xl mx-auto">
@@ -141,12 +188,7 @@ export default function CouponCreate() {
             </button>
           </div>
 
-          <form
-            onSubmit={(e) => {
-              e.preventDefault()
-              toast.info("Coupon submission functionality is coming soon!")
-            }}
-          >
+          <form onSubmit={handleSubmit}>
             <div className="rounded-xl border border-slate-200 bg-white p-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
@@ -383,10 +425,20 @@ export default function CouponCreate() {
                 </button>
                 <button
                   type="submit"
-                  className="px-8 py-3 text-sm font-semibold rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-all shadow-md shadow-blue-200 active:scale-95 flex items-center gap-2"
+                  disabled={isSubmitting}
+                  className="px-8 py-3 text-sm font-semibold rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-all shadow-md shadow-blue-200 active:scale-95 flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
                 >
-                  <Plus className="w-5 h-5" />
-                  {isEditMode ? "Update Coupon" : "Create Coupon"}
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <span>{isEditMode ? "Updating..." : "Creating..."}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-5 h-5" />
+                      <span>{isEditMode ? "Update Coupon" : "Create Coupon"}</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>

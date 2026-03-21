@@ -61,7 +61,7 @@ export default function Coupons() {
       try {
         setLoading(true)
         setError(null)
-        const response = await adminAPI.getAllOffers({})
+        const response = await adminAPI.getAllOffers({ limit: 1000 })
         
         if (response?.data?.success) {
           setOffers(response.data.data.offers || [])
@@ -176,22 +176,33 @@ export default function Coupons() {
                         <span className="text-sm font-medium text-slate-700">{offer.sl}</span>
                       </td>
                       <td className="px-6 py-4">
-                        <span className="text-sm font-medium text-slate-900">{offer.restaurantName}</span>
+                        <span className="text-sm font-bold text-slate-900 drop-shadow-sm">{offer.restaurantName}</span>
                       </td>
                       <td className="px-6 py-4">
-                        <span className="text-sm text-slate-700">{offer.dishName}</span>
+                        <span className={`text-sm px-2 py-0.5 rounded ${
+                          offer.dishId === 'N/A' || !offer.dishId 
+                            ? 'bg-purple-50 text-purple-700 font-medium' 
+                            : 'text-slate-700'
+                        }`}>
+                          {offer.dishName}
+                        </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm font-mono font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                        <span className="text-sm font-mono font-bold text-blue-600 bg-blue-50/50 border border-blue-100 px-2.5 py-1.5 rounded-lg">
                           {offer.couponCode}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm text-slate-700">
-                          {offer.discountType === 'flat-price' 
-                            ? `₹${offer.originalPrice - offer.discountedPrice} OFF`
-                            : `${offer.discountPercentage}% OFF`}
-                        </span>
+                        <div className="flex flex-col">
+                          <span className="text-sm font-semibold text-slate-800">
+                            {offer.discountType === 'flat-price' || offer.discountPercentage === 0
+                              ? `₹${offer.discountedPrice || 0} OFF`
+                              : `${offer.discountPercentage}% OFF`}
+                          </span>
+                          {offer.minOrderValue > 0 && (
+                            <span className="text-[10px] text-slate-400 uppercase font-bold">Min ₹{offer.minOrderValue}</span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="text-sm text-slate-700">{getUserScopeLabel(offer)}</span>
@@ -205,8 +216,10 @@ export default function Coupons() {
 
                           return (
                             <span
-                              className={`px-2.5 py-1 rounded-full text-xs font-medium ${
-                                visible ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-700"
+                              className={`px-2.5 py-1 rounded-full text-xs font-medium border ${
+                                visible 
+                                ? "bg-green-50 text-green-700 border-green-200 shadow-sm" 
+                                : "bg-slate-50 text-slate-600 border-slate-200"
                               }`}
                             >
                               {visible ? "Visible" : "Hidden"}
@@ -215,25 +228,29 @@ export default function Coupons() {
                         })()}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-slate-400 line-through">₹{offer.originalPrice}</span>
-                          <span className="text-sm font-semibold text-green-600">₹{offer.discountedPrice}</span>
-                        </div>
+                        {offer.originalPrice > 0 ? (
+                          <div className="flex flex-col">
+                            <span className="text-[10px] text-slate-400 line-through">₹{offer.originalPrice}</span>
+                            <span className="text-sm font-bold text-green-600">₹{offer.discountedPrice}</span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-400 font-medium italic">Order Wide</span>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        <span className={`px-2 py-1 rounded-full text-xs font-bold border ${
                           offer.status === 'active' 
-                            ? 'bg-green-100 text-green-700' 
+                            ? 'bg-green-50 text-green-700 border-green-200' 
                             : offer.status === 'paused'
-                            ? 'bg-orange-100 text-orange-700'
-                            : 'bg-gray-100 text-gray-700'
+                            ? 'bg-orange-50 text-orange-700 border-orange-200'
+                            : 'bg-slate-50 text-slate-600 border-slate-200'
                         }`}>
-                          {offer.status || 'Inactive'}
+                          {(offer.status || 'inactive').toUpperCase()}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm text-slate-700">
-                          {offer.endDate ? new Date(offer.endDate).toLocaleDateString() : 'No expiry'}
+                        <span className="text-sm font-medium text-slate-600">
+                          {offer.endDate ? new Date(offer.endDate).toLocaleDateString() : 'NO EXPIRY'}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">

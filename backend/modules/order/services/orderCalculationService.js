@@ -261,41 +261,51 @@ export const calculateOrderPricing = async ({
             const couponItem = offer.items.find(item => item.couponCode === couponCode);
 
             if (couponItem) {
-              // Check if coupon is valid for items in cart
-              const cartItemIds = items.map(item => item.itemId);
-              const isValidForCart = couponItem.itemId && cartItemIds.includes(couponItem.itemId);
-
-              // Check minimum order value
               const minOrderMet = !offer.minOrderValue || subtotal >= offer.minOrderValue;
 
-              if (isValidForCart && minOrderMet) {
-                // Calculate discount based on offer type
-                const itemInCart = items.find(item => item.itemId === couponItem.itemId);
-                if (itemInCart) {
-                  const itemQuantity = itemInCart.quantity || 1;
+              if (minOrderMet) {
+                // Check if it's a general restaurant coupon (no itemId) or tied to items in cart
+                const isGeneral = !couponItem.itemId;
+                const cartItemIds = items.map(item => item.itemId);
+                const isValidForCart = isGeneral || (couponItem.itemId && cartItemIds.includes(couponItem.itemId));
 
-                  // Calculate discount per item
-                  const discountPerItem = couponItem.originalPrice - couponItem.discountedPrice;
+                if (isValidForCart) {
+                  if (isGeneral) {
+                    // Calculate discount for general coupon
+                    if (offer.discountType === 'percentage') {
+                      const discountPercentage = couponItem.discountPercentage || 0;
+                      discount = Math.round(subtotal * (discountPercentage / 100));
+                      if (offer.maxLimit) {
+                        discount = Math.min(discount, offer.maxLimit);
+                      }
+                    } else if (offer.discountType === 'flat-price') {
+                      // For general coupons, flat price is the discount amount directly
+                      discount = couponItem.discountedPrice || 0;
+                      discount = Math.min(discount, subtotal);
+                    }
+                  } else {
+                    // Tied to a specific item
+                    const itemInCart = items.find(item => item.itemId === couponItem.itemId);
+                    if (itemInCart) {
+                      const itemQuantity = itemInCart.quantity || 1;
+                      const discountPerItem = (couponItem.originalPrice || 0) - (couponItem.discountedPrice || 0);
+                      discount = Math.round(discountPerItem * itemQuantity);
+                      const itemSubtotal = (itemInCart.price || 0) * itemQuantity;
+                      discount = Math.min(discount, itemSubtotal);
+                    }
+                  }
 
-                  // Apply discount to all quantities of this item
-                  discount = Math.round(discountPerItem * itemQuantity);
-
-                  // Ensure discount doesn't exceed item subtotal
-                  const itemSubtotal = (itemInCart.price || 0) * itemQuantity;
-                  discount = Math.min(discount, itemSubtotal);
+                  appliedCoupon = {
+                    code: couponCode,
+                    discount: discount,
+                    discountPercentage: couponItem.discountPercentage,
+                    minOrder: offer.minOrderValue || 0,
+                    type: offer.discountType === 'percentage' ? 'percentage' : 'flat',
+                    itemId: couponItem.itemId,
+                    itemName: couponItem.itemName,
+                    isGeneral,
+                  };
                 }
-
-                appliedCoupon = {
-                  code: couponCode,
-                  discount: discount,
-                  discountPercentage: couponItem.discountPercentage,
-                  minOrder: offer.minOrderValue || 0,
-                  type: offer.discountType === 'percentage' ? 'percentage' : 'flat',
-                  itemId: couponItem.itemId,
-                  itemName: couponItem.itemName,
-                  originalPrice: couponItem.originalPrice,
-                  discountedPrice: couponItem.discountedPrice,
-                };
               }
             }
           }

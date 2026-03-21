@@ -1260,6 +1260,15 @@ export const adminAPI = {
   getAllOffers: (params = {}) => {
     return apiClient.get(API_ENDPOINTS.ADMIN.OFFERS, { params });
   },
+  createOffer: (data) => {
+    return apiClient.post(API_ENDPOINTS.ADMIN.OFFERS, data);
+  },
+  updateOffer: (id, data) => {
+    return apiClient.put(`${API_ENDPOINTS.ADMIN.OFFERS}/${id}`, data);
+  },
+  deleteOffer: (id) => {
+    return apiClient.delete(`${API_ENDPOINTS.ADMIN.OFFERS}/${id}`);
+  },
 
   // Restaurant Commission Management
   getRestaurantCommissions: (params = {}) => {

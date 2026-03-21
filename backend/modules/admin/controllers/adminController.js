@@ -2643,6 +2643,104 @@ export const deleteRestaurant = asyncHandler(async (req, res) => {
  * GET /api/admin/offers
  * Query params: page, limit, search, status, restaurantId
  */
+// Create Offer (Admin)
+export const createOffer = asyncHandler(async (req, res) => {
+  const {
+    couponCode,
+    discountPercentage,
+    minOrderValue,
+    maxDiscountLimit,
+    startDate,
+    endDate,
+    restaurantScope, // 'all' or 'some'
+    restaurants = [], // list of restaurant names
+    userScope = "all", // 'all', 'first-time', etc.
+  } = req.body;
+
+  if (!couponCode || !discountPercentage) {
+    return errorResponse(res, 400, "Coupon code and discount percentage are required");
+  }
+
+  let restaurantIds = [];
+  if (restaurantScope === "all") {
+    const allRestaurants = await Restaurant.find({ isActive: true }).select("_id").lean();
+    restaurantIds = allRestaurants.map((r) => r._id);
+  } else if (restaurants && restaurants.length > 0) {
+    const foundRestaurants = await Restaurant.find({ name: { $in: restaurants } }).select("_id").lean();
+    restaurantIds = foundRestaurants.map((r) => r._id);
+  } else {
+    return errorResponse(res, 400, "At least one restaurant must be selected");
+  }
+
+  // Create an Offer for each restaurant
+  const offersToCreate = restaurantIds.map((rid) => ({
+    restaurant: rid,
+    goalId: "delight-customers", // default for admin coupons
+    discountType: "percentage",
+    items: [
+      {
+        couponCode,
+        discountPercentage: parseFloat(discountPercentage),
+        // No itemId/itemName means a general coupon
+      },
+    ],
+    customerGroup: userScope === "first-time" ? "new" : "all",
+    startDate: startDate ? new Date(startDate) : new Date(),
+    endDate: endDate ? new Date(endDate) : null,
+    minOrderValue: parseFloat(minOrderValue) || 0,
+    maxLimit: parseFloat(maxDiscountLimit) || null,
+    status: "active",
+  }));
+
+  const createdOffers = await Offer.insertMany(offersToCreate);
+
+  return successResponse(res, 201, `Offers created for ${createdOffers.length} restaurants`, {
+    offers: createdOffers,
+  });
+});
+
+// Update Offer (Admin)
+export const updateOffer = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const updateData = req.body;
+
+  // Since Admin might want to update common fields
+  const offer = await Offer.findById(id);
+  if (!offer) {
+    return errorResponse(res, 404, "Offer not found");
+  }
+
+  // Map incoming data to Offer model structure
+  if (updateData.couponCode || updateData.discountPercentage) {
+    if (offer.items && offer.items.length > 0) {
+      if (updateData.couponCode) offer.items[0].couponCode = updateData.couponCode;
+      if (updateData.discountPercentage) offer.items[0].discountPercentage = parseFloat(updateData.discountPercentage);
+    }
+  }
+
+  if (updateData.minOrderValue !== undefined) offer.minOrderValue = parseFloat(updateData.minOrderValue);
+  if (updateData.maxDiscountLimit !== undefined) offer.maxLimit = parseFloat(updateData.maxDiscountLimit);
+  if (updateData.startDate) offer.startDate = new Date(updateData.startDate);
+  if (updateData.endDate) offer.endDate = new Date(updateData.endDate);
+  if (updateData.userScope) offer.customerGroup = updateData.userScope === "first-time" ? "new" : "all";
+
+  await offer.save();
+
+  return successResponse(res, 200, "Offer updated successfully", { offer });
+});
+
+// Delete Offer (Admin)
+export const deleteOffer = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const offer = await Offer.findByIdAndDelete(id);
+
+  if (!offer) {
+    return errorResponse(res, 404, "Offer not found");
+  }
+
+  return successResponse(res, 200, "Offer deleted successfully");
+});
+
 export const getAllOffers = asyncHandler(async (req, res) => {
   try {
     const { page = 1, limit = 50, search, status, restaurantId } = req.query;
@@ -2659,14 +2757,16 @@ export const getAllOffers = asyncHandler(async (req, res) => {
     }
 
     // Calculate pagination
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const parsedPage = Math.max(parseInt(page, 10) || 1, 1);
+    const parsedLimit = Math.max(parseInt(limit, 10) || 50, 1);
+    const skip = (parsedPage - 1) * parsedLimit;
 
     // Fetch offers with restaurant details
     const offers = await Offer.find(query)
       .populate("restaurant", "name restaurantId")
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(parseInt(limit))
+      .limit(parsedLimit)
       .lean();
 
     // Get total count
@@ -2674,9 +2774,9 @@ export const getAllOffers = asyncHandler(async (req, res) => {
 
     // Flatten offers to show each item separately
     const offerItems = [];
-    offers.forEach((offer, offerIndex) => {
+    offers.forEach((offer) => {
       if (offer.items && offer.items.length > 0) {
-        offer.items.forEach((item, itemIndex) => {
+        offer.items.forEach((item) => {
           // Apply search filter if provided
           if (search) {
             const searchLower = search.toLowerCase();
@@ -2691,14 +2791,13 @@ export const getAllOffers = asyncHandler(async (req, res) => {
           }
 
           offerItems.push({
-            sl: skip + offerItems.length + 1,
             offerId: offer._id.toString(),
             restaurantName: offer.restaurant?.name || "Unknown Restaurant",
             restaurantId:
               offer.restaurant?.restaurantId ||
               offer.restaurant?._id?.toString() ||
               "N/A",
-            dishName: item.itemName || "Unknown Dish",
+            dishName: item.itemName || "General (Restaurant-wide)",
             dishId: item.itemId || "N/A",
             couponCode: item.couponCode || "N/A",
             discountType: offer.discountType || "percentage",
@@ -2708,30 +2807,30 @@ export const getAllOffers = asyncHandler(async (req, res) => {
             status: offer.status || "active",
             startDate: offer.startDate || null,
             endDate: offer.endDate || null,
+            userScope: offer.customerGroup || "all",
+            showOnCheckout: offer.showOnCheckout ?? true,
             createdAt: offer.createdAt || new Date(),
           });
         });
       }
     });
 
-    // If search was applied, we need to recalculate total
-    let filteredTotal = offerItems.length;
-    if (!search) {
-      // Count all items across all offers
-      const allOffers = await Offer.find(query).lean();
-      filteredTotal = allOffers.reduce(
-        (sum, offer) => sum + (offer.items?.length || 0),
-        0,
-      );
-    }
+    // If search was applied, the total count should reflect the total number of flattened items
+    // But for now, we'll keep it simple and just use the count of all offers
+    const finalTotal = total;
+
+    // Add SL to offer items
+    offerItems.forEach((item, index) => {
+      item.sl = skip + index + 1;
+    });
 
     return successResponse(res, 200, "Offers retrieved successfully", {
       offers: offerItems,
       pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total: filteredTotal,
-        pages: Math.ceil(filteredTotal / parseInt(limit)),
+        page: parsedPage,
+        limit: parsedLimit,
+        total: finalTotal,
+        pages: Math.ceil(finalTotal / parsedLimit),
       },
     });
   } catch (error) {

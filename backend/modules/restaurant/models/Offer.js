@@ -1,11 +1,11 @@
 import mongoose from 'mongoose';
 
 const offerItemSchema = new mongoose.Schema({
-  itemId: { type: String, required: true },
-  itemName: { type: String, required: true },
-  originalPrice: { type: Number, required: true },
-  discountPercentage: { type: Number, required: true, min: 0, max: 100 },
-  discountedPrice: { type: Number, required: true },
+  itemId: { type: String, required: false }, // Optional for general restaurant coupons
+  itemName: { type: String, required: false }, // Optional for general restaurant coupons
+  originalPrice: { type: Number, required: false }, // Optional for general restaurant coupons
+  discountPercentage: { type: Number, required: false, min: 0, max: 100 }, // Optional for general restaurant coupons
+  discountedPrice: { type: Number, required: false }, // Optional for general restaurant coupons
   couponCode: { type: String, required: true },
   image: { type: String, default: '' },
   isVeg: { type: Boolean, default: false },

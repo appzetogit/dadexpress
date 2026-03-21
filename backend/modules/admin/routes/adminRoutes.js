@@ -30,6 +30,9 @@ import {
   deleteRestaurant,
   updateRestaurantDiningSettings,
   getAllOffers,
+  createOffer,
+  updateOffer,
+  deleteOffer,
   getRestaurantAnalytics,
   getCustomerWalletReport,
 } from "../controllers/adminController.js";
@@ -437,6 +440,9 @@ router.post("/food-approvals/:id/reject", rejectFoodItem);
 
 // Offers Management
 router.get("/offers", getAllOffers);
+router.post("/offers", createOffer);
+router.put("/offers/:id", updateOffer);
+router.delete("/offers/:id", deleteOffer);
 
 // Zone Management
 router.use("/zones", zoneRoutes);
