@@ -29,8 +29,6 @@ export const uploadSingleMedia = async (req, res) => {
     const result = await uploadToCloudinary(req.file.buffer, {
       folder,
       resource_type: 'auto',
-      // Pass mimetype if available for better Cloudinary detection
-      ...(req.file.mimetype && { context: { alt: req.file.originalname, caption: req.file.originalname } })
     });
 
     if (!result || !result.secure_url) {
