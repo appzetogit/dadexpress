@@ -49,14 +49,22 @@ export const uploadMiddleware = multer({
  */
 export function uploadToCloudinary(buffer, options = {}) {
   return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (err, result) => {
+      if (settled) return;
+      settled = true;
+      if (err) reject(err);
+      else resolve(result);
+    };
+
     try {
       // Validate buffer
       if (!buffer || !Buffer.isBuffer(buffer)) {
-        return reject(new Error('Invalid buffer provided'));
+        return finish(new Error('Invalid buffer provided'));
       }
 
       if (buffer.length === 0) {
-        return reject(new Error('Empty buffer provided'));
+        return finish(new Error('Empty buffer provided'));
       }
 
       // Extract upload options
@@ -93,31 +101,31 @@ export function uploadToCloudinary(buffer, options = {}) {
               name: error.name,
               stack: error.stack
             });
-            return reject(error);
+            return finish(error);
           }
           if (!result) {
-            return reject(new Error('Upload failed: No result returned from Cloudinary'));
+            return finish(new Error('Upload failed: No result returned from Cloudinary'));
           }
           console.log('✅ Cloudinary upload successful:', {
             publicId: result.public_id,
             url: result.secure_url,
             resourceType: result.resource_type
           });
-          resolve(result);
+          finish(null, result);
         }
       );
 
       // Handle stream errors
       uploadStream.on('error', (streamError) => {
         console.error('❌ Cloudinary upload stream error event:', streamError);
-        reject(streamError);
+        finish(streamError);
       });
 
       // Pipe buffer stream to upload stream
       stream.pipe(uploadStream);
     } catch (error) {
       console.error('❌ Error in uploadToCloudinary:', error);
-      reject(error);
+      finish(error);
     }
   });
 }

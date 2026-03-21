@@ -43,6 +43,7 @@ export const uploadSingleMedia = async (req, res) => {
 
     return successResponse(res, 200, 'File uploaded successfully', {
       url: result.secure_url,
+      secure_url: result.secure_url,
       publicId: result.public_id,
       resourceType: result.resource_type,
       bytes: result.bytes,
@@ -58,9 +59,14 @@ export const uploadSingleMedia = async (req, res) => {
       fileSize: req.file?.size,
       bufferSize: req.file?.buffer?.length
     });
-    
-    // Provide more detailed error message
-    const errorMessage = error.message || 'Failed to upload file';
+
+    const msg = error.message || '';
+    const cloudinaryAuthFail =
+      error.http_code === 401 ||
+      /invalid signature|401/i.test(msg);
+    const errorMessage = cloudinaryAuthFail
+      ? 'Cloudinary rejected the upload (check CLOUDINARY_CLOUD_NAME, API key and secret are from the same account in .env or Admin ENV).'
+      : msg || 'Failed to upload file';
     return errorResponse(res, 500, `File upload failed: ${errorMessage}`);
   }
 };

@@ -1,4 +1,4 @@
-import { Eye, MapPin, Package, User, Phone, Mail, Calendar, Clock, Truck, CreditCard, X, Receipt } from "lucide-react"
+import { Eye, MapPin, Package, User, Phone, Mail, Calendar, Clock, Truck, CreditCard, X, Receipt, Camera } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -320,6 +320,63 @@ export default function ViewOrderDialog({ isOpen, onOpenChange, order }) {
               </div>
             </div>
           )}
+
+          {/* Pickup photo (delivery partner at restaurant) */}
+          {(() => {
+            const pickupSrc =
+              order.pickupImageUrl || order.deliveryState?.pickupImageUrl
+            if (
+              !pickupSrc ||
+              typeof pickupSrc !== "string" ||
+              !/^https?:\/\//i.test(pickupSrc.trim())
+            ) {
+              return null
+            }
+            const src = pickupSrc.trim()
+            return (
+              <div className="border-t border-slate-200 pt-4">
+                <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
+                  <Camera className="w-4 h-4 text-emerald-600" />
+                  Pickup photo (delivery partner)
+                </h3>
+                <div className="space-y-3">
+                  <div className="relative w-full max-w-2xl border-2 border-slate-300 rounded-xl overflow-hidden bg-white shadow-sm">
+                    <img
+                      src={src}
+                      alt="Pickup verification"
+                      className="w-full h-auto object-contain max-h-[500px] mx-auto block"
+                      loading="lazy"
+                      onError={(e) => {
+                        console.error("❌ Failed to load pickup image:", e.target.src)
+                        e.target.style.display = "none"
+                        const errorDiv =
+                          e.target.parentElement?.querySelector(
+                            ".pickup-img-error",
+                          )
+                        if (errorDiv) errorDiv.style.display = "block"
+                      }}
+                    />
+                    <div
+                      className="pickup-img-error p-6 text-center text-slate-500 text-sm bg-slate-50"
+                      style={{ display: "none" }}
+                    >
+                      <Camera className="w-8 h-8 mx-auto mb-2 text-slate-400" />
+                      Failed to load pickup image
+                    </div>
+                  </div>
+                  <a
+                    href={src}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors shadow-sm"
+                  >
+                    <Eye className="w-4 h-4" />
+                    View full size
+                  </a>
+                </div>
+              </div>
+            )
+          })()}
 
           {/* Delivery Address */}
           {order.address && (

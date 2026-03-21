@@ -2017,11 +2017,9 @@ export const uploadAPI = {
 
     while (attempt < maxAttempts) {
       try {
+        // Do not set Content-Type: axios + request interceptor set multipart boundary correctly
         return await apiClient.post(API_ENDPOINTS.UPLOAD.MEDIA, formData, {
           timeout: 180000, // Uploads on mobile networks can be slower than regular API calls.
-          headers: {
-            "Content-Type": "multipart/form-data",
-          },
         });
       } catch (error) {
         lastError = error;

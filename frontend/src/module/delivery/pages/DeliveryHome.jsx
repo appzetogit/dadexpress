@@ -4081,6 +4081,15 @@ export default function DeliveryHome() {
     }
   }
 
+  /** Normalize upload API payload to a usable https URL (backend sends url + secure_url). */
+  const pickUploadImageUrl = (data) => {
+    if (!data || typeof data !== "object") return ""
+    const raw = data.secure_url || data.url
+    if (typeof raw !== "string") return ""
+    const u = raw.trim()
+    return /^https?:\/\//i.test(u) ? u : ""
+  }
+
   // Process pickup image file
   const processPickupImageFile = async (file) => {
     if (!file) return
@@ -4100,21 +4109,25 @@ export default function DeliveryHome() {
         folder: 'appzeto/delivery/pickup'
       })
 
-      if (uploadResponse?.data?.success && uploadResponse?.data?.data) {
-        const imageUrl = uploadResponse.data.data.url || uploadResponse.data.data.secure_url
-        if (imageUrl) {
-          setPickupImageUrl(imageUrl)
-          setPickupImageUploaded(true)
-          toast.success('Pickup photo uploaded! You can now confirm pickup.')
-        } else {
-          throw new Error('Failed to get image URL from upload response')
-        }
+      const payload = uploadResponse?.data?.data
+      const imageUrl = pickUploadImageUrl(payload)
+      if (uploadResponse?.data?.success && payload && imageUrl) {
+        setPickupImageUrl(imageUrl)
+        setPickupImageUploaded(true)
+        toast.success('Pickup photo uploaded! You can now confirm pickup.')
       } else {
-        throw new Error('Upload failed')
+        const serverMsg = uploadResponse?.data?.message
+        throw new Error(
+          serverMsg || "Upload failed or no image URL in response",
+        )
       }
     } catch (error) {
       console.error('❌ Error uploading pickup photo:', error)
-      toast.error('Failed to upload pickup photo. Please try again.')
+      toast.error(
+        error.response?.data?.message ||
+          error.message ||
+          'Failed to upload pickup photo. Please try again.',
+      )
       setPickupImageUrl(null)
       setPickupImageUploaded(false)
     } finally {
@@ -4142,21 +4155,25 @@ export default function DeliveryHome() {
         folder: 'appzeto/delivery/dropoff'
       })
 
-      if (uploadResponse?.data?.success && uploadResponse?.data?.data) {
-        const imageUrl = uploadResponse.data.data.url || uploadResponse.data.data.secure_url
-        if (imageUrl) {
-          setDropImageUrl(imageUrl)
-          setDropImageUploaded(true)
-          toast.success('Drop-off photo uploaded! You can now complete delivery.')
-        } else {
-          throw new Error('Failed to get image URL from upload response')
-        }
+      const payload = uploadResponse?.data?.data
+      const imageUrl = pickUploadImageUrl(payload)
+      if (uploadResponse?.data?.success && payload && imageUrl) {
+        setDropImageUrl(imageUrl)
+        setDropImageUploaded(true)
+        toast.success('Drop-off photo uploaded! You can now complete delivery.')
       } else {
-        throw new Error('Upload failed')
+        const serverMsg = uploadResponse?.data?.message
+        throw new Error(
+          serverMsg || "Upload failed or no image URL in response",
+        )
       }
     } catch (error) {
       console.error('❌ Error uploading drop photo:', error)
-      toast.error('Failed to upload drop photo. Please try again.')
+      toast.error(
+        error.response?.data?.message ||
+          error.message ||
+          'Failed to upload drop photo. Please try again.',
+      )
       setDropImageUrl(null)
       setDropImageUploaded(false)
     } finally {
@@ -11700,6 +11717,20 @@ export default function DeliveryHome() {
                 onChange={handlePickupImageSelect}
                 className="sr-only"
               />
+
+              {pickupImageUrl &&
+                /^https?:\/\//i.test(String(pickupImageUrl).trim()) && (
+                  <div className="mt-4 flex justify-center px-2">
+                    <img
+                      src={String(pickupImageUrl).trim()}
+                      alt="Pickup photo preview"
+                      className="max-h-44 max-w-full rounded-xl border border-gray-200 object-contain bg-gray-50"
+                      onError={(e) => {
+                        e.currentTarget.style.display = "none"
+                      }}
+                    />
+                  </div>
+                )}
             </div>
 
             {/* Order Picked Up Button with Swipe */}
