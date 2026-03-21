@@ -1,9 +1,22 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Calendar, Plus } from "lucide-react"
-import { useNavigate } from "react-router-dom"
+import { useLocation, useNavigate } from "react-router-dom"
+
+const formatDateForInput = (value) => {
+  if (!value) return ""
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  const dd = String(date.getDate()).padStart(2, "0")
+  const mm = String(date.getMonth() + 1).padStart(2, "0")
+  const yyyy = String(date.getFullYear())
+  return `${dd}-${mm}-${yyyy}`
+}
 
 export default function CouponCreate() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const offer = location?.state?.offer || null
+  const isEditMode = Boolean(offer)
 
   const [couponCode, setCouponCode] = useState("")
   const [discountPercent, setDiscountPercent] = useState("")
@@ -15,6 +28,45 @@ export default function CouponCreate() {
   const [restaurantScope, setRestaurantScope] = useState("some")
   const [userScope, setUserScope] = useState("all")
   const [showOnCheckout, setShowOnCheckout] = useState(true)
+  const [selectedRestaurants, setSelectedRestaurants] = useState(() => new Set())
+
+  useEffect(() => {
+    if (!offer) return
+
+    setCouponCode(offer.couponCode || offer.code || "")
+    setDiscountPercent(String(offer.discountPercentage ?? offer.discountPercent ?? offer.discount ?? ""))
+    setMinOrderValue(String(offer.minOrderValue ?? offer.minOrder ?? offer.minimumOrderValue ?? ""))
+    setMaxDiscountLimit(String(offer.maxDiscountLimit ?? offer.maxDiscount ?? offer.maximumDiscountLimit ?? ""))
+    setStartDate(formatDateForInput(offer.startDate))
+    setEndDate(formatDateForInput(offer.endDate))
+
+    const scope = offer.userScope ?? offer.user_scope
+    if (scope) setUserScope(String(scope))
+
+    const parseBoolean = (value) => {
+      if (typeof value === "string") {
+        const normalized = value.trim().toLowerCase()
+        if (["false", "0", "no", "hidden"].includes(normalized)) return false
+        if (["true", "1", "yes", "visible"].includes(normalized)) return true
+      }
+      return Boolean(value)
+    }
+
+    const checkout =
+      offer.showOnCheckout ??
+      offer.show_on_checkout ??
+      offer.checkoutVisible ??
+      offer.checkout_visible ??
+      offer.checkoutVisibility ??
+      offer.checkout_visibility
+    if (checkout !== undefined && checkout !== null) setShowOnCheckout(parseBoolean(checkout))
+
+    const restaurant = offer.restaurantName ?? offer.restaurant
+    if (restaurant) {
+      setRestaurantScope("some")
+      setSelectedRestaurants(new Set([String(restaurant)]))
+    }
+  }, [offer])
 
   const restaurantOptions = useMemo(
     () => [
@@ -27,7 +79,6 @@ export default function CouponCreate() {
     ],
     []
   )
-  const [selectedRestaurants, setSelectedRestaurants] = useState(() => new Set())
 
   return (
     <div className="p-4 lg:p-6 bg-slate-50 min-h-screen">
@@ -224,7 +275,7 @@ export default function CouponCreate() {
                   type="submit"
                   className="px-5 py-3 text-sm font-semibold rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition-colors"
                 >
-                  Create Coupon
+                  {isEditMode ? "Update Coupon" : "Create Coupon"}
                 </button>
               </div>
             </div>
@@ -234,4 +285,3 @@ export default function CouponCreate() {
     </div>
   )
 }
-
