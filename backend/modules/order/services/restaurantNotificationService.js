@@ -4,6 +4,7 @@ import Restaurant from '../../restaurant/models/Restaurant.js';
 import mongoose from 'mongoose';
 import notificationService from '../../../shared/services/notificationService.js';
 import { notifyUserOrderUpdate } from './userNotificationService.js';
+import { buildNewOrderAvailablePayload } from './deliveryNotificationService.js';
 
 // Dynamic import to avoid circular dependency
 let getIO = null;
@@ -91,12 +92,15 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
       } catch (e) { /* ignore */ }
     }
 
-    // Prepare order notification data
+    const basePayload = await buildNewOrderAvailablePayload(
+      order,
+      'priority',
+      resolvedPaymentMethod,
+    );
+
     const orderNotification = {
-      orderId: order.orderId,
-      orderMongoId: order._id.toString(),
+      ...basePayload,
       restaurantId: restaurantId,
-      restaurantName: order.restaurantName,
       items: order.items.map(item => ({
         name: item.name,
         quantity: item.quantity,
@@ -114,7 +118,8 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
       estimatedDeliveryTime: order.estimatedDeliveryTime || 30,
       note: order.note || '',
       sendCutlery: order.sendCutlery,
-      paymentMethod: resolvedPaymentMethod
+      paymentMethod: resolvedPaymentMethod,
+      payment: order.payment,
     };
     console.log('📢 Restaurant notification payload paymentMethod:', orderNotification.paymentMethod, { override: paymentMethodOverride, orderPaymentMethod: order.payment?.method });
 
@@ -123,6 +128,34 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
 
     // Normalize restaurantId to string (handle both ObjectId and string)
     const normalizedRestaurantId = restaurantId?.toString() || restaurantId;
+
+    const sendRestaurantNewOrderFcm = () => {
+      const fcmTokensSet = new Set();
+      if (restaurant?.fcmToken) fcmTokensSet.add(JSON.stringify({ token: restaurant.fcmToken, plat: 'web' }));
+      if (restaurant?.fcmTokenMobile) fcmTokensSet.add(JSON.stringify({ token: restaurant.fcmTokenMobile, plat: 'app' }));
+
+      const fcmTokens = Array.from(fcmTokensSet).map(s => JSON.parse(s));
+
+      for (const { token, plat } of fcmTokens) {
+        notificationService.sendPushNotification(
+          token,
+          {
+            title: 'New Order Received! 🍕',
+            body: `You have a new order ${order.orderId} for ₹${order.pricing.total}`
+          },
+          {
+            orderId: orderNotification.orderId,
+            type: 'new_order_available',
+            click_action: '/delivery/discover'
+          },
+          restaurant.platform || plat || 'web'
+        ).then(res => {
+          if (res) console.log(`✅ Push notification sent to restaurant ${normalizedRestaurantId} (${plat})`);
+        }).catch(err => {
+          console.error(`❌ Failed to send push notification to restaurant ${normalizedRestaurantId} (${plat}):`, err);
+        });
+      }
+    };
 
     // Try multiple room formats to ensure we find the restaurant
     const roomVariations = [
@@ -169,33 +202,6 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
         console.log(`📤 Sent notification to room: ${room}`);
       });
       console.log(`✅ Notified restaurant ${normalizedRestaurantId} about new order ${order.orderId} (${socketsInRoom.length} socket(s) connected)`);
-
-      // Also send Push Notification if FCM token exists
-      const fcmTokensSet = new Set();
-      if (restaurant?.fcmToken) fcmTokensSet.add(JSON.stringify({ token: restaurant.fcmToken, plat: 'web' }));
-      if (restaurant?.fcmTokenMobile) fcmTokensSet.add(JSON.stringify({ token: restaurant.fcmTokenMobile, plat: 'app' }));
-
-      const fcmTokens = Array.from(fcmTokensSet).map(s => JSON.parse(s));
-
-      for (const { token, plat } of fcmTokens) {
-        notificationService.sendPushNotification(
-          token,
-          {
-            title: 'New Order Received! 🍕',
-            body: `You have a new order ${order.orderId} for ₹${order.pricing.total}`
-          },
-          {
-            orderId: order.orderId,
-            type: 'new_order',
-            click_action: '/restaurant/orders'
-          },
-          restaurant.platform || plat || 'web'
-        ).then(res => {
-          if (res) console.log(`✅ Push notification sent to restaurant ${normalizedRestaurantId} (${plat})`);
-        }).catch(err => {
-          console.error(`❌ Failed to send push notification to restaurant ${normalizedRestaurantId} (${plat}):`, err);
-        });
-      }
     } else {
       // No sockets found in restaurant room - log error but DO NOT broadcast to all restaurants
       console.error(`❌ CRITICAL: No sockets found for restaurant ${normalizedRestaurantId} in any room!`);
@@ -232,8 +238,11 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
         });
         console.log(`📤 Emitted to room ${room} (no sockets found, but room exists for future connections)`);
       });
+    }
 
-      // Return error instead of success
+    sendRestaurantNewOrderFcm();
+
+    if (socketsInRoom.length === 0) {
       return {
         success: false,
         restaurantId,
