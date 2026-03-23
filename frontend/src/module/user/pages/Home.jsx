@@ -655,9 +655,6 @@ export default function Home() {
   const [showToast, setShowToast] = useState(false)
   const [showManageCollections, setShowManageCollections] = useState(false)
   const [selectedRestaurantSlug, setSelectedRestaurantSlug] = useState(null)
-  const location = currentLocation
-  const activeLocationForRestaurants = effectiveLocation || currentLocation
-
   // Memoize cartCount to prevent recalculation on every render - use cart directly
   const cartCount = useMemo(() =>
     cart.reduce((total, item) => total + (item.quantity || 0), 0),
