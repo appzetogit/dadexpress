@@ -269,7 +269,16 @@ export default function Home() {
   const [heroSearch, setHeroSearch] = useState("")
   const { openSearch, closeSearch, searchValue, setSearchValue } = useSearchOverlay()
   const { openLocationSelector } = useLocationSelector()
-  const { vegMode, setVegMode: setVegModeContext, addresses, getDefaultAddress } = useProfile()
+  const {
+    vegMode,
+    setVegMode: setVegModeContext,
+    addresses,
+    getDefaultAddress,
+    addFavorite,
+    removeFavorite,
+    isFavorite,
+    getFavorites,
+  } = useProfile()
   const [prevVegMode, setPrevVegMode] = useState(vegMode)
   const [showVegModePopup, setShowVegModePopup] = useState(false)
   const [showSwitchOffPopup, setShowSwitchOffPopup] = useState(false)
@@ -624,23 +633,6 @@ export default function Home() {
   const [activeFilterTab, setActiveFilterTab] = useState('sort')
   const categoryScrollRef = useRef(null)
   const gsapAnimationsRef = useRef([])
-  // Safely get profile context - handle case when ProfileProvider is not available
-  let profileContext = null
-  try {
-    profileContext = useProfile()
-  } catch (error) {
-    // Fallback values when ProfileProvider is not available
-    profileContext = {
-      addFavorite: () => {},
-      removeFavorite: () => {},
-      isFavorite: () => false,
-      getFavorites: () => [],
-      addresses: [],
-      getDefaultAddress: () => null,
-    }
-  }
-
-  const { addFavorite, removeFavorite, isFavorite, getFavorites, addresses = [], getDefaultAddress } = profileContext
   const { addToCart, cart } = useCart()
   const { selectedDeliveryAddress } = useSelectedDeliveryAddress()
   const { location, loading, requestLocation } = useLocation()
