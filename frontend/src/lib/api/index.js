@@ -283,6 +283,17 @@ export const zoneAPI = {
       params: { lat, lng },
     });
   },
+  // Alias used by listing flows when zoneId must be resolved from selected address coordinates.
+  getZoneByCoordinates: async (lat, lng) => {
+    const response = await apiClient.get(API_ENDPOINTS.ZONE.DETECT, {
+      params: { lat, lng },
+    });
+    return {
+      ...response,
+      zoneId: response?.data?.data?.zoneId || null,
+      status: response?.data?.data?.status || null,
+    };
+  },
 };
 
 // Export restaurant API helper functions

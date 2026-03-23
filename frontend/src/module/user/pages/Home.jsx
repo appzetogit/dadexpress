@@ -34,9 +34,11 @@ import {
 import { useLocation } from "../hooks/useLocation"
 import { useZone } from "../hooks/useZone"
 import useUserPoints from "../hooks/useUserPoints"
+import { useSelectedDeliveryAddress } from "../hooks/useSelectedDeliveryAddress"
+import { resolveDeliveryAddress } from "../utils/deliveryAddress"
 import quickSpicyLogo from "@/assets/quicky-spicy-logo.png"
 import offerImage from "@/assets/offerimage.png"
-import api, { restaurantAPI } from "@/lib/api"
+import api, { restaurantAPI, zoneAPI } from "@/lib/api"
 import { API_BASE_URL } from "@/lib/api/config"
 import OptimizedImage from "@/components/OptimizedImage"
 // Explore More Icons
@@ -98,6 +100,22 @@ const normalizeImageUrl = (value) => {
   } catch (_error) {
     return trimmed
   }
+}
+
+const toNumber = (value) => {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+const getAddressCoords = (address) => {
+  if (!address) return null
+  const coordinates = Array.isArray(address.location?.coordinates)
+    ? address.location.coordinates
+    : null
+  const lng = toNumber(coordinates?.[0] ?? address.longitude ?? address.lng)
+  const lat = toNumber(coordinates?.[1] ?? address.latitude ?? address.lat)
+  if (!lat || !lng) return null
+  return { lat, lng }
 }
 
 // Restaurant Image Carousel Component
@@ -613,14 +631,20 @@ export default function Home() {
       addFavorite: () => {},
       removeFavorite: () => {},
       isFavorite: () => false,
-      getFavorites: () => []
+      getFavorites: () => [],
+      addresses: [],
+      getDefaultAddress: () => null,
     }
   }
 
-  const { addFavorite, removeFavorite, isFavorite, getFavorites } = profileContext
+  const { addFavorite, removeFavorite, isFavorite, getFavorites, addresses = [], getDefaultAddress } = profileContext
   const { addToCart, cart } = useCart()
+  const { selectedDeliveryAddress } = useSelectedDeliveryAddress()
   const { location, loading, requestLocation } = useLocation()
   const { zoneId, zoneStatus, isInService, isOutOfService, loading: zoneLoading } = useZone(location)
+  const [resolvedZoneId, setResolvedZoneId] = useState(null)
+  const [selectedAddressOutOfService, setSelectedAddressOutOfService] = useState(false)
+  const [zoneResolveLoading, setZoneResolveLoading] = useState(false)
   const { points: userPoints } = useUserPoints()
   const [showToast, setShowToast] = useState(false)
   const [showManageCollections, setShowManageCollections] = useState(false)
@@ -634,6 +658,22 @@ export default function Home() {
 
   const cityName = location?.city || "Select"
   const stateName = location?.state || "Location"
+  const defaultAddress = useMemo(
+    () => (typeof getDefaultAddress === "function" ? getDefaultAddress() : null),
+    [getDefaultAddress, addresses],
+  )
+  const resolvedDeliveryAddress = useMemo(
+    () =>
+      resolveDeliveryAddress({
+        selected: selectedDeliveryAddress,
+        addresses,
+        currentLocation: location,
+        fallbackAddress: defaultAddress,
+      }),
+    [selectedDeliveryAddress, addresses, location, defaultAddress],
+  )
+  const selectedAddress = resolvedDeliveryAddress?.address || null
+  const selectedCoords = resolvedDeliveryAddress?.coords || getAddressCoords(selectedAddress)
 
   const [placeholderIndex, setPlaceholderIndex] = useState(0)
 
@@ -684,6 +724,63 @@ export default function Home() {
 
     return () => observer.disconnect()
   }, [isFilterOpen])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const resolveZoneFromSelectedAddress = async () => {
+      const hasSelectedAddress = Boolean(selectedAddress)
+      const fallbackZoneId = hasSelectedAddress ? null : zoneId
+
+      if (!hasSelectedAddress) {
+        setResolvedZoneId(fallbackZoneId || null)
+        setSelectedAddressOutOfService(false)
+        setZoneResolveLoading(false)
+        return
+      }
+
+      setZoneResolveLoading(true)
+      setSelectedAddressOutOfService(false)
+
+      let nextZoneId =
+        selectedAddress?.zoneId ||
+        selectedAddress?.zone?._id ||
+        selectedAddress?.zone?.id ||
+        null
+
+      if (!nextZoneId && selectedCoords?.lat && selectedCoords?.lng) {
+        try {
+          const response = await zoneAPI.getZoneByCoordinates(
+            selectedCoords.lat,
+            selectedCoords.lng,
+          )
+          const data = response?.data?.data || {}
+          const status = data?.status
+          nextZoneId = data?.zoneId || data?.zone?._id || data?.zone?.id || null
+          if (status && status !== "IN_SERVICE" && !nextZoneId) {
+            setSelectedAddressOutOfService(true)
+          }
+        } catch (error) {
+          console.error("Zone fetch failed for selected address:", error)
+        }
+      }
+
+      if (!nextZoneId) {
+        nextZoneId = fallbackZoneId || null
+      }
+
+      if (!cancelled) {
+        setResolvedZoneId(nextZoneId || null)
+        setZoneResolveLoading(false)
+      }
+    }
+
+    resolveZoneFromSelectedAddress()
+
+    return () => {
+      cancelled = true
+    }
+  }, [selectedAddress, selectedCoords?.lat, selectedCoords?.lng, zoneId])
 
   // Fetch restaurants from API with filters
   const fetchRestaurants = useCallback(async (filters = {}) => {
@@ -762,11 +859,12 @@ export default function Home() {
         params.dietary = "pure-veg"
       }
 
-      // When GPS-based zone is available, restrict listing to that zone.
-      // This prevents stale far-away restaurants from appearing for the user.
-      if (zoneId && isInService) {
-        params.zoneId = zoneId
+      if (!resolvedZoneId || zoneResolveLoading || zoneLoading) {
+        setRestaurantsData([])
+        setLoadingRestaurants(false)
+        return
       }
+      params.zoneId = resolvedZoneId
 
       const response = await restaurantAPI.getRestaurants(params)
 
@@ -793,8 +891,8 @@ export default function Home() {
         }
 
         // Get user coordinates
-        const userLat = location?.latitude
-        const userLng = location?.longitude
+        const userLat = selectedCoords?.lat ?? location?.latitude
+        const userLng = selectedCoords?.lng ?? location?.longitude
 
         // Old default values stored in DB — filter these out so they don't display as dynamic
         const OLD_DEFAULT_DELIVERY_TIMES = ["25-30 mins", "20-25 mins", "30-35 mins"]
@@ -913,16 +1011,18 @@ export default function Home() {
     } finally {
       setLoadingRestaurants(false)
     }
-  }, [vegMode, vegModeOption, zoneId, isInService, location?.latitude, location?.longitude])
+  }, [vegMode, vegModeOption, resolvedZoneId, zoneResolveLoading, zoneLoading, selectedCoords?.lat, selectedCoords?.lng, location?.latitude, location?.longitude])
 
   // Refetch restaurants when filters or GPS zone changes
   useEffect(() => {
     fetchRestaurants(appliedFilters)
-  }, [appliedFilters, fetchRestaurants, zoneId, isInService, location?.latitude, location?.longitude])
+  }, [appliedFilters, fetchRestaurants, resolvedZoneId, zoneResolveLoading, zoneLoading, selectedAddress, selectedCoords?.lat, selectedCoords?.lng])
 
-  // Recalculate distances when user location updates
+  // Recalculate distances when selected delivery address location updates
   useEffect(() => {
-    if (!restaurantsData || restaurantsData.length === 0 || !location?.latitude || !location?.longitude) return
+    const userLat = selectedCoords?.lat ?? location?.latitude
+    const userLng = selectedCoords?.lng ?? location?.longitude
+    if (!restaurantsData || restaurantsData.length === 0 || !userLat || !userLng) return
 
     const calculateDistance = (lat1, lng1, lat2, lng2) => {
       const R = 6371 // Earth's radius in kilometers
@@ -935,9 +1035,6 @@ export default function Home() {
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
       return R * c // Distance in kilometers
     }
-
-    const userLat = location.latitude
-    const userLng = location.longitude
 
     // Recalculate distances for all restaurants
     const updatedRestaurants = restaurantsData.map(restaurant => {
@@ -970,7 +1067,7 @@ export default function Home() {
     })
 
     setRestaurantsData(updatedRestaurants)
-  }, [location?.latitude, location?.longitude])
+  }, [selectedCoords?.lat, selectedCoords?.lng, location?.latitude, location?.longitude])
 
   // Filter restaurants and foods based on active filters
   const filteredRestaurants = useMemo(() => {
@@ -1074,6 +1171,16 @@ export default function Home() {
 
     return filtered
   }, [restaurantsData, activeFilters, selectedCuisine, sortBy])
+
+  const emptyRestaurantsMessage = useMemo(() => {
+    if (selectedAddressOutOfService) {
+      return "Service not available at this address"
+    }
+    if (!resolvedZoneId && !zoneResolveLoading && !zoneLoading) {
+      return "Service not available at this address"
+    }
+    return "No restaurants available in your selected area"
+  }, [selectedAddressOutOfService, resolvedZoneId, zoneResolveLoading, zoneLoading])
 
   // Featured foods removed - will be handled by restaurants data from API
   const filteredFeaturedFoods = useMemo(() => {
@@ -1915,6 +2022,11 @@ export default function Home() {
                 )
               })}
             </div>
+            {!isLoadingFilterResults && !loadingRestaurants && filteredRestaurants.length === 0 && (
+              <div className="mt-4 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-[#1a1a1a] p-4 text-sm text-gray-700 dark:text-gray-300">
+                {emptyRestaurantsMessage}
+              </div>
+            )}
           </div>
           <div className="flex justify-center pt-2 sm:pt-3">
             {/* <Link to="/user/restaurants">
