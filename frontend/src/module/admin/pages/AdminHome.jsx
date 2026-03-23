@@ -526,7 +526,8 @@ export default function AdminHome() {
 
 function MetricCard({ title, value, helper, icon, accent, path, isLoading }) {
   const navigate = useNavigate()
-  const isNavigable = Boolean(path)
+  const isPlatformFeeCard = String(title || "").toLowerCase() === "platform fee"
+  const isNavigable = Boolean(path) && !isPlatformFeeCard
 
   if (isLoading) {
     return (

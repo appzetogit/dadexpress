@@ -3,6 +3,21 @@ import RestaurantWallet from '../../restaurant/models/RestaurantWallet.js';
 import DeliveryWallet from '../../delivery/models/DeliveryWallet.js';
 import mongoose from 'mongoose';
 
+const buildDateRange = (startDate, endDate) => {
+  if (!startDate || !endDate) return null;
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+  start.setHours(0, 0, 0, 0);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+};
+
+const getOrderDeliveredAt = (order) => {
+  if (!order) return null;
+  return order.deliveredAt || order?.tracking?.delivered?.timestamp || null;
+};
+
 /**
  * Get pending settlements for restaurants
  */
@@ -18,18 +33,24 @@ export const getPendingRestaurantSettlements = async (restaurantId = null, start
       query.restaurantId = restaurantId;
     }
 
-    if (startDate && endDate) {
-      query.createdAt = {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate)
-      };
-    }
+    const dateRange = buildDateRange(startDate, endDate);
 
-    const settlements = await OrderSettlement.find(query)
-      .populate('orderId', 'orderId status deliveredAt')
+    const settlementsRaw = await OrderSettlement.find(query)
+      .populate('orderId', 'orderId status deliveredAt tracking')
       .populate('restaurantId', 'name restaurantId')
       .sort({ createdAt: -1 })
       .lean();
+
+    const settlements = settlementsRaw.filter((settlement) => {
+      const order = settlement?.orderId;
+      if (!order || order.status !== 'delivered') return false;
+      if (!dateRange) return true;
+      const deliveredAt = getOrderDeliveredAt(order);
+      if (!deliveredAt) return false;
+      const deliveredAtDate = new Date(deliveredAt);
+      if (Number.isNaN(deliveredAtDate.getTime())) return false;
+      return deliveredAtDate >= dateRange.start && deliveredAtDate <= dateRange.end;
+    });
 
     return settlements;
   } catch (error) {
@@ -54,18 +75,24 @@ export const getPendingDeliverySettlements = async (deliveryId = null, startDate
       query.deliveryPartnerId = deliveryId;
     }
 
-    if (startDate && endDate) {
-      query.createdAt = {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate)
-      };
-    }
+    const dateRange = buildDateRange(startDate, endDate);
 
-    const settlements = await OrderSettlement.find(query)
-      .populate('orderId', 'orderId status deliveredAt')
+    const settlementsRaw = await OrderSettlement.find(query)
+      .populate('orderId', 'orderId status deliveredAt tracking')
       .populate('deliveryPartnerId', 'name phone')
       .sort({ createdAt: -1 })
       .lean();
+
+    const settlements = settlementsRaw.filter((settlement) => {
+      const order = settlement?.orderId;
+      if (!order || order.status !== 'delivered') return false;
+      if (!dateRange) return true;
+      const deliveredAt = getOrderDeliveredAt(order);
+      if (!deliveredAt) return false;
+      const deliveredAtDate = new Date(deliveredAt);
+      if (Number.isNaN(deliveredAtDate.getTime())) return false;
+      return deliveredAtDate >= dateRange.start && deliveredAtDate <= dateRange.end;
+    });
 
     return settlements;
   } catch (error) {
@@ -79,17 +106,25 @@ export const getPendingDeliverySettlements = async (deliveryId = null, startDate
  */
 export const generateRestaurantSettlementReport = async (restaurantId, startDate, endDate) => {
   try {
-    const settlements = await OrderSettlement.find({
+    const dateRange = buildDateRange(startDate, endDate);
+    const settlementsRaw = await OrderSettlement.find({
       restaurantId: restaurantId,
-      'restaurantEarning.status': 'credited',
-      createdAt: {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate)
-      }
+      'restaurantEarning.status': 'credited'
     })
-      .populate('orderId', 'orderId status deliveredAt')
+      .populate('orderId', 'orderId status deliveredAt tracking')
       .sort({ createdAt: -1 })
       .lean();
+
+    const settlements = settlementsRaw.filter((settlement) => {
+      const order = settlement?.orderId;
+      if (!order || order.status !== 'delivered') return false;
+      if (!dateRange) return true;
+      const deliveredAt = getOrderDeliveredAt(order);
+      if (!deliveredAt) return false;
+      const deliveredAtDate = new Date(deliveredAt);
+      if (Number.isNaN(deliveredAtDate.getTime())) return false;
+      return deliveredAtDate >= dateRange.start && deliveredAtDate <= dateRange.end;
+    });
 
     const totalEarnings = settlements.reduce((sum, s) => sum + s.restaurantEarning.netEarning, 0);
     const totalOrders = settlements.length;
@@ -127,17 +162,25 @@ export const generateRestaurantSettlementReport = async (restaurantId, startDate
  */
 export const generateDeliverySettlementReport = async (deliveryId, startDate, endDate) => {
   try {
-    const settlements = await OrderSettlement.find({
+    const dateRange = buildDateRange(startDate, endDate);
+    const settlementsRaw = await OrderSettlement.find({
       deliveryPartnerId: deliveryId,
-      'deliveryPartnerEarning.status': 'credited',
-      createdAt: {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate)
-      }
+      'deliveryPartnerEarning.status': 'credited'
     })
-      .populate('orderId', 'orderId status deliveredAt')
+      .populate('orderId', 'orderId status deliveredAt tracking')
       .sort({ createdAt: -1 })
       .lean();
+
+    const settlements = settlementsRaw.filter((settlement) => {
+      const order = settlement?.orderId;
+      if (!order || order.status !== 'delivered') return false;
+      if (!dateRange) return true;
+      const deliveredAt = getOrderDeliveredAt(order);
+      if (!deliveredAt) return false;
+      const deliveredAtDate = new Date(deliveredAt);
+      if (Number.isNaN(deliveredAtDate.getTime())) return false;
+      return deliveredAtDate >= dateRange.start && deliveredAtDate <= dateRange.end;
+    });
 
     const totalEarnings = settlements.reduce((sum, s) => sum + s.deliveryPartnerEarning.totalEarning, 0);
     const totalOrders = settlements.length;
