@@ -38,6 +38,7 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [referralReward, setReferralReward] = useState(2000)
+  const [isReferralEnabled, setIsReferralEnabled] = useState(true)
   const [loadingReferral, setLoadingReferral] = useState(false)
   const [showAlertSoundPopup, setShowAlertSoundPopup] = useState(false)
   const [selectedAlertSound, setSelectedAlertSound] = useState(() => {
@@ -149,9 +150,14 @@ export default function ProfilePage() {
           : await deliveryAPI.getDashboard() // fallback; should normally not be used
 
         const data = response?.data?.data
+        const referralEnabled = data?.referralSettings?.isEnabled
         const reward =
           data?.referralSettings?.referrerReward ??
           data?.referralSettings?.referrer_reward
+
+        if (typeof referralEnabled === "boolean") {
+          setIsReferralEnabled(referralEnabled)
+        }
 
         if (typeof reward === "number" && reward > 0) {
           setReferralReward(reward)
@@ -370,22 +376,24 @@ export default function ProfilePage() {
         {/* Sections */}
         <div ref={sectionsRef} className="space-y-4">
           {/* Referral bonus */}
-          <Card
-            onClick={() => navigate("/delivery/refer-and-earn")}
-            className="py-0 bg-white border-0 shadow-none cursor-pointer hover:bg-gray-200 transition-colors"
-          >
-            <CardContent className="p-4 flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-medium mb-1">
-                  ₹{loadingReferral ? "…" : referralReward} referral bonus
-                </h3>
-                <p className="text-gray-600 text-sm">Refer your friend and earn</p>
-              </div>
-              <div className="flex items-center justify-center w-12 h-12">
-                <IndianRupee className="w-8 h-8 text-yellow-400" />
-              </div>
-            </CardContent>
-          </Card>
+          {isReferralEnabled && (
+            <Card
+              onClick={() => navigate("/delivery/refer-and-earn")}
+              className="py-0 bg-white border-0 shadow-none cursor-pointer hover:bg-gray-200 transition-colors"
+            >
+              <CardContent className="p-4 flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-medium mb-1">
+                    ₹{loadingReferral ? "…" : referralReward} referral bonus
+                  </h3>
+                  <p className="text-gray-600 text-sm">Refer your friend and earn</p>
+                </div>
+                <div className="flex items-center justify-center w-12 h-12">
+                  <IndianRupee className="w-8 h-8 text-yellow-400" />
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Support Section */}
           <div>

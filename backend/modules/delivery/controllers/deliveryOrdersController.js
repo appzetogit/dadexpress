@@ -30,6 +30,19 @@ const logger = winston.createLogger({
   ]
 });
 
+const normalizeDeliveryPaymentMethod = (rawMethod) => {
+  const normalized = String(rawMethod || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[_-]+/g, ' ');
+
+  if (normalized === 'cash' || normalized === 'cod' || normalized === 'cash on delivery') {
+    return 'cash';
+  }
+
+  return rawMethod || 'razorpay';
+};
+
 /**
  * Get Delivery Partner Orders
  * GET /api/delivery/orders
@@ -143,11 +156,7 @@ export const getOrders = asyncHandler(async (req, res) => {
     // Source of truth remains order.payment.method; this is just a convenience field.
     const ordersWithPaymentMethod = (orders || []).map((o) => {
       const raw = o?.paymentMethod ?? o?.payment?.method ?? '';
-      const normalized = String(raw).toLowerCase().trim();
-      const paymentMethod =
-        normalized === 'cash' || normalized === 'cod' || normalized === 'cash on delivery'
-          ? 'cash'
-          : (raw || 'razorpay');
+      const paymentMethod = normalizeDeliveryPaymentMethod(raw);
       return { ...o, paymentMethod };
     });
 
@@ -288,11 +297,11 @@ export const getOrderDetails = asyncHandler(async (req, res) => {
     }
 
     // Resolve payment method for delivery boy (COD vs Online)
-    let paymentMethod = order.payment?.method || 'razorpay';
+    let paymentMethod = normalizeDeliveryPaymentMethod(order.payment?.method);
     if (paymentMethod !== 'cash') {
       try {
         const paymentRecord = await Payment.findOne({ orderId: order._id }).select('method').lean();
-        if (paymentRecord?.method === 'cash') paymentMethod = 'cash';
+        paymentMethod = normalizeDeliveryPaymentMethod(paymentRecord?.method || paymentMethod);
       } catch (e) { /* ignore */ }
     }
     const orderWithPayment = { ...order, paymentMethod };
@@ -827,6 +836,26 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       deliveryDistance = R * c;
     }
 
+    // Persist a precomputed delivery distance at accept time so completion earnings
+    // do not fall back to base payout when routeToDelivery is not set yet.
+    try {
+      const normalizedDistance = Number(deliveryDistance);
+      const hasSavedDeliveryDistance =
+        Number(updatedOrder?.deliveryState?.routeToDelivery?.distance) > 0;
+
+      if (Number.isFinite(normalizedDistance) && normalizedDistance > 0 && !hasSavedDeliveryDistance) {
+        await Order.findByIdAndUpdate(orderMongoId, {
+          $set: {
+            'deliveryState.routeToDelivery.distance': Number(normalizedDistance.toFixed(3)),
+            'deliveryState.routeToDelivery.calculatedAt': new Date(),
+            'deliveryState.routeToDelivery.method': 'haversine_precompute'
+          }
+        });
+      }
+    } catch (distancePersistError) {
+      console.warn(`⚠️ Could not persist precomputed delivery distance for order ${updatedOrder.orderId}: ${distancePersistError.message}`);
+    }
+
     // Ensure active_orders node is always present in Firebase (even when order was accepted via discover flow)
     try {
       const restaurantCoords = updatedOrder.restaurantId?.location?.coordinates?.length >= 2
@@ -940,11 +969,11 @@ export const acceptOrder = asyncHandler(async (req, res) => {
     }
 
     // Resolve payment method for delivery boy (COD vs Online) - use Payment collection if order.payment is wrong
-    let paymentMethod = updatedOrder.payment?.method || 'razorpay';
+    let paymentMethod = normalizeDeliveryPaymentMethod(updatedOrder.payment?.method);
     if (paymentMethod !== 'cash') {
       try {
         const paymentRecord = await Payment.findOne({ orderId: updatedOrder._id }).select('method').lean();
-        if (paymentRecord?.method === 'cash') paymentMethod = 'cash';
+        paymentMethod = normalizeDeliveryPaymentMethod(paymentRecord?.method || paymentMethod);
       } catch (e) { /* ignore */ }
     }
     const orderWithPayment = { ...updatedOrder, paymentMethod };
@@ -1756,12 +1785,14 @@ export const completeDelivery = asyncHandler(async (req, res) => {
           }
 
           if (recoveredEarning > 0) {
+            const paymentMethod = (order.payment?.method || "razorpay").toString().toLowerCase()
             const recoveredTransaction = wallet.addTransaction({
               amount: recoveredEarning,
               type: 'payment',
               status: 'Completed',
               description: `Delivery earnings recovery for Order #${order.orderId || orderIdForTransaction}`,
               orderId: order._id,
+              paymentMethod: paymentMethod === 'cash' || paymentMethod === 'cod' ? 'cash' : 'other',
               paymentCollected: false
             });
             await wallet.save();
@@ -2027,13 +2058,15 @@ export const completeDelivery = asyncHandler(async (req, res) => {
         console.warn(`⚠️ Earning already added for order ${orderIdForLog}, skipping wallet update`);
       } else {
         // Add payment transaction (earning) with paymentCollected: false so cashInHand gets COD amount, not commission
-        const isCOD = order.payment?.method === 'cash' || order.payment?.method === 'cod';
+        const paymentMethod = (order.payment?.method || '').toString().toLowerCase();
+        const isCOD = paymentMethod === 'cash' || paymentMethod === 'cod';
         walletTransaction = wallet.addTransaction({
           amount: totalEarning,
           type: 'payment',
           status: 'Completed',
           description: `Delivery earnings for Order #${orderIdForLog} (Distance: ${deliveryDistance.toFixed(2)} km)`,
           orderId: orderMongoId || order._id,
+          paymentMethod: isCOD ? 'cash' : 'other',
           paymentCollected: false
         });
 
@@ -2041,8 +2074,7 @@ export const completeDelivery = asyncHandler(async (req, res) => {
 
         // COD: add cash collected (order total) to cashInHand so Pocket balance shows it
         const codAmount = Number(order.pricing?.total) || 0;
-        const paymentMethod = (order.payment?.method || '').toString().toLowerCase();
-        const isCashOrder = paymentMethod === 'cash' || paymentMethod === 'cod';
+        const isCashOrder = isCOD;
         if (isCashOrder && codAmount > 0) {
           try {
             const updateResult = await DeliveryWallet.updateOne(

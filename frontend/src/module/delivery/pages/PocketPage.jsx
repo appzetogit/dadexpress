@@ -212,6 +212,11 @@ export default function PocketPage() {
     ? weeklyEarningsFromAPI.totalOrders
     : weeklyOrdersFromTransactions
 
+  const isCashPaymentMethod = (method) => {
+    const m = String(method || "").toLowerCase().trim()
+    return m === "cash" || m === "cod" || m === "cash on delivery"
+  }
+
   // Fetch active earning addon offers
   useEffect(() => {
     const fetchActiveEarningAddons = async () => {
@@ -362,30 +367,30 @@ export default function PocketPage() {
     ?.filter(t => t.type === 'bonus' && t.status === 'Completed')
     .reduce((sum, t) => sum + (t.amount || 0), 0) || 0
 
-  // Pocket balance - shows total balance (includes bonus)
-  // Total balance = all earnings + bonus - withdrawals
-  // This is what delivery partner can withdraw
-  // IMPORTANT: Use walletState.pocketBalance if available (from API), otherwise use totalBalance
-  let pocketBalance = walletState?.pocketBalance !== undefined
-    ? walletState.pocketBalance
-    : (walletState?.totalBalance || balances.totalBalance || 0)
+  // Pocket balance (withdrawable): only online earnings/credits.
+  // Exclude COD/cash payment transactions from withdrawable pocket balance.
+  const onlinePocketBalanceFromTransactions = Array.isArray(walletState?.transactions)
+    ? walletState.transactions
+      .filter((t) => t?.status === "Completed")
+      .reduce((sum, t) => {
+        if (t.type === "payment") {
+          return isCashPaymentMethod(t.paymentMethod) ? sum : sum + (Number(t.amount) || 0)
+        }
+        if (t.type === "bonus" || t.type === "earning_addon" || t.type === "refund") {
+          return sum + (Number(t.amount) || 0)
+        }
+        if (t.type === "withdrawal" || t.type === "deduction") {
+          return sum - (Number(t.amount) || 0)
+        }
+        return sum
+      }, 0)
+    : null
 
-  // IMPORTANT: Ensure pocket balance includes bonus
-  // If backend totalBalance is 0 but we have bonus, calculate it manually
-  // This ensures bonus is always reflected in pocket balance
-  if (pocketBalance === 0 && totalBonus > 0) {
-    // If totalBalance is 0 but we have bonus, pocket balance = bonus
-    pocketBalance = totalBonus
-  } else if (pocketBalance > 0 && totalBonus > 0) {
-    // Verify pocket balance includes bonus
-    // Calculate expected: Earnings + Bonus - Withdrawals
-    const totalWithdrawn = balances.totalWithdrawn || 0
-    const expectedBalance = weeklyEarnings + totalBonus - totalWithdrawn
-    // Use the higher value to ensure bonus is included
-    if (expectedBalance > pocketBalance) {
-      pocketBalance = expectedBalance
-    }
-  }
+  let pocketBalance = onlinePocketBalanceFromTransactions !== null
+    ? Math.max(0, onlinePocketBalanceFromTransactions)
+    : (walletState?.pocketBalance !== undefined
+      ? Number(walletState.pocketBalance) || 0
+      : (Number(walletState?.totalBalance) || Number(balances.totalBalance) || 0))
 
 
   // Available cash limit = remaining limit (global limit - cash in hand)

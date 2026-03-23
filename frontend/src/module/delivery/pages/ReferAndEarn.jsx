@@ -15,6 +15,8 @@ export default function ReferAndEarn() {
   const [showSuccessPopup, setShowSuccessPopup] = useState(false)
   const [referralCount, setReferralCount] = useState(0)
   const [referralCode, setReferralCode] = useState("")
+  const [referralReward, setReferralReward] = useState(6000)
+  const [isReferralEnabled, setIsReferralEnabled] = useState(true)
   const [referralStats, setReferralStats] = useState(null)
   const [loadingStats, setLoadingStats] = useState(false)
   const [bannerText, setBannerText] = useState(
@@ -50,6 +52,10 @@ export default function ReferAndEarn() {
 
         setReferralStats(data)
         setReferralCode(data.referralCode || "")
+        const referralEnabled = data.referralSettings?.isEnabled
+        if (typeof referralEnabled === "boolean") {
+          setIsReferralEnabled(referralEnabled)
+        }
 
         // Prefer backend referralStats.invited as primary count
         const invitedCount = data.referralStats?.invited ?? null
@@ -60,6 +66,9 @@ export default function ReferAndEarn() {
         // Build a dynamic banner message if we have earned amount
         const earned = data.referralStats?.earned
         const referrerReward = data.referralSettings?.referrerReward
+        if (typeof referrerReward === "number" && referrerReward > 0) {
+          setReferralReward(referrerReward)
+        }
 
         if (typeof earned === "number" && earned > 0) {
           setBannerText(
@@ -90,6 +99,12 @@ export default function ReferAndEarn() {
       isMounted = false
     }
   }, [])
+
+  useEffect(() => {
+    if (isReferralEnabled === false) {
+      navigate("/delivery/profile", { replace: true })
+    }
+  }, [isReferralEnabled, navigate])
 
   // Validate mobile number (10 digits)
   const isValidMobile = /^\d{10}$/.test(mobileNumber)
@@ -202,7 +217,7 @@ export default function ReferAndEarn() {
         {/* Earning Potential */}
         <div>
           <p className="text-2xl font-bold text-gray-900 mb-6">
-            Earn upto ₹6,000 extra per referral
+            Earn upto ₹{referralReward.toLocaleString("en-IN")} extra per referral
           </p>
 
           {/* Friend's Name Input */}
@@ -291,7 +306,7 @@ export default function ReferAndEarn() {
                 <div className="w-6 h-6 rounded-full border-6 border-black bg-white flex-shrink-0"></div>
               </div>
               <div className="flex-1 pt-1">
-                <p className="text-base text-gray-900 font-medium">You earn upto ₹6,000 bonus</p>
+                <p className="text-base text-gray-900 font-medium">You earn upto ₹{referralReward.toLocaleString("en-IN")} bonus</p>
               </div>
             </div>
           </div>

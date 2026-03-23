@@ -402,6 +402,15 @@ export default function DeliveryHome() {
       }
     }
   }
+
+  const isCashPaymentMethod = (value) => {
+    const normalized = String(value || "")
+      .toLowerCase()
+      .trim()
+      .replace(/[_-]+/g, " ")
+    return normalized === "cash" || normalized === "cod" || normalized === "cash on delivery"
+  }
+
   const [walletState, setWalletState] = useState({
     totalBalance: 0,
     cashInHand: 0,
@@ -923,6 +932,11 @@ export default function DeliveryHome() {
 
     return 0
   }, [])
+
+  const isPlaceholderDistance = (value) => {
+    const normalized = String(value || "").trim().toLowerCase()
+    return !normalized || normalized === "0 km" || normalized === "calculating..."
+  }
 
   const getRestaurantProfilePhotoUrl = useCallback((orderLike, fallbackValue = null) => {
     if (!orderLike) return fallbackValue
@@ -5095,12 +5109,24 @@ export default function DeliveryHome() {
       if (!pickupDistance || pickupDistance === '0 km') {
         // Try to calculate from driver's current location to restaurant
         const currentLocation = riderLocation || lastLocationRef.current;
-        const restaurantLat = newOrder.restaurantLocation?.latitude;
-        const restaurantLng = newOrder.restaurantLocation?.longitude;
+        const restaurantCoords =
+          newOrder.restaurantLocation?.coordinates ||
+          newOrder.restaurantId?.location?.coordinates ||
+          newOrder.location?.coordinates ||
+          null;
+        const restaurantLat = Number(
+          newOrder.restaurantLocation?.latitude ??
+          newOrder.restaurantLocation?.lat ??
+          (Array.isArray(restaurantCoords) ? restaurantCoords[1] : undefined)
+        );
+        const restaurantLng = Number(
+          newOrder.restaurantLocation?.longitude ??
+          newOrder.restaurantLocation?.lng ??
+          (Array.isArray(restaurantCoords) ? restaurantCoords[0] : undefined)
+        );
 
         if (currentLocation && currentLocation.length === 2 &&
-          restaurantLat && restaurantLng &&
-          !isNaN(restaurantLat) && !isNaN(restaurantLng)) {
+          Number.isFinite(restaurantLat) && Number.isFinite(restaurantLng)) {
           // Calculate distance in meters, then convert to km
           const distanceInMeters = calculateDistance(
             currentLocation[0],
@@ -5112,6 +5138,10 @@ export default function DeliveryHome() {
           pickupDistance = `${distanceInKm.toFixed(2)} km`;
           false && console.log('📍 Calculated pickup distance:', pickupDistance);
         }
+      }
+
+      if (isPlaceholderDistance(pickupDistance) && !isPlaceholderDistance(selectedRestaurant?.pickupDistance)) {
+        pickupDistance = selectedRestaurant.pickupDistance
       }
 
       // Default to 'Calculating...' if still no distance
@@ -10910,7 +10940,7 @@ export default function DeliveryHome() {
                           return null;
                         })()}
                         <p className="text-gray-400 text-xs">
-                          Pickup: {newOrder?.pickupDistance || selectedRestaurant?.pickupDistance || '0 km'} | Drop: {newOrder?.deliveryDistance || selectedRestaurant?.dropDistance || '0 km'}
+                          Pickup: {(isPlaceholderDistance(selectedRestaurant?.pickupDistance) ? newOrder?.pickupDistance : selectedRestaurant?.pickupDistance) || '0 km'} | Drop: {(isPlaceholderDistance(selectedRestaurant?.dropDistance) ? newOrder?.deliveryDistance : selectedRestaurant?.dropDistance) || '0 km'}
                         </p>
                       </div>
                     </div>
@@ -11296,11 +11326,11 @@ export default function DeliveryHome() {
               <p className="text-gray-500 text-sm font-medium">
                 Order ID: {selectedRestaurant?.orderId || 'ORD1234567890'}
               </p>
-              <div className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${(String((selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment ?? '') || '').toLowerCase() === 'cash' || String((selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment ?? '') || '').toLowerCase() === 'cod')
+              <div className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${isCashPaymentMethod(selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment)
                 ? 'bg-amber-100 text-amber-700 border border-amber-200'
                 : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
                 }`}>
-                {(String((selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment ?? '') || '').toLowerCase() === 'cash' || String((selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment ?? '') || '').toLowerCase() === 'cod') ? 'COD' : 'Paid'}
+                {isCashPaymentMethod(selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment) ? 'COD' : 'Paid'}
               </div>
             </div>
             {(() => {
@@ -11844,11 +11874,11 @@ export default function DeliveryHome() {
                       <h3 className="text-base font-semibold text-gray-900">
                         Head to Customer Location
                       </h3>
-                      <div className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${(String((selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment ?? '') || '').toLowerCase() === 'cash' || String((selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment ?? '') || '').toLowerCase() === 'cod')
+                      <div className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${isCashPaymentMethod(selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment)
                         ? 'bg-amber-100 text-amber-700 border border-amber-200'
                         : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
                         }`}>
-                        {(String((selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment ?? '') || '').toLowerCase() === 'cash' || String((selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment ?? '') || '').toLowerCase() === 'cod') ? 'COD' : 'Paid'}
+                        {isCashPaymentMethod(selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment) ? 'COD' : 'Paid'}
                       </div>
                     </div>
                     <p className="text-sm text-gray-600 mt-0.5">
@@ -11919,7 +11949,7 @@ export default function DeliveryHome() {
               Order ID: {selectedRestaurant?.orderId || 'ORD1234567890'}
             </p>
             {/* Added Clear Payment Visibility */}
-            {(String((selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment ?? '') || '').toLowerCase() === 'cash' || String((selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment ?? '') || '').toLowerCase() === 'cod') ? (
+            {isCashPaymentMethod(selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment) ? (
               <div className="mt-4 bg-amber-50 border-2 border-amber-400 rounded-xl p-4 flex items-center gap-3 animate-pulse shadow-sm">
                 <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center">
                   <IndianRupee className="w-7 h-7 text-amber-600" />
@@ -12205,8 +12235,7 @@ export default function DeliveryHome() {
 
           {/* Payment info: Online = amount paid, COD = collect from customer */}
           {selectedRestaurant?.total != null && (() => {
-            const m = (selectedRestaurant.paymentMethod || '').toLowerCase()
-            const isCod = m === 'cash' || m === 'cod'
+            const isCod = isCashPaymentMethod(selectedRestaurant.paymentMethod || selectedRestaurant.payment)
             const total = Number(selectedRestaurant.total) || 0
             return (
               <div className={`rounded-xl p-4 mb-6 ${isCod ? 'bg-amber-50 border border-amber-200' : 'bg-emerald-50 border border-emerald-200'}`}>

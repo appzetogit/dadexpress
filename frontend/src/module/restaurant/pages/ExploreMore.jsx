@@ -406,7 +406,18 @@ export default function ExploreMore() {
   const formatAddress = (location) => {
     if (!location) return ""
 
+    if (location.formattedAddress && location.formattedAddress.trim() !== "") {
+      return location.formattedAddress.trim()
+    }
+
+    if (location.address && location.address.trim() !== "") {
+      return location.address.trim()
+    }
+
     const parts = []
+
+    if (location.addressLine1) parts.push(location.addressLine1.trim())
+    if (location.addressLine2) parts.push(location.addressLine2.trim())
 
     // Add area if available
     if (location.area) {
@@ -422,7 +433,11 @@ export default function ExploreMore() {
       }
     }
 
-    return parts.join(", ") || ""
+    if (location.landmark) parts.push(location.landmark.trim())
+    if (location.state) parts.push(location.state.trim())
+    if (location.zipCode || location.pincode) parts.push((location.zipCode || location.pincode).trim())
+
+    return parts.filter(Boolean).join(", ") || ""
   }
 
   // Get user data from restaurant data
