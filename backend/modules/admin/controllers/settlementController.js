@@ -2,6 +2,7 @@ import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import {
   getPendingRestaurantSettlements,
+  getRestaurantFinanceReportSettlements,
   getPendingDeliverySettlements,
   generateRestaurantSettlementReport,
   generateDeliverySettlementReport,
@@ -31,19 +32,30 @@ export const getOrderSettlementDetails = asyncHandler(async (req, res) => {
 });
 
 /**
- * Get pending restaurant settlements
+ * Get restaurant settlements for admin finance report (all delivered + settled rows in range).
+ * Query param pendingOnly=1 uses legacy pending-payout-only list.
  * GET /api/admin/settlements/restaurants
- * Query params: restaurantId, startDate, endDate
+ * Query params: restaurantId, startDate, endDate, pendingOnly
  */
 export const getRestaurantSettlements = asyncHandler(async (req, res) => {
   try {
-    const { restaurantId, startDate, endDate } = req.query;
-    
-    const settlements = await getPendingRestaurantSettlements(
-      restaurantId || null,
-      startDate || null,
-      endDate || null
-    );
+    const { restaurantId, startDate, endDate, pendingOnly } = req.query;
+    const usePendingOnly =
+      pendingOnly === '1' ||
+      pendingOnly === 'true' ||
+      pendingOnly === true;
+
+    const settlements = usePendingOnly
+      ? await getPendingRestaurantSettlements(
+          restaurantId || null,
+          startDate || null,
+          endDate || null,
+        )
+      : await getRestaurantFinanceReportSettlements(
+          restaurantId || null,
+          startDate || null,
+          endDate || null,
+        );
 
     // Calculate totals
     const totals = settlements.reduce((acc, s) => {

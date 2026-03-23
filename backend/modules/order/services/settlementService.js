@@ -19,6 +19,63 @@ const getOrderDeliveredAt = (order) => {
 };
 
 /**
+ * Effective delivery timestamp for reporting when deliveredAt / tracking is missing (legacy orders).
+ */
+const getReportDeliveryTimestamp = (order, settlement) => {
+  if (!order || order.status !== 'delivered') return null;
+  const direct = getOrderDeliveredAt(order);
+  if (direct) return new Date(direct);
+  if (order.updatedAt) return new Date(order.updatedAt);
+  if (settlement?.createdAt) return new Date(settlement.createdAt);
+  return null;
+};
+
+/**
+ * Admin Restaurant Finance Report: all delivered orders with completed restaurant settlement (credited).
+ * Unlike getPendingRestaurantSettlements, includes already paid out rows (restaurantSettled: true).
+ */
+export const getRestaurantFinanceReportSettlements = async (
+  restaurantId = null,
+  startDate = null,
+  endDate = null,
+) => {
+  try {
+    // Delivered orders should appear even if settlementStatus stayed "pending" (e.g. status hook not wired)
+    // or restaurantEarning is still "pending" (escrow not released / net ₹0). Exclude only cancelled rows.
+    const query = {
+      settlementStatus: { $nin: ['cancelled'] },
+      'restaurantEarning.status': { $nin: ['cancelled'] },
+    };
+
+    if (restaurantId) {
+      query.restaurantId = restaurantId;
+    }
+
+    const dateRange = buildDateRange(startDate, endDate);
+
+    const settlementsRaw = await OrderSettlement.find(query)
+      .populate('orderId', 'orderId status deliveredAt tracking updatedAt')
+      .populate('restaurantId', 'name restaurantId')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const settlements = settlementsRaw.filter((settlement) => {
+      const order = settlement?.orderId;
+      if (!order || order.status !== 'delivered') return false;
+      if (!dateRange) return true;
+      const dt = getReportDeliveryTimestamp(order, settlement);
+      if (!dt || Number.isNaN(dt.getTime())) return false;
+      return dt >= dateRange.start && dt <= dateRange.end;
+    });
+
+    return settlements;
+  } catch (error) {
+    console.error('Error getting restaurant finance report settlements:', error);
+    throw error;
+  }
+};
+
+/**
  * Get pending settlements for restaurants
  */
 export const getPendingRestaurantSettlements = async (restaurantId = null, startDate = null, endDate = null) => {
