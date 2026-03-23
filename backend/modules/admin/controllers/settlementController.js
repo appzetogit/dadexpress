@@ -31,7 +31,7 @@ export const getOrderSettlementDetails = asyncHandler(async (req, res) => {
 });
 
 /**
- * Get pending restaurant settlements (unpaid payout). After mark-processed, rows no longer appear here.
+ * Restaurant finance report: delivered settlements from DB in date range. Mark-processed sets metadata flag → row hidden here.
  * GET /api/admin/settlements/restaurants
  * Query params: restaurantId, startDate, endDate
  */

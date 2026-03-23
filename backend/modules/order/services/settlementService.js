@@ -31,14 +31,16 @@ const getReportDeliveryTimestamp = (order, settlement) => {
 };
 
 /**
- * Get pending settlements for restaurants (restaurantSettled: false). Mark as paid sets settled → row leaves this list.
+ * Admin restaurant finance report rows: delivered orders with settlement (DB).
+ * Escrow often sets restaurantSettled=true already, so we do NOT filter by restaurantSettled.
+ * Rows hidden after "Mark as Paid" via metadata.restaurantFinanceReportMarked === true.
  */
 export const getPendingRestaurantSettlements = async (restaurantId = null, startDate = null, endDate = null) => {
   try {
     const query = {
-      restaurantSettled: false,
       settlementStatus: { $nin: ['cancelled'] },
       'restaurantEarning.status': { $nin: ['cancelled'] },
+      'metadata.restaurantFinanceReportMarked': { $ne: true },
     };
 
     if (restaurantId) {
@@ -54,6 +56,12 @@ export const getPendingRestaurantSettlements = async (restaurantId = null, start
       .lean();
 
     const settlements = settlementsRaw.filter((settlement) => {
+      const meta = settlement?.metadata;
+      const hidden =
+        meta &&
+        (meta.restaurantFinanceReportMarked === true ||
+          (typeof meta.get === 'function' && meta.get('restaurantFinanceReportMarked') === true));
+      if (hidden) return false;
       const order = settlement?.orderId;
       if (!order || order.status !== 'delivered') return false;
       if (!dateRange) return true;
@@ -241,10 +249,17 @@ export const markSettlementsAsProcessed = async (settlementIds, actorType, actor
     });
 
     for (const settlement of settlements) {
-      if (
-        settlement.restaurantEarning.status !== 'cancelled' &&
-        !settlement.restaurantSettled
-      ) {
+      // Hide from admin Restaurant Finance Report (independent of wallet restaurantSettled / escrow)
+      if (!settlement.metadata || !(settlement.metadata instanceof Map)) {
+        const plain =
+          settlement.metadata && typeof settlement.metadata === 'object' && !(settlement.metadata instanceof Map)
+            ? { ...settlement.metadata }
+            : {};
+        settlement.metadata = new Map(Object.entries(plain));
+      }
+      settlement.metadata.set('restaurantFinanceReportMarked', true);
+
+      if (settlement.restaurantEarning.status === 'credited' && !settlement.restaurantSettled) {
         settlement.restaurantSettled = true;
       }
       if (settlement.deliveryPartnerEarning.status === 'credited' && !settlement.deliveryPartnerSettled) {
