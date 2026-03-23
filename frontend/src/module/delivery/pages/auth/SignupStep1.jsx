@@ -496,7 +496,7 @@ export default function SignupStep1() {
               (!isBicycle && !formData.vehicleNumber.trim()) ||
               !formData.panNumber.trim() ||
               !formData.aadharNumber.trim() ||
-              Object.keys(errors).length > 0
+              Object.values(errors).some(Boolean)
             }
             className={`w-full py-4 rounded-lg font-bold text-white text-base transition-colors mt-6 ${isSubmitting ||
               !formData.name.trim() ||
@@ -507,7 +507,7 @@ export default function SignupStep1() {
               (!isBicycle && !formData.vehicleNumber.trim()) ||
               !formData.panNumber.trim() ||
               !formData.aadharNumber.trim() ||
-              Object.keys(errors).length > 0
+              Object.values(errors).some(Boolean)
               ? "bg-gray-400 cursor-not-allowed"
               : "bg-[#00B761] hover:bg-[#00A055]"
               }`}
