@@ -1951,11 +1951,6 @@ export default function Home() {
               <span className="text-base sm:text-lg lg:text-2xl text-gray-500 font-normal">Featured</span>
             </div>
           </motion.div>
-          {restaurantsEmptyMessage && (
-            <div className="mb-3 rounded-md border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 dark:border-gray-800 dark:bg-[#1a1a1a] dark:text-gray-300">
-              {restaurantsEmptyMessage}
-            </div>
-          )}
           <div className="relative">
             {/* Loading Overlay */}
             <AnimatePresence>
