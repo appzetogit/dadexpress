@@ -121,7 +121,7 @@ export function useOrdersManagement(orders, statusKey, title) {
 
     if (filters.fromDate) {
       result = result.filter(order => {
-        const orderDate = parseOrderDate(order.date)
+        const orderDate = parseOrderDate(order.date || order.createdAt)
         if (!orderDate) return false
         const fromDate = new Date(filters.fromDate)
         return orderDate >= fromDate
@@ -130,7 +130,7 @@ export function useOrdersManagement(orders, statusKey, title) {
 
     if (filters.toDate) {
       result = result.filter(order => {
-        const orderDate = parseOrderDate(order.date)
+        const orderDate = parseOrderDate(order.date || order.createdAt)
         if (!orderDate) return false
         const toDate = new Date(filters.toDate)
         toDate.setHours(23, 59, 59, 999) // Include entire day

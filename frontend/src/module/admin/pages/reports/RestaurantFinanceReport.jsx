@@ -36,8 +36,12 @@ export default function RestaurantFinanceReport() {
     const earning = settlement?.restaurantEarning || {}
     return {
       ...settlement,
-      restaurantId: settlement?.restaurantId || settlement?.restaurant?._id || null,
-      restaurantName: settlement?.restaurantName || settlement?.restaurant?.name || "Restaurant",
+      restaurantId: settlement?.restaurantId?._id || settlement?.restaurantId || settlement?.restaurant?._id || null,
+      restaurantName:
+        settlement?.restaurantId?.name ||
+        settlement?.restaurantName ||
+        settlement?.restaurant?.name ||
+        "Restaurant",
       createdAt: settlement?.createdAt || settlement?.date || settlement?.orderDate || new Date().toISOString(),
       orderNumber: settlement?.orderNumber || settlement?.orderId || settlement?.id || "N/A",
       restaurantEarning: {
@@ -70,35 +74,18 @@ export default function RestaurantFinanceReport() {
       const hasSelectedRestaurant = filters.restaurantId !== "All Restaurants"
       const params = {
         restaurantId: hasSelectedRestaurant ? filters.restaurantId : undefined,
-        restaurant: hasSelectedRestaurant ? filters.restaurantId : undefined,
         startDate: filters.startDate,
         endDate: filters.endDate,
-        fromDate: filters.startDate,
-        toDate: filters.endDate,
       }
       
       const response = await adminAPI.getRestaurantSettlements(params)
       
       if (response?.data?.success) {
         const payload = response?.data?.data || {}
-        const normalizedSettlements = (Array.isArray(payload.settlements) ? payload.settlements : [])
-          .map(normalizeSettlement)
-
-        const locallyFilteredSettlements = normalizedSettlements.filter((settlement) => {
-          const createdAt = new Date(settlement.createdAt)
-          const start = new Date(filters.startDate)
-          const end = new Date(filters.endDate)
-          end.setHours(23, 59, 59, 999)
-          const inDateRange = Number.isNaN(createdAt.getTime()) ? true : createdAt >= start && createdAt <= end
-          const matchesRestaurant =
-            !hasSelectedRestaurant ||
-            settlement.restaurantId === filters.restaurantId ||
-            settlement.restaurant?._id === filters.restaurantId
-          return inDateRange && matchesRestaurant
-        })
+        const normalizedSettlements = (Array.isArray(payload.settlements) ? payload.settlements : []).map(normalizeSettlement)
 
         const backendTotals = payload.totals || {}
-        const computedTotals = locallyFilteredSettlements.reduce(
+        const computedTotals = normalizedSettlements.reduce(
           (acc, settlement) => {
             acc.totalOrders += 1
             acc.totalCommission += parseAmount(settlement.restaurantEarning?.commission)
@@ -108,7 +95,7 @@ export default function RestaurantFinanceReport() {
           { totalOrders: 0, totalEarnings: 0, totalCommission: 0 },
         )
 
-        setSettlements(locallyFilteredSettlements)
+        setSettlements(normalizedSettlements)
         setTotals({
           totalOrders: Number(backendTotals.totalOrders ?? computedTotals.totalOrders) || 0,
           totalEarnings: parseAmount(backendTotals.totalEarnings ?? computedTotals.totalEarnings),
@@ -266,7 +253,7 @@ export default function RestaurantFinanceReport() {
                 >
                   <option value="All Restaurants">All Restaurants</option>
                   {restaurants.map(r => (
-                    <option key={r._id} value={r.restaurantId || r._id}>{r.name}</option>
+                    <option key={r._id} value={r._id}>{r.name}</option>
                   ))}
                 </select>
                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none transition-colors group-hover:text-slate-600" />
