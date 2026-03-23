@@ -216,7 +216,7 @@ export default function AdminHome() {
               helper="Total platform fees"
               icon={<CreditCard className="h-5 w-5 text-purple-600" />}
               accent="bg-purple-200/40"
-              path="/admin/fee-settings"
+              path={null}
               isLoading={isLoading && !hasLoadedOnce}
             />
             <MetricCard
@@ -526,6 +526,7 @@ export default function AdminHome() {
 
 function MetricCard({ title, value, helper, icon, accent, path, isLoading }) {
   const navigate = useNavigate()
+  const isNavigable = Boolean(path)
 
   if (isLoading) {
     return (
@@ -547,8 +548,8 @@ function MetricCard({ title, value, helper, icon, accent, path, isLoading }) {
 
   return (
     <Card
-      className="overflow-hidden border-neutral-200 bg-white p-0 cursor-pointer transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]"
-      onClick={() => path && navigate(path)}
+      className={`overflow-hidden border-neutral-200 bg-white p-0 ${isNavigable ? "cursor-pointer transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]" : ""}`}
+      onClick={isNavigable ? () => navigate(path) : undefined}
     >
       <CardContent className="relative flex flex-col gap-2 px-4 pb-4 pt-4">
         <div className={`absolute inset-0 ${accent} `} />
