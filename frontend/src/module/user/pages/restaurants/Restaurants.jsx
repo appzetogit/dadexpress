@@ -9,14 +9,101 @@ import TextReveal from "../../components/TextReveal"
 import { Card, CardTitle, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useProfile } from "../../context/ProfileContext"
-import { restaurantAPI } from "@/lib/api"
+import { restaurantAPI, zoneAPI } from "@/lib/api"
+import { useLocation } from "../../hooks/useLocation"
+import { useZone } from "../../hooks/useZone"
+import { useSelectedDeliveryAddress } from "../../hooks/useSelectedDeliveryAddress"
+import { resolveDeliveryAddress } from "../../utils/deliveryAddress"
+
+const toNumber = (value) => {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+const getAddressCoords = (address) => {
+  if (!address) return null
+  const coordinates = Array.isArray(address.location?.coordinates)
+    ? address.location.coordinates
+    : null
+  const lng = toNumber(coordinates?.[0] ?? address.longitude ?? address.lng)
+  const lat = toNumber(coordinates?.[1] ?? address.latitude ?? address.lat)
+  if (!lat || !lng) return null
+  return { lat, lng }
+}
 
 export default function Restaurants() {
   const [restaurants, setRestaurants] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [dietaryFilter, setDietaryFilter] = useState("all")
-  const { addFavorite, removeFavorite, isFavorite } = useProfile()
+  const { addFavorite, removeFavorite, isFavorite, addresses = [], getDefaultAddress } = useProfile()
+  const { selectedDeliveryAddress } = useSelectedDeliveryAddress()
+  const { location } = useLocation()
+  const { zoneId: currentZoneId } = useZone(location)
+  const defaultAddress = useMemo(
+    () => (typeof getDefaultAddress === "function" ? getDefaultAddress() : null),
+    [getDefaultAddress, addresses],
+  )
+  const resolvedDeliveryAddress = useMemo(
+    () =>
+      resolveDeliveryAddress({
+        selected: selectedDeliveryAddress,
+        addresses,
+        currentLocation: location,
+        fallbackAddress: defaultAddress,
+      }),
+    [selectedDeliveryAddress, addresses, location, defaultAddress],
+  )
+  const selectedAddress = resolvedDeliveryAddress?.address || null
+  const selectedCoords = resolvedDeliveryAddress?.coords || getAddressCoords(selectedAddress)
+  const [resolvedZoneId, setResolvedZoneId] = useState(null)
+  const [isZoneResolving, setIsZoneResolving] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+
+    const resolveZone = async () => {
+      const hasSelectedAddress = Boolean(selectedAddress)
+      const fallbackZone = hasSelectedAddress ? null : currentZoneId
+
+      if (!hasSelectedAddress) {
+        setResolvedZoneId(fallbackZone || null)
+        setIsZoneResolving(false)
+        return
+      }
+
+      setIsZoneResolving(true)
+      let zoneId =
+        selectedAddress?.zoneId ||
+        selectedAddress?.zone?._id ||
+        selectedAddress?.zone?.id ||
+        null
+
+      if (!zoneId && selectedCoords?.lat && selectedCoords?.lng) {
+        try {
+          const response = await zoneAPI.getZoneByCoordinates(
+            selectedCoords.lat,
+            selectedCoords.lng,
+          )
+          zoneId = response?.zoneId || response?.data?.data?.zoneId || null
+        } catch (zoneError) {
+          console.error("Zone fetch failed:", zoneError)
+        }
+      }
+
+      if (!zoneId) zoneId = fallbackZone || null
+
+      if (!cancelled) {
+        setResolvedZoneId(zoneId || null)
+        setIsZoneResolving(false)
+      }
+    }
+
+    resolveZone()
+    return () => {
+      cancelled = true
+    }
+  }, [selectedAddress, selectedCoords?.lat, selectedCoords?.lng, currentZoneId])
 
   useEffect(() => {
     const fetchRestaurants = async () => {
@@ -24,7 +111,14 @@ export default function Restaurants() {
         setLoading(true)
         setError("")
 
+        if (!resolvedZoneId || isZoneResolving) {
+          setRestaurants([])
+          setLoading(false)
+          return
+        }
+
         const params = {}
+        params.zoneId = resolvedZoneId
         if (dietaryFilter && dietaryFilter !== "all") {
           params.dietary = dietaryFilter
         }
@@ -68,7 +162,7 @@ export default function Restaurants() {
     }
 
     fetchRestaurants()
-  }, [dietaryFilter])
+  }, [dietaryFilter, resolvedZoneId, isZoneResolving])
 
   const content = useMemo(() => {
     if (loading) {
