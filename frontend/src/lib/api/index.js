@@ -283,6 +283,12 @@ export const zoneAPI = {
       params: { lat, lng },
     });
   },
+  // Resolve zone from coordinates (alias kept for selected-address flow)
+  getZoneByCoordinates: (lat, lng) => {
+    return apiClient.get(API_ENDPOINTS.ZONE.DETECT, {
+      params: { lat, lng },
+    });
+  },
 };
 
 // Export restaurant API helper functions
@@ -2231,4 +2237,3 @@ export const publicAPI = {
     });
   }
 };
-
