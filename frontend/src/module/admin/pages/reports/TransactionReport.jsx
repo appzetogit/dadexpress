@@ -142,6 +142,7 @@ export default function TransactionReport() {
           fromDate: fromDate ? fromDate.toISOString() : undefined,
           toDate: toDate ? toDate.toISOString() : undefined,
           search: debouncedSearch || undefined,
+          metric: metricView.key || undefined,
           limit: 1000
         }
 
@@ -175,7 +176,7 @@ export default function TransactionReport() {
     }
 
     fetchTransactionReport()
-  }, [filters, debouncedSearch])
+  }, [filters, debouncedSearch, metricView.key])
 
   const filteredTransactions = useMemo(() => {
     // Backend already applies filters; additionally do a safe, case-insensitive

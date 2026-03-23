@@ -112,7 +112,11 @@ export const getOrders = asyncHandler(async (req, res) => {
       }).select('_id restaurantId').lean();
 
       if (restaurantDoc) {
-        query.restaurantId = restaurantDoc._id?.toString() || restaurantDoc.restaurantId;
+        const restaurantObjectId = restaurantDoc._id;
+        const restaurantStringId = restaurantDoc._id?.toString() || restaurantDoc.restaurantId;
+        query.restaurantId = {
+          $in: [restaurantObjectId, restaurantStringId].filter(Boolean)
+        };
       }
     }
 
@@ -1051,26 +1055,34 @@ export const getTransactionReport = asyncHandler(async (req, res) => {
       zone,
       restaurant,
       fromDate,
-      toDate
+      toDate,
+      metric
     } = req.query;
 
-    console.log('📋 Query params:', { page, limit, search, zone, restaurant, fromDate, toDate });
+    const isRevenueMetricView = metric === 'gross' || metric === 'total';
+
+    console.log('📋 Query params:', { page, limit, search, zone, restaurant, fromDate, toDate, metric });
 
     // Build query for orders
     const query = {};
 
+    if (isRevenueMetricView) {
+      query.status = 'delivered';
+    }
+
     // Date range filter
     if (fromDate || toDate) {
-      query.createdAt = {};
+      const dateField = isRevenueMetricView ? 'deliveredAt' : 'createdAt';
+      query[dateField] = {};
       if (fromDate) {
         const startDate = new Date(fromDate);
         startDate.setHours(0, 0, 0, 0);
-        query.createdAt.$gte = startDate;
+        query[dateField].$gte = startDate;
       }
       if (toDate) {
         const endDate = new Date(toDate);
         endDate.setHours(23, 59, 59, 999);
-        query.createdAt.$lte = endDate;
+        query[dateField].$lte = endDate;
       }
     }
 

@@ -217,6 +217,7 @@ export default function AdminHome() {
               icon={<CreditCard className="h-5 w-5 text-purple-600" />}
               accent="bg-purple-200/40"
               path={null}
+              disableNavigation={true}
               isLoading={isLoading && !hasLoadedOnce}
             />
             <MetricCard
@@ -524,10 +525,10 @@ export default function AdminHome() {
   )
 }
 
-function MetricCard({ title, value, helper, icon, accent, path, isLoading }) {
+function MetricCard({ title, value, helper, icon, accent, path, isLoading, disableNavigation = false }) {
   const navigate = useNavigate()
-  const isPlatformFeeCard = String(title || "").toLowerCase() === "platform fee"
-  const isNavigable = Boolean(path) && !isPlatformFeeCard
+  const isPlatformFeeCard = String(title || "").toLowerCase().includes("platform fee")
+  const isNavigable = Boolean(path) && !disableNavigation && !isPlatformFeeCard
 
   if (isLoading) {
     return (
