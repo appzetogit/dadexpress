@@ -31,18 +31,12 @@ const getReportDeliveryTimestamp = (order, settlement) => {
 };
 
 /**
- * Admin Restaurant Finance Report: all delivered orders with completed restaurant settlement (credited).
- * Unlike getPendingRestaurantSettlements, includes already paid out rows (restaurantSettled: true).
+ * Get pending settlements for restaurants (restaurantSettled: false). Mark as paid sets settled → row leaves this list.
  */
-export const getRestaurantFinanceReportSettlements = async (
-  restaurantId = null,
-  startDate = null,
-  endDate = null,
-) => {
+export const getPendingRestaurantSettlements = async (restaurantId = null, startDate = null, endDate = null) => {
   try {
-    // Delivered orders should appear even if settlementStatus stayed "pending" (e.g. status hook not wired)
-    // or restaurantEarning is still "pending" (escrow not released / net ₹0). Exclude only cancelled rows.
     const query = {
+      restaurantSettled: false,
       settlementStatus: { $nin: ['cancelled'] },
       'restaurantEarning.status': { $nin: ['cancelled'] },
     };
@@ -66,47 +60,6 @@ export const getRestaurantFinanceReportSettlements = async (
       const dt = getReportDeliveryTimestamp(order, settlement);
       if (!dt || Number.isNaN(dt.getTime())) return false;
       return dt >= dateRange.start && dt <= dateRange.end;
-    });
-
-    return settlements;
-  } catch (error) {
-    console.error('Error getting restaurant finance report settlements:', error);
-    throw error;
-  }
-};
-
-/**
- * Get pending settlements for restaurants
- */
-export const getPendingRestaurantSettlements = async (restaurantId = null, startDate = null, endDate = null) => {
-  try {
-    const query = {
-      'restaurantEarning.status': 'credited',
-      restaurantSettled: false,
-      settlementStatus: 'completed'
-    };
-
-    if (restaurantId) {
-      query.restaurantId = restaurantId;
-    }
-
-    const dateRange = buildDateRange(startDate, endDate);
-
-    const settlementsRaw = await OrderSettlement.find(query)
-      .populate('orderId', 'orderId status deliveredAt tracking')
-      .populate('restaurantId', 'name restaurantId')
-      .sort({ createdAt: -1 })
-      .lean();
-
-    const settlements = settlementsRaw.filter((settlement) => {
-      const order = settlement?.orderId;
-      if (!order || order.status !== 'delivered') return false;
-      if (!dateRange) return true;
-      const deliveredAt = getOrderDeliveredAt(order);
-      if (!deliveredAt) return false;
-      const deliveredAtDate = new Date(deliveredAt);
-      if (Number.isNaN(deliveredAtDate.getTime())) return false;
-      return deliveredAtDate >= dateRange.start && deliveredAtDate <= dateRange.end;
     });
 
     return settlements;
@@ -288,7 +241,10 @@ export const markSettlementsAsProcessed = async (settlementIds, actorType, actor
     });
 
     for (const settlement of settlements) {
-      if (settlement.restaurantEarning.status === 'credited' && !settlement.restaurantSettled) {
+      if (
+        settlement.restaurantEarning.status !== 'cancelled' &&
+        !settlement.restaurantSettled
+      ) {
         settlement.restaurantSettled = true;
       }
       if (settlement.deliveryPartnerEarning.status === 'credited' && !settlement.deliveryPartnerSettled) {
