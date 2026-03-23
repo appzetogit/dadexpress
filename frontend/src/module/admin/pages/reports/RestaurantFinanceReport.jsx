@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from "react"
-import { Search, Download, ChevronDown, Filter, Briefcase, RefreshCw, Settings, ArrowUpDown, FileText, FileSpreadsheet, Code, Loader2, CheckCircle2, Calendar, LayoutDashboard, WalletCards } from "lucide-react"
+import { useState, useEffect } from "react"
+import { Download, ChevronDown, Filter, Briefcase, RefreshCw, FileText, FileSpreadsheet, Code, Loader2, CheckCircle2, LayoutDashboard, WalletCards } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { exportReportsToCSV, exportReportsToExcel, exportReportsToPDF, exportReportsToJSON } from "../../components/reports/reportsExportUtils"
 import { adminAPI } from "@/lib/api"
@@ -22,6 +22,32 @@ export default function RestaurantFinanceReport() {
     endDate: format(new Date(), "yyyy-MM-dd"),
   })
 
+  const parseAmount = (value) => {
+    if (typeof value === "number") return Number.isFinite(value) ? value : 0
+    if (typeof value === "string") {
+      const cleaned = value.replace(/[^\d.-]/g, "")
+      const parsed = Number(cleaned)
+      return Number.isFinite(parsed) ? parsed : 0
+    }
+    return 0
+  }
+
+  const normalizeSettlement = (settlement) => {
+    const earning = settlement?.restaurantEarning || {}
+    return {
+      ...settlement,
+      restaurantId: settlement?.restaurantId || settlement?.restaurant?._id || null,
+      restaurantName: settlement?.restaurantName || settlement?.restaurant?.name || "Restaurant",
+      createdAt: settlement?.createdAt || settlement?.date || settlement?.orderDate || new Date().toISOString(),
+      orderNumber: settlement?.orderNumber || settlement?.orderId || settlement?.id || "N/A",
+      restaurantEarning: {
+        foodPrice: parseAmount(earning.foodPrice ?? settlement?.foodPrice),
+        commission: parseAmount(earning.commission ?? settlement?.commission),
+        netEarning: parseAmount(earning.netEarning ?? settlement?.netEarning ?? settlement?.originalPrice),
+      },
+    }
+  }
+
   // Fetch all restaurants for the dropdown
   useEffect(() => {
     const fetchRestaurants = async () => {
@@ -41,20 +67,52 @@ export default function RestaurantFinanceReport() {
   const fetchSettlements = async () => {
     try {
       setLoading(true)
+      const hasSelectedRestaurant = filters.restaurantId !== "All Restaurants"
       const params = {
-        restaurantId: filters.restaurantId !== "All Restaurants" ? filters.restaurantId : undefined,
+        restaurantId: hasSelectedRestaurant ? filters.restaurantId : undefined,
+        restaurant: hasSelectedRestaurant ? filters.restaurantId : undefined,
         startDate: filters.startDate,
-        endDate: filters.endDate
+        endDate: filters.endDate,
+        fromDate: filters.startDate,
+        toDate: filters.endDate,
       }
       
       const response = await adminAPI.getRestaurantSettlements(params)
       
       if (response?.data?.success) {
-        setSettlements(response.data.data.settlements || [])
-        setTotals(response.data.data.totals || {
-          totalOrders: 0,
-          totalEarnings: 0,
-          totalCommission: 0
+        const payload = response?.data?.data || {}
+        const normalizedSettlements = (Array.isArray(payload.settlements) ? payload.settlements : [])
+          .map(normalizeSettlement)
+
+        const locallyFilteredSettlements = normalizedSettlements.filter((settlement) => {
+          const createdAt = new Date(settlement.createdAt)
+          const start = new Date(filters.startDate)
+          const end = new Date(filters.endDate)
+          end.setHours(23, 59, 59, 999)
+          const inDateRange = Number.isNaN(createdAt.getTime()) ? true : createdAt >= start && createdAt <= end
+          const matchesRestaurant =
+            !hasSelectedRestaurant ||
+            settlement.restaurantId === filters.restaurantId ||
+            settlement.restaurant?._id === filters.restaurantId
+          return inDateRange && matchesRestaurant
+        })
+
+        const backendTotals = payload.totals || {}
+        const computedTotals = locallyFilteredSettlements.reduce(
+          (acc, settlement) => {
+            acc.totalOrders += 1
+            acc.totalCommission += parseAmount(settlement.restaurantEarning?.commission)
+            acc.totalEarnings += parseAmount(settlement.restaurantEarning?.netEarning)
+            return acc
+          },
+          { totalOrders: 0, totalEarnings: 0, totalCommission: 0 },
+        )
+
+        setSettlements(locallyFilteredSettlements)
+        setTotals({
+          totalOrders: Number(backendTotals.totalOrders ?? computedTotals.totalOrders) || 0,
+          totalEarnings: parseAmount(backendTotals.totalEarnings ?? computedTotals.totalEarnings),
+          totalCommission: parseAmount(backendTotals.totalCommission ?? computedTotals.totalCommission),
         })
       } else {
         setSettlements([])
@@ -116,9 +174,9 @@ export default function RestaurantFinanceReport() {
       orderNumber: s.orderNumber,
       date: format(new Date(s.createdAt), "dd MMM yyyy HH:mm"),
       restaurant: s.restaurantName,
-      foodPrice: s.restaurantEarning.foodPrice,
-      commission: s.restaurantEarning.commission,
-      netEarning: s.restaurantEarning.netEarning,
+      foodPrice: s.restaurantEarning?.foodPrice ?? 0,
+      commission: s.restaurantEarning?.commission ?? 0,
+      netEarning: s.restaurantEarning?.netEarning ?? 0,
       status: "Delivered"
     }))
 
@@ -208,7 +266,7 @@ export default function RestaurantFinanceReport() {
                 >
                   <option value="All Restaurants">All Restaurants</option>
                   {restaurants.map(r => (
-                    <option key={r._id} value={r._id}>{r.name}</option>
+                    <option key={r._id} value={r.restaurantId || r._id}>{r.name}</option>
                   ))}
                 </select>
                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none transition-colors group-hover:text-slate-600" />
@@ -346,13 +404,13 @@ export default function RestaurantFinanceReport() {
                         <span className="text-sm font-bold text-slate-700">{s.restaurantName}</span>
                       </td>
                       <td className="px-6 py-4 text-right pr-12">
-                        <span className="text-sm font-bold text-slate-700 pr-10">₹{s.restaurantEarning.foodPrice}</span>
+                        <span className="text-sm font-bold text-slate-700 pr-10">₹{s.restaurantEarning?.foodPrice ?? 0}</span>
                       </td>
                       <td className="px-6 py-4">
-                        <span className="text-sm font-bold text-rose-500">₹{s.restaurantEarning.commission}</span>
+                        <span className="text-sm font-bold text-rose-500">₹{s.restaurantEarning?.commission ?? 0}</span>
                       </td>
                       <td className="px-6 py-4">
-                        <span className="text-sm font-bold text-blue-600 font-mono">₹{s.restaurantEarning.netEarning}</span>
+                        <span className="text-sm font-bold text-blue-600 font-mono">₹{s.restaurantEarning?.netEarning ?? 0}</span>
                       </td>
                       <td className="px-6 py-4">
                         <span className="px-2.5 py-1 rounded text-[10px] font-bold bg-emerald-50 text-emerald-600 uppercase border border-emerald-100">

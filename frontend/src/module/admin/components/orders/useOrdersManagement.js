@@ -35,6 +35,26 @@ export function useOrdersManagement(orders, statusKey, title) {
     return [...new Set(orders.map(o => o.restaurant))]
   }, [orders])
 
+  const normalizeText = (value) => String(value || "").trim().toLowerCase()
+
+  const normalizePaymentStatus = (value) => {
+    const v = normalizeText(value)
+    if (!v) return ""
+    if (v === "paid" || v === "collected" || v === "success") return "paid"
+    if (
+      v === "pending" ||
+      v === "unpaid" ||
+      v === "not collected" ||
+      v === "notcollected"
+    ) {
+      return "pending"
+    }
+    if (v === "failed" || v === "payment failed") return "failed"
+    if (v === "refunded" || v === "refund processed") return "refunded"
+    if (v === "processing" || v === "initiated") return "processing"
+    return v
+  }
+
   // Apply search and filters
   const filteredOrders = useMemo(() => {
     let result = [...orders]
@@ -53,17 +73,17 @@ export function useOrdersManagement(orders, statusKey, title) {
 
     // Apply filters
     if (filters.paymentStatus) {
-      const wanted = filters.paymentStatus.toLowerCase()
+      const wanted = normalizePaymentStatus(filters.paymentStatus)
       result = result.filter((order) => {
-        const paymentStatus = String(order.paymentStatus || "").toLowerCase()
-        const collectionStatus = String(order.paymentCollectionStatus || "").toLowerCase()
+        const paymentStatus = normalizePaymentStatus(order.paymentStatus)
+        const collectionStatus = normalizePaymentStatus(order.paymentCollectionStatus)
         return paymentStatus === wanted || collectionStatus === wanted
       })
     }
 
     if (filters.deliveryType) {
       result = result.filter(
-        (order) => String(order.deliveryType || "").toLowerCase() === filters.deliveryType.toLowerCase(),
+        (order) => normalizeText(order.deliveryType) === normalizeText(filters.deliveryType),
       )
     }
 
@@ -81,23 +101,28 @@ export function useOrdersManagement(orders, statusKey, title) {
 
     // Helper function to parse date format "16 JUL 2025"
     const parseOrderDate = (dateStr) => {
+      if (!dateStr) return null
+      if (dateStr instanceof Date) return Number.isNaN(dateStr.getTime()) ? null : dateStr
       const months = {
         "JAN": "01", "FEB": "02", "MAR": "03", "APR": "04", "MAY": "05", "JUN": "06",
         "JUL": "07", "AUG": "08", "SEP": "09", "OCT": "10", "NOV": "11", "DEC": "12"
       }
-      const parts = dateStr.split(" ")
+      const safeDate = String(dateStr).trim().replace(",", " ")
+      const parts = safeDate.split(/\s+/)
       if (parts.length === 3) {
         const day = parts[0].padStart(2, "0")
         const month = months[parts[1].toUpperCase()] || "01"
         const year = parts[2]
         return new Date(`${year}-${month}-${day}`)
       }
-      return new Date(dateStr)
+      const parsed = new Date(safeDate)
+      return Number.isNaN(parsed.getTime()) ? null : parsed
     }
 
     if (filters.fromDate) {
       result = result.filter(order => {
         const orderDate = parseOrderDate(order.date)
+        if (!orderDate) return false
         const fromDate = new Date(filters.fromDate)
         return orderDate >= fromDate
       })
@@ -106,6 +131,7 @@ export function useOrdersManagement(orders, statusKey, title) {
     if (filters.toDate) {
       result = result.filter(order => {
         const orderDate = parseOrderDate(order.date)
+        if (!orderDate) return false
         const toDate = new Date(filters.toDate)
         toDate.setHours(23, 59, 59, 999) // Include entire day
         return orderDate <= toDate

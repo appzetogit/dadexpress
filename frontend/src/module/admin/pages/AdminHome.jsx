@@ -550,8 +550,8 @@ function MetricCard({ title, value, helper, icon, accent, path, isLoading, disab
 
   return (
     <Card
-      className={`overflow-hidden border-neutral-200 bg-white p-0 ${isNavigable ? "cursor-pointer transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]" : ""}`}
-      onClick={isNavigable ? () => navigate(path) : undefined}
+      className={`overflow-hidden border-neutral-200 bg-white p-0 ${isNavigable ? "cursor-pointer transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]" : "cursor-default"}`}
+      onClick={isNavigable ? () => navigate(path) : (e) => e.stopPropagation()}
     >
       <CardContent className="relative flex flex-col gap-2 px-4 pb-4 pt-4">
         <div className={`absolute inset-0 ${accent} `} />
