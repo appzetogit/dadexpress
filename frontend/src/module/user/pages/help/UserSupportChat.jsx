@@ -141,24 +141,24 @@ export default function UserSupportChat() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f5f5f5] flex flex-col">
+    <div className="min-h-screen bg-[#f5f5f5] dark:bg-gray-950 flex flex-col">
       {/* Header */}
-      <div className="bg-white border-b px-4 py-4 flex items-center gap-3 sticky top-0 z-10 shadow-sm">
+      <div className="bg-white dark:bg-gray-900 border-b dark:border-gray-800 px-4 py-4 flex items-center gap-3 sticky top-0 z-10 shadow-sm">
         <button
           onClick={() => navigate(-1)}
-          className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+          className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
         >
-          <ArrowLeft className="h-5 w-5 text-gray-700" />
+          <ArrowLeft className="h-5 w-5 text-gray-700 dark:text-gray-200" />
         </button>
         <div className="flex items-center gap-3 flex-1">
           <div className="w-10 h-10 rounded-full bg-primary-orange/10 flex items-center justify-center">
             <User className="h-6 w-6 text-primary-orange" />
           </div>
           <div>
-            <p className="font-bold text-gray-900">{userName}</p>
+            <p className="font-bold text-gray-900 dark:text-gray-100">{userName}</p>
             <div className="flex items-center gap-1.5">
               <span className={`w-2 h-2 rounded-full ${connected ? "bg-green-500" : "bg-gray-300"}`} />
-              <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wider">
+              <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider">
                 {connected ? "Online" : "Connecting..."}
               </p>
             </div>
@@ -171,15 +171,15 @@ export default function UserSupportChat() {
         {loading ? (
           <div className="flex flex-col items-center justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-primary-orange mb-2" />
-            <p className="text-sm text-gray-500">Loading conversation...</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Loading conversation...</p>
           </div>
         ) : messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center px-6">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-              <Send className="h-8 w-8 text-gray-300" />
+            <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
+              <Send className="h-8 w-8 text-gray-300 dark:text-gray-500" />
             </div>
-            <h3 className="text-lg font-bold text-gray-900 mb-1">Support Chat</h3>
-            <p className="text-sm text-gray-500">How can we help you today? Send a message to start chatting with our support team.</p>
+            <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-1">Support Chat</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400">How can we help you today? Send a message to start chatting with our support team.</p>
           </div>
         ) : (
           messages.map((msg, idx) => {
@@ -192,7 +192,7 @@ export default function UserSupportChat() {
                       type="button"
                       onClick={() => handleDeleteMessage(msg?._id)}
                       disabled={!connected || !msg?._id}
-                      className="opacity-100 md:opacity-0 md:group-hover:opacity-100 p-1 rounded-full hover:bg-gray-200 disabled:opacity-40 transition-opacity"
+                      className="opacity-100 md:opacity-0 md:group-hover:opacity-100 p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 disabled:opacity-40 transition-opacity"
                       aria-label="Delete message"
                     >
                       <Trash2 className="h-3.5 w-3.5 text-gray-400" />
@@ -202,7 +202,7 @@ export default function UserSupportChat() {
                     className={`group relative max-w-[85%] px-4 py-2.5 rounded-2xl text-sm shadow-sm ${
                       isMine 
                         ? "bg-primary-orange text-white rounded-br-none" 
-                        : "bg-white text-gray-900 border border-gray-100 rounded-bl-none"
+                        : "bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 border border-gray-100 dark:border-gray-800 rounded-bl-none"
                     }`}
                   >
                     <p className="whitespace-pre-wrap break-words">{msg?.text || ""}</p>
@@ -219,12 +219,12 @@ export default function UserSupportChat() {
       </div>
 
       {/* Input */}
-      <div className="bg-white border-t p-4 pb-6 flex items-center gap-3 sticky bottom-0 z-10">
+      <div className="bg-white dark:bg-gray-900 border-t dark:border-gray-800 p-4 pb-6 flex items-center gap-3 sticky bottom-0 z-10">
         <Input
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           placeholder="Describe your issue..."
-          className="rounded-full border-gray-200 focus:ring-primary-orange focus:border-primary-orange h-11 px-5"
+          className="rounded-full border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:ring-primary-orange focus:border-primary-orange h-11 px-5"
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault()
