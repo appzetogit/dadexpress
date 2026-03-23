@@ -169,20 +169,6 @@ export const resolveDeliveryAddress = ({
     };
   }
 
-  const currentFallback = buildAddressFromCurrentLocation(currentLocation, normalizedFallback);
-  const currentCoords = currentFallback?.location?.coordinates || null;
-  const currentLat = toNumber(currentCoords?.[1]);
-  const currentLng = toNumber(currentCoords?.[0]);
-
-  if (isValidCoords(currentLat, currentLng)) {
-    return {
-      address: currentFallback,
-      coords: { lat: currentLat, lng: currentLng },
-      source: "current",
-      error: null,
-    };
-  }
-
   if (normalizedFallback) {
     const fallbackCoords = normalizedFallback?.location?.coordinates || null;
     const fallbackLat = toNumber(fallbackCoords?.[1]);
@@ -200,6 +186,20 @@ export const resolveDeliveryAddress = ({
       coords: null,
       source: "saved",
       error: "Invalid coordinates for default address",
+    };
+  }
+
+  const currentFallback = buildAddressFromCurrentLocation(currentLocation, normalizedFallback);
+  const currentCoords = currentFallback?.location?.coordinates || null;
+  const currentLat = toNumber(currentCoords?.[1]);
+  const currentLng = toNumber(currentCoords?.[0]);
+
+  if (isValidCoords(currentLat, currentLng)) {
+    return {
+      address: currentFallback,
+      coords: { lat: currentLat, lng: currentLng },
+      source: "current",
+      error: null,
     };
   }
 

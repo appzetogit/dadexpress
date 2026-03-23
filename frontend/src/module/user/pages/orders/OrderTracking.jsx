@@ -16,7 +16,8 @@ import {
   Shield,
   Receipt,
   CircleSlash,
-  Loader2
+  Loader2,
+  IndianRupee
 } from "lucide-react"
 import AnimatedPage from "../../components/AnimatedPage"
 import { Card, CardContent } from "@/components/ui/card"
@@ -237,8 +238,11 @@ export default function OrderTracking() {
   const [timerNow, setTimerNow] = useState(Date.now())
   const [showLocationDialog, setShowLocationDialog] = useState(false)
   const [showDeliveryInstructionModal, setShowDeliveryInstructionModal] = useState(false)
+  const [showTipDialog, setShowTipDialog] = useState(false)
   const [deliveryInstructionText, setDeliveryInstructionText] = useState("")
+  const [tipAmount, setTipAmount] = useState("")
   const [isSavingInstruction, setIsSavingInstruction] = useState(false)
+  const [isSavingTip, setIsSavingTip] = useState(false)
   const [isUpdatingLocation, setIsUpdatingLocation] = useState(false)
   const [locationForm, setLocationForm] = useState({
     formattedAddress: "",
@@ -582,7 +586,8 @@ export default function OrderTracking() {
               gst: apiOrder.pricing?.gst || apiOrder.gst || 0,
               paymentMethod: apiOrder.paymentMethod || null,
               eta: apiOrder.eta || null,
-              estimatedDeliveryTime: apiOrder.estimatedDeliveryTime ?? null
+              estimatedDeliveryTime: apiOrder.estimatedDeliveryTime ?? null,
+              customerTip: Number(apiOrder.customerTip || 0)
             };
 
             setOrder(transformedOrder);
@@ -721,7 +726,8 @@ export default function OrderTracking() {
             paymentMethod: apiOrder.paymentMethod || null,
             eta: apiOrder.eta || null,
             estimatedDeliveryTime: apiOrder.estimatedDeliveryTime ?? null,
-            deliveryInstruction: apiOrder.deliveryInstruction || ''
+            deliveryInstruction: apiOrder.deliveryInstruction || '',
+            customerTip: Number(apiOrder.customerTip || 0)
           }
 
           setOrder(transformedOrder)
@@ -768,6 +774,48 @@ export default function OrderTracking() {
       return () => clearTimeout(timer1)
     }
   }, [confirmed])
+
+  useEffect(() => {
+    if (!order) return
+
+    const normalizedStatus = String(order.status || '').toLowerCase()
+    const deliveryStateStatus = String(order?.deliveryState?.status || '').toLowerCase()
+    const deliveryPhase = String(order?.deliveryState?.currentPhase || '').toLowerCase()
+    const isOutForDelivery = Boolean(
+      order?.tracking?.outForDelivery?.status ||
+      order?.tracking?.out_for_delivery?.status ||
+      normalizedStatus === 'out_for_delivery' ||
+      deliveryStateStatus === 'en_route_to_delivery' ||
+      deliveryPhase === 'en_route_to_delivery' ||
+      deliveryPhase === 'at_delivery'
+    )
+    const isDelivered = Boolean(
+      normalizedStatus === 'delivered' ||
+      deliveryStateStatus === 'delivered' ||
+      deliveryPhase === 'completed'
+    )
+    const isCancelled = normalizedStatus === 'cancelled'
+
+    let nextStatus = 'placed'
+
+    if (isCancelled) {
+      nextStatus = 'cancelled'
+    } else if (isDelivered) {
+      nextStatus = 'delivered'
+    } else if (isOutForDelivery || normalizedStatus === 'ready') {
+      nextStatus = 'pickup'
+    } else if (normalizedStatus === 'preparing') {
+      nextStatus = 'preparing'
+    }
+
+    setOrderStatus((prev) => (prev === nextStatus ? prev : nextStatus))
+  }, [
+    order?.status,
+    order?.tracking?.outForDelivery?.status,
+    order?.tracking?.out_for_delivery?.status,
+    order?.deliveryState?.status,
+    order?.deliveryState?.currentPhase
+  ])
 
   // Sync ETA updates emitted from the tracking socket
   useEffect(() => {
@@ -956,6 +1004,12 @@ export default function OrderTracking() {
     setDeliveryInstructionText(order?.deliveryInstruction || "")
   }, [showDeliveryInstructionModal, order?.deliveryInstruction])
 
+  useEffect(() => {
+    if (!showTipDialog) return
+    const currentTip = Number(order?.customerTip || 0)
+    setTipAmount(currentTip > 0 ? String(currentTip) : "")
+  }, [showTipDialog, order?.customerTip])
+
   const handleSaveDeliveryInstruction = async () => {
     if (!order?.id && !order?.orderId && !orderId) {
       toast.error('Order not found')
@@ -979,6 +1033,38 @@ export default function OrderTracking() {
       toast.error(error?.response?.data?.message || 'Failed to update delivery instruction')
     } finally {
       setIsSavingInstruction(false)
+    }
+  }
+
+  const handleSaveCustomerTip = async () => {
+    if (!order?.id && !order?.orderId && !orderId) {
+      toast.error('Order not found')
+      return
+    }
+
+    const parsedTip = Number(tipAmount)
+    if (!Number.isFinite(parsedTip) || parsedTip < 0) {
+      toast.error('Please enter a valid tip amount')
+      return
+    }
+
+    try {
+      setIsSavingTip(true)
+      const currentOrderId = order?.id || order?.orderId || orderId
+      const response = await orderAPI.updateCustomerTip(currentOrderId, parsedTip)
+
+      if (response?.data?.success) {
+        setOrder((prev) => (prev ? { ...prev, customerTip: Number(parsedTip.toFixed(2)) } : prev))
+        toast.success('Tip updated')
+        setShowTipDialog(false)
+      } else {
+        toast.error(response?.data?.message || 'Failed to update tip')
+      }
+    } catch (error) {
+      console.error('Error updating tip:', error)
+      toast.error(error?.response?.data?.message || 'Failed to update tip')
+    } finally {
+      setIsSavingTip(false)
     }
   }
 
@@ -1138,7 +1224,8 @@ export default function OrderTracking() {
           updatedAt: apiOrder.updatedAt || null,
           eta: apiOrder.eta || null,
           estimatedDeliveryTime: apiOrder.estimatedDeliveryTime ?? null,
-          deliveryInstruction: apiOrder.deliveryInstruction || ''
+          deliveryInstruction: apiOrder.deliveryInstruction || '',
+          customerTip: Number(apiOrder.customerTip || 0)
         }
         setOrder(transformedOrder)
 
@@ -1472,6 +1559,13 @@ export default function OrderTracking() {
               }
             />
           )}
+          <SectionItem
+            icon={IndianRupee}
+            title="Add tip for delivery partner"
+            subtitle={Number(order?.customerTip || 0) > 0 ? `₹${Number(order.customerTip).toFixed(2)} added` : "Tap to add tip"}
+            onClick={() => setShowTipDialog(true)}
+            showArrow={true}
+          />
           <SectionItem
             icon={HomeIcon}
             title="Delivery at Location"
@@ -1875,6 +1969,78 @@ export default function OrderTracking() {
                   )}
                 </Button>
               )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showTipDialog} onOpenChange={setShowTipDialog}>
+        <DialogContent className="sm:max-w-md w-[95%] p-0 overflow-hidden border-none bg-white dark:bg-[#1a1a1a] rounded-3xl shadow-2xl">
+          <div className="bg-gradient-to-r from-[#EB590E] to-[#ff8c42] p-6 text-white relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16" />
+            <div className="relative flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center shadow-lg">
+                <IndianRupee className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <DialogHeader className="p-0 border-none space-y-0 text-left">
+                  <DialogTitle className="text-xl font-bold text-white pr-8">
+                    Add tip
+                  </DialogTitle>
+                  <p className="text-orange-50 text-xs mt-0.5">Support your delivery partner</p>
+                </DialogHeader>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-6 space-y-5">
+            <div className="grid grid-cols-4 gap-2">
+              {[20, 30, 50, 100].map((amount) => (
+                <Button
+                  key={amount}
+                  type="button"
+                  variant="outline"
+                  onClick={() => setTipAmount(String(amount))}
+                  className={`rounded-xl ${Number(tipAmount) === amount ? "border-[#EB590E] text-[#EB590E]" : ""}`}
+                >
+                  ₹{amount}
+                </Button>
+              ))}
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Custom Tip Amount</label>
+              <Input
+                type="number"
+                min="0"
+                step="1"
+                placeholder="Enter tip amount"
+                value={tipAmount}
+                onChange={(e) => setTipAmount(e.target.value)}
+                className="h-12 rounded-xl"
+              />
+            </div>
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setShowTipDialog(false)}
+                className="flex-1 h-12 rounded-xl border-gray-200 text-gray-600 font-bold hover:bg-gray-50 active:scale-[0.98] transition-all"
+              >
+                Close
+              </Button>
+              <Button
+                onClick={handleSaveCustomerTip}
+                disabled={isSavingTip}
+                className="flex-1 h-12 rounded-xl bg-gray-900 text-white font-bold shadow-lg shadow-gray-200 active:scale-[0.98] transition-all disabled:opacity-50"
+              >
+                {isSavingTip ? (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Saving...</span>
+                  </div>
+                ) : (
+                  'Save'
+                )}
+              </Button>
             </div>
           </div>
         </DialogContent>

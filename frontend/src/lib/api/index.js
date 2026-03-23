@@ -2108,6 +2108,12 @@ export const orderAPI = {
       { deliveryInstruction }
     );
   },
+  updateCustomerTip: (orderId, customerTip) => {
+    return apiClient.patch(
+      API_ENDPOINTS.ORDER.LOCATION.replace(":orderId", encodeURIComponent(orderId)),
+      { customerTip }
+    );
+  },
 };
 
 // Export dining API helper functions
@@ -2242,4 +2248,3 @@ export const publicAPI = {
     });
   }
 };
-

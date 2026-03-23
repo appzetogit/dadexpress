@@ -185,6 +185,11 @@ const orderSchema = new mongoose.Schema({
     default: '',
     maxlength: 200
   },
+  customerTip: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
   sendCutlery: {
     type: Boolean,
     default: true

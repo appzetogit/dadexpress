@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Link } from "react-router-dom"
 
 import { ArrowLeft, Clock, MapPin, Heart, Star } from "lucide-react"
@@ -35,11 +35,13 @@ export default function Restaurants() {
   const [restaurants, setRestaurants] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const [emptyMessage, setEmptyMessage] = useState("No restaurants found for this address")
   const [dietaryFilter, setDietaryFilter] = useState("all")
   const { addFavorite, removeFavorite, isFavorite, addresses = [], getDefaultAddress } = useProfile()
   const { selectedDeliveryAddress } = useSelectedDeliveryAddress()
   const { location } = useLocation()
-  const { zoneId: currentZoneId } = useZone(location)
+  const { zoneId: currentZoneId, loading: zoneLoading } = useZone(location)
+  const isSavedSelectionLocked = selectedDeliveryAddress?.mode === "saved"
   const defaultAddress = useMemo(
     () => (typeof getDefaultAddress === "function" ? getDefaultAddress() : null),
     [getDefaultAddress, addresses],
@@ -58,17 +60,31 @@ export default function Restaurants() {
   const selectedCoords = resolvedDeliveryAddress?.coords || getAddressCoords(selectedAddress)
   const [resolvedZoneId, setResolvedZoneId] = useState(null)
   const [isZoneResolving, setIsZoneResolving] = useState(false)
+  const zoneResolveRequestRef = useRef(0)
+  const restaurantsRequestRef = useRef(0)
 
   useEffect(() => {
     let cancelled = false
+    const resolveRequestId = ++zoneResolveRequestRef.current
 
     const resolveZone = async () => {
       const hasSelectedAddress = Boolean(selectedAddress)
-      const fallbackZone = hasSelectedAddress ? null : currentZoneId
+      const hasSelectedCoords = Boolean(selectedCoords?.lat && selectedCoords?.lng)
 
-      if (!hasSelectedAddress) {
-        setResolvedZoneId(fallbackZone || null)
+      console.log("[Restaurants][ZoneResolve]", {
+        resolveRequestId,
+        selectedDeliveryAddress,
+        selectedAddress,
+        effectiveLocation: location,
+        isSavedSelectionLocked,
+        zoneIdFromCurrentLocation: currentZoneId,
+      })
+
+      if (!isSavedSelectionLocked) {
+        if (cancelled || resolveRequestId !== zoneResolveRequestRef.current) return
+        setResolvedZoneId(currentZoneId || null)
         setIsZoneResolving(false)
+        setError("")
         return
       }
 
@@ -79,21 +95,31 @@ export default function Restaurants() {
         selectedAddress?.zone?.id ||
         null
 
-      if (!zoneId && selectedCoords?.lat && selectedCoords?.lng) {
+      if (!zoneId && hasSelectedCoords) {
         try {
           const response = await zoneAPI.getZoneByCoordinates(
             selectedCoords.lat,
             selectedCoords.lng,
           )
-          zoneId = response?.zoneId || response?.data?.data?.zoneId || null
+          zoneId =
+            response?.data?.data?.zoneId ||
+            response?.data?.data?.zone?._id ||
+            response?.zoneId ||
+            null
         } catch (zoneError) {
           console.error("Zone fetch failed:", zoneError)
         }
       }
 
-      if (!zoneId) zoneId = fallbackZone || null
-
-      if (!cancelled) {
+      if (cancelled || resolveRequestId !== zoneResolveRequestRef.current) return
+      if (!zoneId && !hasSelectedAddress) {
+        setError("Service not available in this area")
+      } else if (!zoneId) {
+        setError("Service not available in this area")
+      } else {
+        setError("")
+      }
+      if (!cancelled && resolveRequestId === zoneResolveRequestRef.current) {
         setResolvedZoneId(zoneId || null)
         setIsZoneResolving(false)
       }
@@ -103,9 +129,30 @@ export default function Restaurants() {
     return () => {
       cancelled = true
     }
-  }, [selectedAddress, selectedCoords?.lat, selectedCoords?.lng, currentZoneId])
+  }, [
+    selectedDeliveryAddress,
+    isSavedSelectionLocked,
+    selectedAddress,
+    selectedCoords?.lat,
+    selectedCoords?.lng,
+    currentZoneId,
+    location,
+  ])
 
   useEffect(() => {
+    const requestId = ++restaurantsRequestRef.current
+    if (zoneLoading || isZoneResolving) {
+      return
+    }
+
+    if (!resolvedZoneId) {
+      setLoading(false)
+      setRestaurants([])
+      setError("Service not available in this area")
+      setEmptyMessage("No restaurants found for this address")
+      return
+    }
+
     const fetchRestaurants = async () => {
       try {
         setLoading(true)
@@ -123,8 +170,30 @@ export default function Restaurants() {
           params.dietary = dietaryFilter
         }
 
+        console.log("[Restaurants][Fetch:start]", {
+          requestId,
+          selectedDeliveryAddress,
+          selectedAddress,
+          effectiveLocation: location,
+          zoneIdUsed: params.zoneId,
+        })
+
         const response = await restaurantAPI.getRestaurants(params)
+        if (requestId !== restaurantsRequestRef.current) {
+          console.log("[Restaurants][Fetch:stale-response]", {
+            requestId,
+            activeRequestId: restaurantsRequestRef.current,
+            aborted: true,
+          })
+          return
+        }
         const restaurantsArray = response?.data?.data?.restaurants || []
+
+        if (restaurantsArray.length === 0) {
+          setRestaurants([])
+          setEmptyMessage("No restaurants found for this address")
+          return
+        }
 
         const transformed = restaurantsArray.map((restaurant) => {
           const cuisine = restaurant.cuisines && restaurant.cuisines.length > 0
@@ -155,16 +224,38 @@ export default function Restaurants() {
         })
 
         setRestaurants(transformed)
+        console.log("[Restaurants][Fetch:done]", {
+          requestId,
+          zoneIdUsed: params.zoneId,
+          count: transformed.length,
+          aborted: requestId !== restaurantsRequestRef.current,
+        })
       } catch (err) {
+        if (requestId !== restaurantsRequestRef.current) return
         setError(err?.response?.data?.message || "Failed to load restaurants")
         setRestaurants([])
+        setEmptyMessage("No restaurants found for this address")
       } finally {
+        if (requestId !== restaurantsRequestRef.current) return
         setLoading(false)
       }
     }
 
     fetchRestaurants()
-  }, [dietaryFilter, resolvedZoneId, isZoneResolving])
+  }, [
+    dietaryFilter,
+    resolvedZoneId,
+    isZoneResolving,
+    zoneLoading,
+    selectedDeliveryAddress,
+    selectedAddress,
+    location,
+  ])
+
+  useEffect(() => {
+    setRestaurants([])
+    setLoading(true)
+  }, [resolvedZoneId, isSavedSelectionLocked])
 
   const content = useMemo(() => {
     if (loading) {
@@ -176,7 +267,7 @@ export default function Restaurants() {
     }
 
     if (restaurants.length === 0) {
-      return <p className="text-sm text-gray-600 dark:text-gray-400">No restaurants found.</p>
+      return <p className="text-sm text-gray-600 dark:text-gray-400">{emptyMessage}</p>
     }
 
     return (
@@ -200,7 +291,7 @@ export default function Restaurants() {
                 deliveryTime: restaurant.deliveryTime,
                 distance: restaurant.distance,
                 priceRange: restaurant.priceRange,
-                image: restaurant.image
+                image: restaurant.image,
               })
             }
           }
@@ -339,12 +430,11 @@ export default function Restaurants() {
         })}
       </div>
     )
-  }, [loading, error, restaurants, isFavorite, addFavorite, removeFavorite])
+  }, [loading, error, restaurants, emptyMessage, isFavorite, addFavorite, removeFavorite])
 
   return (
     <AnimatedPage className="min-h-screen bg-gradient-to-b from-yellow-50/30 dark:from-[#0a0a0a] via-white dark:via-[#0a0a0a] to-orange-50/20 dark:to-[#0a0a0a]">
       <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 xl:px-12 py-4 sm:py-6 md:py-8 lg:py-10 space-y-4 sm:space-y-6 lg:space-y-8">
-        {/* Header */}
         <ScrollReveal>
           <div className="flex items-center gap-3 sm:gap-4 lg:gap-5 mb-4 lg:mb-6">
             <Link to="/user">
@@ -365,8 +455,8 @@ export default function Restaurants() {
             <button
               onClick={() => setDietaryFilter("all")}
               className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${dietaryFilter === "all"
-                  ? "bg-gray-900 text-white dark:bg-white dark:text-gray-900"
-                  : "bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 dark:bg-[#1a1a1a] dark:text-gray-300 dark:border-gray-800 dark:hover:bg-gray-800"
+                ? "bg-gray-900 text-white dark:bg-white dark:text-gray-900"
+                : "bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 dark:bg-[#1a1a1a] dark:text-gray-300 dark:border-gray-800 dark:hover:bg-gray-800"
                 }`}
             >
               All
@@ -374,8 +464,8 @@ export default function Restaurants() {
             <button
               onClick={() => setDietaryFilter("veg")}
               className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors flex items-center gap-1.5 ${dietaryFilter === "veg"
-                  ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800"
-                  : "bg-white text-gray-700 border-gray-200 hover:bg-green-50 hover:text-green-600 hover:border-green-200 dark:bg-[#1a1a1a] dark:text-gray-300 dark:border-gray-800 dark:hover:bg-gray-800"
+                ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800"
+                : "bg-white text-gray-700 border-gray-200 hover:bg-green-50 hover:text-green-600 hover:border-green-200 dark:bg-[#1a1a1a] dark:text-gray-300 dark:border-gray-800 dark:hover:bg-gray-800"
                 }`}
             >
               <div className="w-3 h-3 border border-green-600 rounded-sm flex items-center justify-center">
@@ -386,8 +476,8 @@ export default function Restaurants() {
             <button
               onClick={() => setDietaryFilter("non-veg")}
               className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors flex items-center gap-1.5 ${dietaryFilter === "non-veg"
-                  ? "bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800"
-                  : "bg-white text-gray-700 border-gray-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200 dark:bg-[#1a1a1a] dark:text-gray-300 dark:border-gray-800 dark:hover:bg-gray-800"
+                ? "bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800"
+                : "bg-white text-gray-700 border-gray-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200 dark:bg-[#1a1a1a] dark:text-gray-300 dark:border-gray-800 dark:hover:bg-gray-800"
                 }`}
             >
               <div className="w-3 h-3 border border-red-600 rounded-sm flex items-center justify-center">
@@ -398,8 +488,8 @@ export default function Restaurants() {
             <button
               onClick={() => setDietaryFilter("pure-veg")}
               className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors flex items-center gap-1.5 ${dietaryFilter === "pure-veg"
-                  ? "bg-green-600 text-white border-green-600 dark:bg-green-500 dark:border-green-500"
-                  : "bg-white text-green-700 border-green-600 hover:bg-green-50 dark:bg-[#1a1a1a] dark:text-green-400 dark:hover:bg-green-900/20"
+                ? "bg-green-600 text-white border-green-600 dark:bg-green-500 dark:border-green-500"
+                : "bg-white text-green-700 border-green-600 hover:bg-green-50 dark:bg-[#1a1a1a] dark:text-green-400 dark:hover:bg-green-900/20"
                 }`}
             >
               <div className="w-3 h-3 border border-current rounded-sm flex items-center justify-center">
@@ -416,4 +506,3 @@ export default function Restaurants() {
     </AnimatedPage>
   )
 }
-

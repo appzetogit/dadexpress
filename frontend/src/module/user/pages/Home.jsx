@@ -36,8 +36,11 @@ import { useZone } from "../hooks/useZone"
 import useUserPoints from "../hooks/useUserPoints"
 import { useSelectedDeliveryAddress } from "../hooks/useSelectedDeliveryAddress"
 import { resolveDeliveryAddress } from "../utils/deliveryAddress"
+import { useSelectedDeliveryAddress } from "../hooks/useSelectedDeliveryAddress"
+import { resolveDeliveryAddress } from "../utils/deliveryAddress"
 import quickSpicyLogo from "@/assets/quicky-spicy-logo.png"
 import offerImage from "@/assets/offerimage.png"
+import api, { restaurantAPI, zoneAPI } from "@/lib/api"
 import api, { restaurantAPI, zoneAPI } from "@/lib/api"
 import { API_BASE_URL } from "@/lib/api/config"
 import OptimizedImage from "@/components/OptimizedImage"
@@ -266,7 +269,7 @@ export default function Home() {
   const [heroSearch, setHeroSearch] = useState("")
   const { openSearch, closeSearch, searchValue, setSearchValue } = useSearchOverlay()
   const { openLocationSelector } = useLocationSelector()
-  const { vegMode, setVegMode: setVegModeContext } = useProfile()
+  const { vegMode, setVegMode: setVegModeContext, addresses, getDefaultAddress } = useProfile()
   const [prevVegMode, setPrevVegMode] = useState(vegMode)
   const [showVegModePopup, setShowVegModePopup] = useState(false)
   const [showSwitchOffPopup, setShowSwitchOffPopup] = useState(false)
@@ -642,13 +645,18 @@ export default function Home() {
   const { selectedDeliveryAddress } = useSelectedDeliveryAddress()
   const { location, loading, requestLocation } = useLocation()
   const { zoneId, zoneStatus, isInService, isOutOfService, loading: zoneLoading } = useZone(location)
+  const isSavedSelectionLocked = selectedDeliveryAddress?.mode === "saved"
   const [resolvedZoneId, setResolvedZoneId] = useState(null)
   const [selectedAddressOutOfService, setSelectedAddressOutOfService] = useState(false)
   const [zoneResolveLoading, setZoneResolveLoading] = useState(false)
+  const zoneResolveRequestRef = useRef(0)
+  const restaurantsRequestRef = useRef(0)
   const { points: userPoints } = useUserPoints()
   const [showToast, setShowToast] = useState(false)
   const [showManageCollections, setShowManageCollections] = useState(false)
   const [selectedRestaurantSlug, setSelectedRestaurantSlug] = useState(null)
+  const location = currentLocation
+  const activeLocationForRestaurants = effectiveLocation || currentLocation
 
   // Memoize cartCount to prevent recalculation on every render - use cart directly
   const cartCount = useMemo(() =>
@@ -727,13 +735,24 @@ export default function Home() {
 
   useEffect(() => {
     let cancelled = false
+    const resolveRequestId = ++zoneResolveRequestRef.current
 
-    const resolveZoneFromSelectedAddress = async () => {
+    const resolveZoneFromSelection = async () => {
       const hasSelectedAddress = Boolean(selectedAddress)
-      const fallbackZoneId = hasSelectedAddress ? null : zoneId
+      const hasSelectedCoords = Boolean(selectedCoords?.lat && selectedCoords?.lng)
 
-      if (!hasSelectedAddress) {
-        setResolvedZoneId(fallbackZoneId || null)
+      console.log("[Home][ZoneResolve]", {
+        resolveRequestId,
+        selectedDeliveryAddress,
+        selectedAddress,
+        effectiveLocation: location,
+        isSavedSelectionLocked,
+        zoneIdFromCurrentLocation: zoneId,
+      })
+
+      if (!isSavedSelectionLocked) {
+        if (cancelled || resolveRequestId !== zoneResolveRequestRef.current) return
+        setResolvedZoneId(zoneId || null)
         setSelectedAddressOutOfService(false)
         setZoneResolveLoading(false)
         return
@@ -747,8 +766,9 @@ export default function Home() {
         selectedAddress?.zone?._id ||
         selectedAddress?.zone?.id ||
         null
+      let outOfService = false
 
-      if (!nextZoneId && selectedCoords?.lat && selectedCoords?.lng) {
+      if (!nextZoneId && hasSelectedCoords) {
         try {
           const response = await zoneAPI.getZoneByCoordinates(
             selectedCoords.lat,
@@ -757,33 +777,40 @@ export default function Home() {
           const data = response?.data?.data || {}
           const status = data?.status
           nextZoneId = data?.zoneId || data?.zone?._id || data?.zone?.id || null
-          if (status && status !== "IN_SERVICE" && !nextZoneId) {
-            setSelectedAddressOutOfService(true)
-          }
+          outOfService = Boolean(status && status !== "IN_SERVICE" && !nextZoneId)
         } catch (error) {
           console.error("Zone fetch failed for selected address:", error)
         }
       }
 
-      if (!nextZoneId) {
-        nextZoneId = fallbackZoneId || null
+      if (!nextZoneId && !hasSelectedAddress) {
+        outOfService = true
       }
 
-      if (!cancelled) {
-        setResolvedZoneId(nextZoneId || null)
-        setZoneResolveLoading(false)
-      }
+      if (cancelled || resolveRequestId !== zoneResolveRequestRef.current) return
+      setResolvedZoneId(nextZoneId || null)
+      setSelectedAddressOutOfService(outOfService || (!nextZoneId && isSavedSelectionLocked))
+      setZoneResolveLoading(false)
     }
 
-    resolveZoneFromSelectedAddress()
+    resolveZoneFromSelection()
 
     return () => {
       cancelled = true
     }
-  }, [selectedAddress, selectedCoords?.lat, selectedCoords?.lng, zoneId])
+  }, [
+    selectedDeliveryAddress,
+    isSavedSelectionLocked,
+    selectedAddress,
+    selectedCoords?.lat,
+    selectedCoords?.lng,
+    zoneId,
+    location,
+  ])
 
   // Fetch restaurants from API with filters
   const fetchRestaurants = useCallback(async (filters = {}) => {
+    const requestId = ++restaurantsRequestRef.current
     try {
       setLoadingRestaurants(true)
 
@@ -860,13 +887,39 @@ export default function Home() {
       }
 
       if (!resolvedZoneId || zoneResolveLoading || zoneLoading) {
+        console.log("[Home][RestaurantsFetch:skipped]", {
+          requestId,
+          selectedDeliveryAddress,
+          selectedAddress,
+          effectiveLocation: location,
+          zoneIdUsed: resolvedZoneId,
+          zoneResolveLoading,
+          zoneLoading,
+          aborted: requestId !== restaurantsRequestRef.current,
+        })
+        if (requestId !== restaurantsRequestRef.current) return
         setRestaurantsData([])
         setLoadingRestaurants(false)
         return
       }
       params.zoneId = resolvedZoneId
 
+      console.log("[Home][RestaurantsFetch:start]", {
+        requestId,
+        selectedDeliveryAddress,
+        selectedAddress,
+        effectiveLocation: location,
+        zoneIdUsed: params.zoneId,
+      })
       const response = await restaurantAPI.getRestaurants(params)
+      if (requestId !== restaurantsRequestRef.current) {
+        console.log("[Home][RestaurantsFetch:stale-response]", {
+          requestId,
+          activeRequestId: restaurantsRequestRef.current,
+          aborted: true,
+        })
+        return
+      }
 
       if (response.data && response.data.success && response.data.data && response.data.data.restaurants) {
         const restaurantsArray = response.data.data.restaurants
@@ -981,9 +1034,17 @@ export default function Home() {
           }
         })
 
+        // Keep only practically nearby restaurants for the resolved zone when precise location is available.
+        const nearbyZoneRestaurants = (resolvedZoneId && userLat && userLng)
+          ? transformedRestaurants.filter((restaurant) => {
+              if (restaurant.distanceInKm === null || restaurant.distanceInKm === undefined) return true
+              return restaurant.distanceInKm <= 30
+            })
+          : transformedRestaurants
+
         // Sort restaurants by distance (nearby first) - only if user location is available
         if (userLat && userLng) {
-          transformedRestaurants.sort((a, b) => {
+          nearbyZoneRestaurants.sort((a, b) => {
             // Available restaurants first, then unavailable
             const aAvailable = a.isActive && a.isAcceptingOrders
             const bAvailable = b.isActive && b.isAcceptingOrders
@@ -998,25 +1059,43 @@ export default function Home() {
             return aDistance - bDistance
           })
         }
-        setRestaurantsData(transformedRestaurants)
+        setRestaurantsData(nearbyZoneRestaurants)
       } else {
         setRestaurantsData([])
       }
     } catch (error) {
+      if (requestId !== restaurantsRequestRef.current) {
+        console.log("[Home][RestaurantsFetch:stale-error]", {
+          requestId,
+          activeRequestId: restaurantsRequestRef.current,
+          aborted: true,
+        })
+        return
+      }
       console.error('Error fetching restaurants:', error)
       console.error('Error details:', error.response?.data || error.message)
       // Don't set hardcoded data here - let the useMemo fallback handle it
       // This way, if API succeeds later, it will show the real data
       setRestaurantsData([])
     } finally {
+      if (requestId !== restaurantsRequestRef.current) return
       setLoadingRestaurants(false)
+      console.log("[Home][RestaurantsFetch:done]", {
+        requestId,
+        zoneIdUsed: resolvedZoneId,
+        aborted: requestId !== restaurantsRequestRef.current,
+      })
     }
-  }, [vegMode, vegModeOption, resolvedZoneId, zoneResolveLoading, zoneLoading, selectedCoords?.lat, selectedCoords?.lng, location?.latitude, location?.longitude])
+  }, [vegMode, vegModeOption, resolvedZoneId, zoneResolveLoading, zoneLoading, selectedCoords?.lat, selectedCoords?.lng, location, selectedDeliveryAddress, selectedAddress])
 
   // Refetch restaurants when filters or GPS zone changes
   useEffect(() => {
     fetchRestaurants(appliedFilters)
   }, [appliedFilters, fetchRestaurants, resolvedZoneId, zoneResolveLoading, zoneLoading, selectedAddress, selectedCoords?.lat, selectedCoords?.lng])
+
+  useEffect(() => {
+    setRestaurantsData([])
+  }, [resolvedZoneId, isSavedSelectionLocked])
 
   // Recalculate distances when selected delivery address location updates
   useEffect(() => {
@@ -1065,9 +1144,15 @@ export default function Home() {
         distanceInKm: distanceInKm // Preserve numeric distance for sorting
       }
     })
+    const nearbyZoneRestaurants = (resolvedZoneId && userLat && userLng)
+      ? updatedRestaurants.filter((restaurant) => {
+          if (restaurant.distanceInKm === null || restaurant.distanceInKm === undefined) return true
+          return restaurant.distanceInKm <= 30
+        })
+      : updatedRestaurants
 
-    setRestaurantsData(updatedRestaurants)
-  }, [selectedCoords?.lat, selectedCoords?.lng, location?.latitude, location?.longitude])
+    setRestaurantsData(nearbyZoneRestaurants)
+  }, [selectedCoords?.lat, selectedCoords?.lng, location?.latitude, location?.longitude, resolvedZoneId])
 
   // Filter restaurants and foods based on active filters
   const filteredRestaurants = useMemo(() => {
@@ -1880,6 +1965,11 @@ export default function Home() {
               <span className="text-base sm:text-lg lg:text-2xl text-gray-500 font-normal">Featured</span>
             </div>
           </motion.div>
+          {restaurantsEmptyMessage && (
+            <div className="mb-3 rounded-md border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 dark:border-gray-800 dark:bg-[#1a1a1a] dark:text-gray-300">
+              {restaurantsEmptyMessage}
+            </div>
+          )}
           <div className="relative">
             {/* Loading Overlay */}
             <AnimatePresence>

@@ -1294,9 +1294,22 @@ export const updateOrderLocation = async (req, res) => {
       Object.prototype.hasOwnProperty.call(payload, 'deliveryInstruction') &&
       typeof payload.deliveryInstruction === 'string';
     const deliveryInstruction = hasDeliveryInstruction ? payload.deliveryInstruction.trim() : null;
+    const hasCustomerTip = Object.prototype.hasOwnProperty.call(payload, 'customerTip');
+    const parsedCustomerTip = hasCustomerTip ? Number(payload.customerTip) : null;
     const isInstructionOnlyPayload =
       Object.keys(payload).length === 1 && Object.prototype.hasOwnProperty.call(payload, 'deliveryInstruction');
-    const address = payload.address || (isInstructionOnlyPayload ? null : payload);
+    const isTipOnlyPayload =
+      Object.keys(payload).length === 1 && Object.prototype.hasOwnProperty.call(payload, 'customerTip');
+    const hasAddressObject =
+      Object.prototype.hasOwnProperty.call(payload, 'address') &&
+      payload.address &&
+      typeof payload.address === 'object';
+    const isOnlyMetadataPayload = !hasAddressObject && (
+      isInstructionOnlyPayload ||
+      isTipOnlyPayload ||
+      (hasDeliveryInstruction && hasCustomerTip && Object.keys(payload).length === 2)
+    );
+    const address = hasAddressObject ? payload.address : (isOnlyMetadataPayload ? null : payload);
 
     if (!orderId) {
       return res.status(400).json({
@@ -1305,10 +1318,10 @@ export const updateOrderLocation = async (req, res) => {
       });
     }
 
-    if (!hasDeliveryInstruction && (!address || typeof address !== 'object')) {
+    if (!hasDeliveryInstruction && !hasCustomerTip && (!address || typeof address !== 'object')) {
       return res.status(400).json({
         success: false,
-        message: 'Address payload or delivery instruction is required'
+        message: 'Address payload, delivery instruction, or customer tip is required'
       });
     }
 
@@ -1371,7 +1384,7 @@ export const updateOrderLocation = async (req, res) => {
         message: 'Delivery location cannot be updated after a delivery partner has been assigned'
       });
     }
-    const hasAddressUpdate = !isInstructionOnlyPayload && !!address && typeof address === 'object';
+    const hasAddressUpdate = !isInstructionOnlyPayload && !isTipOnlyPayload && !!address && typeof address === 'object';
 
     if (hasAddressUpdate) {
       const coordsFromAddress = (() => {
@@ -1432,6 +1445,16 @@ export const updateOrderLocation = async (req, res) => {
       order.deliveryInstruction = deliveryInstruction;
     }
 
+    if (hasCustomerTip) {
+      if (!Number.isFinite(parsedCustomerTip) || parsedCustomerTip < 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Customer tip must be a valid non-negative amount'
+        });
+      }
+      order.customerTip = Number(parsedCustomerTip.toFixed(2));
+    }
+
     await order.save();
 
     const responseAddress = {
@@ -1443,11 +1466,16 @@ export const updateOrderLocation = async (req, res) => {
       success: true,
       message: hasAddressUpdate && hasDeliveryInstruction
         ? 'Delivery details updated'
-        : (hasAddressUpdate ? 'Delivery location updated' : 'Delivery instruction updated'),
+        : (hasAddressUpdate
+          ? 'Delivery location updated'
+          : (hasDeliveryInstruction
+            ? 'Delivery instruction updated'
+            : 'Customer tip updated')),
       data: {
         orderId: order.orderId || order._id?.toString(),
         address: responseAddress,
-        deliveryInstruction: order.deliveryInstruction || ''
+        deliveryInstruction: order.deliveryInstruction || '',
+        customerTip: Number(order.customerTip || 0)
       }
     });
   } catch (error) {
