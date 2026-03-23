@@ -822,6 +822,8 @@ export default function Cart() {
   const totalBeforeDiscount = subtotal + deliveryFee + platformFee + gstCharges
   const total = pricing?.total || (totalBeforeDiscount - discount)
   const savings = pricing?.savings || (discount + (subtotal > 500 ? 32 : 0))
+  const showCutTotalBill =
+    Math.round(Number(totalBeforeDiscount || 0)) > Math.round(Number(total || 0))
 
   // Restaurant name from data or cart
   const restaurantName = restaurantData?.name || cart[0]?.restaurant || "Restaurant"
@@ -1961,7 +1963,9 @@ export default function Cart() {
                     <div className="text-left">
                       <div className="flex items-center gap-2 md:gap-3 flex-wrap">
                         <span className="text-sm md:text-base text-gray-800 dark:text-gray-200">Total Bill</span>
-                        <span className="text-sm md:text-base text-gray-400 dark:text-gray-500 line-through">₹{totalBeforeDiscount.toFixed(0)}</span>
+                        {showCutTotalBill && (
+                          <span className="text-sm md:text-base text-gray-400 dark:text-gray-500 line-through">₹{totalBeforeDiscount.toFixed(0)}</span>
+                        )}
                         <span className="text-sm md:text-base font-semibold text-gray-800 dark:text-gray-200">₹{total.toFixed(0)}</span>
                         {savings > 0 && (
                           <span className="text-xs md:text-sm bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-1.5 md:px-2 py-0.5 rounded font-medium">You saved ₹{savings}</span>
