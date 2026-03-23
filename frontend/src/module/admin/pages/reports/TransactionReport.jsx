@@ -39,6 +39,11 @@ export default function TransactionReport() {
     restaurant: "All restaurants",
     time: "All Time",
   })
+  const [pendingFilters, setPendingFilters] = useState({
+    zone: "All Zones",
+    restaurant: "All restaurants",
+    time: "All Time",
+  })
   const [zones, setZones] = useState([])
   const [restaurants, setRestaurants] = useState([])
   const [metricView, setMetricView] = useState({
@@ -56,6 +61,10 @@ export default function TransactionReport() {
     const validMetrics = ["gross", "total"]
     if (urlTime && validTimes.includes(urlTime)) {
       setFilters(prev => ({
+        ...prev,
+        time: urlTime,
+      }))
+      setPendingFilters(prev => ({
         ...prev,
         time: urlTime,
       }))
@@ -202,15 +211,18 @@ export default function TransactionReport() {
   }
 
   const handleFilterApply = () => {
-    // Filters are already applied via useMemo
+    setFilters(pendingFilters)
+    setCurrentPage(1)
   }
 
   const handleResetFilters = () => {
-    setFilters({
+    const defaultFilters = {
       zone: "All Zones",
       restaurant: "All restaurants",
       time: "All Time",
-    })
+    }
+    setPendingFilters(defaultFilters)
+    setFilters(defaultFilters)
     setCurrentPage(1)
   }
 
@@ -262,8 +274,8 @@ export default function TransactionReport() {
           <div className="flex flex-col sm:flex-row sm:items-center gap-2">
             <div className="relative flex-1 min-w-0">
               <select
-                value={filters.zone}
-                onChange={(e) => setFilters(prev => ({ ...prev, zone: e.target.value }))}
+                value={pendingFilters.zone}
+                onChange={(e) => setPendingFilters(prev => ({ ...prev, zone: e.target.value }))}
                 className="w-full px-2.5 py-1.5 pr-5 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs appearance-none cursor-pointer"
               >
                 <option value="All Zones">All Zones</option>
@@ -276,8 +288,8 @@ export default function TransactionReport() {
 
             <div className="relative flex-1 min-w-0">
               <select
-                value={filters.restaurant}
-                onChange={(e) => setFilters(prev => ({ ...prev, restaurant: e.target.value }))}
+                value={pendingFilters.restaurant}
+                onChange={(e) => setPendingFilters(prev => ({ ...prev, restaurant: e.target.value }))}
                 className="w-full px-2.5 py-1.5 pr-5 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs appearance-none cursor-pointer"
               >
                 <option value="All restaurants">All restaurants</option>
@@ -290,8 +302,8 @@ export default function TransactionReport() {
 
             <div className="relative flex-1 min-w-0">
               <select
-                value={filters.time}
-                onChange={(e) => setFilters(prev => ({ ...prev, time: e.target.value }))}
+                value={pendingFilters.time}
+                onChange={(e) => setPendingFilters(prev => ({ ...prev, time: e.target.value }))}
                 className="w-full px-2.5 py-1.5 pr-5 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs appearance-none cursor-pointer"
               >
                 <option value="All Time">All Time</option>
