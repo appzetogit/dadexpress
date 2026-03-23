@@ -1676,7 +1676,7 @@ export default function OrderTracking() {
 
       {/* Update Delivery Location Dialog */}
       <Dialog open={showLocationDialog} onOpenChange={setShowLocationDialog}>
-        <DialogContent className="sm:max-w-xl w-[95%] max-w-[600px]">
+        <DialogContent className="sm:max-w-xl w-[95%] max-w-[600px] p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-gray-900">
               {canUpdateLocation ? "Update Delivery Location" : "Delivery Location"}
@@ -1690,7 +1690,7 @@ export default function OrderTracking() {
                   value={locationForm.formattedAddress}
                   onChange={(e) => setLocationForm((prev) => ({ ...prev, formattedAddress: e.target.value }))}
                   placeholder="Enter complete delivery address"
-                  className="min-h-[90px] resize-none"
+                  className="min-h-[90px] block w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 text-base shadow-xs outline-none placeholder:text-muted-foreground focus-visible:border-neutral-900 focus-visible:ring-neutral-900/40 focus-visible:ring-[3px] md:text-sm"
                 />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
