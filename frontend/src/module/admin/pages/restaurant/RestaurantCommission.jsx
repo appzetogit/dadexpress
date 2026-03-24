@@ -16,6 +16,7 @@ export default function RestaurantCommission() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [totalCommissions, setTotalCommissions] = useState(0)
   const [isAddEditOpen, setIsAddEditOpen] = useState(false)
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
   const [isRestaurantSelectOpen, setIsRestaurantSelectOpen] = useState(false)
@@ -77,18 +78,26 @@ export default function RestaurantCommission() {
       const response = await adminAPI.getRestaurantCommissions({})
       
       let commissionsData = null
+      let paginationTotal = null
       if (response?.data?.success && response?.data?.data?.commissions) {
         commissionsData = response.data.data.commissions
+        paginationTotal = response.data.data.pagination?.total ?? null
       } else if (response?.data?.data?.commissions) {
         commissionsData = response.data.data.commissions
+        paginationTotal = response.data.data.pagination?.total ?? null
       } else if (response?.data?.commissions) {
         commissionsData = response.data.commissions
+        paginationTotal = response.data.pagination?.total ?? response.data.total ?? null
       }
       
       if (commissionsData && Array.isArray(commissionsData)) {
         setCommissions(commissionsData)
+        setTotalCommissions(
+          typeof paginationTotal === "number" ? paginationTotal : commissionsData.length
+        )
       } else {
         setCommissions([])
+        setTotalCommissions(0)
       }
     } catch (error) {
       console.error('Error fetching commissions:', error)
@@ -104,6 +113,7 @@ export default function RestaurantCommission() {
         toast.error(error.response?.data?.message || 'Failed to fetch commissions')
       }
       setCommissions([])
+      setTotalCommissions(0)
     } finally {
       setLoading(false)
     }
@@ -323,7 +333,7 @@ export default function RestaurantCommission() {
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold text-slate-900">Restaurant Commission</h1>
               <span className="px-3 py-1 rounded-full text-sm font-semibold bg-slate-100 text-slate-700">
-                {filteredCommissions.length}
+                {totalCommissions}
               </span>
             </div>
 
@@ -643,4 +653,3 @@ export default function RestaurantCommission() {
     </div>
   )
 }
-
