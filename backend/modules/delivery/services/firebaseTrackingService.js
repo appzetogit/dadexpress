@@ -9,6 +9,10 @@ function toNumber(value) {
   return Number.isFinite(n) ? n : null;
 }
 
+function shouldWarnRealtimeUnavailable() {
+  return process.env.FIREBASE_REALTIME_ENABLED === 'true';
+}
+
 function haversineKm(lat1, lng1, lat2, lng2) {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -30,7 +34,9 @@ export async function syncDeliveryPartnerRealtime({
   isOnline = false
 }) {
   if (!isFirebaseRealtimeAvailable()) {
-    console.warn('⚠️ Firebase Realtime Database not available');
+    if (shouldWarnRealtimeUnavailable()) {
+      console.warn('⚠️ Firebase Realtime Database not available');
+    }
     return false;
   }
 
@@ -68,7 +74,9 @@ export async function syncActiveOrderRealtime({
   createdAt = null
 }) {
   if (!isFirebaseRealtimeAvailable()) {
-    console.warn('⚠️ Firebase Realtime Database not available');
+    if (shouldWarnRealtimeUnavailable()) {
+      console.warn('⚠️ Firebase Realtime Database not available');
+    }
     return false;
   }
 
@@ -240,7 +248,9 @@ export async function syncUserRealtime({
   accuracy = null
 }) {
   if (!isFirebaseRealtimeAvailable()) {
-    console.warn('⚠️ Firebase Realtime Database not available');
+    if (shouldWarnRealtimeUnavailable()) {
+      console.warn('⚠️ Firebase Realtime Database not available');
+    }
     return false;
   }
 

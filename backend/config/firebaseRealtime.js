@@ -6,7 +6,9 @@ import { getFirebaseCredentials } from '../shared/utils/envService.js';
 const REALTIME_APP_NAME = 'realtime-tracking';
 let realtimeDb = null;
 let initialized = false;
-const isRealtimeEnabled = process.env.FIREBASE_REALTIME_ENABLED === 'true';
+// Realtime tracking is intentionally disabled for now to avoid noisy runtime warnings
+// and unnecessary Firebase writes in environments that don't use live tracking.
+const isRealtimeEnabled = false;
 
 function resolveServiceAccountFromFile() {
   const candidatePaths = [
