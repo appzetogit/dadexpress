@@ -697,6 +697,7 @@ export default function Home() {
   )
   const currentLocation = location || null
   const [resolvedZoneId, setResolvedZoneId] = useState(null)
+  const [resolvedZoneSource, setResolvedZoneSource] = useState(null) // "manual" | "gps" | null
   const [selectedAddressOutOfService, setSelectedAddressOutOfService] = useState(false)
   const [zoneResolveLoading, setZoneResolveLoading] = useState(false)
   const [resolvedSelectedCoords, setResolvedSelectedCoords] = useState(null)
@@ -806,6 +807,7 @@ export default function Home() {
       if (isManualMode && !hasSelectedAddress) {
         if (cancelled || resolveRequestId !== zoneResolveRequestRef.current) return
         setResolvedZoneId(null)
+        setResolvedZoneSource(null)
         setSelectedAddressOutOfService(false)
         setResolvedSelectedCoords(null)
         setZoneResolveLoading(true)
@@ -830,6 +832,7 @@ export default function Home() {
       if (!hasSelectedAddress) {
         if (cancelled || resolveRequestId !== zoneResolveRequestRef.current) return
         setResolvedZoneId(zoneId || null)
+        setResolvedZoneSource("gps")
         setSelectedAddressOutOfService(false)
         setResolvedSelectedCoords(null)
         setZoneResolveLoading(false)
@@ -896,6 +899,7 @@ export default function Home() {
 
       if (cancelled || resolveRequestId !== zoneResolveRequestRef.current) return
       setResolvedZoneId(nextZoneId || null)
+      setResolvedZoneSource("manual")
       setSelectedAddressOutOfService(outOfService || !nextZoneId)
       setResolvedSelectedCoords(nextZoneId ? (selectedLocationCoords || null) : null)
       setZoneResolveLoading(false)
@@ -1008,6 +1012,12 @@ export default function Home() {
           zoneLoading,
           aborted: requestId !== restaurantsRequestRef.current,
         })
+        if (requestId !== restaurantsRequestRef.current) return
+        setRestaurantsData([])
+        setLoadingRestaurants(false)
+        return
+      }
+      if (isManualMode && resolvedZoneSource !== "manual") {
         if (requestId !== restaurantsRequestRef.current) return
         setRestaurantsData([])
         setLoadingRestaurants(false)
@@ -1213,7 +1223,7 @@ export default function Home() {
         aborted: requestId !== restaurantsRequestRef.current,
       })
     }
-  }, [vegMode, vegModeOption, resolvedZoneId, zoneResolveLoading, zoneLoading, selectedCoords?.lat, selectedCoords?.lng, resolvedSelectedCoords?.lat, resolvedSelectedCoords?.lng, currentLocation, activeLocation, selectedDeliveryAddress, selectedAddress])
+  }, [vegMode, vegModeOption, resolvedZoneId, resolvedZoneSource, zoneResolveLoading, zoneLoading, selectedCoords?.lat, selectedCoords?.lng, resolvedSelectedCoords?.lat, resolvedSelectedCoords?.lng, currentLocation, activeLocation, selectedDeliveryAddress, selectedAddress, isManualMode])
 
   // Refetch restaurants when filters or GPS zone changes
   useEffect(() => {

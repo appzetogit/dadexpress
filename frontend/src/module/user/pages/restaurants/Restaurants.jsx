@@ -120,6 +120,7 @@ export default function Restaurants() {
   const currentLocation = location || null
   const selectedCoords = resolvedDeliveryAddress?.coords || getAddressCoords(selectedAddress)
   const [resolvedZoneId, setResolvedZoneId] = useState(null)
+  const [resolvedZoneSource, setResolvedZoneSource] = useState(null) // "manual" | "gps" | null
   const [resolvedSelectedCoords, setResolvedSelectedCoords] = useState(null)
   const [isZoneResolving, setIsZoneResolving] = useState(false)
   const zoneResolveRequestRef = useRef(0)
@@ -150,6 +151,7 @@ export default function Restaurants() {
       if (isManualMode && !hasSelectedAddress) {
         if (cancelled || resolveRequestId !== zoneResolveRequestRef.current) return
         setResolvedZoneId(null)
+        setResolvedZoneSource(null)
         setResolvedSelectedCoords(null)
         setIsZoneResolving(true)
         setError("")
@@ -174,6 +176,7 @@ export default function Restaurants() {
       if (!hasSelectedAddress) {
         if (cancelled || resolveRequestId !== zoneResolveRequestRef.current) return
         setResolvedZoneId(currentZoneId || null)
+        setResolvedZoneSource("gps")
         setResolvedSelectedCoords(null)
         setIsZoneResolving(false)
         setError("")
@@ -244,6 +247,7 @@ export default function Restaurants() {
       }
       if (!cancelled && resolveRequestId === zoneResolveRequestRef.current) {
         setResolvedZoneId(zoneId || null)
+        setResolvedZoneSource("manual")
         setResolvedSelectedCoords(zoneId ? (selectedLocationCoords || null) : null)
         setIsZoneResolving(false)
       }
@@ -285,6 +289,11 @@ export default function Restaurants() {
         setError("")
 
         if (!resolvedZoneId || isZoneResolving) {
+          setRestaurants([])
+          setLoading(false)
+          return
+        }
+        if (isManualMode && resolvedZoneSource !== "manual") {
           setRestaurants([])
           setLoading(false)
           return
@@ -384,6 +393,7 @@ export default function Restaurants() {
   }, [
     dietaryFilter,
     resolvedZoneId,
+    resolvedZoneSource,
     isZoneResolving,
     zoneLoading,
     selectedDeliveryAddress,
@@ -392,6 +402,7 @@ export default function Restaurants() {
     activeLocation,
     resolvedSelectedCoords?.lat,
     resolvedSelectedCoords?.lng,
+    isManualMode,
   ])
 
   useEffect(() => {
