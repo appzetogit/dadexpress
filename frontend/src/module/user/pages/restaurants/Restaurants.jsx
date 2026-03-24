@@ -13,7 +13,7 @@ import { restaurantAPI, zoneAPI } from "@/lib/api"
 import { useLocation } from "../../hooks/useLocation"
 import { useZone } from "../../hooks/useZone"
 import { useSelectedDeliveryAddress } from "../../hooks/useSelectedDeliveryAddress"
-import { resolveDeliveryAddress } from "../../utils/deliveryAddress"
+import { resolveActiveLocation, resolveDeliveryAddress } from "../../utils/deliveryAddress"
 
 const toNumber = (value) => {
   const parsed = Number(value)
@@ -25,9 +25,18 @@ const getAddressCoords = (address) => {
   const coordinates = Array.isArray(address.location?.coordinates)
     ? address.location.coordinates
     : null
-  const lng = toNumber(coordinates?.[0] ?? address.longitude ?? address.lng)
-  const lat = toNumber(coordinates?.[1] ?? address.latitude ?? address.lat)
+  let lng = toNumber(coordinates?.[0] ?? address.longitude ?? address.lng)
+  let lat = toNumber(coordinates?.[1] ?? address.latitude ?? address.lat)
   if (!lat || !lng) return null
+  const latValid = Math.abs(lat) <= 90
+  const lngValid = Math.abs(lng) <= 180
+  if (!latValid && Math.abs(lng) <= 90 && Math.abs(lat) <= 180) {
+    const swappedLat = lng
+    const swappedLng = lat
+    lat = swappedLat
+    lng = swappedLng
+  }
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null
   return { lat, lng }
 }
 
@@ -88,8 +97,11 @@ export default function Restaurants() {
   const { addFavorite, removeFavorite, isFavorite, addresses = [], getDefaultAddress } = useProfile()
   const { selectedDeliveryAddress } = useSelectedDeliveryAddress()
   const { location } = useLocation()
-  const { zoneId: currentZoneId, loading: zoneLoading } = useZone(location)
   const isSavedSelectionLocked = selectedDeliveryAddress?.mode === "saved"
+  const isManualMode = selectedDeliveryAddress?.mode === "saved"
+  const { zoneId: currentZoneId, loading: zoneLoading } = useZone(
+    isSavedSelectionLocked ? null : location,
+  )
   const defaultAddress = useMemo(
     () => (typeof getDefaultAddress === "function" ? getDefaultAddress() : null),
     [getDefaultAddress, addresses],
@@ -112,7 +124,19 @@ export default function Restaurants() {
   const [isZoneResolving, setIsZoneResolving] = useState(false)
   const zoneResolveRequestRef = useRef(0)
   const restaurantsRequestRef = useRef(0)
-  const activeLocation = selectedAddress || currentLocation
+  const activeLocation = useMemo(
+    () =>
+      resolveActiveLocation({
+        selectedAddress,
+        currentLocation: !isManualMode && currentLocation
+          ? {
+            ...currentLocation,
+            zoneId: currentZoneId || currentLocation.zoneId || null,
+          }
+          : null,
+      }),
+    [selectedAddress, currentLocation, currentZoneId, isManualMode],
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -122,6 +146,20 @@ export default function Restaurants() {
       const hasSelectedAddress = Boolean(selectedAddress)
       let selectedLocationCoords = selectedCoords
       const hasSelectedCoords = Boolean(selectedLocationCoords?.lat && selectedLocationCoords?.lng)
+
+      if (isManualMode && !hasSelectedAddress) {
+        if (cancelled || resolveRequestId !== zoneResolveRequestRef.current) return
+        setResolvedZoneId(null)
+        setResolvedSelectedCoords(null)
+        setIsZoneResolving(true)
+        setError("")
+        return
+      }
+
+      // id="sanity-check"
+      if (selectedAddress) {
+        console.log("📦 Stored Address:", selectedAddress)
+      }
 
       console.log("[Restaurants][ZoneResolve]", {
         resolveRequestId,
@@ -149,19 +187,52 @@ export default function Restaurants() {
         selectedLocationCoords = await geocodeAddressCoords(selectedAddress)
       }
 
-      if (!zoneId && selectedLocationCoords?.lat && selectedLocationCoords?.lng) {
+      const hasResolvedCoords = Boolean(selectedLocationCoords?.lat && selectedLocationCoords?.lng)
+      // id="addr-validate"
+      if (selectedAddress) {
+        if (!hasResolvedCoords) {
+          console.error("❌ Invalid selectedAddress coordinates")
+          if (cancelled || resolveRequestId !== zoneResolveRequestRef.current) return
+          setResolvedZoneId(null)
+          setResolvedSelectedCoords(null)
+          setIsZoneResolving(false)
+          setError("Service not available in this area")
+          return
+        }
+        console.log("✅ Selected Address:", selectedAddress)
+      }
+
+      if (!zoneId && hasResolvedCoords) {
         try {
+          // id="zone-test"
           const response = await zoneAPI.getZoneByCoordinates(
             selectedLocationCoords.lat,
             selectedLocationCoords.lng,
           )
-          zoneId =
+          const derivedZoneId =
             response?.data?.data?.zoneId ||
             response?.data?.data?.zone?._id ||
             response?.zoneId ||
             null
+          console.log("📍 Zone from API:", derivedZoneId)
+          zoneId = derivedZoneId
         } catch (zoneError) {
           console.error("Zone fetch failed:", zoneError)
+        }
+      }
+
+      // id="zone-lock"
+      if (selectedAddress) {
+        const derivedZoneId = zoneId || null
+        const storedZoneId = getAddressZoneId(selectedAddress)
+        if (derivedZoneId && storedZoneId && derivedZoneId !== storedZoneId) {
+          console.error("❌ Zone mismatch detected", {
+            storedZoneId,
+            derivedZoneId,
+          })
+          zoneId = derivedZoneId
+        } else if (storedZoneId && !derivedZoneId) {
+          zoneId = storedZoneId
         }
       }
 
@@ -191,6 +262,7 @@ export default function Restaurants() {
     currentZoneId,
     currentLocation,
     activeLocation,
+    isManualMode,
   ])
 
   useEffect(() => {
@@ -224,6 +296,18 @@ export default function Restaurants() {
           params.dietary = dietaryFilter
         }
 
+        const selectedAddressZoneId = getAddressZoneId(selectedAddress)
+        if (selectedAddress && selectedAddressZoneId && selectedAddressZoneId !== params.zoneId) {
+          console.error("❌ GPS OVERRIDE DETECTED", {
+            selectedAddressZoneId,
+            zoneIdUsed: params.zoneId,
+          })
+        }
+
+        console.log("MODE:", selectedAddress ? "MANUAL" : "GPS")
+        console.log("ZONE USED:", params.zoneId)
+        console.log("ACTIVE LOCATION:", activeLocation)
+        console.log("ZONE ID USED:", params.zoneId)
         console.log("[Restaurants][Fetch:start]", {
           requestId,
           selectedDeliveryAddress,
@@ -233,7 +317,7 @@ export default function Restaurants() {
           zoneIdUsed: params.zoneId,
         })
 
-        const response = await restaurantAPI.getRestaurants(params)
+        const response = await restaurantAPI.getRestaurantsByZone(params.zoneId, params)
         if (requestId !== restaurantsRequestRef.current) {
           console.log("[Restaurants][Fetch:stale-response]", {
             requestId,

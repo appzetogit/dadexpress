@@ -3,6 +3,7 @@ import { MapPin, X } from "lucide-react"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useLocation } from "../hooks/useLocation"
+import { hasManualSelectedAddress } from "../utils/deliveryAddress"
 
 const safeStorage = {
   getItem(key) {
@@ -28,6 +29,11 @@ export default function LocationPrompt() {
   const cardRef = useRef(null)
 
   useEffect(() => {
+    if (hasManualSelectedAddress()) {
+      setShowPrompt(false)
+      return
+    }
+
     // Check if location permission was already granted
     const storedLocation = safeStorage.getItem("userLocation")
     const promptDismissed = safeStorage.getItem("locationPromptDismissed")
@@ -82,6 +88,12 @@ export default function LocationPrompt() {
   }, [location, showPrompt])
 
   const handleAllow = async () => {
+    if (hasManualSelectedAddress()) {
+      setShowPrompt(false)
+      document.body.style.overflow = ""
+      return
+    }
+
     await requestLocation()
     // Wait a bit for location to be set
     setTimeout(() => {
@@ -160,4 +172,3 @@ export default function LocationPrompt() {
     </div>
   )
 }
-

@@ -8,6 +8,9 @@ const toNumber = (value) => {
 
 const getAddressId = (address) => address?.id || address?._id || null;
 
+const getAddressZoneId = (address) =>
+  address?.zoneId || address?.zone?._id || address?.zone?.id || null;
+
 const isValidCoords = (lat, lng) =>
   Number.isFinite(lat) &&
   Number.isFinite(lng) &&
@@ -212,3 +215,58 @@ export const resolveDeliveryAddress = ({
 };
 
 export const DELIVERY_ADDRESS_EVENT = STORAGE_EVENT;
+
+export const getAddressCoordinates = (address) => {
+  if (!address) return null;
+  const coordinates = Array.isArray(address.location?.coordinates)
+    ? address.location.coordinates
+    : Array.isArray(address.coordinates)
+      ? address.coordinates
+      : null;
+  const longitude = toNumber(coordinates?.[0] ?? address.longitude ?? address.lng);
+  const latitude = toNumber(coordinates?.[1] ?? address.latitude ?? address.lat);
+  if (!isValidCoords(latitude, longitude)) return null;
+  return { latitude, longitude };
+};
+
+export const hasManualSelectedAddress = () => {
+  const selected = getSelectedDeliveryAddress();
+  return selected?.mode === "saved" && Boolean(selected?.addressId);
+};
+
+export const resolveActiveLocation = ({ selectedAddress, currentLocation } = {}) => {
+  const selectedCoords = getAddressCoordinates(selectedAddress);
+  const selectedZoneId = getAddressZoneId(selectedAddress);
+
+  if (selectedAddress && (selectedZoneId || selectedCoords)) {
+    return {
+      source: "SELECTED",
+      ...selectedAddress,
+      zoneId: selectedZoneId || null,
+      coordinates: selectedCoords
+        ? [selectedCoords.longitude, selectedCoords.latitude]
+        : null,
+    };
+  }
+
+  if (currentLocation) {
+    const currentZoneId =
+      currentLocation.zoneId ||
+      currentLocation.zone?._id ||
+      currentLocation.zone?.id ||
+      null;
+    if (currentZoneId) {
+      const latitude = toNumber(currentLocation.latitude);
+      const longitude = toNumber(currentLocation.longitude);
+      return {
+        source: "GPS",
+        ...currentLocation,
+        zoneId: currentZoneId,
+        coordinates:
+          isValidCoords(latitude, longitude) ? [longitude, latitude] : null,
+      };
+    }
+  }
+
+  return null;
+};

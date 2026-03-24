@@ -617,6 +617,24 @@ export const restaurantAPI = {
     return apiClient.get(API_ENDPOINTS.RESTAURANT.LIST, { params });
   },
 
+  // Strict zone-based fetch for user listing flows.
+  // Prevents accidental GPS/coords fallback in callers.
+  getRestaurantsByZone: (zoneId, params = {}) => {
+    if (!zoneId) {
+      throw new Error("ZoneId is required");
+    }
+    const sanitizedParams = { ...params };
+    delete sanitizedParams.lat;
+    delete sanitizedParams.lng;
+    delete sanitizedParams.latitude;
+    delete sanitizedParams.longitude;
+    delete sanitizedParams.coords;
+    delete sanitizedParams.coordinates;
+    return apiClient.get(API_ENDPOINTS.RESTAURANT.LIST, {
+      params: { ...sanitizedParams, zoneId },
+    });
+  },
+
   // Get restaurants with dishes under ₹250
   getRestaurantsUnder250: (zoneId) => {
     const params = zoneId ? { zoneId } : {};

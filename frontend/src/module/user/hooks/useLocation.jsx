@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react"
 import { locationAPI, userAPI } from "@/lib/api"
+import { DELIVERY_ADDRESS_EVENT, hasManualSelectedAddress } from "../utils/deliveryAddress"
 
 const USER_LOCATION_UPDATED_EVENT = "user-location-updated"
 
@@ -12,6 +13,18 @@ export function useLocation() {
   const watchIdRef = useRef(null)
   const updateTimerRef = useRef(null)
   const prevLocationCoordsRef = useRef({ latitude: null, longitude: null })
+  const isManualAddressLocked = () => hasManualSelectedAddress()
+  const enforceManualModeLock = () => {
+    // Manual address is the single source of truth; clear GPS cache and stop watchers.
+    try {
+      localStorage.removeItem("userLocation")
+    } catch {}
+    stopWatchingLocation()
+    prevLocationCoordsRef.current = { latitude: null, longitude: null }
+    setLocation(null)
+    setPermissionGranted(false)
+    setError(null)
+  }
 
   /* ===================== DB UPDATE (LIVE LOCATION TRACKING) ===================== */
   const updateLocationInDB = async (locationData) => {
@@ -1412,6 +1425,12 @@ export function useLocation() {
       return dbLocation
     }
 
+    // Strict isolation: when manual address is selected, do not invoke GPS.
+    if (isManualAddressLocked()) {
+      if (showLoading) setLoading(false)
+      return dbLocation || location || null
+    }
+
     if (!navigator.geolocation) {
       setError("Geolocation not supported")
       if (showLoading) setLoading(false)
@@ -1435,6 +1454,11 @@ export function useLocation() {
         navigator.geolocation.getCurrentPosition(
           async (pos) => {
             try {
+              if (isManualAddressLocked()) {
+                if (showLoading) setLoading(false)
+                return resolve(location || dbLocation || null)
+              }
+
               const { latitude, longitude, accuracy } = pos.coords
               const timestamp = pos.timestamp || Date.now()
 
@@ -1501,29 +1525,33 @@ export function useLocation() {
                   address: finalLoc.address,
                   formattedAddress: finalLoc.formattedAddress
                 }
-                localStorage.setItem("userLocation", JSON.stringify(coordOnlyLoc))
-                setLocation(coordOnlyLoc)
-                setPermissionGranted(true)
-                if (showLoading) setLoading(false)
-                setError(null)
-                if (updateDB) {
-                  await updateLocationInDB(coordOnlyLoc).catch(() => { })
+                if (!isManualAddressLocked()) {
+                  localStorage.setItem("userLocation", JSON.stringify(coordOnlyLoc))
+                  setLocation(coordOnlyLoc)
+                  setPermissionGranted(true)
+                  if (showLoading) setLoading(false)
+                  setError(null)
+                  if (updateDB) {
+                    await updateLocationInDB(coordOnlyLoc).catch(() => { })
+                  }
                 }
                 resolve(coordOnlyLoc)
                 return
               }
 
               false && console.log("💾 Saving location:", finalLoc)
-              localStorage.setItem("userLocation", JSON.stringify(finalLoc))
-              setLocation(finalLoc)
-              setPermissionGranted(true)
-              if (showLoading) setLoading(false)
-              setError(null)
+              if (!isManualAddressLocked()) {
+                localStorage.setItem("userLocation", JSON.stringify(finalLoc))
+                setLocation(finalLoc)
+                setPermissionGranted(true)
+                if (showLoading) setLoading(false)
+                setError(null)
 
-              if (updateDB) {
-                await updateLocationInDB(finalLoc).catch(err => {
-                  false && console.warn("Failed to update location in DB:", err)
-                })
+                if (updateDB) {
+                  await updateLocationInDB(finalLoc).catch(err => {
+                    false && console.warn("Failed to update location in DB:", err)
+                  })
+                }
               }
               resolve(finalLoc)
             } catch (err) {
@@ -1701,6 +1729,10 @@ export function useLocation() {
 
   /* ===================== WATCH LOCATION ===================== */
   const startWatchingLocation = () => {
+    if (isManualAddressLocked()) {
+      stopWatchingLocation()
+      return
+    }
     if (!navigator.geolocation) {
       false && console.warn("⚠️ Geolocation not supported")
       return
@@ -1721,6 +1753,10 @@ export function useLocation() {
       watchIdRef.current = navigator.geolocation.watchPosition(
         async (pos) => {
           try {
+            if (isManualAddressLocked()) {
+              stopWatchingLocation()
+              return
+            }
             const { latitude, longitude, accuracy } = pos.coords
             false && console.log("🔄 Location updated:", { latitude, longitude, accuracy: `${accuracy}m` })
 
@@ -1864,26 +1900,28 @@ export function useLocation() {
               Math.abs(prevLocationCoordsRef.current.longitude - loc.longitude) > coordThreshold
 
             // Only update location state if coordinates changed significantly
-            if (coordsChanged) {
-              prevLocationCoordsRef.current = { latitude: loc.latitude, longitude: loc.longitude }
-              false && console.log("💾 Updating live location:", loc)
-              localStorage.setItem("userLocation", JSON.stringify(loc))
-              setLocation(loc)
-              setPermissionGranted(true)
-              setError(null)
-            } else {
-              // Coordinates haven't changed significantly, skip state update to prevent re-renders
-              // Still update localStorage silently for persistence
-              localStorage.setItem("userLocation", JSON.stringify(loc))
-            }
+            if (!isManualAddressLocked()) {
+              if (coordsChanged) {
+                prevLocationCoordsRef.current = { latitude: loc.latitude, longitude: loc.longitude }
+                false && console.log("💾 Updating live location:", loc)
+                localStorage.setItem("userLocation", JSON.stringify(loc))
+                setLocation(loc)
+                setPermissionGranted(true)
+                setError(null)
+              } else {
+                // Coordinates haven't changed significantly, skip state update to prevent re-renders
+                // Still update localStorage silently for persistence
+                localStorage.setItem("userLocation", JSON.stringify(loc))
+              }
 
-            // Debounce DB updates - only update every 5 seconds
-            clearTimeout(updateTimerRef.current)
-            updateTimerRef.current = setTimeout(() => {
-              updateLocationInDB(loc).catch(err => {
-                false && console.warn("Failed to update location in DB:", err)
-              })
-            }, 5000)
+              // Debounce DB updates - only update every 5 seconds
+              clearTimeout(updateTimerRef.current)
+              updateTimerRef.current = setTimeout(() => {
+                updateLocationInDB(loc).catch(err => {
+                  false && console.warn("Failed to update location in DB:", err)
+                })
+              }, 5000)
+            }
           } catch (err) {
             console.error("❌ Error processing live location update:", err)
             // If reverse geocoding fails, DON'T use coordinates - use placeholder
@@ -1985,6 +2023,12 @@ export function useLocation() {
 
   /* ===================== INIT ===================== */
   useEffect(() => {
+    if (isManualAddressLocked()) {
+      enforceManualModeLock()
+      setLoading(false)
+      return
+    }
+
     // Load stored location first for IMMEDIATE display (no loading state)
     const stored = localStorage.getItem("userLocation")
     let shouldForceRefresh = false
@@ -2092,6 +2136,12 @@ export function useLocation() {
     // This prevents "Requests geolocation permission on page load" warning
     const checkPermissionAndStart = async () => {
       try {
+        if (isManualAddressLocked()) {
+          setLoading(false)
+          stopWatchingLocation()
+          return
+        }
+
         let permissionGranted = false;
 
         if (navigator.permissions && navigator.permissions.query) {
@@ -2213,10 +2263,26 @@ export function useLocation() {
     }
   }, [])
 
+  // Hard-stop GPS updates when manual address is selected.
+  useEffect(() => {
+    const handleManualModeChange = () => {
+      if (isManualAddressLocked()) {
+        enforceManualModeLock()
+      }
+    }
+
+    window.addEventListener(DELIVERY_ADDRESS_EVENT, handleManualModeChange)
+    return () => {
+      window.removeEventListener(DELIVERY_ADDRESS_EVENT, handleManualModeChange)
+    }
+  }, [])
+
   // Allow other screens/components to push fresh GPS coordinates immediately
   // so zone detection and UI update in real time without waiting for watcher cycles.
   useEffect(() => {
     const handleExternalLocationUpdate = (event) => {
+      if (isManualAddressLocked()) return
+
       const payload = event?.detail || {}
       const latitude = Number(payload?.latitude)
       const longitude = Number(payload?.longitude)
@@ -2243,6 +2309,10 @@ export function useLocation() {
   }, [])
 
   const requestLocation = async () => {
+    if (isManualAddressLocked()) {
+      setLoading(false)
+      return location || null
+    }
     false && console.log("📍📍📍 User requested location update - clearing cache and fetching fresh")
     setLoading(true)
     setError(null)
