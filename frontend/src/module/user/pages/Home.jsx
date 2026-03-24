@@ -118,6 +118,54 @@ const getAddressCoords = (address) => {
   return { lat, lng }
 }
 
+const getAddressZoneId = (address) => (
+  address?.zoneId ||
+  address?.zone?._id ||
+  address?.zone?.id ||
+  null
+)
+
+const getAddressSearchQuery = (address) => {
+  if (!address) return ""
+  return [
+    address.formattedAddress,
+    address.address,
+    address.street,
+    address.area,
+    address.city,
+    address.state,
+    address.zipCode,
+  ]
+    .map((part) => (typeof part === "string" ? part.trim() : ""))
+    .filter(Boolean)
+    .join(", ")
+}
+
+const geocodeAddressCoords = async (address) => {
+  const query = getAddressSearchQuery(address)
+  if (!query) return null
+  if (
+    typeof window === "undefined" ||
+    !window.google?.maps?.Geocoder
+  ) {
+    return null
+  }
+
+  const geocoder = new window.google.maps.Geocoder()
+  try {
+    const geocodeResult = await geocoder.geocode({ address: query })
+    const result = geocodeResult?.results?.[0]
+    const location = result?.geometry?.location
+    const lat = typeof location?.lat === "function" ? toNumber(location.lat()) : null
+    const lng = typeof location?.lng === "function" ? toNumber(location.lng()) : null
+    if (!lat || !lng) return null
+    return { lat, lng }
+  } catch (error) {
+    console.error("Address geocoding failed:", error)
+    return null
+  }
+}
+
 // Restaurant Image Carousel Component
 const RestaurantImageCarousel = React.memo(({ restaurant, priority = false }) => {
   const images = useMemo(() => restaurant.images || [restaurant.image], [restaurant])
@@ -635,9 +683,11 @@ export default function Home() {
   const { location, loading, requestLocation } = useLocation()
   const { zoneId, zoneStatus, isInService, isOutOfService, loading: zoneLoading } = useZone(location)
   const isSavedSelectionLocked = selectedDeliveryAddress?.mode === "saved"
+  const currentLocation = location || null
   const [resolvedZoneId, setResolvedZoneId] = useState(null)
   const [selectedAddressOutOfService, setSelectedAddressOutOfService] = useState(false)
   const [zoneResolveLoading, setZoneResolveLoading] = useState(false)
+  const [resolvedSelectedCoords, setResolvedSelectedCoords] = useState(null)
   const zoneResolveRequestRef = useRef(0)
   const restaurantsRequestRef = useRef(0)
   const { points: userPoints } = useUserPoints()
@@ -668,6 +718,7 @@ export default function Home() {
   )
   const selectedAddress = resolvedDeliveryAddress?.address || null
   const selectedCoords = resolvedDeliveryAddress?.coords || getAddressCoords(selectedAddress)
+  const activeLocation = selectedAddress || currentLocation
 
   const [placeholderIndex, setPlaceholderIndex] = useState(0)
 
@@ -725,21 +776,24 @@ export default function Home() {
 
     const resolveZoneFromSelection = async () => {
       const hasSelectedAddress = Boolean(selectedAddress)
-      const hasSelectedCoords = Boolean(selectedCoords?.lat && selectedCoords?.lng)
+      let selectedLocationCoords = selectedCoords
+      const hasSelectedCoords = Boolean(selectedLocationCoords?.lat && selectedLocationCoords?.lng)
 
       console.log("[Home][ZoneResolve]", {
         resolveRequestId,
         selectedDeliveryAddress,
         selectedAddress,
-        effectiveLocation: location,
+        currentLocation,
+        activeLocation,
         isSavedSelectionLocked,
         zoneIdFromCurrentLocation: zoneId,
       })
 
-      if (!isSavedSelectionLocked) {
+      if (!hasSelectedAddress) {
         if (cancelled || resolveRequestId !== zoneResolveRequestRef.current) return
         setResolvedZoneId(zoneId || null)
         setSelectedAddressOutOfService(false)
+        setResolvedSelectedCoords(null)
         setZoneResolveLoading(false)
         return
       }
@@ -747,18 +801,18 @@ export default function Home() {
       setZoneResolveLoading(true)
       setSelectedAddressOutOfService(false)
 
-      let nextZoneId =
-        selectedAddress?.zoneId ||
-        selectedAddress?.zone?._id ||
-        selectedAddress?.zone?.id ||
-        null
+      let nextZoneId = getAddressZoneId(selectedAddress)
       let outOfService = false
 
-      if (!nextZoneId && hasSelectedCoords) {
+      if (!nextZoneId && !hasSelectedCoords) {
+        selectedLocationCoords = await geocodeAddressCoords(selectedAddress)
+      }
+
+      if (!nextZoneId && selectedLocationCoords?.lat && selectedLocationCoords?.lng) {
         try {
           const response = await zoneAPI.getZoneByCoordinates(
-            selectedCoords.lat,
-            selectedCoords.lng,
+            selectedLocationCoords.lat,
+            selectedLocationCoords.lng,
           )
           const data = response?.data?.data || {}
           const status = data?.status
@@ -769,13 +823,10 @@ export default function Home() {
         }
       }
 
-      if (!nextZoneId && !hasSelectedAddress) {
-        outOfService = true
-      }
-
       if (cancelled || resolveRequestId !== zoneResolveRequestRef.current) return
       setResolvedZoneId(nextZoneId || null)
-      setSelectedAddressOutOfService(outOfService || (!nextZoneId && isSavedSelectionLocked))
+      setSelectedAddressOutOfService(outOfService || !nextZoneId)
+      setResolvedSelectedCoords(nextZoneId ? (selectedLocationCoords || null) : null)
       setZoneResolveLoading(false)
     }
 
@@ -791,7 +842,8 @@ export default function Home() {
     selectedCoords?.lat,
     selectedCoords?.lng,
     zoneId,
-    location,
+    currentLocation,
+    activeLocation,
   ])
 
   // Fetch restaurants from API with filters
@@ -877,7 +929,8 @@ export default function Home() {
           requestId,
           selectedDeliveryAddress,
           selectedAddress,
-          effectiveLocation: location,
+          currentLocation,
+          activeLocation,
           zoneIdUsed: resolvedZoneId,
           zoneResolveLoading,
           zoneLoading,
@@ -894,7 +947,8 @@ export default function Home() {
         requestId,
         selectedDeliveryAddress,
         selectedAddress,
-        effectiveLocation: location,
+        currentLocation,
+        activeLocation,
         zoneIdUsed: params.zoneId,
       })
       const response = await restaurantAPI.getRestaurants(params)
@@ -930,8 +984,11 @@ export default function Home() {
         }
 
         // Get user coordinates
-        const userLat = selectedCoords?.lat ?? location?.latitude
-        const userLng = selectedCoords?.lng ?? location?.longitude
+        const activeCoords = selectedAddress
+          ? (resolvedSelectedCoords || selectedCoords)
+          : null
+        const userLat = activeCoords?.lat ?? currentLocation?.latitude
+        const userLng = activeCoords?.lng ?? currentLocation?.longitude
 
         // Old default values stored in DB — filter these out so they don't display as dynamic
         const OLD_DEFAULT_DELIVERY_TIMES = ["25-30 mins", "20-25 mins", "30-35 mins"]
@@ -1072,7 +1129,7 @@ export default function Home() {
         aborted: requestId !== restaurantsRequestRef.current,
       })
     }
-  }, [vegMode, vegModeOption, resolvedZoneId, zoneResolveLoading, zoneLoading, selectedCoords?.lat, selectedCoords?.lng, location, selectedDeliveryAddress, selectedAddress])
+  }, [vegMode, vegModeOption, resolvedZoneId, zoneResolveLoading, zoneLoading, selectedCoords?.lat, selectedCoords?.lng, resolvedSelectedCoords?.lat, resolvedSelectedCoords?.lng, currentLocation, activeLocation, selectedDeliveryAddress, selectedAddress])
 
   // Refetch restaurants when filters or GPS zone changes
   useEffect(() => {
@@ -1085,8 +1142,11 @@ export default function Home() {
 
   // Recalculate distances when selected delivery address location updates
   useEffect(() => {
-    const userLat = selectedCoords?.lat ?? location?.latitude
-    const userLng = selectedCoords?.lng ?? location?.longitude
+    const activeCoords = selectedAddress
+      ? (resolvedSelectedCoords || selectedCoords)
+      : null
+    const userLat = activeCoords?.lat ?? currentLocation?.latitude
+    const userLng = activeCoords?.lng ?? currentLocation?.longitude
     if (!restaurantsData || restaurantsData.length === 0 || !userLat || !userLng) return
 
     const calculateDistance = (lat1, lng1, lat2, lng2) => {
@@ -1138,7 +1198,7 @@ export default function Home() {
       : updatedRestaurants
 
     setRestaurantsData(nearbyZoneRestaurants)
-  }, [selectedCoords?.lat, selectedCoords?.lng, location?.latitude, location?.longitude, resolvedZoneId])
+  }, [selectedAddress, selectedCoords?.lat, selectedCoords?.lng, resolvedSelectedCoords?.lat, resolvedSelectedCoords?.lng, currentLocation?.latitude, currentLocation?.longitude, resolvedZoneId])
 
   // Filter restaurants and foods based on active filters
   const filteredRestaurants = useMemo(() => {
@@ -1250,7 +1310,7 @@ export default function Home() {
     if (!resolvedZoneId && !zoneResolveLoading && !zoneLoading) {
       return "Service not available at this address"
     }
-    return "No restaurants available in your selected area"
+    return "No restaurants available in this area"
   }, [selectedAddressOutOfService, resolvedZoneId, zoneResolveLoading, zoneLoading])
 
   // Featured foods removed - will be handled by restaurants data from API

@@ -31,11 +31,59 @@ const getAddressCoords = (address) => {
   return { lat, lng }
 }
 
+const getAddressZoneId = (address) => (
+  address?.zoneId ||
+  address?.zone?._id ||
+  address?.zone?.id ||
+  null
+)
+
+const getAddressSearchQuery = (address) => {
+  if (!address) return ""
+  return [
+    address.formattedAddress,
+    address.address,
+    address.street,
+    address.area,
+    address.city,
+    address.state,
+    address.zipCode,
+  ]
+    .map((part) => (typeof part === "string" ? part.trim() : ""))
+    .filter(Boolean)
+    .join(", ")
+}
+
+const geocodeAddressCoords = async (address) => {
+  const query = getAddressSearchQuery(address)
+  if (!query) return null
+  if (
+    typeof window === "undefined" ||
+    !window.google?.maps?.Geocoder
+  ) {
+    return null
+  }
+
+  const geocoder = new window.google.maps.Geocoder()
+  try {
+    const geocodeResult = await geocoder.geocode({ address: query })
+    const result = geocodeResult?.results?.[0]
+    const location = result?.geometry?.location
+    const lat = typeof location?.lat === "function" ? toNumber(location.lat()) : null
+    const lng = typeof location?.lng === "function" ? toNumber(location.lng()) : null
+    if (!lat || !lng) return null
+    return { lat, lng }
+  } catch (error) {
+    console.error("Address geocoding failed:", error)
+    return null
+  }
+}
+
 export default function Restaurants() {
   const [restaurants, setRestaurants] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
-  const [emptyMessage, setEmptyMessage] = useState("No restaurants found for this address")
+  const [emptyMessage, setEmptyMessage] = useState("No restaurants available in this area")
   const [dietaryFilter, setDietaryFilter] = useState("all")
   const { addFavorite, removeFavorite, isFavorite, addresses = [], getDefaultAddress } = useProfile()
   const { selectedDeliveryAddress } = useSelectedDeliveryAddress()
@@ -57,11 +105,14 @@ export default function Restaurants() {
     [selectedDeliveryAddress, addresses, location, defaultAddress],
   )
   const selectedAddress = resolvedDeliveryAddress?.address || null
+  const currentLocation = location || null
   const selectedCoords = resolvedDeliveryAddress?.coords || getAddressCoords(selectedAddress)
   const [resolvedZoneId, setResolvedZoneId] = useState(null)
+  const [resolvedSelectedCoords, setResolvedSelectedCoords] = useState(null)
   const [isZoneResolving, setIsZoneResolving] = useState(false)
   const zoneResolveRequestRef = useRef(0)
   const restaurantsRequestRef = useRef(0)
+  const activeLocation = selectedAddress || currentLocation
 
   useEffect(() => {
     let cancelled = false
@@ -69,37 +120,40 @@ export default function Restaurants() {
 
     const resolveZone = async () => {
       const hasSelectedAddress = Boolean(selectedAddress)
-      const hasSelectedCoords = Boolean(selectedCoords?.lat && selectedCoords?.lng)
+      let selectedLocationCoords = selectedCoords
+      const hasSelectedCoords = Boolean(selectedLocationCoords?.lat && selectedLocationCoords?.lng)
 
       console.log("[Restaurants][ZoneResolve]", {
         resolveRequestId,
         selectedDeliveryAddress,
         selectedAddress,
-        effectiveLocation: location,
+        currentLocation,
+        activeLocation,
         isSavedSelectionLocked,
         zoneIdFromCurrentLocation: currentZoneId,
       })
 
-      if (!isSavedSelectionLocked) {
+      if (!hasSelectedAddress) {
         if (cancelled || resolveRequestId !== zoneResolveRequestRef.current) return
         setResolvedZoneId(currentZoneId || null)
+        setResolvedSelectedCoords(null)
         setIsZoneResolving(false)
         setError("")
         return
       }
 
       setIsZoneResolving(true)
-      let zoneId =
-        selectedAddress?.zoneId ||
-        selectedAddress?.zone?._id ||
-        selectedAddress?.zone?.id ||
-        null
+      let zoneId = getAddressZoneId(selectedAddress)
 
-      if (!zoneId && hasSelectedCoords) {
+      if (!zoneId && !hasSelectedCoords) {
+        selectedLocationCoords = await geocodeAddressCoords(selectedAddress)
+      }
+
+      if (!zoneId && selectedLocationCoords?.lat && selectedLocationCoords?.lng) {
         try {
           const response = await zoneAPI.getZoneByCoordinates(
-            selectedCoords.lat,
-            selectedCoords.lng,
+            selectedLocationCoords.lat,
+            selectedLocationCoords.lng,
           )
           zoneId =
             response?.data?.data?.zoneId ||
@@ -112,15 +166,14 @@ export default function Restaurants() {
       }
 
       if (cancelled || resolveRequestId !== zoneResolveRequestRef.current) return
-      if (!zoneId && !hasSelectedAddress) {
-        setError("Service not available in this area")
-      } else if (!zoneId) {
+      if (!zoneId) {
         setError("Service not available in this area")
       } else {
         setError("")
       }
       if (!cancelled && resolveRequestId === zoneResolveRequestRef.current) {
         setResolvedZoneId(zoneId || null)
+        setResolvedSelectedCoords(zoneId ? (selectedLocationCoords || null) : null)
         setIsZoneResolving(false)
       }
     }
@@ -136,7 +189,8 @@ export default function Restaurants() {
     selectedCoords?.lat,
     selectedCoords?.lng,
     currentZoneId,
-    location,
+    currentLocation,
+    activeLocation,
   ])
 
   useEffect(() => {
@@ -149,7 +203,7 @@ export default function Restaurants() {
       setLoading(false)
       setRestaurants([])
       setError("Service not available in this area")
-      setEmptyMessage("No restaurants found for this address")
+      setEmptyMessage("No restaurants available in this area")
       return
     }
 
@@ -174,7 +228,8 @@ export default function Restaurants() {
           requestId,
           selectedDeliveryAddress,
           selectedAddress,
-          effectiveLocation: location,
+          currentLocation,
+          activeLocation,
           zoneIdUsed: params.zoneId,
         })
 
@@ -191,7 +246,7 @@ export default function Restaurants() {
 
         if (restaurantsArray.length === 0) {
           setRestaurants([])
-          setEmptyMessage("No restaurants found for this address")
+          setEmptyMessage("No restaurants available in this area")
           return
         }
 
@@ -234,7 +289,7 @@ export default function Restaurants() {
         if (requestId !== restaurantsRequestRef.current) return
         setError(err?.response?.data?.message || "Failed to load restaurants")
         setRestaurants([])
-        setEmptyMessage("No restaurants found for this address")
+        setEmptyMessage("No restaurants available in this area")
       } finally {
         if (requestId !== restaurantsRequestRef.current) return
         setLoading(false)
@@ -249,7 +304,10 @@ export default function Restaurants() {
     zoneLoading,
     selectedDeliveryAddress,
     selectedAddress,
-    location,
+    currentLocation,
+    activeLocation,
+    resolvedSelectedCoords?.lat,
+    resolvedSelectedCoords?.lng,
   ])
 
   useEffect(() => {
