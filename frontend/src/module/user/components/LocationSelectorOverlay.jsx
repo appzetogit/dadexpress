@@ -1791,6 +1791,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
         zipCode: (addressFormData.zipCode || "").trim(),
         latitude: mapPosition[0], // latitude from mapPosition[0]
         longitude: mapPosition[1], // longitude from mapPosition[1]
+        isDefault: true,
       }
 
       // Always create a new address entry (even if label is same like Home/Office).
@@ -1905,6 +1906,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       // Update selected/default address so checkout reflects selection immediately.
       const selectedAddressId = address.id || address._id
       if (selectedAddressId) {
+        await updateAddress(selectedAddressId, { isDefault: true })
         setDefaultAddress(selectedAddressId)
         setSelectedDeliveryAddress({ mode: "saved", addressId: selectedAddressId })
       }
@@ -2362,7 +2364,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
                     const IconComponent = getAddressIcon(address)
                     return (
                       <div
-                        key={address.id}
+                        key={address.id || address._id || `${address.label}-${index}`}
                         className="px-4 sm:px-6 lg:px-8"
                         style={{ animation: `slideUp 0.3s ease-out ${0.25 + index * 0.05}s both` }}
                       >

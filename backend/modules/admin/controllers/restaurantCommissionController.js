@@ -5,6 +5,45 @@ import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import AuditLog from '../models/AuditLog.js';
 import mongoose from 'mongoose';
 
+const ensureRestaurantCommissionSetup = async (adminId) => {
+  const activeRestaurants = await Restaurant.find({ isActive: true })
+    .select('_id name restaurantId')
+    .lean();
+
+  if (!activeRestaurants.length) return;
+
+  const existing = await RestaurantCommission.find({
+    restaurant: { $in: activeRestaurants.map((r) => r._id) }
+  })
+    .select('restaurant')
+    .lean();
+
+  const existingSet = new Set(existing.map((c) => String(c.restaurant)));
+  const missingDocs = activeRestaurants
+    .filter((r) => !existingSet.has(String(r._id)))
+    .map((r) => ({
+      restaurant: r._id,
+      restaurantName: r.name,
+      restaurantId: r.restaurantId,
+      commissionRules: [],
+      defaultCommission: { type: 'percentage', value: 10 },
+      status: true,
+      notes: 'Auto-created default commission setup',
+      createdBy: adminId
+    }));
+
+  if (!missingDocs.length) return;
+
+  try {
+    await RestaurantCommission.insertMany(missingDocs, { ordered: false });
+  } catch (error) {
+    // Ignore duplicate key races; keep request flow stable
+    if (error?.code !== 11000 && !Array.isArray(error?.writeErrors)) {
+      throw error;
+    }
+  }
+};
+
 /**
  * Get all restaurant commissions
  * GET /api/admin/restaurant-commission
@@ -12,6 +51,8 @@ import mongoose from 'mongoose';
  */
 export const getRestaurantCommissions = asyncHandler(async (req, res) => {
   try {
+    await ensureRestaurantCommissionSetup(req.user?._id);
+
     const { 
       status,
       search,

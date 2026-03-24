@@ -30,6 +30,8 @@ const safeParse = (value, fallback = null) => {
   }
 }
 
+const getAddressId = (address) => address?.id || address?._id || null
+
 export function ProfileProvider({ children }) {
   const [userProfile, setUserProfile] = useState(() => {
     // First, try to get from localStorage (user_user from auth)
@@ -208,7 +210,13 @@ export function ProfileProvider({ children }) {
   const addAddress = useCallback(async (address) => {
     try {
       const response = await userAPI.addAddress(address)
-      const newAddress = response?.data?.data?.address || response?.data?.address
+      const rawAddress = response?.data?.data?.address || response?.data?.address
+      const newAddress = rawAddress
+        ? {
+            ...rawAddress,
+            id: rawAddress.id || rawAddress._id || rawAddress?.id?.toString?.() || null,
+          }
+        : null
       
       if (newAddress) {
         setAddresses((prev) => {
@@ -227,11 +235,19 @@ export function ProfileProvider({ children }) {
   const updateAddress = useCallback(async (id, updatedAddress) => {
     try {
       const response = await userAPI.updateAddress(id, updatedAddress)
-      const updatedAddr = response?.data?.data?.address || response?.data?.address
+      const rawUpdatedAddr = response?.data?.data?.address || response?.data?.address
+      const updatedAddr = rawUpdatedAddr
+        ? {
+            ...rawUpdatedAddr,
+            id: rawUpdatedAddr.id || rawUpdatedAddr._id || String(id),
+          }
+        : null
       
       if (updatedAddr) {
         setAddresses((prev) => {
-          const updated = prev.map((addr) => (addr.id === id ? { ...updatedAddr, id } : addr))
+          const updated = prev.map((addr) =>
+            String(getAddressId(addr)) === String(id) ? { ...updatedAddr } : addr,
+          )
           safeStorage.setItem("userAddresses", JSON.stringify(updated))
           return updated
         })
@@ -247,7 +263,7 @@ export function ProfileProvider({ children }) {
     try {
       await userAPI.deleteAddress(id)
       setAddresses((prev) => {
-        const newAddresses = prev.filter((addr) => addr.id !== id)
+        const newAddresses = prev.filter((addr) => String(getAddressId(addr)) !== String(id))
         safeStorage.setItem("userAddresses", JSON.stringify(newAddresses))
         return newAddresses
       })
@@ -319,7 +335,7 @@ export function ProfileProvider({ children }) {
   }, [paymentMethods])
 
   const getAddressById = useCallback((id) => {
-    return addresses.find((addr) => addr.id === id)
+    return addresses.find((addr) => String(getAddressId(addr)) === String(id))
   }, [addresses])
 
   const getPaymentMethodById = useCallback((id) => {
