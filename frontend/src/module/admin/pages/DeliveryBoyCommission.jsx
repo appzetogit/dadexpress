@@ -341,6 +341,20 @@ export default function DeliveryBoyCommission() {
 
             <div className="flex items-center gap-2">
               <button
+                onClick={() => window.location.href = '/admin/cash-limit-settlement'}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-all shadow-sm"
+              >
+                <IndianRupee className="w-4 h-4" />
+                <span className="text-sm font-semibold">Return Payment</span>
+              </button>
+              <button
+                onClick={() => window.location.href = '/admin/delivery-partners/bonus'}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-all shadow-sm"
+              >
+                <Plus className="w-4 h-4" />
+                <span className="text-sm font-semibold">Bonus</span>
+              </button>
+              <button
                 onClick={handleAdd}
                 className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all shadow-sm"
               >

@@ -383,16 +383,9 @@ export default function RegularOrderReport() {
             </button>
             <button 
               onClick={handleFilterApply}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all whitespace-nowrap relative ${
-                activeFiltersCount > 0 ? "ring-2 ring-blue-300" : ""
-              }`}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all whitespace-nowrap relative`}
             >
               Filter
-              {activeFiltersCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 text-white rounded-full text-[8px] flex items-center justify-center font-bold">
-                  {activeFiltersCount}
-                </span>
-              )}
             </button>
           </div>
         </div>

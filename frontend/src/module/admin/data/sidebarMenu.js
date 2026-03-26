@@ -183,6 +183,12 @@ export const sidebarMenuData = [
       },
       {
         type: "link",
+        label: "Return Payment",
+        path: "/admin/cash-limit-settlement",
+        icon: "Receipt",
+      },
+      {
+        type: "link",
         label: "Cash limit settlement",
         path: "/admin/cash-limit-settlement",
         icon: "Receipt",
@@ -204,6 +210,12 @@ export const sidebarMenuData = [
         label: "Delivery Boy Commission",
         path: "/admin/delivery-boy-commission",
         icon: "DollarSign",
+      },
+      {
+        type: "link",
+        label: "Bonus",
+        path: "/admin/delivery-partners/bonus",
+        icon: "Gift",
       },
       {
         type: "link",

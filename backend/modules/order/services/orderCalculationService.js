@@ -64,117 +64,54 @@ const getPerKmDeliveryCharge = (feeSettings, restaurant, deliveryAddress) => {
  * Calculate delivery fee based on order value, distance, and restaurant settings
  */
 export const calculateDeliveryFee = async (orderValue, restaurant, deliveryAddress = null, deliveryFleet = 'standard') => {
-  // 1) First try to calculate delivery fee using DeliveryBoyCommission settings (NEW requested behavior)
+  // 1) First try to calculate delivery fee using FeeSettings (manual overrides)
+  const feeSettings = await getFeeSettings();
+  const perKmCharge = getPerKmDeliveryCharge(feeSettings, restaurant, deliveryAddress);
+
+  // A) Check if delivery fee ranges match the order value
+  if (feeSettings.deliveryFeeRanges && Array.isArray(feeSettings.deliveryFeeRanges) && feeSettings.deliveryFeeRanges.length > 0) {
+    const sortedRanges = [...feeSettings.deliveryFeeRanges].sort((a, b) => a.min - b.min);
+    
+    for (let i = 0; i < sortedRanges.length; i++) {
+        const range = sortedRanges[i];
+        const isLastRange = i === sortedRanges.length - 1;
+        if (isLastRange ? (orderValue >= range.min && orderValue <= range.max) : (orderValue >= range.min && orderValue < range.max)) {
+           return roundCurrency(Number(range.fee) + perKmCharge);
+        }
+    }
+  }
+
+  // B) Fallback to Base Delivery Fee + Per Km from FeeSettings if NO matches and NO commission rules
+  const baseDeliveryFee = (feeSettings.deliveryFee !== undefined && feeSettings.deliveryFee !== null) ? feeSettings.deliveryFee : 25;
+  const legacyFee = roundCurrency(Number(baseDeliveryFee) + perKmCharge);
+
+  // 2) If no range matched, check DeliveryBoyCommission rules (as a backup/fallback)
   try {
     const restaurantCoordinates = restaurant?.location?.coordinates;
     const deliveryCoordinates = deliveryAddress?.location?.coordinates || deliveryAddress?.coordinates;
     
     let distanceKm = null;
-
-    // A) Try to get distance from coordinates
     if (Array.isArray(restaurantCoordinates) && restaurantCoordinates.length >= 2 &&
         Array.isArray(deliveryCoordinates) && deliveryCoordinates.length >= 2) {
       distanceKm = calculateDistance(restaurantCoordinates, deliveryCoordinates);
     }
 
-    // B) Fallback: Try to get distance from restaurant.distance field (e.g., "1.2 km")
     if ((distanceKm === null || distanceKm <= 0) && restaurant?.distance) {
       const parsedDistance = parseFloat(restaurant.distance.toString().replace(/[^\d.]/g, ''));
-      if (!isNaN(parsedDistance)) {
-        distanceKm = parsedDistance;
-      }
+      if (!isNaN(parsedDistance)) distanceKm = parsedDistance;
     }
     
-    // Even if distance is 0, we still want to apply the Commission rules (for base payout)
     if (distanceKm !== null && distanceKm >= 0) {
-      // Try the static method first
-      let commissionResult = null;
-      try {
-        commissionResult = await DeliveryBoyCommission.calculateCommission(distanceKm);
-      } catch (commErr) {
-        console.error(`[PRICING] calculateCommission threw: ${commErr.message}`);
-      }
-
-      // If static method failed or returned 0, try a direct DB query as fallback
-      if (!commissionResult || typeof commissionResult.commission !== 'number' || commissionResult.commission <= 0) {
-        try {
-          // First try with status: true (Boolean)
-          let rules = await DeliveryBoyCommission.find({ status: true }).sort({ minDistance: 1 }).lean();
-          
-          // If no rules found with Boolean true, try with any status (catches data type issues)
-          if (!rules || rules.length === 0) {
-            rules = await DeliveryBoyCommission.find({}).sort({ minDistance: 1 }).lean();
-          }
-          
-          console.log(`[PRICING] Direct DB query found ${rules.length} rules for distance ${distanceKm.toFixed(2)} km`);
-          if (rules && rules.length > 0) {
-            let applicable = rules[0];
-            for (const rule of rules) {
-              if (distanceKm >= rule.minDistance) {
-                if (rule.maxDistance === null || rule.maxDistance === undefined || distanceKm <= rule.maxDistance) {
-                  applicable = rule;
-                  break;
-                }
-                applicable = rule;
-              }
-            }
-            const commission = (applicable.basePayout || 0) + (distanceKm * (applicable.commissionPerKm || 0));
-            commissionResult = { commission: Math.round(commission * 100) / 100 };
-            console.log(`[PRICING] Rule: "${applicable.name}", base: ₹${applicable.basePayout}, perKm: ₹${applicable.commissionPerKm}, dist: ${distanceKm.toFixed(2)}km => commission: ₹${commissionResult.commission}`);
-          }
-        } catch (dbErr) {
-          console.error(`[PRICING] Direct DB query also failed: ${dbErr.message}`);
-        }
-      }
-
-      if (commissionResult && typeof commissionResult.commission === 'number' && commissionResult.commission > 0) {
-        console.log(`[PRICING] ✅ Rule Matched: ₹${commissionResult.commission} for ${distanceKm.toFixed(2)}km`);
+      const commissionResult = await DeliveryBoyCommission.calculateCommission(distanceKm);
+      if (commissionResult && commissionResult.commission > 0) {
         return roundCurrency(commissionResult.commission);
       }
-
-      console.warn(`[PRICING] ⚠️ No commission rule matched for ${distanceKm?.toFixed?.(2)}km, falling back to FeeSettings`);
     }
   } catch (err) {
-    console.error('[PRICING] ❌ Commission error:', err.message);
+    console.error('[PRICING] Commission calculation failed, using legacy fee:', err.message);
   }
 
-  // Get fee settings from database fallback
-  const feeSettings = await getFeeSettings();
-  const perKmCharge = getPerKmDeliveryCharge(feeSettings, restaurant, deliveryAddress);
-
-  // 1) If delivery fee ranges are configured, they are the source of truth.
-  // This avoids unintended FREE delivery from threshold defaults.
-  if (feeSettings.deliveryFeeRanges && Array.isArray(feeSettings.deliveryFeeRanges) && feeSettings.deliveryFeeRanges.length > 0) {
-    // Sort ranges by min value to ensure proper checking
-    const sortedRanges = [...feeSettings.deliveryFeeRanges].sort((a, b) => a.min - b.min);
-
-    // Find matching range (orderValue >= min && orderValue < max)
-    // For the last range, we check orderValue >= min && orderValue <= max
-    for (let i = 0; i < sortedRanges.length; i++) {
-      const range = sortedRanges[i];
-      const isLastRange = i === sortedRanges.length - 1;
-
-      if (isLastRange) {
-        // Last range: include max value
-        if (orderValue >= range.min && orderValue <= range.max) {
-          return roundCurrency(Number(range.fee) + perKmCharge);
-        }
-      } else {
-        // Other ranges: exclude max value (handled by next range)
-        if (orderValue >= range.min && orderValue < range.max) {
-          return roundCurrency(Number(range.fee) + perKmCharge);
-        }
-      }
-    }
-
-    // If ranges exist but none matched, treat as free delivery.
-    return roundCurrency(perKmCharge);
-  }
-
-  // 2) Base delivery fee fallback.
-  const baseDeliveryFee = feeSettings.deliveryFee || 25;
-
-  return roundCurrency(baseDeliveryFee + perKmCharge);
+  return legacyFee;
 };
 
 /**
@@ -189,11 +126,11 @@ export const calculatePlatformFeeFromPercentage = (subtotal = 0, percentage = 0)
 
 export const calculatePlatformFee = async (subtotal = 0) => {
   const feeSettings = await getFeeSettings();
-  const percentage =
-    feeSettings?.platformFeePercentage !== undefined && feeSettings?.platformFeePercentage !== null
-      ? Number(feeSettings.platformFeePercentage)
-      : Number(feeSettings?.platformCommissionPercent || 0);
-  return calculatePlatformFeeFromPercentage(subtotal, percentage);
+  const fixedFee = Number(feeSettings?.platformFee || 0);
+  const totalPercentage = Number(feeSettings?.platformFeePercentage || 0) + Number(feeSettings?.platformCommissionPercent || 0);
+  
+  const percentageFee = calculatePlatformFeeFromPercentage(subtotal, totalPercentage);
+  return roundCurrency(fixedFee + percentageFee);
 };
 
 /**
@@ -392,14 +329,13 @@ export const calculateOrderPricing = async ({
     // Apply free delivery from coupon
     const finalDeliveryFee = appliedCoupon?.freeDelivery ? 0 : deliveryFee;
 
-    // Calculate platform fee based on configured percentage (fallback to legacy percent, then 0).
+    // Calculate platform fee based on configured settings (Fixed + Percentage).
     const feeSettings = await getFeeSettings();
-    const platformFeePercentage = Number(
-      feeSettings?.platformFeePercentage ??
-      feeSettings?.platformCommissionPercent ??
-      0,
-    );
-    const platformFee = calculatePlatformFeeFromPercentage(subtotal, platformFeePercentage);
+    const fixedPlatformFee = Number(feeSettings?.platformFee || 0);
+    const platformFeePercentage = Number(feeSettings?.platformFeePercentage || 0) + Number(feeSettings?.platformCommissionPercent || 0);
+    
+    const percentagePlatformFee = calculatePlatformFeeFromPercentage(subtotal, platformFeePercentage);
+    const platformFee = roundCurrency(fixedPlatformFee + percentagePlatformFee);
 
     // Calculate GST on subtotal after discount
     const gst = await calculateGST(subtotal, discount);

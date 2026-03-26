@@ -193,11 +193,21 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
         $group: {
           _id: null,
           totalRevenue: { $sum: "$pricing.total" },
+          totalTax: { $sum: "$pricing.tax" },
           last30DaysRevenue: {
             $sum: {
               $cond: [
                 { $gte: ["$createdAt", last30Days] },
                 "$pricing.total",
+                0,
+              ],
+            },
+          },
+          last30DaysTax: {
+            $sum: {
+              $cond: [
+                { $gte: ["$createdAt", last30Days] },
+                "$pricing.tax",
                 0,
               ],
             },
@@ -209,7 +219,9 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     // Get revenue data from aggregation result
     const revenueData = revenueStats[0] || {
       totalRevenue: 0,
+      totalTax: 0,
       last30DaysRevenue: 0,
+      last30DaysTax: 0
     };
 
     // Get all settlements for delivered orders filtered by period
@@ -272,7 +284,8 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     totalCommission = Math.round(totalCommission * 100) / 100;
     totalPlatformFee = Math.round(totalPlatformFee * 100) / 100;
     totalDeliveryFee = Math.round(totalDeliveryFee * 100) / 100;
-    totalGST = Math.round(totalGST * 100) / 100;
+    // Use tax from Order model as primary source of truth for GST to match Gross Revenue consistency
+    totalGST = Math.round((revenueData.totalTax || 0) * 100) / 100;
     totalDeliveryEarning = Math.round(
       (await getDeliveryEarningFromWallets(periodStart, now)) * 100,
     ) / 100;
@@ -483,7 +496,8 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     });
 
     // Keep dashboard "Pending orders" aligned with /admin/orders/pending list.
-    const pendingOrders = orderStatusMap.pending || 0;
+    // Use a global count to ensure all orders awaiting processing are visible regardless of period.
+    const pendingOrders = await Order.countDocuments({ status: "pending" });
 
     // Completed orders (delivered orders)
     const completedOrders = orderStatusMap.delivered || 0;
@@ -578,7 +592,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       },
       gst: {
         total: totalGST,
-        last30Days: last30DaysGST,
+        last30Days: Math.round((revenueData.last30DaysTax || 0) * 100) / 100,
         currency: "INR",
       },
       totalAdminEarnings: {
@@ -1021,13 +1035,27 @@ export const getUsers = asyncHandler(async (req, res) => {
       query.isActive = false;
     }
 
-    // Joining date filter
+    // Joining date filter (Global Database filter)
     if (joiningDate) {
       const startDate = new Date(joiningDate);
       startDate.setHours(0, 0, 0, 0);
       const endDate = new Date(joiningDate);
       endDate.setHours(23, 59, 59, 999);
       query.createdAt = { $gte: startDate, $lte: endDate };
+    }
+
+    // Order date filter (Find users who ordered on this date)
+    if (orderDate) {
+      const startDate = new Date(orderDate);
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = new Date(orderDate);
+      endDate.setHours(23, 59, 59, 999);
+
+      const userIdsWithOrders = await Order.find({
+        createdAt: { $gte: startDate, $lte: endDate }
+      }).distinct("userId");
+
+      query._id = { $in: userIdsWithOrders };
     }
 
     // Get users
@@ -1119,17 +1147,10 @@ export const getUsers = asyncHandler(async (req, res) => {
       }
     }
 
-    // Order date filter (filter by order date after aggregation)
-    let filteredUsers = formattedUsers;
-    if (orderDate) {
-      // This would require additional query to filter by order date
-      // For now, we'll skip this as it's complex and may require different approach
-    }
-
     const total = await User.countDocuments(query);
 
     return successResponse(res, 200, "Users retrieved successfully", {
-      users: filteredUsers,
+      users: formattedUsers,
       total,
       limit: parseInt(limit),
       offset: parseInt(offset),

@@ -507,6 +507,10 @@ export const createOrder = async (req, res) => {
       payment: {
         method: normalizedPaymentMethod,
         status: 'pending'
+      },
+      assignmentInfo: {
+        zoneId: restaurantZone?._id?.toString(),
+        zoneName: restaurantZone?.name || restaurantZone?.zoneName
       }
     });
 
@@ -775,14 +779,11 @@ export const createOrder = async (req, res) => {
         });
       }
 
-      // Mark order as confirmed so restaurant can prepare it (ensure payment.method is cash for notification)
+      // For cash-on-delivery orders, keep as pending and notify restaurant.
       order.payment.method = 'cash';
       order.payment.status = 'pending';
-      order.status = 'confirmed';
-      order.tracking.confirmed = {
-        status: true,
-        timestamp: new Date()
-      };
+      order.status = 'pending';
+      // tracking.confirmed will be set when the restaurant manualy accepts the order
       await order.save();
 
       // Calculate order settlement and hold escrow for COD orders too
@@ -1002,13 +1003,13 @@ export const verifyOrderPayment = async (req, res) => {
 
     await payment.save();
 
-    // Update order status
+    // Update order status (stay in pending initially even after payment to allow manual restaurant acceptance)
     order.payment.status = 'completed';
     order.payment.razorpayPaymentId = razorpayPaymentId;
     order.payment.razorpaySignature = razorpaySignature;
     order.payment.transactionId = razorpayPaymentId;
-    order.status = 'confirmed';
-    order.tracking.confirmed = { status: true, timestamp: new Date() };
+    order.status = 'pending';
+    // tracking.confirmed will be set when the restaurant manualy accepts the order
     await order.save();
 
     // Calculate order settlement and hold escrow

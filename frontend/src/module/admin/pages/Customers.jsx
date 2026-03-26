@@ -23,61 +23,10 @@ export default function Customers() {
     chooseFirst: "",
   })
 
+  // No local filtering needed anymore as the backend handles all filters accurately
   const filteredCustomers = useMemo(() => {
-    let result = [...customers]
-
-    // Filter by search query
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim()
-      result = result.filter(customer =>
-        customer.name.toLowerCase().includes(query) ||
-        customer.email.toLowerCase().includes(query) ||
-        customer.phone.includes(query)
-      )
-    }
-
-    // Filter by order date (if customer has order date field, otherwise skip)
-    // Note: customersDummy doesn't have orderDate, so this is a placeholder for future implementation
-
-    // Filter by joining date
-    if (filters.joiningDate) {
-      result = result.filter(customer => {
-        // Parse joining date from format "17 Oct 2021"
-        const customerDate = new Date(customer.joiningDate)
-        const filterDate = new Date(filters.joiningDate)
-        return customerDate.toDateString() === filterDate.toDateString()
-      })
-    }
-
-    // Filter by status
-    if (filters.status) {
-      if (filters.status === "active") {
-        result = result.filter(customer => customer.status === true)
-      } else if (filters.status === "inactive") {
-        result = result.filter(customer => customer.status === false)
-      }
-    }
-
-    // Sort by options
-    if (filters.sortBy) {
-      if (filters.sortBy === "name-asc") {
-        result.sort((a, b) => a.name.localeCompare(b.name))
-      } else if (filters.sortBy === "name-desc") {
-        result.sort((a, b) => b.name.localeCompare(a.name))
-      } else if (filters.sortBy === "orders-asc") {
-        result.sort((a, b) => a.totalOrder - b.totalOrder)
-      } else if (filters.sortBy === "orders-desc") {
-        result.sort((a, b) => b.totalOrder - a.totalOrder)
-      }
-    }
-
-    // Limit results if "Choose First" is set
-    if (filters.chooseFirst && parseInt(filters.chooseFirst) > 0) {
-      result = result.slice(0, parseInt(filters.chooseFirst))
-    }
-
-    return result
-  }, [customers, searchQuery, filters])
+    return customers;
+  }, [customers]);
 
   const handleFilterChange = (field, value) => {
     setFilters(prev => ({ ...prev, [field]: value }))
@@ -425,19 +374,19 @@ export default function Customers() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <button
-                          onClick={() => handleToggleStatus(customer.id || customer.sl)}
+                          onClick={() => handleToggleStatus(customer.id)}
                           className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${customer.status ? "bg-blue-600" : "bg-slate-300"
                             }`}
                         >
                           <span
                             className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${customer.status ? "translate-x-6" : "translate-x-1"
-                              }`}
+                               }`}
                           />
                         </button>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         <button
-                          onClick={() => handleViewDetails(customer.id || customer.sl)}
+                          onClick={() => handleViewDetails(customer.id)}
                           className="p-1.5 rounded text-blue-600 hover:bg-blue-50 transition-colors"
                         >
                           <Eye className="w-4 h-4" />

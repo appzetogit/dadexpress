@@ -237,7 +237,6 @@ export default function TransactionReport() {
     )
   }
 
-  const activeFiltersCount = (filters.zone !== "All Zones" ? 1 : 0) + (filters.restaurant !== "All restaurants" ? 1 : 0) + (filters.time !== "All Time" ? 1 : 0)
 
   const metricDisplayAmount = useMemo(() => {
     const urlMetricAmount = Number(metricView.amount)
@@ -247,7 +246,7 @@ export default function TransactionReport() {
       filters.restaurant !== "All restaurants" ||
       filters.time !== "All Time"
     const hasSearch = Boolean((debouncedSearch || "").trim())
-    const shouldUseLiveSummary = hasActiveFilters || hasSearch
+    const shouldUseLiveSummary = hasActiveFilters || hasSearch || hasLoadedOnce
 
     if (metricView.key === "gross") {
       if (!shouldUseLiveSummary && hasUrlMetricAmount) return urlMetricAmount
@@ -258,7 +257,7 @@ export default function TransactionReport() {
       return Number(summary.totalRevenue ?? summary.adminEarning ?? 0) || 0
     }
     return hasUrlMetricAmount ? urlMetricAmount : 0
-  }, [metricView.amount, metricView.key, summary, filters, debouncedSearch])
+  }, [metricView.amount, metricView.key, summary, filters, debouncedSearch, hasLoadedOnce])
 
   const formatCurrency = (amount) => {
     const numericAmount = Number(amount) || 0
@@ -333,15 +332,9 @@ export default function TransactionReport() {
 
             <button
               onClick={handleFilterApply}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all whitespace-nowrap relative ${activeFiltersCount > 0 ? "ring-2 ring-blue-300" : ""
-                }`}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all whitespace-nowrap"
             >
               Filter
-              {activeFiltersCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 text-white rounded-full text-[8px] flex items-center justify-center font-bold">
-                  {activeFiltersCount}
-                </span>
-              )}
             </button>
             <button
               onClick={handleResetFilters}

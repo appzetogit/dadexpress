@@ -47,7 +47,7 @@ export const getOrders = asyncHandler(async (req, res) => {
         'offline-payments': null
       };
 
-      const mappedStatus = statusMap[status] || status;
+      const mappedStatus = statusMap.hasOwnProperty(status) ? statusMap[status] : status;
       if (mappedStatus) {
         query.status = mappedStatus;
       }
@@ -1102,7 +1102,9 @@ export const getTransactionReport = asyncHandler(async (req, res) => {
       }).select('_id restaurantId').lean();
 
       if (restaurantDoc) {
-        query.restaurantId = restaurantDoc._id?.toString() || restaurantDoc.restaurantId;
+        query.restaurantId = {
+          $in: [restaurantDoc._id?.toString(), restaurantDoc.restaurantId].filter(Boolean)
+        };
       }
     }
 
@@ -1111,10 +1113,38 @@ export const getTransactionReport = asyncHandler(async (req, res) => {
       const Zone = (await import('../models/Zone.js')).default;
       const zoneDoc = await Zone.findOne({
         name: { $regex: zone, $options: 'i' }
-      }).select('_id name').lean();
+      }).select('_id name coordinates boundary').lean();
 
       if (zoneDoc) {
-        query['assignmentInfo.zoneId'] = zoneDoc._id?.toString();
+        // Identify all restaurants belonging to this zone for backward compatibility with old orders.
+        // We find all restaurants and filter them manually based on their coordinates if they fall within the zone.
+        const Restaurant = (await import('../../restaurant/models/Restaurant.js')).default;
+        const allRestaurants = await Restaurant.find({ isActive: true }).select('_id restaurantId location').lean();
+        
+        // Use the point-in-polygon logic manually on the lean doc coordinates.
+        const restaurantIdsInZone = allRestaurants.filter(r => {
+          const lat = r.location?.latitude || r.location?.coordinates?.[1];
+          const lng = r.location?.longitude || r.location?.coordinates?.[0];
+          if (!lat || !lng || !zoneDoc.coordinates) return false;
+          
+          let inside = false;
+          const coords = zoneDoc.coordinates;
+          for (let i = 0, j = coords.length - 1; i < coords.length; j = i++) {
+            const xi = coords[i].longitude, yi = coords[i].latitude;
+            const xj = coords[j].longitude, yj = coords[j].latitude;
+            const intersect = ((yi > lat) !== (yj > lat)) && (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi);
+            if (intersect) inside = !inside;
+          }
+          return inside;
+        }).flatMap(r => [r._id?.toString(), r.restaurantId]).filter(Boolean);
+
+        // Filter by both the persisted zone info (for new orders) and matching restaurant IDs (for all orders).
+        // Using $in to support multiple formats (ID string, ObjectId string, Name).
+        query.$or = [
+          { 'assignmentInfo.zoneId': { $in: [zoneDoc._id?.toString(), zoneDoc.name].filter(Boolean) } },
+          { 'assignmentInfo.zoneName': { $in: [zoneDoc.name, zoneDoc.zoneName].filter(Boolean) } },
+          { restaurantId: { $in: restaurantIdsInZone } }
+        ];
       }
     }
 
@@ -1205,8 +1235,15 @@ export const getTransactionReport = asyncHandler(async (req, res) => {
       }
     }
 
-    // Get all orders for summary calculation (without pagination)
+    // Gross revenue and other financial cards should show stats 
+    // filtered by current filters (Zone/Restaurant/Dates).
+    // If a specific metric is requested (like from Dashboard), we keep the 'delivered' status.
+    // Otherwise, we calculate summary based on the same query used for the list.
     const summaryQuery = { ...query };
+    if (metric === undefined) {
+      delete summaryQuery.status;
+    }
+
     const allOrdersForSummary = await Order.find(summaryQuery)
       .populate('userId', 'name')
       .populate('restaurantId', 'name')
@@ -1351,9 +1388,21 @@ export const getTransactionReport = asyncHandler(async (req, res) => {
       return sum + (Number(order.pricing?.deliveryFee) || 0) * 0.8;
     }, 0);
 
-    // Keep delivery earning aligned with dashboard logic: payout transactions from delivery wallets.
+    // Keep delivery earning aligned with dashboard logic: filters for existing delivery partners and payout transactions.
+    const Delivery = (await import('../../delivery/models/Delivery.js')).default;
+    const existingDeliveryPartnerIds = await Delivery.find({})
+      .distinct("_id")
+      .catch(() => []);
+
     const DeliveryWallet = (await import('../../delivery/models/DeliveryWallet.js')).default;
     const deliveryWalletPipeline = [
+      {
+        $match: {
+          ...(Array.isArray(existingDeliveryPartnerIds) && existingDeliveryPartnerIds.length > 0
+            ? { deliveryId: { $in: existingDeliveryPartnerIds } }
+            : {})
+        }
+      },
       { $unwind: '$transactions' },
       {
         $addFields: {
@@ -1385,22 +1434,30 @@ export const getTransactionReport = asyncHandler(async (req, res) => {
     ];
     const deliveryWalletResult = await DeliveryWallet.aggregate(deliveryWalletPipeline);
     const deliverymanEarningFromWallets = Number(deliveryWalletResult?.[0]?.total || 0);
-    const deliverymanEarning =
-      deliverymanEarningFromWallets > 0 ? deliverymanEarningFromWallets : deliverymanEarningFromOrders;
+    
+    // If restaurant/zone filters are active, we MUST use order-based calculations
+    // for deliveryman earnings as wallet transactions are global.
+    const hasActiveFilters = (restaurant && restaurant !== 'All restaurants') || (zone && zone !== 'All Zones');
+    const deliverymanEarning = (hasActiveFilters || deliverymanEarningFromWallets === 0)
+      ? deliverymanEarningFromOrders
+      : deliverymanEarningFromWallets;
 
     // Gross revenue: total value of completed paid transactions.
     const grossRevenue = completedTransaction;
 
     // Total revenue aligned with dashboard:
     // commission + platform fee + GST + delivery earning.
+    // Use pricing.tax from the Order model as the primary source of truth for GST to match the dashboard.
     const settlementRevenueBreakdown = completedOrders.reduce((sum, order) => {
       const orderId = order._id?.toString();
       const settlement = settlementByOrderId.get(orderId);
 
+      // Always pull GST from the order itself for dashboard consistency
+      sum.gst += Number(order.pricing?.tax) || 0;
+
       if (settlement?.adminEarning) {
         sum.commission += Number(settlement.adminEarning.commission) || 0;
         sum.platformFee += Number(settlement.adminEarning.platformFee) || 0;
-        sum.gst += Number(settlement.adminEarning.gst) || 0;
         return sum;
       }
 
@@ -1511,35 +1568,51 @@ export const getRestaurantReport = asyncHandler(async (req, res) => {
     // Build restaurant query
     const restaurantQuery = {};
 
-    // Zone filter
+    // Zone filter with robust polygon-based spatial check
     if (zone && zone !== 'All Zones') {
       const Zone = (await import('../models/Zone.js')).default;
       const zoneDoc = await Zone.findOne({
         name: { $regex: zone, $options: 'i' }
-      }).select('_id name').lean();
+      }).select('_id name coordinates boundary').lean();
 
-      if (zoneDoc) {
-        // Find restaurants in this zone by checking orders with this zoneId
-        const ordersInZone = await Order.distinct('restaurantId', {
-          'assignmentInfo.zoneId': zoneDoc._id?.toString()
+      if (zoneDoc && Array.isArray(zoneDoc.coordinates)) {
+        // Find ALL restaurants and check which ones fall inside the zone polygon
+        const allRestaurants = await Restaurant.find({}).select('_id restaurantId location').lean();
+        
+        // Separate ObjectIds and String IDs to avoid CastError
+        const restaurantInternalIds = [];
+        const restaurantSlugIds = [];
+
+        allRestaurants.forEach(r => {
+          const lat = r.location?.latitude || r.location?.coordinates?.[1];
+          const lng = r.location?.longitude || r.location?.coordinates?.[0];
+          if (!lat || !lng || !zoneDoc.coordinates) return;
+          
+          let inside = false;
+          const coords = zoneDoc.coordinates;
+          for (let i = 0, j = coords.length - 1; i < coords.length; j = i++) {
+            const xi = coords[i].longitude, yi = coords[i].latitude;
+            const xj = coords[j].longitude, yj = coords[j].latitude;
+            const intersect = ((yi > lat) !== (yj > lat)) && (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi);
+            if (intersect) inside = !inside;
+          }
+
+          if (inside) {
+            if (r._id) restaurantInternalIds.push(r._id);
+            if (r.restaurantId) restaurantSlugIds.push(r.restaurantId);
+          }
         });
 
-        if (ordersInZone.length > 0) {
-          restaurantQuery.$or = [
-            { _id: { $in: ordersInZone } },
-            { restaurantId: { $in: ordersInZone } }
-          ];
+        if (restaurantInternalIds.length > 0 || restaurantSlugIds.length > 0) {
+          restaurantQuery.$or = [];
+          if (restaurantInternalIds.length > 0) {
+            restaurantQuery.$or.push({ _id: { $in: restaurantInternalIds } });
+          }
+          if (restaurantSlugIds.length > 0) {
+            restaurantQuery.$or.push({ restaurantId: { $in: restaurantSlugIds } });
+          }
         } else {
-          // No restaurants found in this zone
-          return successResponse(res, 200, 'Restaurant report retrieved successfully', {
-            restaurants: [],
-            pagination: {
-              page: 1,
-              limit: 1000,
-              total: 0,
-              pages: 0
-            }
-          });
+          return successResponse(res, 200, 'No restaurants found in this zone', { restaurants: [], count: 0 });
         }
       }
     }
@@ -1731,12 +1804,13 @@ export const getRestaurantReport = asyncHandler(async (req, res) => {
       })
     );
 
-    // Filter by type (Commission/Subscription) if needed
+    // Filter by type (Commission/Subscription)
     let filteredReports = restaurantReports.filter(Boolean);
     if (type && type !== 'All types') {
-      // This would require checking restaurant subscription status
-      // For now, we'll return all restaurants
-      // You can add subscription filtering logic here if needed
+      const targetModel = type.toLowerCase().includes('subscription') ? 'Subscription Base' : 'Commission Base';
+      const typedRestaurants = await Restaurant.find({ businessModel: targetModel }).distinct('_id');
+      const typedIds = typedRestaurants.map(id => id.toString());
+      filteredReports = filteredReports.filter(report => typedIds.includes(report.id));
     }
 
     // Sort by restaurant name

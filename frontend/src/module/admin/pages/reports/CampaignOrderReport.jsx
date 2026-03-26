@@ -200,17 +200,10 @@ export default function CampaignOrderReport() {
               </button>
               <button 
                 onClick={handleFilterApply}
-                className={`px-4 py-2 text-xs font-medium rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-all flex items-center gap-2 relative ${
-                  activeFiltersCount > 0 ? "ring-2 ring-blue-300" : ""
-                }`}
+                className={`px-4 py-2 text-xs font-medium rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-all flex items-center gap-2 relative`}
               >
                 <Filter className="w-3.5 h-3.5" />
                 Filter
-                {activeFiltersCount > 0 && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 text-white rounded-full text-[8px] flex items-center justify-center font-bold">
-                    {activeFiltersCount}
-                  </span>
-                )}
               </button>
             </div>
           </div>

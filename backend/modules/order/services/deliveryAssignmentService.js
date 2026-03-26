@@ -433,6 +433,7 @@ export async function assignOrderToDeliveryBoy(order, restaurantLat, restaurantL
     // Note: Don't set outForDelivery yet - that should happen when delivery boy picks up the order
     order.deliveryPartnerId = nearestDeliveryBoy.deliveryPartnerId;
     order.assignmentInfo = {
+      ...(order.assignmentInfo || {}),
       deliveryPartnerId: nearestDeliveryBoy.deliveryPartnerId,
       distance: nearestDeliveryBoy.distance,
       assignedAt: new Date(),

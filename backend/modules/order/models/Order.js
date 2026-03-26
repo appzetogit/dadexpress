@@ -325,17 +325,16 @@ orderSchema.index({ restaurantId: 1, status: 1 });
 orderSchema.index({ status: 1, createdAt: -1 });
 orderSchema.index({ 'payment.razorpayOrderId': 1 });
 
-// Generate order ID before saving (fallback if not provided)
+// Combined pre-save hook for ID generation and tracking updates
 orderSchema.pre('save', async function() {
+  const now = new Date();
+  
+  // Generate order ID before saving (fallback if not provided)
   if (!this.orderId) {
     this.orderId = generateOrderId();
   }
-});
 
-// Update tracking when status changes
-orderSchema.pre('save', function(next) {
-  const now = new Date();
-  
+  // Update tracking when status changes
   if (this.isModified('status')) {
     switch (this.status) {
       case 'confirmed':
@@ -371,8 +370,6 @@ orderSchema.pre('save', function(next) {
         break;
     }
   }
-  
-  next();
 });
 
 export default mongoose.models.Order || mongoose.model('Order', orderSchema);

@@ -207,7 +207,7 @@ export default function AdminHome() {
               helper="Fulfilled & billed"
               icon={<Activity className="h-5 w-5 text-amber-600" />}
               accent="bg-amber-200/40"
-              path="/admin/orders/all"
+              path="/admin/orders/delivered"
               isLoading={isLoading && !hasLoadedOnce}
             />
             <MetricCard
