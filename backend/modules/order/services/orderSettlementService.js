@@ -98,31 +98,55 @@ export const calculateOrderSettlement = async (orderId) => {
       status: 'pending'
     };
 
-    if (order.deliveryPartnerId && order.assignmentInfo?.distance) {
-      const distance = order.assignmentInfo.distance;
-      const deliveryCommission = await DeliveryBoyCommission.calculateCommission(distance);
+    if (order.deliveryPartnerId) {
+      // Robust distance calculation
+      let distance = order.assignmentInfo?.distance || order.deliveryState?.routeToDelivery?.distance || 0;
       
-      // Get surge multiplier (can be configured in order or settings)
+      if (distance <= 0 && order.restaurantId?.location?.coordinates && order.address?.location?.coordinates) {
+        // Fallback to Haversine if no computed distance exists
+        const [rLng, rLat] = order.restaurantId.location.coordinates;
+        const [cLng, cLat] = order.address.location.coordinates;
+        const R = 6371; // km
+        const dLat = (cLat - rLat) * Math.PI / 180;
+        const dLng = (cLng - rLng) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(rLat * Math.PI / 180) * Math.cos(cLat * Math.PI / 180) *
+          Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        distance = Math.round(R * c * 100) / 100;
+      }
+
+      let baseEarning = 0;
+      let breakdown = { basePayout: 0, commissionPerKm: 0, distanceCommission: 0 };
+
+      try {
+        const deliveryCommission = await DeliveryBoyCommission.calculateCommission(distance);
+        baseEarning = deliveryCommission.commission;
+        breakdown = deliveryCommission.breakdown;
+      } catch (err) {
+        // Fallback: If commission rules fail, use delivery fee from order
+        baseEarning = order.pricing?.deliveryFee || 0;
+        breakdown.basePayout = baseEarning;
+      }
+      
       const surgeMultiplier = order.assignmentInfo?.surgeMultiplier || 1;
-      const baseEarning = deliveryCommission.commission;
       const surgeAmount = baseEarning * (surgeMultiplier - 1);
 
       deliveryPartnerEarning = {
-        basePayout: deliveryCommission.breakdown.basePayout,
+        basePayout: breakdown.basePayout,
         distance: distance,
-        commissionPerKm: deliveryCommission.breakdown.commissionPerKm,
-        distanceCommission: deliveryCommission.breakdown.distanceCommission,
+        commissionPerKm: breakdown.commissionPerKm,
+        distanceCommission: breakdown.distanceCommission,
         surgeMultiplier: surgeMultiplier,
         surgeAmount: surgeAmount,
-        totalEarning: baseEarning + surgeAmount,
+        totalEarning: Math.round((baseEarning + surgeAmount) * 100) / 100,
         status: 'pending'
       };
     }
 
     // Calculate admin/platform earnings
-    // Admin gets: Restaurant commission + Platform fee + Delivery fee + GST
-    // Note: Even if delivery is free for user, delivery fee amount still goes to admin
-    const deliveryMargin = userPayment.deliveryFee - deliveryPartnerEarning.totalEarning;
+    const deliveryMargin = (order.pricing?.deliveryFee || 0) - deliveryPartnerEarning.totalEarning;
+
     
     const adminCommission = Math.round(restaurantEarning.commission * 100) / 100;
     const adminPlatformFee = Math.round(userPayment.platformFee * 100) / 100;

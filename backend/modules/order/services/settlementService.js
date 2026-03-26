@@ -1,6 +1,8 @@
 import OrderSettlement from '../models/OrderSettlement.js';
+import Order from '../models/Order.js';
 import RestaurantWallet from '../../restaurant/models/RestaurantWallet.js';
 import DeliveryWallet from '../../delivery/models/DeliveryWallet.js';
+import { calculateOrderSettlement } from './orderSettlementService.js';
 import mongoose from 'mongoose';
 
 const buildDateRange = (startDate, endDate) => {
@@ -37,92 +39,151 @@ const getReportDeliveryTimestamp = (order, settlement) => {
  */
 export const getPendingRestaurantSettlements = async (restaurantId = null, startDate = null, endDate = null) => {
   try {
-    const query = {
-      settlementStatus: { $nin: ['cancelled'] },
-      'restaurantEarning.status': { $nin: ['cancelled'] },
-      'metadata.restaurantFinanceReportMarked': { $ne: true },
-    };
-
-    if (restaurantId) {
-      query.restaurantId = restaurantId;
+    const dateRange = buildDateRange(startDate, endDate);
+    
+    // 1. Find delivered orders first (Source of Truth)
+    const orderQuery = { status: 'delivered' };
+    if (restaurantId) orderQuery.restaurantId = restaurantId;
+    
+    // If date range is provided, filter by deliveredAt or updatedAt
+    if (dateRange) {
+      orderQuery.$or = [
+        { deliveredAt: { $gte: dateRange.start, $lte: dateRange.end } },
+        { updatedAt: { $gte: dateRange.start, $lte: dateRange.end } }
+      ];
     }
 
-    const dateRange = buildDateRange(startDate, endDate);
+    const orders = await Order.find(orderQuery).select('_id orderId restaurantId restaurantName status deliveredAt updatedAt').lean();
+    const orderIds = orders.map(o => o._id);
 
-    const settlementsRaw = await OrderSettlement.find(query)
-      .populate('orderId', 'orderId status deliveredAt tracking updatedAt')
-      .populate('restaurantId', 'name restaurantId')
-      .sort({ createdAt: -1 })
-      .lean();
+    // 2. Find/Ensure settlements exist for these orders
+    // Use an aggressive check to ensure we have data
+    const settlements = [];
+    for (const order of orders) {
+      let settlement = await OrderSettlement.findOne({ orderId: order._id })
+        .populate('orderId', 'orderId status deliveredAt tracking updatedAt pricing')
+        .populate('restaurantId', 'name restaurantId')
+        .lean();
 
-    const settlements = settlementsRaw.filter((settlement) => {
+      // Auto-create if missing (Permanent Fix for data gaps)
+      if (!settlement) {
+        try {
+          const newDoc = await calculateOrderSettlement(order._id);
+          settlement = await OrderSettlement.findById(newDoc._id)
+            .populate('orderId', 'orderId status deliveredAt tracking updatedAt pricing')
+            .populate('restaurantId', 'name restaurantId')
+            .lean();
+        } catch (calcErr) {
+          console.error(`Failed to auto-create settlement for order ${order.orderId}:`, calcErr.message);
+          continue;
+        }
+      }
+
+      // 3. Filter by paid/hidden status
       const meta = settlement?.metadata;
-      const hidden =
-        meta &&
-        (meta.restaurantFinanceReportMarked === true ||
-          (typeof meta.get === 'function' && meta.get('restaurantFinanceReportMarked') === true));
-      if (hidden) return false;
-      const order = settlement?.orderId;
-      if (!order || order.status !== 'delivered') return false;
-      if (!dateRange) return true;
-      const dt = getReportDeliveryTimestamp(order, settlement);
-      if (!dt || Number.isNaN(dt.getTime())) return false;
-      return dt >= dateRange.start && dt <= dateRange.end;
-    });
+      let isHidden = false;
+      if (meta) {
+        if (typeof meta.get === 'function') {
+          isHidden = meta.get('restaurantFinanceReportMarked') === true;
+        } else {
+          isHidden = meta.restaurantFinanceReportMarked === true;
+        }
+      }
 
-    return settlements;
+      if (!isHidden && settlement.settlementStatus !== 'cancelled') {
+        settlements.push(settlement);
+      }
+    }
+
+    // Sort by delivery date descending
+    return settlements.sort((a, b) => {
+      const dateA = getReportDeliveryTimestamp(a.orderId, a);
+      const dateB = getReportDeliveryTimestamp(b.orderId, b);
+      return (dateB?.getTime() || 0) - (dateA?.getTime() || 0);
+    });
   } catch (error) {
     console.error('Error getting pending restaurant settlements:', error);
     throw error;
   }
 };
 
+
 /**
  * Get pending settlements for delivery partners
  */
 export const getPendingDeliverySettlements = async (deliveryId = null, startDate = null, endDate = null) => {
   try {
-    const query = {
-      'deliveryPartnerEarning.status': 'credited',
-      deliveryPartnerSettled: false,
-      settlementStatus: 'completed',
-      deliveryPartnerId: { $ne: null },
-      'metadata.deliveryFinanceReportMarked': { $ne: true },
+    const dateRange = buildDateRange(startDate, endDate);
+    
+    // 1. Find delivered orders first (Source of Truth)
+    const orderQuery = { 
+      status: 'delivered',
+      deliveryPartnerId: { $ne: null } 
     };
-
+    
     if (deliveryId) {
-      query.deliveryPartnerId = deliveryId;
+      orderQuery.deliveryPartnerId = deliveryId;
+    }
+    
+    if (dateRange) {
+      orderQuery.$or = [
+        { deliveredAt: { $gte: dateRange.start, $lte: dateRange.end } },
+        { updatedAt: { $gte: dateRange.start, $lte: dateRange.end } }
+      ];
     }
 
-    const dateRange = buildDateRange(startDate, endDate);
+    const orders = await Order.find(orderQuery).select('_id orderId deliveryPartnerId status deliveredAt updatedAt').lean();
+    
+    const settlements = [];
+    for (const order of orders) {
+      let settlement = await OrderSettlement.findOne({ orderId: order._id })
+        .populate('orderId', 'orderId status deliveredAt tracking updatedAt selectionDetails pricing')
+        .populate('deliveryPartnerId', 'name phone')
+        .lean();
 
-    const settlementsRaw = await OrderSettlement.find(query)
-      .populate('orderId', 'orderId status deliveredAt tracking updatedAt')
-      .populate('deliveryPartnerId', 'name phone')
-      .sort({ createdAt: -1 })
-      .lean();
+      // Auto-create if missing OR force recalculate if earning is 0
+      const currentEarning = settlement?.deliveryPartnerEarning?.totalEarning || 0;
+      if (!settlement || (currentEarning === 0 && order.status === 'delivered')) {
+        try {
+          const newDoc = await calculateOrderSettlement(order._id);
+          settlement = await OrderSettlement.findById(newDoc._id)
+            .populate('orderId', 'orderId status deliveredAt tracking updatedAt selectionDetails pricing')
+            .populate('deliveryPartnerId', 'name phone')
+            .lean();
+        } catch (calcErr) {
+          console.error(`Failed to repair delivery settlement for order ${order.orderId}:`, calcErr.message);
+          if (!settlement) continue;
+        }
+      }
 
-    const settlements = settlementsRaw.filter((settlement) => {
+      // Check if hidden
       const meta = settlement?.metadata;
-      const hidden =
-        meta &&
-        (meta.deliveryFinanceReportMarked === true ||
-          (typeof meta.get === 'function' && meta.get('deliveryFinanceReportMarked') === true));
-      if (hidden) return false;
-      const order = settlement?.orderId;
-      if (!order || order.status !== 'delivered') return false;
-      if (!dateRange) return true;
-      const dt = getReportDeliveryTimestamp(order, settlement);
-      if (!dt || Number.isNaN(dt.getTime())) return false;
-      return dt >= dateRange.start && dt <= dateRange.end;
-    });
+      let isHidden = false;
+      if (meta) {
+        if (typeof meta.get === 'function') {
+          isHidden = meta.get('deliveryFinanceReportMarked') === true;
+        } else {
+          isHidden = meta.deliveryFinanceReportMarked === true;
+        }
+      }
 
-    return settlements;
+      if (!isHidden && settlement.settlementStatus !== 'cancelled') {
+        settlements.push(settlement);
+      }
+    }
+
+    // Sort by delivery date descending
+    return settlements.sort((a, b) => {
+      const dateA = getReportDeliveryTimestamp(a.orderId, a);
+      const dateB = getReportDeliveryTimestamp(b.orderId, b);
+      return (dateB?.getTime() || 0) - (dateA?.getTime() || 0);
+    });
   } catch (error) {
     console.error('Error getting pending delivery settlements:', error);
     throw error;
   }
 };
+
 
 /**
  * Generate restaurant settlement report for restaurants (daily/weekly)
@@ -266,13 +327,14 @@ export const markSettlementsAsProcessed = async (settlementIds, actorType, actor
       settlement.metadata.set('restaurantFinanceReportMarked', true);
       settlement.metadata.set('deliveryFinanceReportMarked', true);
 
-      if (settlement.restaurantEarning.status === 'credited' && !settlement.restaurantSettled) {
+      if (settlement.restaurantEarning.status !== 'cancelled' && !settlement.restaurantSettled) {
         settlement.restaurantSettled = true;
       }
-      if (settlement.deliveryPartnerEarning.status === 'credited' && !settlement.deliveryPartnerSettled) {
+      if (settlement.deliveryPartnerEarning.status !== 'cancelled' && !settlement.deliveryPartnerSettled) {
         settlement.deliveryPartnerSettled = true;
       }
       await settlement.save();
+
     }
 
     return settlements;

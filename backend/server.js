@@ -1,5 +1,5 @@
 import dns from 'node:dns';
-dns.setServers(['8.8.8.8', '8.8.4.4']);
+dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
 import express from 'express'; // Restarting to apply Firebase changes
 import dotenv from 'dotenv';
 import helmet from 'helmet';

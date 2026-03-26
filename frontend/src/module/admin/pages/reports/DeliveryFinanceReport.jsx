@@ -160,7 +160,6 @@ export default function DeliveryFinanceReport() {
       deliveryBoy: s.deliveryName,
       distance: s.deliveryEarning?.distance ?? 0,
       basePayout: s.deliveryEarning?.basePayout ?? 0,
-      surge: s.deliveryEarning?.surgeAmount ?? 0,
       totalEarning: s.deliveryEarning?.totalEarning ?? 0,
       status: "Delivered"
     }))
@@ -172,7 +171,6 @@ export default function DeliveryFinanceReport() {
       { key: "deliveryBoy", label: "Delivery Boy" },
       { key: "distance", label: "Distance (km)" },
       { key: "basePayout", label: "Base Payout" },
-      { key: "surge", label: "Surge" },
       { key: "totalEarning", label: "Total Earning" },
       { key: "status", label: "Status" },
     ]
@@ -341,7 +339,7 @@ export default function DeliveryFinanceReport() {
             <table className="w-full">
               <thead className="bg-[#F8FAFC]">
                 <tr>
-                  {["SL", "Order #", "Date", "Delivery Boy", "Distance", "Base Payout", "Surge", "Total Earning", "Status"].map((header) => (
+                  {["SL", "Order #", "Date", "Delivery Boy", "Distance", "Base Payout", "Total Earning", "Status"].map((header) => (
                     <th key={header} className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">
                       {header}
                     </th>
@@ -351,7 +349,7 @@ export default function DeliveryFinanceReport() {
               <tbody className="divide-y divide-slate-100">
                 {loading ? (
                   <tr>
-                    <td colSpan={9} className="px-6 py-20 text-center">
+                    <td colSpan={8} className="px-6 py-20 text-center">
                       <div className="flex flex-col items-center gap-4">
                         <Loader2 className="w-8 h-8 text-slate-800 animate-spin" />
                         <p className="text-sm font-bold text-slate-500">Loading settlement data...</p>
@@ -360,7 +358,7 @@ export default function DeliveryFinanceReport() {
                   </tr>
                 ) : settlements.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-6 py-20 text-center">
+                    <td colSpan={8} className="px-6 py-20 text-center">
                       <div className="flex flex-col items-center gap-3">
                         <LayoutDashboard className="w-10 h-10 text-slate-200" />
                         <p className="text-slate-500 font-bold">No records found for the selected period.</p>
@@ -394,9 +392,6 @@ export default function DeliveryFinanceReport() {
                       </td>
                       <td className="px-6 py-4">
                         <span className="text-sm font-bold text-slate-700">₹{s.deliveryEarning?.basePayout ?? 0}</span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="text-sm font-bold text-orange-500">₹{s.deliveryEarning?.surgeAmount ?? 0}</span>
                       </td>
                       <td className="px-6 py-4">
                         <span className="text-sm font-bold text-blue-600 font-mono">₹{s.deliveryEarning?.totalEarning ?? 0}</span>
