@@ -116,8 +116,18 @@ const getDashboardChartBuckets = (period, now) => {
  */
 export const getDashboardStats = asyncHandler(async (req, res) => {
   try {
-    const { period } = req.query;
+    const { period, zone } = req.query;
     const now = new Date();
+
+    // Create a robust zone filter for both string and ObjectId matches (in case type varies in DB)
+    const getZoneFilter = (z) => {
+      if (!z || z === "all") return null;
+      if (mongoose.Types.ObjectId.isValid(z)) {
+        return { $in: [z, new mongoose.Types.ObjectId(z)] };
+      }
+      return z;
+    };
+    const zoneMatcher = getZoneFilter(zone);
 
     // Calculate date range based on period filter
     let periodStart = null;
@@ -131,9 +141,10 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       periodStart = new Date(now.getFullYear(), 0, 1);
     }
 
-    // Base order match - filter by period if specified
+    // Base order match - filter by period and zone if specified
     const baseOrderMatch = { status: "delivered", "pricing.total": { $exists: true } };
     if (periodStart) baseOrderMatch.deliveredAt = { $gte: periodStart, $lte: now };
+    if (zoneMatcher) baseOrderMatch["assignmentInfo.zoneId"] = zoneMatcher;
 
     const last30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     const existingDeliveryPartnerIds = await Delivery.find({})
@@ -224,9 +235,11 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       last30DaysTax: 0
     };
 
-    // Get all settlements for delivered orders filtered by period
+    // Get all settlements for delivered orders filtered by period and zone
     const deliveredOrderQuery = { status: "delivered" };
     if (periodStart) deliveredOrderQuery.deliveredAt = { $gte: periodStart, $lte: now };
+    if (zoneMatcher) deliveredOrderQuery["assignmentInfo.zoneId"] = zoneMatcher;
+    
     const deliveredOrderIds = await Order.find(deliveredOrderQuery)
       .select("_id")
       .lean();
@@ -295,8 +308,17 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     );
 
     // Get last 30 days data from OrderSettlement
+    const last30DaysOrderQuery = {
+      status: "delivered",
+      deliveredAt: { $gte: last30Days, $lte: now }
+    };
+    if (zoneMatcher) last30DaysOrderQuery["assignmentInfo.zoneId"] = zoneMatcher;
+    
+    const last30DaysOrderIds = await Order.find(last30DaysOrderQuery).select("_id").lean();
+    const last30DaysOrderIdArray = last30DaysOrderIds.map(o => o._id);
+
     const last30DaysSettlements = await OrderSettlement.find({
-      createdAt: { $gte: last30Days, $lte: now },
+      orderId: { $in: last30DaysOrderIdArray }
     }).lean();
     const last30DaysCommission = last30DaysSettlements.reduce(
       (sum, s) => sum + (s.adminEarning?.commission || 0),
@@ -320,8 +342,9 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     );
 
     // Get order statistics aligned with the selected period using each status event timestamp.
-    const orderFlowQuery = periodStart
-      ? {
+    const orderFlowQuery = {
+      $and: [
+        periodStart ? {
           $or: [
             { createdAt: { $gte: periodStart, $lte: now } },
             { deliveredAt: { $gte: periodStart, $lte: now } },
@@ -332,8 +355,10 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
             { "tracking.outForDelivery.timestamp": { $gte: periodStart, $lte: now } },
             { "tracking.delivered.timestamp": { $gte: periodStart, $lte: now } },
           ],
-        }
-      : {};
+        } : {},
+        zoneMatcher ? { "assignmentInfo.zoneId": zoneMatcher } : {}
+      ]
+    };
 
     const orderFlowCandidates = await Order.find(orderFlowQuery)
       .select("status createdAt deliveredAt cancelledAt tracking")
@@ -355,23 +380,44 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     const totalOrders = orderStatusMap.delivered || 0;
 
     // Get active partners count
-    const activeRestaurants = await Restaurant.countDocuments({
-      isActive: true,
-    });
+    // Shared scope for dashboard list parity:
+    // filter by zone if specified (not possible directly on Restaurant, using orders found in zone)
+    let restaurantMatch = { isActive: true };
+    if (zoneMatcher) {
+      // Find restaurants that have at least one order in this zone
+      const restaurantIdsInZone = await Order.distinct("restaurantId", { "assignmentInfo.zoneId": zoneMatcher });
+      // Also check restaurants that are associated with the zone in Zone model?
+      const ZoneModel = (await import("../models/Zone.js")).default;
+      const zones = await ZoneModel.find({ _id: zoneMatcher }).select("restaurantId").lean();
+      const directRestaurantId = zones[0]?.restaurantId;
+      
+      const combinedRestaurantIds = [...new Set([...restaurantIdsInZone, directRestaurantId].filter(id => id))];
+      
+      const validObjectIds = combinedRestaurantIds.filter(id => mongoose.Types.ObjectId.isValid(id)).map(id => new mongoose.Types.ObjectId(id));
+      const validStringIds = combinedRestaurantIds.filter(id => typeof id === 'string' && !mongoose.Types.ObjectId.isValid(id));
+
+      restaurantMatch.$or = [
+        { _id: { $in: validObjectIds } },
+        { restaurantId: { $in: validStringIds } }
+      ];
+    }
+
+    const activeRestaurantsDocs = await Restaurant.find(restaurantMatch)
+      .select("_id restaurantId")
+      .lean();
+    
+    // Update total restaurants count and active partners count based on filtered restaurants
+    const totalRestaurants = activeRestaurantsDocs.length;
+    const activeRestaurantsCount = activeRestaurantsDocs.length;
+    
     // Note: Delivery partners are stored in User model
     const User = (await import("../../auth/models/User.js")).default;
+    // For now, only filter restaurants by zone as delivery boys move across zones
     const activeDeliveryPartners = await User.countDocuments({
       role: "delivery",
       isActive: true,
     });
-    const activePartners = activeRestaurants + activeDeliveryPartners;
-
-    // Get additional stats
-    // Total restaurants (only active/approved restaurants)
-    // This matches the admin restaurants list which shows only active restaurants by default
-    const totalRestaurants = await Restaurant.countDocuments({
-      isActive: true,
-    });
+    const activePartners = activeRestaurantsCount + activeDeliveryPartners;
 
     // Restaurant requests pending (inactive restaurants with completed onboarding, no rejection)
     const pendingRestaurantRequestsQuery = {
@@ -405,11 +451,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       status: "pending",
     });
 
-    // Shared scope for dashboard list parity:
-    // only active restaurants, then their menus.
-    const activeRestaurantIds = await Restaurant.find({ isActive: true })
-      .select("_id")
-      .lean();
+    const activeRestaurantObjectIds = activeRestaurantsDocs.map(r => r._id);
 
     // Total foods (Menu items) - Count all individual menu items from active restaurant menus
     // Count ALL items (including disabled sections, unavailable items, pending/approved, excluding only rejected)
@@ -417,7 +459,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     // Get all active menus and count items in sections and subsections
     const activeMenus = await Menu.find({
       isActive: true,
-      restaurant: { $in: activeRestaurantIds.map((r) => r._id) },
+      restaurant: { $in: activeRestaurantObjectIds },
     })
       .select("sections")
       .lean();
@@ -458,7 +500,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     let totalAddons = 0;
     const menusWithAddons = await Menu.find({
       isActive: true,
-      restaurant: { $in: activeRestaurantIds.map((r) => r._id) },
+      restaurant: { $in: activeRestaurantObjectIds },
     })
       .select("addons")
       .lean();
@@ -497,7 +539,9 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
 
     // Keep dashboard "Pending orders" aligned with /admin/orders/pending list.
     // Use a global count to ensure all orders awaiting processing are visible regardless of period.
-    const pendingOrders = await Order.countDocuments({ status: "pending" });
+    const pendingOrdersQuery = { status: "pending" };
+    if (zoneMatcher) pendingOrdersQuery["assignmentInfo.zoneId"] = zoneMatcher;
+    const pendingOrders = await Order.countDocuments(pendingOrdersQuery);
 
     // Completed orders (delivered orders)
     const completedOrders = orderStatusMap.delivered || 0;
@@ -516,10 +560,14 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     const chartBuckets = getDashboardChartBuckets(period, now);
     const chartRangeStart = chartBuckets[0]?.start || new Date(now.getFullYear(), now.getMonth() - 11, 1);
     const chartRangeEnd = chartBuckets[chartBuckets.length - 1]?.end || now;
-    const chartOrders = await Order.find({
+    
+    const chartOrderQuery = {
       status: "delivered",
       deliveredAt: { $gte: chartRangeStart, $lte: chartRangeEnd },
-    })
+    };
+    if (zoneMatcher) chartOrderQuery["assignmentInfo.zoneId"] = zoneMatcher;
+
+    const chartOrders = await Order.find(chartOrderQuery)
       .select("_id pricing deliveredAt tracking createdAt")
       .lean();
 
@@ -618,7 +666,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       },
       partners: {
         total: activePartners,
-        restaurants: activeRestaurants,
+        restaurants: activeRestaurantsCount,
         delivery: activeDeliveryPartners,
       },
       recentActivity: {
@@ -630,7 +678,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       // Additional stats
       restaurants: {
         total: totalRestaurants,
-        active: activeRestaurants,
+        active: activeRestaurantsCount,
         pendingRequests: pendingRestaurantRequests,
       },
       deliveryBoys: {

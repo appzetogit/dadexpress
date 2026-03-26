@@ -8,7 +8,7 @@ import alertSound from '@/assets/audio/alert.mp3';
  * Hook for restaurant to receive real-time order notifications with sound
  * @returns {object} - { newOrder, playSound, isConnected }
  */
-export const useRestaurantNotifications = () => {
+export const useRestaurantNotifications = (isOnline = null) => {
   const socketRef = useRef(null);
   const [newOrder, setNewOrder] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -19,13 +19,14 @@ export const useRestaurantNotifications = () => {
   const CONNECT_ERROR_LOG_THROTTLE_MS = 10000;
   const STATUS_STORAGE_KEY = 'restaurant_online_status';
 
-  const isRestaurantOnlineNow = () => {
+  // State-based online status with fallback to localStorage
+  const isCurrentlyOnline = isOnline !== null ? isOnline : (() => {
     try {
       return JSON.parse(localStorage.getItem(STATUS_STORAGE_KEY) || 'false') === true;
     } catch {
       return false;
     }
-  };
+  })();
 
   // Get restaurant ID from API
   useEffect(() => {
@@ -34,19 +35,29 @@ export const useRestaurantNotifications = () => {
         const response = await restaurantAPI.getCurrentRestaurant();
         if (response.data?.success && response.data.data?.restaurant) {
           const restaurant = response.data.data.restaurant;
+          // Priority: _id (ObjectId), then restaurantId (Slug)
           const id = restaurant._id?.toString() || restaurant.restaurantId;
+          console.log('✅ useRestaurantNotifications: Fetched restaurantId:', id);
           setRestaurantId(id);
         }
       } catch (error) {
-        console.error('Error fetching restaurant:', error);
+        console.error('❌ useRestaurantNotifications: Error fetching restaurant:', error);
       }
     };
     fetchRestaurantId();
   }, []);
 
   useEffect(() => {
-    if (!restaurantId) {
-      false && console.log('⏳ Waiting for restaurantId...');
+    // Exit if missing crucial info or if restaurant is offline
+    if (!restaurantId) return;
+    
+    if (!isCurrentlyOnline) {
+      console.log('🔌 useRestaurantNotifications: Restaurant is OFFLINE, skipping/cleaning up socket');
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+        setIsConnected(false);
+      }
       return;
     }
 
@@ -295,8 +306,8 @@ export const useRestaurantNotifications = () => {
 
     // Listen for new order notifications
     socketRef.current.on('new_order', (orderData) => {
-      if (!isRestaurantOnlineNow()) {
-        false && console.log('⏸️ Ignoring new_order socket event while restaurant is offline');
+      if (!isCurrentlyOnline) {
+        console.log('⏸️ useRestaurantNotifications: Ignoring new_order socket event while restaurant is offline');
         return;
       }
       false && console.log('📦 New order received:', orderData);
@@ -332,7 +343,7 @@ export const useRestaurantNotifications = () => {
         audioRef.current = null;
       }
     };
-  }, [restaurantId]);
+  }, [restaurantId, isCurrentlyOnline]);
 
   // Track user interaction for autoplay policy
   useEffect(() => {

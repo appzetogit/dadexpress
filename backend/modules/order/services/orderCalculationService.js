@@ -127,7 +127,7 @@ export const calculatePlatformFeeFromPercentage = (subtotal = 0, percentage = 0)
 export const calculatePlatformFee = async (subtotal = 0) => {
   const feeSettings = await getFeeSettings();
   const fixedFee = Number(feeSettings?.platformFee || 0);
-  const totalPercentage = Number(feeSettings?.platformFeePercentage || 0) + Number(feeSettings?.platformCommissionPercent || 0);
+  const totalPercentage = Number(feeSettings?.platformFeePercentage || 0);
   
   const percentageFee = calculatePlatformFeeFromPercentage(subtotal, totalPercentage);
   return roundCurrency(fixedFee + percentageFee);
@@ -332,7 +332,7 @@ export const calculateOrderPricing = async ({
     // Calculate platform fee based on configured settings (Fixed + Percentage).
     const feeSettings = await getFeeSettings();
     const fixedPlatformFee = Number(feeSettings?.platformFee || 0);
-    const platformFeePercentage = Number(feeSettings?.platformFeePercentage || 0) + Number(feeSettings?.platformCommissionPercent || 0);
+    const platformFeePercentage = Number(feeSettings?.platformFeePercentage || 0);
     
     const percentagePlatformFee = calculatePlatformFeeFromPercentage(subtotal, platformFeePercentage);
     const platformFee = roundCurrency(fixedPlatformFee + percentagePlatformFee);

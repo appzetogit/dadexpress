@@ -1,6 +1,10 @@
+import dns from 'node:dns';
+dns.setServers(['8.8.8.8', '8.8.4.4']);
 import mongoose from 'mongoose';
+import dotenv from 'dotenv';
+dotenv.config();
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/dad_express';
+const MONGODB_URI = 'mongodb+srv://dadexpress7392_db_user:PFlpxlxxIVcCAKBD@ac-9nisify.mvacj1n.mongodb.net/dadexpress?retryWrites=true&w=majority';
 
 async function checkDB() {
   await mongoose.connect(MONGODB_URI);

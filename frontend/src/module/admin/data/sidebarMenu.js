@@ -308,6 +308,7 @@ export const sidebarMenuData = [
         icon: "FileText",
         subItems: [
           { label: "Restaurant Finance Report", path: "/admin/restaurant-report" },
+          { label: "Delivery Finance Report", path: "/admin/delivery-report" },
           { label: "Restaurant Report (Old)", path: "/admin/restaurant-report-old" },
         ],
       },

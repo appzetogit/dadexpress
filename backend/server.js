@@ -379,7 +379,7 @@ deliveryNamespace.on('connection', (socket) => {
   socket.on('send-message', async (data) => {
     try {
       const { room, orderId, senderId, senderType, recipientId, recipientType, text, timestamp } = data;
-      
+
       if (!room || !text || !senderId) {
         socket.emit('message-sent', { success: false, error: 'Invalid message data' });
         return;
@@ -403,7 +403,7 @@ deliveryNamespace.on('connection', (socket) => {
       // Also emit to user/restaurant namespaces if needed
       const userRoom = `user:${recipientId}`;
       const restaurantRoom = `restaurant:${recipientId}`;
-      
+
       if (recipientType === 'customer') {
         io.to(userRoom).emit('new-message', { room, message });
       } else if (recipientType === 'restaurant') {
@@ -452,12 +452,24 @@ app.set('io', io);
 // Connect to databases
 import { initializeCloudinary } from './config/cloudinary.js';
 
-// Connect to databases
+// Start server only after database is connected
 connectDB().then(() => {
   // Retry realtime init after DB connection so admin-saved Firebase creds can be used too.
   initializeFirebaseRealtimeAsync().catch(err => console.error('Failed to initialize Firebase Realtime Database:', err));
   // Initialize Cloudinary after DB connection
   initializeCloudinary().catch(err => console.error('Failed to initialize Cloudinary:', err));
+
+  // Start HTTP server
+  const PORT = process.env.PORT || 5000;
+  httpServer.listen(PORT, () => {
+    console.log(`✅ Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+    
+    // Initialize scheduled tasks only after successful DB connection
+    initializeScheduledTasks();
+  });
+}).catch(err => {
+  console.error('❌ CRITICAL ERROR: Database connection failed during startup:', err.message);
+  process.exit(1);
 });
 
 // Redis connection is optional - only connects if REDIS_ENABLED=true
@@ -746,7 +758,7 @@ io.on('connection', (socket) => {
         // Store latest location for next sync
         const timer = firebaseSyncTimers.get(orderId);
         clearTimeout(timer);
-        
+
         // Set new timer with latest location
         const newTimer = setTimeout(() => {
           syncActiveOrderRealtime({
@@ -1023,18 +1035,7 @@ io.on('connection', (socket) => {
   });
 });
 
-// Start server
-const PORT = process.env.PORT || 5000;
-
-httpServer.listen(PORT, () => {
-  console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
-
-  // Initialize scheduled tasks after DB connection is established
-  // Wait a bit for DB to connect, then start cron jobs
-  setTimeout(() => {
-    initializeScheduledTasks();
-  }, 5000);
-});
+// Scheduled tasks are now initialized from within the connectDB().then() block above
 
 // Initialize scheduled tasks
 function initializeScheduledTasks() {

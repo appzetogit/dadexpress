@@ -144,6 +144,11 @@ const environmentVariableSchema = new mongoose.Schema(
 
 // Create a single document instance (singleton pattern)
 environmentVariableSchema.statics.getOrCreate = async function() {
+  // Prevent buffering timeout if DB not connected; fallback to an empty model
+  if (mongoose.connection.readyState !== 1) {
+    return new this({});
+  }
+
   let envVars = await this.findOne();
   if (!envVars) {
     envVars = await this.create({});

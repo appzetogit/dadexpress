@@ -86,7 +86,8 @@ export const getPendingDeliverySettlements = async (deliveryId = null, startDate
       'deliveryPartnerEarning.status': 'credited',
       deliveryPartnerSettled: false,
       settlementStatus: 'completed',
-      deliveryPartnerId: { $ne: null }
+      deliveryPartnerId: { $ne: null },
+      'metadata.deliveryFinanceReportMarked': { $ne: true },
     };
 
     if (deliveryId) {
@@ -96,20 +97,24 @@ export const getPendingDeliverySettlements = async (deliveryId = null, startDate
     const dateRange = buildDateRange(startDate, endDate);
 
     const settlementsRaw = await OrderSettlement.find(query)
-      .populate('orderId', 'orderId status deliveredAt tracking')
+      .populate('orderId', 'orderId status deliveredAt tracking updatedAt')
       .populate('deliveryPartnerId', 'name phone')
       .sort({ createdAt: -1 })
       .lean();
 
     const settlements = settlementsRaw.filter((settlement) => {
+      const meta = settlement?.metadata;
+      const hidden =
+        meta &&
+        (meta.deliveryFinanceReportMarked === true ||
+          (typeof meta.get === 'function' && meta.get('deliveryFinanceReportMarked') === true));
+      if (hidden) return false;
       const order = settlement?.orderId;
       if (!order || order.status !== 'delivered') return false;
       if (!dateRange) return true;
-      const deliveredAt = getOrderDeliveredAt(order);
-      if (!deliveredAt) return false;
-      const deliveredAtDate = new Date(deliveredAt);
-      if (Number.isNaN(deliveredAtDate.getTime())) return false;
-      return deliveredAtDate >= dateRange.start && deliveredAtDate <= dateRange.end;
+      const dt = getReportDeliveryTimestamp(order, settlement);
+      if (!dt || Number.isNaN(dt.getTime())) return false;
+      return dt >= dateRange.start && dt <= dateRange.end;
     });
 
     return settlements;
@@ -120,7 +125,7 @@ export const getPendingDeliverySettlements = async (deliveryId = null, startDate
 };
 
 /**
- * Generate settlement report for restaurants (daily/weekly)
+ * Generate restaurant settlement report for restaurants (daily/weekly)
  */
 export const generateRestaurantSettlementReport = async (restaurantId, startDate, endDate) => {
   try {
@@ -249,7 +254,6 @@ export const markSettlementsAsProcessed = async (settlementIds, actorType, actor
     });
 
     for (const settlement of settlements) {
-      // Hide from admin Restaurant Finance Report (independent of wallet restaurantSettled / escrow)
       if (!settlement.metadata || !(settlement.metadata instanceof Map)) {
         const plain =
           settlement.metadata && typeof settlement.metadata === 'object' && !(settlement.metadata instanceof Map)
@@ -257,7 +261,10 @@ export const markSettlementsAsProcessed = async (settlementIds, actorType, actor
             : {};
         settlement.metadata = new Map(Object.entries(plain));
       }
+
+      // Mark for both reports to be safe if applicable
       settlement.metadata.set('restaurantFinanceReportMarked', true);
+      settlement.metadata.set('deliveryFinanceReportMarked', true);
 
       if (settlement.restaurantEarning.status === 'credited' && !settlement.restaurantSettled) {
         settlement.restaurantSettled = true;

@@ -1,5 +1,9 @@
 import mongoose from 'mongoose';
 import winston from 'winston';
+import dns from 'dns';
+
+// Fix for MongoDB Atlas SRV resolution issues on some DNS providers
+dns.setServers(['8.8.8.8', '8.8.4.4']);
 
 const logger = winston.createLogger({
   level: 'info',
@@ -17,18 +21,22 @@ mongoose.set('autoIndex', process.env.NODE_ENV !== 'production');
 export const connectDB = async () => {
   try {
     const conn = await mongoose.connect(process.env.MONGODB_URI, {
-      // family: 4 is also removed to avoid SRV lookup issues
+      serverSelectionTimeoutMS: 60000, // Wait 60 seconds (useful for Atlas elections)
+      connectTimeoutMS: 60000,
+      socketTimeoutMS: 60000,
+      retryWrites: true,
+      w: 'majority'
     });
 
-    logger.info(`MongoDB Connected: ${conn.connection.host}`);
+    logger.info(`✅ MongoDB Connected: ${conn.connection.host}`);
     
     // Handle connection events
     mongoose.connection.on('error', (err) => {
-      logger.error(`MongoDB connection error: ${err}`);
+      logger.error(`❌ MongoDB connection error: ${err.message}`);
     });
 
     mongoose.connection.on('disconnected', () => {
-      logger.warn('MongoDB disconnected');
+      logger.warn('⚠️ MongoDB disconnected');
     });
 
     // Graceful shutdown
@@ -40,8 +48,11 @@ export const connectDB = async () => {
 
     return conn;
   } catch (error) {
-    logger.error(`Error connecting to MongoDB: ${error.message}`);
-    process.exit(1);
+    logger.error(`❌ Error connecting to MongoDB: ${error.message}`);
+    if (error.message.includes('whitelist') || error.message.includes('ETIMEDOUT')) {
+      logger.error('💡 PRO TIP: This often means your IP address is not whitelisted in MongoDB Atlas.');
+    }
+    throw error; // Let the caller handle it (e.g., exiting or waiting)
   }
 };
 

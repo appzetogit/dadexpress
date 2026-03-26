@@ -1,8 +1,8 @@
 import express from 'express';
 import { initializeRazorpay } from './services/razorpayService.js';
 
-// Initialize Razorpay on module load
-initializeRazorpay();
+// Initialize Razorpay on module load (Removed - now handled in server.js after DB connection)
+// initializeRazorpay();
 
 const router = express.Router();
 

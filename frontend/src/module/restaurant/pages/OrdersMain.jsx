@@ -648,7 +648,7 @@ export default function OrdersMain() {
   })
 
   // Restaurant notifications hook for real-time orders
-  const { newOrder, clearNewOrder, isConnected } = useRestaurantNotifications()
+  const { newOrder, clearNewOrder, isConnected } = useRestaurantNotifications(isRestaurantOnline)
 
   // Keep online/offline flag synced with RestaurantStatus toggle.
   useEffect(() => {
@@ -865,9 +865,9 @@ export default function OrdersMain() {
       try {
         const response = await restaurantAPI.getOrders()
         if (response.data?.success && response.data.data?.orders) {
-          // Find confirmed orders that haven't been shown yet
+          // Find pending/confirmed orders that haven't been shown yet
           const confirmedOrders = response.data.data.orders.filter(
-            order => order.status === 'confirmed' &&
+            order => (order.status === 'pending' || order.status === 'confirmed') &&
               !shownOrdersRef.current.has(order.orderId || order._id)
           )
 

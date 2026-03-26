@@ -30,9 +30,26 @@ import { adminAPI } from "@/lib/api"
 export default function AdminHome() {
   const navigate = useNavigate()
   const [selectedPeriod, setSelectedPeriod] = useState("overall")
+  const [selectedZone, setSelectedZone] = useState("all")
+  const [zones, setZones] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [dashboardData, setDashboardData] = useState(null)
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
+
+  // Fetch zones on mount
+  useEffect(() => {
+    const fetchZones = async () => {
+      try {
+        const response = await adminAPI.getZones({ limit: 100, isActive: true })
+        if (response.data?.success) {
+          setZones(response.data.data.zones || [])
+        }
+      } catch (error) {
+        console.error('❌ Error fetching zones:', error)
+      }
+    }
+    fetchZones()
+  }, [])
 
   // Fetch dashboard stats whenever period or zone changes
   useEffect(() => {
@@ -41,6 +58,8 @@ export default function AdminHome() {
         setIsLoading(true)
         const params = {}
         if (selectedPeriod && selectedPeriod !== "overall") params.period = selectedPeriod
+        if (selectedZone && selectedZone !== "all") params.zone = selectedZone
+        
         const response = await adminAPI.getDashboardStats(params)
         if (response.data?.success && response.data?.data) {
           setDashboardData(response.data.data)
@@ -59,7 +78,7 @@ export default function AdminHome() {
     // Auto-refresh every 60 seconds
     const intervalId = setInterval(fetchDashboardStats, 60000)
     return () => clearInterval(intervalId)
-  }, [selectedPeriod])
+  }, [selectedPeriod, selectedZone])
 
   // Get order stats from real data
   const getOrderStats = () => {
@@ -166,6 +185,23 @@ export default function AdminHome() {
 
           </div>
           <div className="flex flex-wrap gap-3">
+            <Select value={selectedZone} onValueChange={setSelectedZone}>
+              <SelectTrigger className="min-w-[160px] border-neutral-300 bg-white text-neutral-900 border-indigo-200 focus:ring-indigo-500">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
+                  <SelectValue placeholder="All Zones" />
+                </div>
+              </SelectTrigger>
+              <SelectContent className="border-neutral-200 bg-white text-neutral-900 max-h-[300px]">
+                <SelectItem value="all">All Zones</SelectItem>
+                {zones.map((zone) => (
+                  <SelectItem key={zone._id} value={zone._id}>
+                    {zone.name || zone.zoneName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
             <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
               <SelectTrigger className="min-w-[140px] border-neutral-300 bg-white text-neutral-900">
                 <SelectValue placeholder="Overall" />
@@ -198,7 +234,7 @@ export default function AdminHome() {
               helper="Restaurant commission"
               icon={<ArrowUpRight className="h-5 w-5 text-indigo-600" />}
               accent="bg-indigo-200/40"
-              path="/admin/restaurants/commission"
+              path="/admin/restaurant-report"
               isLoading={isLoading && !hasLoadedOnce}
             />
             <MetricCard
