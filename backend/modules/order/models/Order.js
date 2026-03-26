@@ -326,11 +326,10 @@ orderSchema.index({ status: 1, createdAt: -1 });
 orderSchema.index({ 'payment.razorpayOrderId': 1 });
 
 // Generate order ID before saving (fallback if not provided)
-orderSchema.pre('save', async function(next) {
+orderSchema.pre('save', async function() {
   if (!this.orderId) {
     this.orderId = generateOrderId();
   }
-  next();
 });
 
 // Update tracking when status changes

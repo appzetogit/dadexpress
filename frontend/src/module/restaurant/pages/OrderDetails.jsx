@@ -15,6 +15,7 @@ import {
   CheckCircle,
   XCircle,
   Loader2,
+  Phone
 } from "lucide-react"
 
 export default function OrderDetails() {
@@ -53,6 +54,7 @@ export default function OrderDetails() {
             address: order.address?.street || order.address?.city || 'Address not available',
             customer: {
               name: order.userId?.name || 'Customer',
+              phone: order.userId?.phone || '',
               orderCount: 1,
               location: `${order.address?.city || ''}, ${order.address?.state || ''}`.trim(),
               distance: 'N/A'
@@ -238,7 +240,7 @@ export default function OrderDetails() {
       `${item.quantity}x`,
       item.name,
       item.type || "-",
-      `₹${item.price}`
+      `${item.price}`
     ])
 
     // Use autoTable with the doc instance
@@ -274,11 +276,11 @@ export default function OrderDetails() {
     doc.setFontSize(10)
     doc.setFont("helvetica", "normal")
     doc.text("Item Subtotal:", 15, yPosition)
-    doc.text(`₹${orderData.billing.itemSubtotal}`, pageWidth - 15, yPosition, { align: "right" })
+    doc.text(`${orderData.billing.itemSubtotal}`, pageWidth - 15, yPosition, { align: "right" })
     yPosition += 6
 
     doc.text("Taxes:", 15, yPosition)
-    doc.text(`₹${orderData.billing.taxes}`, pageWidth - 15, yPosition, { align: "right" })
+    doc.text(`${orderData.billing.taxes}`, pageWidth - 15, yPosition, { align: "right" })
     yPosition += 6
 
     // Dashed line for total
@@ -290,7 +292,7 @@ export default function OrderDetails() {
     doc.setFont("helvetica", "bold")
     doc.setFontSize(11)
     doc.text("Total Bill:", 15, yPosition)
-    doc.text(`₹${orderData.billing.total}`, pageWidth - 15, yPosition, { align: "right" })
+    doc.text(`${orderData.billing.total}`, pageWidth - 15, yPosition, { align: "right" })
     yPosition += 6
 
     doc.setFontSize(9)
@@ -368,7 +370,12 @@ export default function OrderDetails() {
     yPosition += 5
     doc.text(`Generated on: ${new Date().toLocaleString()}`, pageWidth / 2, yPosition, { align: "center" })
 
-    // Save the PDF
+    // Open the PDF in a new tab (more reliable for printing on mobile)
+    const blob = doc.output('blob');
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    
+    // Also save/download the file
     doc.save(`Order_Receipt_${orderData.id}.pdf`)
     
     // Show success message
@@ -484,7 +491,9 @@ export default function OrderDetails() {
               )}
             </button>
             <button
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              onClick={handlePrintReceipt}
+              disabled={isGeneratingPDF}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               aria-label="Receipt"
             >
               <FileText className="w-5 h-5 text-gray-900" />
@@ -544,10 +553,27 @@ export default function OrderDetails() {
               <div className="flex-1">
                 <p className="text-sm font-semibold text-gray-900">{orderData.customer.name}</p>
                 <p className="text-xs text-gray-500 mt-0.5">{orderData.customer.orderCount} order with you</p>
+                {orderData.customer.phone && (
+                  <p className="text-xs text-blue-600 mt-1 flex items-center gap-1 font-medium">
+                    <Phone className="w-3 h-3" />
+                    <a href={`tel:${orderData.customer.phone}`} className="hover:underline">
+                      {orderData.customer.phone}
+                    </a>
+                  </p>
+                )}
               </div>
 
-              <hr className="border-gray-200 my-3" />
-              
+              <div className="flex flex-col gap-2">
+                {orderData.customer.phone && (
+                  <button
+                    onClick={() => window.location.href = `tel:${orderData.customer.phone}`}
+                    className="p-2 bg-blue-50 hover:bg-blue-100 rounded-full transition-colors border border-blue-100"
+                    aria-label="Call customer"
+                  >
+                    <Phone className="w-5 h-5 text-blue-600" />
+                  </button>
+                )}
+              </div>
             </div>
                <div className="flex items-center gap-3">
               <MapPin className="w-5 h-5 text-gray-600" />

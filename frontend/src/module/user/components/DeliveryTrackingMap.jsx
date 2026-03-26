@@ -87,6 +87,7 @@ const DeliveryTrackingMap = ({
       );
     } else if (animationControllerRef.current) {
       animationControllerRef.current.updatePolyline(polylinePoints);
+      animationControllerRef.current.lastProgress = 0; // Reset progress for new route
     }
 
     if (isMapLoaded && mapInstance.current && window.google?.maps) {
@@ -192,6 +193,9 @@ const DeliveryTrackingMap = ({
               bikeMarkerRef.current,
               polylinePoints
             );
+          } else if (animationControllerRef.current) {
+            animationControllerRef.current.updatePolyline(polylinePoints);
+            animationControllerRef.current.lastProgress = 0; // Reset progress for new route
           }
         }
 
@@ -281,6 +285,9 @@ const DeliveryTrackingMap = ({
                 polylinePoints
               );
               console.log('✅ Route-based animation controller initialized');
+            } else if (animationControllerRef.current) {
+              animationControllerRef.current.updatePolyline(polylinePoints);
+              animationControllerRef.current.lastProgress = 0; // Reset progress for new route
             }
           }
 

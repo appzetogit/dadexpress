@@ -28,6 +28,8 @@ import {
   IndianRupee,
   Loader2,
   Camera,
+  ScanLine,
+  XCircle,
 } from "lucide-react"
 import BottomPopup from "../components/BottomPopup"
 import FeedNavbar from "../components/FeedNavbar"
@@ -803,6 +805,54 @@ export default function DeliveryHome() {
     orderDelivered: { rafId: null, pending: 0, last: 0 },
     acceptOrders: { rafId: null, pending: 0, last: 0 },
   })
+
+  // QR Timer and Real-time Trip States
+  const [qrTimer, setQrTimer] = useState(120);
+  const qrTimerRef = useRef(null);
+  const [elapsedTripSeconds, setElapsedTripSeconds] = useState(0);
+  const tripIntervalRef = useRef(null);
+
+  // Format QR Timer (MM:SS)
+  const formatQrTimer = (secs) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
+  // QR Timer Effect
+  useEffect(() => {
+    if (showOrderDeliveredAnimation) {
+      setQrTimer(120);
+      qrTimerRef.current = setInterval(() => {
+        setQrTimer((prev) => (prev > 0 ? prev - 1 : 0));
+      }, 1000);
+    } else {
+      if (qrTimerRef.current) clearInterval(qrTimerRef.current);
+    }
+    return () => {
+      if (qrTimerRef.current) clearInterval(qrTimerRef.current);
+    }
+  }, [showOrderDeliveredAnimation]);
+
+  // Real-time Trip Duration Effect
+  useEffect(() => {
+    if (selectedRestaurant?.orderId && !showOrderDeliveredAnimation) {
+      const storedPickedAt = localStorage.getItem(`pickedAt_${selectedRestaurant.orderId}`);
+      if (storedPickedAt) {
+        const start = parseInt(storedPickedAt);
+        tripIntervalRef.current = setInterval(() => {
+          setElapsedTripSeconds(Math.floor((Date.now() - start) / 1000));
+        }, 1000);
+      }
+    } else if (!selectedRestaurant) {
+      setElapsedTripSeconds(0);
+      if (tripIntervalRef.current) clearInterval(tripIntervalRef.current);
+    }
+    
+    return () => {
+      if (tripIntervalRef.current) clearInterval(tripIntervalRef.current);
+    };
+  }, [selectedRestaurant?.orderId, showOrderDeliveredAnimation]);
 
   const scheduleSliderProgressUpdate = useCallback((key, nextValue, setter) => {
     const slider = sliderProgressRafRef.current[key]
@@ -4389,6 +4439,11 @@ export default function DeliveryHome() {
           if (response.data?.success && response.data.data) {
             const orderData = response.data.data
             const order = orderData.order || orderData
+   
+   // Track pickup time for real-time trip duration
+   if (order?._id || order?.orderId) {
+     localStorage.setItem(`pickedAt_${order._id || order.orderId}`, Date.now().toString());
+   }
             const routeData = orderData.route || order.deliveryState?.routeToDelivery
 
             // Update selectedRestaurant with customer address
@@ -5386,8 +5441,34 @@ export default function DeliveryHome() {
     return localStorage.getItem('selectedDropLocation') || null
   })
 
+  const [supportNumber, setSupportNumber] = useState("");
+
+  // Fetch support number from business settings
+  useEffect(() => {
+    const fetchSupportNumber = async () => {
+      try {
+        const response = await restaurantAPI.getBusinessSettingsPublic();
+        if (response?.data?.success && response?.data?.data?.settings?.supportPhoneNumber) {
+          setSupportNumber(response.data.data.settings.supportPhoneNumber);
+        }
+      } catch (err) {
+        console.warn("Error fetching support number for DeliveryHome:", err);
+      }
+    };
+    fetchSupportNumber();
+  }, []);
+
   // Help options - using paths from DeliveryRouter
   const helpOptions = [
+    ...(supportNumber ? [{
+      id: "supportCenter",
+      title: "Help centre",
+      subtitle: "Call support for help",
+      icon: "helpCenter",
+      onClick: () => {
+        window.location.href = `tel:${supportNumber}`;
+      }
+    }] : []),
     {
       id: "supportTickets",
       title: "Support tickets",
@@ -5409,6 +5490,9 @@ export default function DeliveryHome() {
     if (option.path) {
       setShowHelpPopup(false)
       navigate(option.path)
+    } else if (option.onClick) {
+      option.onClick()
+      setShowHelpPopup(false)
     }
   }
 
@@ -12220,8 +12304,8 @@ export default function DeliveryHome() {
                 </div>
                 <span className="text-gray-900 font-semibold">
                   {(() => {
-                    const value = tripTime ?? selectedRestaurant?.tripTime ?? null
-                    if (value === null || value === undefined || value === '') return 'Calculating...'
+                    const value = elapsedTripSeconds > 0 ? elapsedTripSeconds : (tripTime ?? selectedRestaurant?.tripTime ?? null)
+                    if (value === null || value === undefined || value === '' || value === 0) return 'Calculating...'
                     const numeric = Number(value)
                     if (Number.isFinite(numeric)) {
                       return numeric >= 60 ? `${Math.round(numeric / 60)} mins` : `${Math.round(numeric)} secs`
@@ -12231,6 +12315,53 @@ export default function DeliveryHome() {
                 </span>
               </div>
             </div>
+          </div>
+
+          {/* Payment QR Code Section */}
+          <div className="flex flex-col items-center gap-3 mb-6 p-5 bg-white rounded-2xl border border-gray-100 shadow-sm relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-2">
+              <div className={`text-xs font-mono font-bold px-2 py-1 rounded bg-gray-50 flex items-center gap-1.5 ${qrTimer < 30 ? 'text-red-500' : 'text-gray-500'}`}>
+                <Clock className={`w-3 h-3 ${qrTimer < 30 ? 'animate-pulse' : ''}`} />
+                {formatQrTimer(qrTimer)}
+              </div>
+            </div>
+
+            <div className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+              <ScanLine className="w-4 h-4 text-green-600" />
+              Scan QR for COD Payment
+            </div>
+            
+            <div className="relative group transition-transform hover:scale-105 duration-300">
+              <div className="absolute -inset-1 bg-gradient-to-r from-green-500 to-emerald-500 rounded-xl blur opacity-10 group-hover:opacity-20 transition duration-1000"></div>
+              <div className="relative p-2 bg-white rounded-xl border border-gray-100 shadow-inner">
+                <img 
+                  src="/qr code.jpeg" 
+                  alt="Payment QR" 
+                  className="w-40 h-40 object-contain rounded-lg"
+                  onError={(e) => {
+                    e.target.src = "https://placehold.co/400x400/png?text=QR+Code";
+                    e.target.onerror = null;
+                  }}
+                />
+                
+                {qrTimer === 0 && (
+                  <div className="absolute inset-0 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center rounded-lg p-4 text-center">
+                    <XCircle className="w-10 h-10 text-red-500 mb-2" />
+                    <span className="text-red-600 font-bold text-sm">QR Code Expired</span>
+                    <button 
+                      onClick={() => setQrTimer(120)}
+                      className="mt-2 text-xs text-green-600 font-semibold underline"
+                    >
+                      Regenerate
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            <p className="text-[10px] text-gray-400 text-center uppercase tracking-widest font-medium">
+              Powered by Razorpay
+            </p>
           </div>
 
           {/* Payment info: Online = amount paid, COD = collect from customer */}

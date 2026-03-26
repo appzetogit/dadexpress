@@ -21,9 +21,6 @@ import {
   normalizeDeliveryStatus,
   DELIVERY_ORDER_STATUS
 } from "../utils/deliveryOrderStatus"
-import { 
-  getDeliveryOrderPaymentStatus 
-} from "../utils/deliveryWalletState"
 import { deliveryAPI } from "@/lib/api"
 import { toast } from "sonner"
 
@@ -31,7 +28,7 @@ export default function AcceptedOrderDetails() {
   const navigate = useNavigate()
   const { orderId } = useParams()
   const [orderStatus, setOrderStatus] = useState(() => getDeliveryOrderStatus(orderId))
-  const [paymentStatus, setPaymentStatus] = useState(() => getDeliveryOrderPaymentStatus(orderId))
+  const [paymentStatus, setPaymentStatus] = useState("Unpaid")
   const [activeOrderInfo, setActiveOrderInfo] = useState(null)
   const [loading, setLoading] = useState(true)
   const [orderData, setOrderData] = useState(null)
@@ -63,6 +60,10 @@ export default function AcceptedOrderDetails() {
         if (response?.data?.success && response.data.data?.order) {
           const order = response.data.data.order
           setOrderData(order)
+          // Dynamically determine payment status
+          const isPaid = order.payment?.status === 'completed' || order.paymentStatus === 'completed'
+          setPaymentStatus(isPaid ? "Paid" : "Unpaid")
+          
           const backendStatus = mapBackendStatusToUiStatus(order.status || order.deliveryState?.currentPhase)
           if (backendStatus) {
             setOrderStatus(backendStatus)
@@ -144,7 +145,6 @@ export default function AcceptedOrderDetails() {
   useEffect(() => {
     const handleStatusUpdate = () => {
       setOrderStatus(getDeliveryOrderStatus(orderId))
-      setPaymentStatus(getDeliveryOrderPaymentStatus(orderId))
     }
 
     handleStatusUpdate()
@@ -648,7 +648,9 @@ export default function AcceptedOrderDetails() {
         <div className="bg-gray-50 rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
             <span className="text-gray-900 font-medium">Payment Method</span>
-            <span className="text-red-600 font-medium">{displayOrderData.paymentMethod.status}</span>
+            <span className={`${displayOrderData.paymentMethod.status === 'Paid' ? 'text-green-600' : 'text-red-600'} font-medium`}>
+              {displayOrderData.paymentMethod.status}
+            </span>
           </div>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center">

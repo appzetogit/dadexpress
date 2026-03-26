@@ -2,6 +2,8 @@ import Delivery from '../../delivery/models/Delivery.js';
 import Order from '../models/Order.js';
 import Zone from '../../admin/models/Zone.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
+import DeliveryWallet from '../../delivery/models/DeliveryWallet.js';
+import BusinessSettings from '../../admin/models/BusinessSettings.js';
 import mongoose from 'mongoose';
 import { generateRoutePolyline } from '../../delivery/services/locationProcessingService.js';
 import {
@@ -37,9 +39,11 @@ function calculateDistance(lat1, lng1, lat2, lng2) {
  * @param {number} restaurantLng - Restaurant longitude
  * @param {string} restaurantId - Restaurant ID (for zone lookup)
  * @param {number} priorityDistance - Priority distance in km (default: 5km)
+ * @param {number} maxCount - Max number of partners to return
+ * @param {Object} order - The order being assigned (optional)
  * @returns {Promise<Array>} Array of delivery boys within priority distance
  */
-export async function findNearestDeliveryBoys(restaurantLat, restaurantLng, restaurantId = null, priorityDistance = 5) {
+export async function findNearestDeliveryBoys(restaurantLat, restaurantLng, restaurantId = null, priorityDistance = 5, maxCount = 20, order = null) {
   try {
     console.log(`🔍 Searching for priority delivery partners within ${priorityDistance}km of restaurant: ${restaurantLat}, ${restaurantLng}`);
     
@@ -82,8 +86,28 @@ export async function findNearestDeliveryBoys(restaurantLat, restaurantLng, rest
     }
 
     // Calculate distance and filter
+    const wallets = await DeliveryWallet.find({ deliveryId: { $in: deliveryPartners.map(p => p._id) } }).lean();
+    const settings = await BusinessSettings.getSettings();
+    const totalCashLimit = Math.max(0, Number(settings?.deliveryCashLimit) || 0);
+
     const deliveryPartnersWithDistance = deliveryPartners
       .map(partner => {
+        // Cash limit enforcement: skip partners if over-limit AND order is cash
+        // Source of truth for payment method is order.payment.method or normalized
+        const isCashCandidate = order?.payment?.method?.toLowerCase() === 'cash' || 
+                              order?.payment?.method?.toLowerCase() === 'cod' ||
+                              order?.paymentMethod === 'cash';
+
+        if (totalCashLimit > 0 && isCashCandidate) {
+          const wallet = (wallets || []).find(w => w.deliveryId.toString() === partner._id.toString());
+          const cashInHand = Math.max(0, Number(wallet?.cashInHand) || 0);
+          
+          if (cashInHand >= totalCashLimit) {
+             console.log(`🚫 Skipping over-limit partner ${partner.name} for CASH order (Cash: ${cashInHand}, Limit: ${totalCashLimit})`);
+             return null;
+          }
+        }
+
         const location = partner.availability?.currentLocation;
         if (!location || !location.coordinates || location.coordinates.length < 2) {
           return null;
@@ -151,9 +175,10 @@ export async function findNearestDeliveryBoys(restaurantLat, restaurantLng, rest
  * @param {string} restaurantId - Restaurant ID (for zone lookup)
  * @param {number} maxDistance - Maximum distance in km (default: 50km)
  * @param {Array} excludeIds - Array of delivery partner IDs to exclude (already notified)
+ * @param {Object} order - The order being assigned (optional)
  * @returns {Promise<Object|null>} Nearest delivery boy or null
  */
-export async function findNearestDeliveryBoy(restaurantLat, restaurantLng, restaurantId = null, maxDistance = 50, excludeIds = []) {
+export async function findNearestDeliveryBoy(restaurantLat, restaurantLng, restaurantId = null, maxDistance = 50, excludeIds = [], order = null) {
   try {
     console.log(`🔍 Searching for nearest delivery partner near restaurant: ${restaurantLat}, ${restaurantLng} (Restaurant ID: ${restaurantId})`);
 
@@ -246,28 +271,36 @@ export async function findNearestDeliveryBoy(restaurantLat, restaurantLng, resta
       .select('_id name phone availability.currentLocation availability.lastLocationUpdate status isActive zoneId')
       .lean();
 
-    console.log(`📊 Found ${deliveryPartners?.length || 0} online delivery partners in database`);
+    console.log(`📊 Found ${deliveryPartners?.length || 1} online delivery partners in database`);
 
     if (!deliveryPartners || deliveryPartners.length === 0) {
-      console.log('⚠️ No online delivery partners found');
-      console.log('⚠️ Checking all delivery partners to see why...');
-      
-      // Debug: Check all delivery partners to see their status
-      const allPartners = await Delivery.find({})
-        .select('_id name availability.isOnline status isActive availability.currentLocation')
-        .lean();
-      
-      console.log(`📊 Total delivery partners in database: ${allPartners.length}`);
-      allPartners.forEach(partner => {
-        console.log(`  - ${partner.name} (${partner._id}): online=${partner.availability?.isOnline}, status=${partner.status}, active=${partner.isActive}, hasLocation=${!!partner.availability?.currentLocation?.coordinates}`);
-      });
-      
       return null;
     }
+
+    // Load wallets and settings for cash limit enforcement
+    const onlinePartnerIds = (deliveryPartners || []).map(p => p._id);
+    const wallets = (onlinePartnerIds.length > 0) ? await DeliveryWallet.find({ deliveryId: { $in: onlinePartnerIds } }).lean() : [];
+    const settings = await BusinessSettings.getSettings();
+    const totalCashLimit = Math.max(0, Number(settings?.deliveryCashLimit) || 0);
 
     // Calculate distance for each delivery partner and filter by zone if applicable
     const deliveryPartnersWithDistance = deliveryPartners
       .map(partner => {
+        // Cash limit enforcement: skip partners if over-limit AND order is cash
+        const isCashCandidate = order?.payment?.method?.toLowerCase() === 'cash' || 
+                              order?.payment?.method?.toLowerCase() === 'cod' ||
+                              order?.paymentMethod === 'cash';
+
+        if (totalCashLimit > 0 && isCashCandidate) {
+          const wallet = (wallets || []).find(w => w.deliveryId.toString() === partner._id.toString());
+          const cashInHand = Math.max(0, Number(wallet?.cashInHand) || 0);
+          
+          if (cashInHand >= totalCashLimit) {
+            console.log(`🚫 Excluding over-limit partner ${partner.name} from CASH order search`);
+            return null;
+          }
+        }
+
         const location = partner.availability?.currentLocation;
         if (!location || !location.coordinates || location.coordinates.length < 2) {
           return null;
@@ -388,8 +421,8 @@ export async function assignOrderToDeliveryBoy(order, restaurantLat, restaurantL
     // Get restaurantId from order if not provided
     const orderRestaurantId = restaurantId || order.restaurantId;
     
-    // Find nearest delivery boy (with zone-based filtering)
-    const nearestDeliveryBoy = await findNearestDeliveryBoy(restaurantLat, restaurantLng, orderRestaurantId);
+    // Find nearest delivery boy (with zone-based filtering and cash limit check)
+    const nearestDeliveryBoy = await findNearestDeliveryBoy(restaurantLat, restaurantLng, orderRestaurantId, 50, [], order);
 
     if (!nearestDeliveryBoy) {
       console.log(`⚠️ No delivery boy found for order ${order.orderId}`);

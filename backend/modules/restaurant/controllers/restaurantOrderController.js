@@ -385,7 +385,7 @@ export const acceptOrder = asyncHandler(async (req, res) => {
             console.log(`⚠️ Order ${order.orderId} already has delivery partner: ${freshOrder.deliveryPartnerId}`);
           } else {
             // Step 1: Find nearest delivery boys (within 5km priority distance)
-            const priorityDeliveryBoys = await findNearestDeliveryBoys(restaurantLat, restaurantLng, restaurantId, 5);
+            const priorityDeliveryBoys = await findNearestDeliveryBoys(restaurantLat, restaurantLng, restaurantId, 5, 20, freshOrder);
             
             if (priorityDeliveryBoys && priorityDeliveryBoys.length > 0) {
               console.log(`✅ Found ${priorityDeliveryBoys.length} priority delivery partners within 5km`);
@@ -428,7 +428,9 @@ export const acceptOrder = asyncHandler(async (req, res) => {
                       restaurantLat, 
                       restaurantLng, 
                       restaurantId, 
-                      50 // Max distance 50km
+                      50, // Max distance 50km
+                      50, // Max count
+                      checkOrder // Pass order to filter over-limit riders
                     );
 
                     // Filter out priority delivery boys
@@ -470,7 +472,7 @@ export const acceptOrder = asyncHandler(async (req, res) => {
             } else {
               // No priority delivery boys found, immediately try to find any delivery boy
               console.log(`⚠️ No priority delivery partners found, searching for any available delivery partner`);
-              const anyDeliveryBoy = await findNearestDeliveryBoy(restaurantLat, restaurantLng, restaurantId, 50);
+              const anyDeliveryBoy = await findNearestDeliveryBoy(restaurantLat, restaurantLng, restaurantId, 50, [], freshOrder);
               
               if (anyDeliveryBoy) {
                 const populatedOrder = await Order.findById(freshOrder._id)
@@ -708,18 +710,8 @@ export const markOrderPreparing = asyncHandler(async (req, res) => {
       }
     }
 
-    // CRITICAL: Don't assign delivery partner if order is cancelled
-    if (freshOrder.status === 'cancelled') {
-      console.log(`⚠️ Order ${freshOrder.orderId} is cancelled. Cannot assign delivery partner.`);
-      return successResponse(res, 200, 'Order is cancelled. Cannot assign delivery partner.', {
-        order: freshOrder
-      });
-    }
-
-    // Assign order to nearest delivery boy and notify them (if not already assigned)
-    // This is critical - even if order is already preparing, we need to assign delivery partner
     // Reload order first to get the latest state (in case it was updated elsewhere)
-    const freshOrder = await Order.findById(order._id);
+    let freshOrder = await Order.findById(order._id);
     if (!freshOrder) {
       console.error(`❌ Order ${order.orderId} not found after save`);
       return errorResponse(res, 404, 'Order not found after update');

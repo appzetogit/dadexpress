@@ -93,17 +93,15 @@ adminSchema.index({ role: 1 });
 adminSchema.index({ isActive: 1 });
 
 // Hash password before saving
-adminSchema.pre('save', async function (next) {
+adminSchema.pre('save', async function () {
   if (!this.isModified('password')) {
-    return next();
+    return;
   }
 
   if (this.password) {
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
   }
-
-  next();
 });
 
 // Method to compare password

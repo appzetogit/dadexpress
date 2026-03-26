@@ -51,12 +51,11 @@ const tableBookingSchema = new mongoose.Schema(
 );
 
 // Generate a random 8-character booking ID before saving
-tableBookingSchema.pre("save", async function (next) {
+tableBookingSchema.pre("save", async function () {
   if (!this.bookingId) {
     this.bookingId =
       "BK" + Math.random().toString(36).substring(2, 8).toUpperCase();
   }
-  next();
 });
 
 const TableBooking = mongoose.models.TableBooking || mongoose.model("TableBooking", tableBookingSchema);

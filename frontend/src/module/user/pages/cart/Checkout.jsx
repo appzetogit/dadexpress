@@ -133,7 +133,7 @@ export default function Checkout() {
   // Call calculateOrderPricing whenever dependencies change
   useEffect(() => {
     const calculate = async () => {
-      if (cart.length === 0 || !deliveryAddress || deliveryAddressError) return
+      if (cart.length === 0 || !deliveryAddress) return
 
       try {
         setRefreshing(true)
@@ -146,14 +146,23 @@ export default function Checkout() {
           restaurantId: item.restaurantId
         }))
 
+        // Resolve coordinates from all possible address formats
+        const addrLat = deliveryAddress?.location?.coordinates?.[1]
+          ?? deliveryAddress?.lat ?? deliveryAddress?.latitude
+          ?? resolvedDelivery?.coords?.lat ?? null
+        const addrLng = deliveryAddress?.location?.coordinates?.[0]
+          ?? deliveryAddress?.lng ?? deliveryAddress?.longitude
+          ?? resolvedDelivery?.coords?.lng ?? null
+
         // Call our specialized calculateOrder helper from orderAPI
         const response = await orderAPI.calculateOrder({
           items,
+          restaurantId: items[0]?.restaurantId,
           useRewardCoins: useRewards,
           rewardCoins: useRewards ? rewardBalance : 0,
           deliveryAddress: deliveryAddress,
-          latitude: deliveryAddress?.location?.coordinates?.[1],
-          longitude: deliveryAddress?.location?.coordinates?.[0],
+          latitude: addrLat,
+          longitude: addrLng,
         })
 
         const data = response?.data?.data || response?.data

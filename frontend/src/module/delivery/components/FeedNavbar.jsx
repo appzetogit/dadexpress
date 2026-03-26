@@ -53,7 +53,7 @@ function BottomPopup({
   );
 }
 
-export default function FeedNavbar({ className = "" }) {
+export default function FeedNavbar({ className = "", onEmergencyClick, onHelpClick }) {
   const companyName = useCompanyName()
   const navigate = useNavigate();
 
@@ -243,6 +243,36 @@ export default function FeedNavbar({ className = "" }) {
     },
   ];
 
+  const [supportNumber, setSupportNumber] = useState("");
+
+  // Fetch support number from business settings
+  useEffect(() => {
+    const fetchSupportNumber = async () => {
+      try {
+        const response = await restaurantAPI.getBusinessSettingsPublic();
+        if (response?.data?.success && response?.data?.data?.settings?.supportPhoneNumber) {
+          setSupportNumber(response.data.data.settings.supportPhoneNumber);
+        }
+      } catch (err) {
+        console.warn("Error fetching support number for FeedNavbar:", err);
+      }
+    };
+    fetchSupportNumber();
+  }, []);
+
+  // Add dynamic Help Center option
+  if (supportNumber && !helpOptions.find(o => o.id === "supportCenter")) {
+    helpOptions.unshift({
+      id: "supportCenter",
+      title: "Help centre",
+      subtitle: "Call support for help",
+      icon: "helpCenter",
+      onClick: () => {
+        window.location.href = `tel:${supportNumber}`;
+      }
+    });
+  }
+
   // Handle help option click - navigate to the correct route
   const handleHelpOptionClick = (option) => {
     if (option.path) {
@@ -425,7 +455,7 @@ export default function FeedNavbar({ className = "" }) {
       <div className="flex items-center gap-3">
         {/* Emergency */}
         <button
-            onClick={() => setShowEmergencyPopup(true)}
+            onClick={() => onEmergencyClick ? onEmergencyClick() : setShowEmergencyPopup(true)}
           className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center hover:bg-red-600 transition-colors relative"
             title="Emergency"
         >
@@ -436,7 +466,7 @@ export default function FeedNavbar({ className = "" }) {
 
         {/* Help */}
         <button
-            onClick={() => setShowHelpPopup(true)}
+            onClick={() => onHelpClick ? onHelpClick() : setShowHelpPopup(true)}
           className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center hover:bg-gray-300 transition-colors"
             title="Help"
         >

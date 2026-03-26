@@ -69,12 +69,24 @@ export const getTripHistory = asyncHandler(async (req, res) => {
     }
 
     // Build query
+    // We search across BOTH createdAt and deliveredAt to ensure orders created yesterday 
+    // but delivered today (or vice-versa) appear in the correct period.
     const query = {
       deliveryPartnerId: delivery._id,
-      createdAt: {
-        $gte: startDate,
-        $lte: endDate
-      }
+      $or: [
+        {
+          createdAt: {
+            $gte: startDate,
+            $lte: endDate
+          }
+        },
+        {
+          deliveredAt: {
+            $gte: startDate,
+            $lte: endDate
+          }
+        }
+      ]
     };
 
     // Status filter
@@ -92,11 +104,12 @@ export const getTripHistory = asyncHandler(async (req, res) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     // Fetch orders
+    // Sort by deliveredAt if available, fallback to createdAt
     const orders = await Order.find(query)
       .populate('userId', 'name phone')
-      .sort({ createdAt: -1 })
+      .sort({ deliveredAt: -1, createdAt: -1 })
       .skip(skip)
-      .limit(parseInt(limit))
+      .limit(parseInt(limit || 1000))
       .lean();
 
     // Get total count
@@ -179,8 +192,9 @@ export const getTripHistory = asyncHandler(async (req, res) => {
 
       const displayStatus = statusMap[order.status] || order.status;
 
-      // Format time
-      const orderDate = new Date(order.createdAt);
+      // Format time - for delivered orders, show the completion time (deliveredAt)
+      // For others, show the creation time
+      const orderDate = new Date(order.status === 'delivered' ? (order.deliveredAt || order.createdAt) : order.createdAt);
       const hours = orderDate.getHours();
       const minutes = orderDate.getMinutes();
       const time = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;

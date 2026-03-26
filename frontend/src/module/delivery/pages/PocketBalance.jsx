@@ -94,42 +94,27 @@ export default function PocketBalancePage() {
   // Calculate total withdrawn (needed for pocket balance calculation)
   const totalWithdrawn = balances.totalWithdrawn || 0
   
-  // Pocket balance = total balance (includes bonus + earnings)
-  // Formula: Pocket Balance = Earnings + Bonus - Withdrawals
-  // Use walletState.pocketBalance if available, otherwise calculate from totalBalance
-  let pocketBalance = walletState?.pocketBalance !== undefined 
+  // Pocket balance = (total earnings + bonus) - cash collected 
+  // Backend now correctly calculates this in wallet.pocketBalance
+  const pocketBalance = walletState?.pocketBalance !== undefined 
     ? walletState.pocketBalance 
-    : (walletState?.totalBalance || balances.totalBalance || 0)
-  
-  // IMPORTANT: Ensure pocket balance includes bonus
-  // If backend totalBalance is 0 but we have bonus, calculate it manually
-  // This ensures bonus is always reflected in pocket balance and withdrawable amount
-  if (pocketBalance === 0 && totalBonus > 0) {
-    // If totalBalance is 0 but we have bonus, pocket balance = bonus
-    pocketBalance = totalBonus
-  } else if (pocketBalance > 0 && totalBonus > 0) {
-    // Verify pocket balance includes bonus
-    // Calculate expected: Earnings + Bonus - Withdrawals
-    const expectedBalance = weeklyEarnings + totalBonus - totalWithdrawn
-    // Use the higher value to ensure bonus is included
-    if (expectedBalance > pocketBalance) {
-      pocketBalance = expectedBalance
-    }
-  }
-  
+    : (walletState?.totalBalance || balances.totalBalance || 0) - (walletState?.cashInHand || 0)
+    
   // Calculate cash collected (cash in hand)
-  const cashCollected = balances.cashInHand || 0
+  const cashCollected = walletState?.cashInHand !== undefined 
+    ? walletState.cashInHand 
+    : (balances.cashInHand || 0)
   
-  // Deductions = actual deductions only (fees, penalties). Pending withdrawal is NOT a deduction.
+  // Deductions = actual deductions only (fees, penalties)
   const deductions = 0
   
-  // Amount withdrawn = approved + pending (requested) withdrawals. Withdraw ki hui amount yahin dikhegi.
+  // Amount withdrawn = approved + pending (requested) withdrawals
   const amountWithdrawnDisplay = (balances.totalWithdrawn || 0) + (balances.pendingWithdrawals || 0)
   
   // Withdrawal limit from admin (min amount above which withdrawal is allowed)
   const withdrawalLimit = Number(walletState?.deliveryWithdrawalLimit) || 100
   
-  // Withdrawable amount = pocket balance (includes bonus + earnings)
+  // Withdrawable amount = pocket balance (capped at 0)
   const withdrawableAmount = pocketBalance > 0 ? pocketBalance : 0
   
   // Withdrawal allowed only when withdrawable amount >= withdrawal limit

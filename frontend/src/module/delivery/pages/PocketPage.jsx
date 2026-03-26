@@ -367,30 +367,14 @@ export default function PocketPage() {
     ?.filter(t => t.type === 'bonus' && t.status === 'Completed')
     .reduce((sum, t) => sum + (t.amount || 0), 0) || 0
 
-  // Pocket balance (withdrawable): only online earnings/credits.
-  // Exclude COD/cash payment transactions from withdrawable pocket balance.
-  const onlinePocketBalanceFromTransactions = Array.isArray(walletState?.transactions)
-    ? walletState.transactions
-      .filter((t) => t?.status === "Completed")
-      .reduce((sum, t) => {
-        if (t.type === "payment") {
-          return isCashPaymentMethod(t.paymentMethod) ? sum : sum + (Number(t.amount) || 0)
-        }
-        if (t.type === "bonus" || t.type === "earning_addon" || t.type === "refund") {
-          return sum + (Number(t.amount) || 0)
-        }
-        if (t.type === "withdrawal" || t.type === "deduction") {
-          return sum - (Number(t.amount) || 0)
-        }
-        return sum
-      }, 0)
-    : null
-
-  let pocketBalance = onlinePocketBalanceFromTransactions !== null
-    ? Math.max(0, onlinePocketBalanceFromTransactions)
-    : (walletState?.pocketBalance !== undefined
-      ? Number(walletState.pocketBalance) || 0
-      : (Number(walletState?.totalBalance) || Number(balances.totalBalance) || 0))
+  // Pocket balance (withdrawable): use backend pocketBalance (totalBalance - cashInHand)
+  let pocketBalance = walletState?.pocketBalance !== undefined
+    ? Number(walletState.pocketBalance) || 0
+    : Math.max(0, (Number(walletState?.totalBalance) || 0) - (Number(walletState?.cashInHand) || 0))
+    
+  // For the home screen summary card, ensure we don't show negative balance if rider is in debt
+  // but let the detailed screen show the true liability.
+  pocketBalance = Math.max(0, pocketBalance)
 
 
   // Available cash limit = remaining limit (global limit - cash in hand)

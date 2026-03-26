@@ -9,6 +9,8 @@ import {
   Plus,
   Coffee,
   Trash2,
+  Phone,
+  Mail
 } from "lucide-react"
 import { restaurantAPI } from "@/lib/api"
 import OptimizedImage from "@/components/OptimizedImage"
@@ -228,11 +230,17 @@ export default function ContactDetails() {
               <p className="text-base font-bold text-gray-900 mb-1">
                 {loading ? "Loading..." : (ownerData.name || "N/A")}
               </p>
-              <p className="text-sm text-gray-900 font-normal">
-                {loading ? "Loading..." : (ownerData.phone || "N/A")}
+              <p className="text-sm text-gray-900 font-normal flex items-center gap-2">
+                <Phone className="w-3.5 h-3.5 text-blue-600" />
+                <a href={`tel:${ownerData.phone}`} className="hover:underline">
+                  {loading ? "Loading..." : (ownerData.phone || "N/A")}
+                </a>
               </p>
-              <p className="text-sm text-gray-900 font-normal">
-                {loading ? "Loading..." : (ownerData.email || "N/A")}
+              <p className="text-sm text-gray-900 font-normal flex items-center gap-2">
+                <Mail className="w-3.5 h-3.5 text-blue-600" />
+                <a href={`mailto:${ownerData.email}`} className="hover:underline">
+                  {loading ? "Loading..." : (ownerData.email || "N/A")}
+                </a>
               </p>
             </div>
             <button
@@ -297,8 +305,23 @@ export default function ContactDetails() {
                             <p className="text-base font-bold text-gray-900 mb-0.5 ">
                               {user.name || "N/A"}
                             </p>
-                            <p className="text-sm text-gray-900 font-normal">
-                              {user.phone || user.email}
+                            <p className="text-sm text-gray-900 font-normal flex flex-col gap-1">
+                              {user.phone && (
+                                <span className="flex items-center gap-2">
+                                  <Phone className="w-3.5 h-3.5 text-orange-600" />
+                                  <a href={`tel:${user.phone}`} className="hover:underline">
+                                    {user.phone}
+                                  </a>
+                                </span>
+                              )}
+                              {user.email && (
+                                <span className="flex items-center gap-2">
+                                  <Mail className="w-3.5 h-3.5 text-orange-600" />
+                                  <a href={`mailto:${user.email}`} className="hover:underline">
+                                    {user.email}
+                                  </a>
+                                </span>
+                              )}
                             </p>
                           </div>
                         </div>
@@ -362,8 +385,23 @@ export default function ContactDetails() {
                             <p className="text-base font-bold text-gray-900 mb-0.5">
                               {user.name || "N/A"}
                             </p>
-                            <p className="text-sm text-gray-900 font-normal">
-                              {user.phone || user.email}
+                            <p className="text-sm text-gray-900 font-normal flex flex-col gap-1">
+                              {user.phone && (
+                                <span className="flex items-center gap-2">
+                                  <Phone className="w-3.5 h-3.5 text-orange-600" />
+                                  <a href={`tel:${user.phone}`} className="hover:underline">
+                                    {user.phone}
+                                  </a>
+                                </span>
+                              )}
+                              {user.email && (
+                                <span className="flex items-center gap-2">
+                                  <Mail className="w-3.5 h-3.5 text-orange-600" />
+                                  <a href={`mailto:${user.email}`} className="hover:underline">
+                                    {user.email}
+                                  </a>
+                                </span>
+                              )}
                             </p>
                           </div>
                         </div>

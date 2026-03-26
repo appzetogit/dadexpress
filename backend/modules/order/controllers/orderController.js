@@ -97,6 +97,9 @@ const resolveAddressFromPayload = async (payload, userId) => {
   if (address) {
     const coordsFromAddress = (() => {
       if (Array.isArray(address?.location?.coordinates) && address.location.coordinates.length >= 2) {
+        const [lng, lat] = address.location.coordinates;
+        // Skip [0,0] which is the MongoDB default (not a real location)
+        if (lng === 0 && lat === 0) return null;
         return address.location.coordinates;
       }
       const addrLat = toNumber(address?.lat ?? address?.latitude);
@@ -108,7 +111,9 @@ const resolveAddressFromPayload = async (payload, userId) => {
     })();
 
     const coordsFromPayload = isValidCoords(latitude, longitude) ? [longitude, latitude] : null;
-    const coords = coordsFromPayload || coordsFromAddress;
+    // Skip [0,0] payload coords too
+    const validPayloadCoords = coordsFromPayload && !(coordsFromPayload[0] === 0 && coordsFromPayload[1] === 0) ? coordsFromPayload : null;
+    const coords = validPayloadCoords || coordsFromAddress;
 
     if (coords) {
       address.location = {
@@ -1362,31 +1367,31 @@ export const updateOrderLocation = async (req, res) => {
       });
     }
 
-    const allowedStatuses = new Set(['pending', 'confirmed', 'preparing']);
-    if (!allowedStatuses.has(order.status)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Delivery location can only be updated while the order is pending, confirmed, or preparing'
-      });
-    }
-
-    const deliveryStateStatus = order.deliveryState?.status;
-    const deliveryPhase = order.deliveryState?.currentPhase;
-    const isAssigned =
-      !!order.deliveryPartnerId ||
-      !!order.assignmentInfo?.deliveryPartnerId ||
-      ['accepted', 'en_route_to_pickup', 'at_pickup', 'en_route_to_delivery', 'delivered'].includes(deliveryStateStatus) ||
-      ['en_route_to_pickup', 'at_pickup', 'en_route_to_delivery', 'completed'].includes(deliveryPhase);
-
-    if (isAssigned) {
-      return res.status(400).json({
-        success: false,
-        message: 'Delivery location cannot be updated after a delivery partner has been assigned'
-      });
-    }
     const hasAddressUpdate = !isInstructionOnlyPayload && !isTipOnlyPayload && !!address && typeof address === 'object';
 
     if (hasAddressUpdate) {
+      const allowedStatuses = new Set(['pending', 'confirmed', 'preparing']);
+      if (!allowedStatuses.has(order.status)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Delivery location can only be updated while the order is pending, confirmed, or preparing'
+        });
+      }
+
+      const deliveryStateStatus = order.deliveryState?.status;
+      const deliveryPhase = order.deliveryState?.currentPhase;
+      const isAssigned =
+        !!order.deliveryPartnerId ||
+        !!order.assignmentInfo?.deliveryPartnerId ||
+        ['accepted', 'en_route_to_pickup', 'at_pickup', 'en_route_to_delivery', 'delivered'].includes(deliveryStateStatus) ||
+        ['en_route_to_pickup', 'at_pickup', 'en_route_to_delivery', 'completed'].includes(deliveryPhase);
+
+      if (isAssigned) {
+        return res.status(400).json({
+          success: false,
+          message: 'Delivery location cannot be updated after a delivery partner has been assigned'
+        });
+      }
       const coordsFromAddress = (() => {
         if (Array.isArray(address?.location?.coordinates) && address.location.coordinates.length >= 2) {
           return address.location.coordinates;
@@ -1630,7 +1635,13 @@ export const cancelOrder = async (req, res) => {
  */
 export const calculateOrder = async (req, res) => {
   try {
-    const { items, restaurantId, couponCode, deliveryFleet, useReferralCoins, coinsToUse } = req.body;
+    const { items, couponCode, deliveryFleet, useReferralCoins, coinsToUse } = req.body;
+    let { restaurantId } = req.body;
+
+    // Extract restaurantId from items if not provided at top-level
+    if (!restaurantId && items && items.length > 0) {
+      restaurantId = items[0].restaurantId || items[0].id?.restaurantId;
+    }
     // Route is public (no auth middleware) so req.user may be undefined
     const userId = req.user?.id || null;
 

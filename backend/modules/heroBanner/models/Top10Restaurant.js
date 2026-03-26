@@ -40,11 +40,11 @@ top10RestaurantSchema.index({ rank: 1, isActive: 1 });
 top10RestaurantSchema.index({ order: 1, isActive: 1 });
 
 // Ensure only 10 restaurants can be active
-top10RestaurantSchema.pre('save', async function(next) {
+top10RestaurantSchema.pre('save', async function() {
   if (this.isActive && this.isNew) {
     const activeCount = await mongoose.model('Top10Restaurant').countDocuments({ isActive: true });
     if (activeCount >= 10) {
-      return next(new Error('Maximum 10 restaurants can be active in Top 10'));
+      throw new Error('Maximum 10 restaurants can be active in Top 10');
     }
   }
   // If activating an existing restaurant, check count excluding current document
@@ -54,10 +54,9 @@ top10RestaurantSchema.pre('save', async function(next) {
       _id: { $ne: this._id } 
     });
     if (activeCount >= 10) {
-      return next(new Error('Maximum 10 restaurants can be active in Top 10'));
+      throw new Error('Maximum 10 restaurants can be active in Top 10');
     }
   }
-  next();
 });
 
 export default mongoose.models.Top10Restaurant || mongoose.model('Top10Restaurant', top10RestaurantSchema);

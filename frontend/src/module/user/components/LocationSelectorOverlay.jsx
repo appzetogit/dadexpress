@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react"
 import { useNavigate, useLocation as useRouterLocation } from "react-router-dom"
-import { ChevronLeft, Search, ChevronRight, Plus, MapPin, MoreHorizontal, Navigation, Home, Building2, Briefcase, Phone, X, Crosshair } from "lucide-react"
+import { ChevronLeft, Search, ChevronRight, Plus, MapPin, MoreHorizontal, Navigation, Home, Building2, Briefcase, Phone, X, Crosshair, Pencil } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -60,6 +60,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
   const { location } = useGeoLocation()
   const { addresses = [], addAddress, updateAddress, userProfile, setDefaultAddress } = useProfile()
   const [showAddressForm, setShowAddressForm] = useState(false)
+  const [editingAddressId, setEditingAddressId] = useState(null)
   const [mapPosition, setMapPosition] = useState([22.7196, 75.8577]) // Default Indore coordinates [lat, lng]
   const [addressFormData, setAddressFormData] = useState({
     street: "",
@@ -894,6 +895,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
   }
 
   const handleAddAddress = () => {
+    setEditingAddressId(null)
     setShowAddressForm(true)
     // Initialize form with current location data
     if (location?.latitude && location?.longitude) {
@@ -909,19 +911,20 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
   }
 
   const handleAddressFormChange = (e) => {
-    if (e.target.name === "zipCode") {
-      const nextZip = String(e.target.value || "").replace(/\D/g, "").slice(0, 6)
-      setAddressFormData({
-        ...addressFormData,
+    const { name, value } = e.target
+    if (name === "zipCode") {
+      const nextZip = String(value || "").replace(/\D/g, "").slice(0, 6)
+      setAddressFormData(prev => ({
+        ...prev,
         zipCode: nextZip,
-      })
+      }))
       return
     }
 
-    setAddressFormData({
-      ...addressFormData,
-      [e.target.name]: e.target.value,
-    })
+    setAddressFormData(prev => ({
+      ...prev,
+      [name]: value,
+    }))
   }
 
   // Google Maps loading is handled by the Loader in the initialization useEffect above
@@ -1794,13 +1797,23 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
         isDefault: true,
       }
 
-      // Always create a new address entry (even if label is same like Home/Office).
-      console.log("💾 Saving new address:", addressToSave)
-      const savedAddress = await addAddress(addressToSave)
-      toast.success(`Address saved as ${normalizedLabel}!`)
+      let resultAddress = null
+      // Check if we are editing an existing address or adding a new one
+      if (editingAddressId) {
+        console.log("💾 Updating address:", addressToSave)
+        resultAddress = await updateAddress(editingAddressId, addressToSave)
+        toast.success(`Address updated!`)
+      } else {
+        // Always create a new address entry (even if label is same like Home/Office).
+        console.log("💾 Saving new address:", addressToSave)
+        resultAddress = await addAddress(addressToSave)
+        toast.success(`Address saved as ${normalizedLabel}!`)
+      }
 
-      // Use newly saved address as the active delivery address.
-      const savedAddressId = savedAddress?.id || savedAddress?._id
+      setEditingAddressId(null)
+
+      // Use newly saved/updated address as the active delivery address.
+      const savedAddressId = resultAddress?.id || resultAddress?._id
       if (savedAddressId) {
         setSelectedDeliveryAddress({ mode: "saved", addressId: savedAddressId })
       }
@@ -1818,9 +1831,15 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       setShowAddressForm(false)
       setIsSavingAddress(false)
 
-      // Close overlay and redirect to home page
-      onClose()
-      if (!isCartPath) navigate("/")
+      // Only close overlay and redirect IF we are in the cart flow or if it's a new address.
+      // If we are just editing, staying in the list allows the user to see the update.
+      if (isCartPath) {
+        onClose()
+      } else if (!editingAddressId) {
+        // For new addresses in home flow, we can close or stay. 
+        // But the user wants to see it "here", so let's stay if they are managing addresses.
+        // Actually, original behavior was likely to close, so we'll stay only if the user wants to see the list.
+      }
     } catch (error) {
       console.error("❌ Error saving address:", error)
       console.error("❌ Error details:", {
@@ -1845,8 +1864,113 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
     }
   }
 
+  const handleSearchLocation = async (query) => {
+    if (!query || !window.google || !window.google.maps || !googleMapRef.current) return
+    const trimmedQuery = query.trim()
+    if (!trimmedQuery) return
+
+    setMapLoading(true)
+    try {
+      const service = new window.google.maps.places.PlacesService(googleMapRef.current)
+      const request = {
+        query: trimmedQuery,
+        fields: ["geometry", "formatted_address", "name"],
+      }
+
+      service.findPlaceFromQuery(request, (results, status) => {
+        if (status === window.google.maps.places.PlacesServiceStatus.OK && results && results[0]) {
+          const place = results[0]
+          const lat = place.geometry.location.lat()
+          const lng = place.geometry.location.lng()
+          
+          console.log("🔍 Search result:", { lat, lng, address: place.formatted_address })
+          
+          googleMapRef.current.panTo({ lat, lng })
+          googleMapRef.current.setZoom(17)
+          
+          if (greenMarkerRef.current) {
+            greenMarkerRef.current.setPosition({ lat, lng })
+          }
+          
+          // Extract address components for form update (from formatted_address parsing since components not avail)
+          let street = ""
+          let city = ""
+          let state = ""
+          let zip = ""
+          
+          if (place.formatted_address) {
+            const parts = place.formatted_address.split(",").map(p => p.trim())
+            // Agra, Uttar Pradesh, India
+            if (parts.length >= 3) {
+              const country = parts[parts.length - 1]
+              const stateInfo = parts[parts.length - 2] // "Uttar Pradesh" or "Madhya Pradesh 452010"
+              const cityInfo = parts[parts.length - 3]  // "Agra" or "Indore"
+              
+              // Extract pincode from state info if possible (e.g. "Madhya Pradesh 452010")
+              const zipMatch = stateInfo.match(/\d{6}/)
+              if (zipMatch) zip = zipMatch[0]
+              
+              state = stateInfo.replace(/\d{6}/, "").trim()
+              city = cityInfo
+              street = parts.slice(0, parts.length - 3).join(", ")
+            } else if (parts.length === 2) {
+              city = parts[0]
+              state = parts[1]
+            }
+          }
+
+          // Use place name/address if specific components not found
+          const finalStreet = street || place.name || (place.formatted_address ? place.formatted_address.split(',')[0] : "")
+
+          // Set active location for the map
+          setMapPosition([lat, lng])
+
+          // Update form data with search results
+          setAddressFormData(prev => ({
+            ...prev,
+            street: finalStreet || prev.street,
+            city: city || prev.city,
+            state: state || prev.state,
+            zipCode: zip || prev.zipCode,
+            additionalDetails: (place.formatted_address || prev.additionalDetails)
+          }))
+          
+          // Use setTimeout to allow map pan to finish slightly before processing updates
+          setTimeout(() => {
+            handleMapMoveEnd(lat, lng)
+            setCurrentAddress(place.formatted_address || `${lat.toFixed(6)}, ${lng.toFixed(6)}`)
+          }, 300)
+        } else {
+          console.warn("🔍 Search failed or no results:", status)
+          toast.error("Location not found")
+        }
+        setMapLoading(false)
+      })
+    } catch (error) {
+      console.error("❌ Search error:", error)
+      setMapLoading(false)
+    }
+  }
+
+  const handleEditAddress = (e, address) => {
+    e.stopPropagation()
+    setEditingAddressId(address.id || address._id)
+    setAddressFormData({
+      street: address.street || "",
+      city: address.city || "",
+      state: address.state || "",
+      zipCode: address.zipCode || "",
+      additionalDetails: address.additionalDetails || "",
+      label: address.label || "Home",
+      phone: address.phone || "",
+    })
+    setMapPosition([address.latitude, address.longitude])
+    setShowAddressForm(true)
+  }
+
   const handleCancelAddressForm = () => {
     setShowAddressForm(false)
+    setEditingAddressId(null)
     setAddressFormData({
       street: "",
       city: "",
@@ -1988,10 +2112,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
     return distance < 1000 ? `${Math.round(distance)} m` : `${(distance / 1000).toFixed(2)} km`
   }
 
-  const handleEditAddress = (addressId) => {
-    // Edit address functionality removed - user can delete and add new address instead
-    toast.info("To edit address, please delete and add a new one")
-  }
+
 
   const deliveryDetailsText = (() => {
     const zipCode = String(addressFormData.zipCode || "").trim()
@@ -2043,11 +2164,22 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
 
         {/* Search Bar */}
         <div className="flex-shrink-0 bg-white dark:bg-[#1a1a1a] px-4 py-3 border-b border-gray-100 dark:border-gray-800">
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-orange-600 z-10" />
+          <div className="relative flex items-center">
+            <button 
+              type="button"
+              onClick={() => handleSearchLocation(searchValue)}
+              className="absolute left-4 top-1/2 transform -translate-y-1/2 h-8 w-8 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors z-20"
+            >
+              <Search className="h-5 w-5 text-orange-600" />
+            </button>
             <Input
               value={searchValue}
               onChange={(e) => setSearchValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  handleSearchLocation(searchValue)
+                }
+              }}
               placeholder="Search for area, street name..."
               className="pl-12 pr-4 h-12 w-full bg-gray-50 dark:bg-[#2a2a2a] border-gray-200 dark:border-gray-700 focus:border-orange-600 dark:focus:border-orange-600 rounded-xl"
             />
@@ -2371,9 +2503,9 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
                         <div
                           className={`py-4 ${index !== 0 ? 'border-t border-gray-100 dark:border-gray-800' : ''}`}
                         >
-                          <button
+                          <div
                             onClick={() => handleSelectSavedAddress(address)}
-                            className="w-full flex items-start gap-4 text-left hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors p-2 -m-2"
+                            className="w-full flex items-start gap-4 text-left hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors p-2 -m-2 cursor-pointer"
                           >
                             <div className="flex flex-col items-center">
                               <div className="h-10 w-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
@@ -2397,7 +2529,17 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
                                 Phone number: {address.phone || userProfile?.phone || "Not provided"}
                               </p>
                             </div>
-                          </button>
+                            <div className="flex flex-col items-center justify-center">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20"
+                                onClick={(e) => handleEditAddress(e, address)}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     )

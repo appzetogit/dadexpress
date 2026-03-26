@@ -92,7 +92,8 @@ export const resendDeliveryNotification = asyncHandler(async (req, res) => {
       restaurantLng,
       restaurantId,
       20, // 20km radius for priority
-      10  // Top 10 nearest
+      10, // Top 10 nearest
+      order // Pass order to filter over-limit riders
     );
 
     if (!priorityDeliveryBoys || priorityDeliveryBoys.length === 0) {
@@ -102,7 +103,8 @@ export const resendDeliveryNotification = asyncHandler(async (req, res) => {
         restaurantLng,
         restaurantId,
         50, // 50km radius
-        20  // Top 20 nearest
+        20, // Top 20 nearest
+        order // Pass order to filter over-limit riders
       );
 
       if (!allDeliveryBoys || allDeliveryBoys.length === 0) {

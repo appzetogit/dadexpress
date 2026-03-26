@@ -17,7 +17,8 @@ import {
   Receipt,
   CircleSlash,
   Loader2,
-  IndianRupee
+  IndianRupee,
+  Star
 } from "lucide-react"
 import AnimatedPage from "../../components/AnimatedPage"
 import { Card, CardContent } from "@/components/ui/card"
@@ -35,6 +36,8 @@ import { useProfile } from "../../context/ProfileContext"
 import { useLocation as useUserLocation } from "../../hooks/useLocation"
 import DeliveryTrackingMap from "../../components/DeliveryTrackingMap"
 import { orderAPI, restaurantAPI } from "@/lib/api"
+import { API_ENDPOINTS } from "@/lib/api/endpoints"
+import api from "@/lib/api/axios"
 import circleIcon from "@/assets/circleicon.png"
 
 // Animated checkmark component
@@ -244,6 +247,10 @@ export default function OrderTracking() {
   const [isSavingInstruction, setIsSavingInstruction] = useState(false)
   const [isSavingTip, setIsSavingTip] = useState(false)
   const [isUpdatingLocation, setIsUpdatingLocation] = useState(false)
+  const [ratingModal, setRatingModal] = useState({ open: false, order: null })
+  const [selectedRating, setSelectedRating] = useState(null)
+  const [feedbackText, setFeedbackText] = useState("")
+  const [submittingRating, setSubmittingRating] = useState(false)
   const [locationForm, setLocationForm] = useState({
     formattedAddress: "",
     street: "",
@@ -722,7 +729,8 @@ export default function OrderTracking() {
             updatedAt: apiOrder.updatedAt || null,
             totalAmount: apiOrder.pricing?.total || apiOrder.totalAmount || 0,
             deliveryFee: apiOrder.pricing?.deliveryFee || apiOrder.deliveryFee || 0,
-            gst: apiOrder.pricing?.gst || apiOrder.gst || 0,
+            gst: apiOrder.pricing?.gst || apiOrder.pricing?.tax || apiOrder.gst || apiOrder.tax || 0,
+            platformFee: apiOrder.pricing?.platformFee || apiOrder.platformFee || 0,
             paymentMethod: apiOrder.paymentMethod || null,
             eta: apiOrder.eta || null,
             estimatedDeliveryTime: apiOrder.estimatedDeliveryTime ?? null,
@@ -911,11 +919,6 @@ export default function OrderTracking() {
   const handleCancelOrder = () => {
     // Check if order can be cancelled (only Razorpay orders that aren't delivered/cancelled)
     if (!order) return;
-
-    if (isAdminAccepted && !isEditWindowOpen) {
-      toast.error('Cancellation window ended. You can no longer cancel this order.');
-      return;
-    }
 
     if (order.status === 'cancelled') {
       toast.error('Order is already cancelled');
@@ -1140,6 +1143,65 @@ export default function OrderTracking() {
     }
   };
 
+  const handleOpenRating = (orderData) => {
+    setRatingModal({ open: true, order: orderData })
+    setSelectedRating(orderData?.rating || null)
+    setFeedbackText(orderData?.review?.comment || "")
+  }
+
+  const handleCloseRating = () => {
+    setRatingModal({ open: false, order: null })
+    setSelectedRating(null)
+    setFeedbackText("")
+  }
+
+  const handleSubmitRating = async () => {
+    if (!ratingModal.order || selectedRating === null) {
+      toast.error("Please select a rating first")
+      return
+    }
+
+    try {
+      setSubmittingRating(true)
+
+      const orderData = ratingModal.order
+
+      await api.post(API_ENDPOINTS.ADMIN.FEEDBACK_EXPERIENCE_CREATE, {
+        rating: selectedRating,
+        module: "user",
+        restaurantId: orderData.restaurantId || null,
+        metadata: {
+          orderId: orderData.id,
+          orderMongoId: orderData.mongoId,
+          orderTotal: orderData.totalAmount || orderData.total,
+          restaurantName: orderData.restaurant,
+          comment: feedbackText || undefined,
+        },
+      })
+
+      // Update local state so UI shows "You rated"
+      setOrder(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          rating: selectedRating,
+          review: { rating: selectedRating, comment: feedbackText || undefined }
+        }
+      })
+
+      toast.success("Thanks for rating your order! 🎉")
+      handleCloseRating()
+    } catch (error) {
+      console.error("Error submitting order rating:", error)
+      toast.error(
+        error?.response?.data?.message ||
+        "Failed to submit rating. Please try again."
+      )
+    } finally {
+      setSubmittingRating(false)
+    }
+  }
+
   const handleRefresh = async () => {
     setIsRefreshing(true)
     try {
@@ -1222,6 +1284,10 @@ export default function OrderTracking() {
           deliveryState: apiOrder.deliveryState || null,
           createdAt: apiOrder.createdAt || null,
           updatedAt: apiOrder.updatedAt || null,
+          totalAmount: apiOrder.pricing?.total || apiOrder.totalAmount || 0,
+          deliveryFee: apiOrder.pricing?.deliveryFee || apiOrder.deliveryFee || 0,
+          gst: apiOrder.pricing?.gst || apiOrder.pricing?.tax || apiOrder.gst || apiOrder.tax || 0,
+          platformFee: apiOrder.pricing?.platformFee || apiOrder.platformFee || 0,
           eta: apiOrder.eta || null,
           estimatedDeliveryTime: apiOrder.estimatedDeliveryTime ?? null,
           deliveryInstruction: apiOrder.deliveryInstruction || '',
@@ -1514,6 +1580,31 @@ export default function OrderTracking() {
           </p>
         </motion.div>
 
+        {/* Payment QR Code */}
+        {['pickup', 'delivered'].includes(orderStatus) && (
+          <motion.div
+            className="bg-white rounded-xl shadow-sm overflow-hidden p-4 border border-gray-100 flex flex-col items-center justify-center gap-3"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.68 }}
+          >
+            <p className="text-sm font-bold text-gray-900 uppercase tracking-widest text-center w-full pb-2 border-b border-gray-100 border-dashed">
+              Scan to Pay Rider
+            </p>
+            <div className="w-48 h-48 sm:w-56 sm:h-56 rounded-xl overflow-hidden border-2 border-orange-100 shadow-sm p-2">
+              <img 
+                src="/qr%20code.jpeg" 
+                alt="Payment QR Code" 
+                className="w-full h-full object-contain"
+                onError={(e) => e.target.style.display = 'none'}
+              />
+            </div>
+            <p className="text-xs text-gray-500 font-medium text-center">
+              Please verify payment with the delivery partner
+            </p>
+          </motion.div>
+        )}
+
         {/* Contact & Address Section */}
         <motion.div
           className="bg-white rounded-xl shadow-sm overflow-hidden"
@@ -1638,6 +1729,15 @@ export default function OrderTracking() {
               showArrow={canUpdateLocation}
             />
           )}
+          {orderStatus === 'delivered' && (
+            <SectionItem
+              icon={Star}
+              title={order?.rating ? "You rated this order" : "Rate this order"}
+              subtitle={order?.rating ? `${order.rating} stars` : "Share your feedback"}
+              onClick={() => handleOpenRating(order)}
+              showArrow={true}
+            />
+          )}
         </motion.div>
 
         {/* Restaurant Section */}
@@ -1700,21 +1800,12 @@ export default function OrderTracking() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.8 }}
         >
-          {!isAdminAccepted || isEditWindowOpen ? (
-            <SectionItem
-              icon={CircleSlash}
-              title="Cancel order"
-              subtitle=""
-              onClick={handleCancelOrder}
-            />
-          ) : (
-            <SectionItem
-              icon={CircleSlash}
-              title="Cancel order"
-              subtitle="Cancellation window ended"
-              onClick={handleCancelOrder}
-            />
-          )}
+          <SectionItem
+            icon={CircleSlash}
+            title="Cancel order"
+            subtitle=""
+            onClick={handleCancelOrder}
+          />
         </motion.div>
 
       </div>
@@ -2110,19 +2201,29 @@ export default function OrderTracking() {
               <p className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-1">Bill Summary</p>
               <div className="flex justify-between items-center text-sm">
                 <span className="text-gray-600">Item Total</span>
-                <span className="text-gray-900 font-medium">₹{order?.totalAmount - (order?.deliveryFee || 0) - (order?.gst || 0)}</span>
+                <span className="text-gray-900 font-medium">₹{order?.totalAmount - (order?.deliveryFee || 0) - (order?.gst || 0) - (order?.platformFee || 0)}</span>
               </div>
               <div className="flex justify-between items-center text-sm">
                 <span className="text-gray-600">Delivery Fee</span>
                 <span className="text-gray-900 font-medium">₹{order?.deliveryFee || 0}</span>
               </div>
               <div className="flex justify-between items-center text-sm">
+                <span className="text-gray-600">Platform Fee</span>
+                <span className="text-gray-900 font-medium">₹{order?.platformFee || 0}</span>
+              </div>
+              <div className="flex justify-between items-center text-sm">
                 <span className="text-gray-600">Taxes & Charges</span>
                 <span className="text-gray-900 font-medium">₹{order?.gst || 0}</span>
               </div>
+              {Number(order?.customerTip || 0) > 0 && (
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-600">Customer Tip</span>
+                  <span className="text-green-600 font-medium">+₹{order?.customerTip}</span>
+                </div>
+              )}
               <div className="pt-2 border-t border-gray-200 flex justify-between items-center">
                 <span className="text-base font-bold text-gray-900">Total Amount</span>
-                <span className="text-lg font-bold text-gray-900">₹{order?.totalAmount}</span>
+                <span className="text-lg font-bold text-gray-900">₹{(order?.totalAmount || 0) + Number(order?.customerTip || 0)}</span>
               </div>
             </div>
 
@@ -2150,6 +2251,117 @@ export default function OrderTracking() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Rating & Feedback Modal */}
+      {ratingModal.open && ratingModal.order && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-md rounded-3xl bg-white shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+            {/* Header with gradient */}
+            <div className="bg-gradient-to-r from-[#EB590E] to-[#D94F0C] px-6 py-5">
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                  <Star className="w-5 h-5 fill-white" />
+                  Rate Your Order
+                </h2>
+                <button
+                  type="button"
+                  onClick={handleCloseRating}
+                  className="text-white/80 hover:text-white transition-colors p-1 rounded-full hover:bg-white/20"
+                >
+                  <span className="text-xl">✕</span>
+                </button>
+              </div>
+              <p className="text-sm text-white/90">
+                {ratingModal.order.restaurant} • Order #{ratingModal.order.id || ratingModal.order.orderId}
+              </p>
+            </div>
+
+            <div className="px-6 py-6">
+              {/* Star rating (1-5) */}
+              <div className="mb-6">
+                <p className="text-sm font-semibold text-gray-900 mb-4 text-center">
+                  How was your overall experience?
+                </p>
+                <div className="flex items-center justify-center gap-2 mb-3">
+                  {Array.from({ length: 5 }, (_, i) => i + 1).map((num) => {
+                    const isActive = (selectedRating || 0) >= num
+                    return (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() => setSelectedRating(num)}
+                        className="p-2 transition-transform hover:scale-125 active:scale-95"
+                      >
+                        <Star
+                          className={`w-10 h-10 transition-all ${isActive
+                              ? "text-yellow-400 fill-yellow-400 drop-shadow-lg"
+                              : "text-gray-300 hover:text-yellow-200"
+                            }`}
+                        />
+                      </button>
+                    )
+                  })}
+                </div>
+                <div className="flex items-center justify-between mt-2 px-2">
+                  <span className="text-xs text-red-500 font-medium">Poor</span>
+                  <span className="text-xs text-gray-400">Average</span>
+                  <span className="text-xs text-green-600 font-medium">Excellent</span>
+                </div>
+                {selectedRating && (
+                  <p className="text-center mt-3 text-sm font-medium text-gray-700">
+                    {selectedRating === 5 && "⭐⭐⭐⭐⭐ Excellent!"}
+                    {selectedRating === 4 && "⭐⭐⭐⭐ Great!"}
+                    {selectedRating === 3 && "⭐⭐⭐ Good"}
+                    {selectedRating === 2 && "⭐⭐ Fair"}
+                    {selectedRating === 1 && "⭐ Poor"}
+                  </p>
+                )}
+              </div>
+
+              {/* Feedback text area */}
+              <div className="mb-6">
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Share your feedback <span className="text-gray-400 font-normal">(Optional)</span>
+                </label>
+                <Textarea
+                  value={feedbackText}
+                  onChange={(e) => setFeedbackText(e.target.value)}
+                  placeholder="What did you like or dislike? How was the food and delivery?"
+                  className="w-full resize-none min-h-[100px] border-2 border-gray-100 rounded-xl focus:border-orange-500/50 focus:ring-4 focus:ring-orange-500/10 transition-all text-sm p-3 placeholder:text-gray-400"
+                  maxLength={500}
+                />
+                <p className="text-xs text-gray-400 mt-1">Your feedback helps us improve our service.</p>
+              </div>
+
+              {/* Submit / Cancel Buttons */}
+              <div className="flex gap-3 mt-4">
+                <Button
+                  variant="outline"
+                  onClick={handleCloseRating}
+                  className="flex-1 h-12 rounded-xl border-2 border-gray-100 font-bold hover:bg-gray-50 hover:text-gray-900 active:scale-95 transition-all text-gray-600"
+                  disabled={submittingRating}
+                >
+                  Skip
+                </Button>
+                <Button
+                  onClick={handleSubmitRating}
+                  disabled={submittingRating || selectedRating === null}
+                  className="flex-1 h-12 rounded-xl bg-gray-900 text-white font-bold shadow-lg shadow-gray-200 hover:bg-gray-800 active:scale-95 transition-all disabled:opacity-50 disabled:active:scale-100"
+                >
+                  {submittingRating ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <span>Submitting...</span>
+                    </div>
+                  ) : (
+                    "Submit Review"
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

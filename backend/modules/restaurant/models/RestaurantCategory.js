@@ -51,7 +51,7 @@ restaurantCategorySchema.index({ restaurant: 1, isActive: 1 });
 restaurantCategorySchema.index({ restaurant: 1, name: 1 }, { unique: true });
 
 // Pre-save middleware to update item count
-restaurantCategorySchema.pre('save', async function(next) {
+restaurantCategorySchema.pre('save', async function() {
   if (this.isNew || this.isModified('name')) {
     // Check for duplicate category name within same restaurant
     const existingCategory = await mongoose.model('RestaurantCategory').findOne({
@@ -63,10 +63,9 @@ restaurantCategorySchema.pre('save', async function(next) {
     if (existingCategory) {
       const error = new Error('Category with this name already exists for this restaurant');
       error.name = 'ValidationError';
-      return next(error);
+      throw error;
     }
   }
-  next();
 });
 
 // Method to update item count

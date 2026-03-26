@@ -173,8 +173,8 @@ export const getWallet = asyncHandler(async (req, res) => {
       totalCashLimit: totalCashLimit,
       availableCashLimit: Math.max(0, totalCashLimit - cashInHandForLimit),
       deliveryWithdrawalLimit: withdrawalLimit,
-      // Pocket balance = total balance (includes bonus, earnings, etc.)
-      pocketBalance: wallet.totalBalance || 0,
+      // Pocket balance = total balance - cashInHand (calculated via virtual in model)
+      pocketBalance: wallet.pocketBalance ?? (wallet.totalBalance - (wallet.cashInHand || 0)),
       pendingWithdrawals: pendingWithdrawals,
       joiningBonusClaimed: wallet.joiningBonusClaimed || false,
       joiningBonusAmount: wallet.joiningBonusAmount || 0,
@@ -333,10 +333,12 @@ export const createWithdrawalRequest = asyncHandler(async (req, res) => {
       return errorResponse(res, 400, `Minimum withdrawal amount is ₹${minWithdrawalAmount}`);
     }
 
-    // Withdrawal is based on totalBalance only. No connection to cash-in-hand (COD collected).
-    const availableForWithdrawal = Number(wallet.totalBalance) || 0;
+    // Withdrawal is based on net pocketBalance (totalBalance - cashInHand).
+    // A rider cannot withdraw online earnings if they are already holding 
+    // an equivalent (or greater) amount of company cash from COD orders.
+    const availableForWithdrawal = Math.max(0, wallet.pocketBalance ?? (wallet.totalBalance - (wallet.cashInHand || 0)));
     if (amount > availableForWithdrawal) {
-      return errorResponse(res, 400, `Insufficient balance. Available balance: ₹${availableForWithdrawal.toFixed(2)}`);
+      return errorResponse(res, 400, `Insufficient withdrawable balance. Your pocket balance (after cash collected reduction) is ₹${availableForWithdrawal.toFixed(2)}`);
     }
     // Withdrawal allowed only when withdrawable >= limit (enforced via min amount check above)
 

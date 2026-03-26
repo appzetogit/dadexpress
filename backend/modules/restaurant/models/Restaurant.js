@@ -358,7 +358,7 @@ const restaurantSchema = new mongoose.Schema(
 // Note: email, phone, and googleId indexes are now defined at the field level
 
 // Hash password before saving
-restaurantSchema.pre("save", async function (next) {
+restaurantSchema.pre("save", async function () {
   // Generate restaurantId FIRST (before any validation)
   if (!this.restaurantId) {
     const timestamp = Date.now();
@@ -475,13 +475,9 @@ restaurantSchema.pre("save", async function (next) {
   if (!this.ownerEmail && this.phone && !this.email) {
     this.ownerEmail = `${this.phone.replace(/\D/g, "")}@restaurant.appzeto.com`;
   }
-
-  // Set ownerEmail from email if email exists and ownerEmail not set
   if (this.email && !this.ownerEmail) {
     this.ownerEmail = this.email;
   }
-
-  next();
 });
 
 // Method to compare password

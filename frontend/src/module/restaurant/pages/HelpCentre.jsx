@@ -1,11 +1,13 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { 
   ChevronLeft, 
   ChevronRight,
   PhoneCall,
+  Loader2
 } from "lucide-react"
 import BottomNavOrders from "../components/BottomNavOrders"
+import { api, API_ENDPOINTS } from "@/lib/api"
 
 const HELP_CENTRE_PHONE_KEY = "dadexpress_restaurant_help_centre_phone"
 
@@ -13,13 +15,36 @@ const baseHelpTopics = []
 
 export default function HelpCentre() {
   const navigate = useNavigate()
-  const [helpCentrePhone] = useState(() => {
-    try {
-      return localStorage.getItem(HELP_CENTRE_PHONE_KEY) ?? ""
-    } catch {
-      return ""
+  const [helpCentrePhone, setHelpCentrePhone] = useState("")
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchHelpPhone = async () => {
+      try {
+        setLoading(true)
+        // Try to fetch from backend first
+        const response = await api.get("/business-settings/public")
+        const data = response?.data?.data
+        if (data?.phone?.number) {
+          const fullPhone = `${data.phone.countryCode || "+91"} ${data.phone.number}`
+          setHelpCentrePhone(fullPhone)
+          localStorage.setItem(HELP_CENTRE_PHONE_KEY, fullPhone)
+        } else {
+          // Fallback to localStorage if API fails or phone not set
+          const saved = localStorage.getItem(HELP_CENTRE_PHONE_KEY)
+          if (saved) setHelpCentrePhone(saved)
+        }
+      } catch (error) {
+        console.error("Error fetching help center phone:", error)
+        const saved = localStorage.getItem(HELP_CENTRE_PHONE_KEY)
+        if (saved) setHelpCentrePhone(saved)
+      } finally {
+        setLoading(false)
+      }
     }
-  })
+
+    fetchHelpPhone()
+  }, [])
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
@@ -50,7 +75,11 @@ export default function HelpCentre() {
         </div>
 
          {/* Help center number */}
-         {helpCentrePhone.trim() ? (
+         {loading ? (
+             <div className="flex justify-center items-center py-4">
+                 <Loader2 className="w-6 h-6 animate-spin text-red-600" />
+             </div>
+         ) : helpCentrePhone.trim() ? (
            <div className="mb-4">
              <div className="w-full flex items-center gap-4 px-3 py-3 rounded-lg border border-red-200 bg-red-50 text-left">
                <div className="flex-1 min-w-0">
@@ -62,17 +91,13 @@ export default function HelpCentre() {
                  </p>
                </div>
 
-               <button
-                 type="button"
-                 onClick={() => {
-                   const normalized = helpCentrePhone.trim().replace(/\s+/g, "")
-                   window.location.href = `tel:${normalized}`
-                 }}
+               <a
+                 href={`tel:${helpCentrePhone.trim().replace(/\s+/g, "")}`}
                  className="flex-shrink-0 p-2 bg-white hover:bg-red-100 rounded-full transition-colors border border-red-200"
                  aria-label="Call help center"
                >
                  <PhoneCall className="w-5 h-5 text-red-700" />
-               </button>
+               </a>
              </div>
            </div>
          ) : null}

@@ -254,7 +254,7 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
 
     const orders = await Order.find({
       ...getRestaurantIdQuery(restaurant._id),
-      status: 'delivered',
+      status: { $ne: 'cancelled' },
       $or: [
         { deliveredAt: { $gte: previousStartDate, $lte: endDate } },
         { 'tracking.delivered.timestamp': { $gte: previousStartDate, $lte: endDate } },
@@ -295,7 +295,7 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
     if (allUserIds.length > 0) {
       const priorOrders = await Order.find({
         ...getRestaurantIdQuery(restaurant._id),
-        status: 'delivered',
+        status: { $ne: 'cancelled' },
         userId: { $in: allUserIds },
         $or: [
           { deliveredAt: { $lt: startDate } },

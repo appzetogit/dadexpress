@@ -68,6 +68,28 @@ export default function TripHistory() {
     }
 
     fetchTrips()
+    
+    // Set up polling interval to keep history updated in real-time
+    const pollInterval = setInterval(() => {
+      // Background fetch (don't set loading to true to avoid flickering)
+      const backgroundFetch = async () => {
+        try {
+          const params = {
+            period: activeTab,
+            date: selectedDate.toISOString().split('T')[0],
+            status: selectedTripType !== "ALL TRIPS" ? selectedTripType : undefined,
+            limit: 1000
+          }
+          const response = await deliveryAPI.getTripHistory(params)
+          if (response.data?.success && response.data?.data?.trips) {
+            setTrips(response.data.data.trips)
+          }
+        } catch (e) { /* ignore periodic poll errors */ }
+      };
+      backgroundFetch();
+    }, 30000);
+
+    return () => clearInterval(pollInterval)
   }, [selectedDate, activeTab, selectedTripType, updateTodayTrips])
 
   // Close dropdowns when clicking outside

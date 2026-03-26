@@ -24,6 +24,8 @@ export const getBusinessSettingsPublic = asyncHandler(async (req, res) => {
         companyName: settings?.companyName || "Appzeto Food",
         logo: settings?.logo || { url: "", publicId: "" },
         favicon: settings?.favicon || { url: "", publicId: "" },
+        phone: settings?.phone || { countryCode: "+91", number: "" },
+        email: settings?.email || "",
       },
     );
   } catch (error) {

@@ -282,19 +282,18 @@ deliverySchema.index({ status: 1 });
 deliverySchema.index({ isActive: 1 });
 
 // Hash password before saving
-deliverySchema.pre('save', async function (next) {
+deliverySchema.pre('save', async function () {
   if (!this.isModified('password')) {
-    return next();
+    return;
   }
   if (this.password) {
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
   }
-  next();
 });
 
 // Generate deliveryId before saving
-deliverySchema.pre('save', async function (next) {
+deliverySchema.pre('save', async function () {
   if (!this.deliveryId && this.isNew) {
     try {
       const DeliveryModel = mongoose.model('Delivery');
@@ -354,7 +353,6 @@ deliverySchema.pre('save', async function (next) {
       this.deliveryId = `DEL${Date.now().toString().slice(-6)}`;
     }
   }
-  next();
 });
 
 // Method to compare password

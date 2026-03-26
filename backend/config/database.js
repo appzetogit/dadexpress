@@ -17,7 +17,7 @@ mongoose.set('autoIndex', process.env.NODE_ENV !== 'production');
 export const connectDB = async () => {
   try {
     const conn = await mongoose.connect(process.env.MONGODB_URI, {
-      family: 4, // Force IPv4 for better compatibility in local environments
+      // family: 4 is also removed to avoid SRV lookup issues
     });
 
     logger.info(`MongoDB Connected: ${conn.connection.host}`);
