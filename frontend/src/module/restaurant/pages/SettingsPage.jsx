@@ -5,7 +5,6 @@ import Lenis from "lenis"
 import { 
   ArrowLeft,
   User,
-  Bell,
   Shield,
   Globe,
   Moon,
@@ -27,7 +26,6 @@ import MenuOverlay from "../components/MenuOverlay"
 export default function SettingsPage() {
   const navigate = useNavigate()
   const [showMenu, setShowMenu] = useState(false)
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true)
   const [darkMode, setDarkMode] = useState(false)
 
   // Lenis smooth scrolling
@@ -56,7 +54,6 @@ export default function SettingsPage() {
       id: "account",
       title: "Account",
       items: [
-        { id: "notifications", label: "Notifications", icon: Bell, hasToggle: true, toggleValue: notificationsEnabled, onToggle: setNotificationsEnabled },
         { id: "privacy", label: "Privacy & Security", icon: Shield, route: "/restaurant/privacy" },
       ]
     },

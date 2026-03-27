@@ -4,6 +4,7 @@ import Restaurant from "../../restaurant/models/Restaurant.js";
 import Delivery from "../../delivery/models/Delivery.js";
 import DeliveryWallet from "../../delivery/models/DeliveryWallet.js";
 import Offer from "../../restaurant/models/Offer.js";
+import Menu from "../../restaurant/models/Menu.js";
 import AdminCommission from "../models/AdminCommission.js";
 import OrderSettlement from "../../order/models/OrderSettlement.js";
 import AdminWallet from "../models/AdminWallet.js";
@@ -1665,7 +1666,7 @@ export const getRestaurantJoinRequests = asyncHandler(async (req, res) => {
     if (status === "pending") {
       // Pending = onboarding completed, not yet approved, and not rejected
       query.$and = [
-        { "onboarding.completedSteps": { $gte: 4 } },
+        { "onboarding.completedSteps": { $gte: 1 } },
         {
           $or: [{ approvedAt: { $exists: false } }, { approvedAt: null }],
         },
@@ -2181,10 +2182,19 @@ export const updateRestaurant = asyncHandler(async (req, res) => {
         const buffer = Buffer.from(base64Data, "base64");
         const result = await uploadToCloudinary(buffer, { folder: "appzeto/restaurant/profile", resource_type: "image" });
         restaurant.profileImage = { url: result.secure_url, publicId: result.public_id };
+        if (!restaurant.onboarding) restaurant.onboarding = {};
+        if (!restaurant.onboarding.step2) restaurant.onboarding.step2 = {};
+        restaurant.onboarding.step2.profileImageUrl = { url: result.secure_url, publicId: result.public_id };
       } else if (profileImage && profileImage.url) {
         restaurant.profileImage = profileImage;
+        if (!restaurant.onboarding) restaurant.onboarding = {};
+        if (!restaurant.onboarding.step2) restaurant.onboarding.step2 = {};
+        restaurant.onboarding.step2.profileImageUrl = profileImage;
       } else if (typeof profileImage === "string" && profileImage.startsWith("http")) {
         restaurant.profileImage = { url: profileImage };
+        if (!restaurant.onboarding) restaurant.onboarding = {};
+        if (!restaurant.onboarding.step2) restaurant.onboarding.step2 = {};
+        restaurant.onboarding.step2.profileImageUrl = { url: profileImage };
       }
     }
 
@@ -2204,6 +2214,9 @@ export const updateRestaurant = asyncHandler(async (req, res) => {
         }
       }
       restaurant.menuImages = processedImages;
+      if (!restaurant.onboarding) restaurant.onboarding = {};
+      if (!restaurant.onboarding.step2) restaurant.onboarding.step2 = {};
+      restaurant.onboarding.step2.menuImageUrls = processedImages;
     }
 
     // Handle PAN image
@@ -2213,10 +2226,22 @@ export const updateRestaurant = asyncHandler(async (req, res) => {
         const buffer = Buffer.from(base64Data, "base64");
         const result = await uploadToCloudinary(buffer, { folder: "appzeto/restaurant/pan", resource_type: "image" });
         restaurant.panImage = { url: result.secure_url, publicId: result.public_id };
+        if (!restaurant.onboarding) restaurant.onboarding = {};
+        if (!restaurant.onboarding.step3) restaurant.onboarding.step3 = {};
+        if (!restaurant.onboarding.step3.pan) restaurant.onboarding.step3.pan = {};
+        restaurant.onboarding.step3.pan.image = { url: result.secure_url, publicId: result.public_id };
       } else if (panImage && panImage.url) {
         restaurant.panImage = panImage;
+        if (!restaurant.onboarding) restaurant.onboarding = {};
+        if (!restaurant.onboarding.step3) restaurant.onboarding.step3 = {};
+        if (!restaurant.onboarding.step3.pan) restaurant.onboarding.step3.pan = {};
+        restaurant.onboarding.step3.pan.image = panImage;
       } else if (typeof panImage === "string" && panImage.startsWith("http")) {
         restaurant.panImage = { url: panImage };
+        if (!restaurant.onboarding) restaurant.onboarding = {};
+        if (!restaurant.onboarding.step3) restaurant.onboarding.step3 = {};
+        if (!restaurant.onboarding.step3.pan) restaurant.onboarding.step3.pan = {};
+        restaurant.onboarding.step3.pan.image = { url: panImage };
       }
     }
 
@@ -2227,10 +2252,22 @@ export const updateRestaurant = asyncHandler(async (req, res) => {
         const buffer = Buffer.from(base64Data, "base64");
         const result = await uploadToCloudinary(buffer, { folder: "appzeto/restaurant/gst", resource_type: "image" });
         restaurant.gstImage = { url: result.secure_url, publicId: result.public_id };
+        if (!restaurant.onboarding) restaurant.onboarding = {};
+        if (!restaurant.onboarding.step3) restaurant.onboarding.step3 = {};
+        if (!restaurant.onboarding.step3.gst) restaurant.onboarding.step3.gst = {};
+        restaurant.onboarding.step3.gst.image = { url: result.secure_url, publicId: result.public_id };
       } else if (gstImage && gstImage.url) {
         restaurant.gstImage = gstImage;
+        if (!restaurant.onboarding) restaurant.onboarding = {};
+        if (!restaurant.onboarding.step3) restaurant.onboarding.step3 = {};
+        if (!restaurant.onboarding.step3.gst) restaurant.onboarding.step3.gst = {};
+        restaurant.onboarding.step3.gst.image = gstImage;
       } else if (typeof gstImage === "string" && gstImage.startsWith("http")) {
         restaurant.gstImage = { url: gstImage };
+        if (!restaurant.onboarding) restaurant.onboarding = {};
+        if (!restaurant.onboarding.step3) restaurant.onboarding.step3 = {};
+        if (!restaurant.onboarding.step3.gst) restaurant.onboarding.step3.gst = {};
+        restaurant.onboarding.step3.gst.image = { url: gstImage };
       }
     }
 
@@ -2241,10 +2278,22 @@ export const updateRestaurant = asyncHandler(async (req, res) => {
         const buffer = Buffer.from(base64Data, "base64");
         const result = await uploadToCloudinary(buffer, { folder: "appzeto/restaurant/fssai", resource_type: "image" });
         restaurant.fssaiImage = { url: result.secure_url, publicId: result.public_id };
+        if (!restaurant.onboarding) restaurant.onboarding = {};
+        if (!restaurant.onboarding.step3) restaurant.onboarding.step3 = {};
+        if (!restaurant.onboarding.step3.fssai) restaurant.onboarding.step3.fssai = {};
+        restaurant.onboarding.step3.fssai.image = { url: result.secure_url, publicId: result.public_id };
       } else if (fssaiImage && fssaiImage.url) {
         restaurant.fssaiImage = fssaiImage;
+        if (!restaurant.onboarding) restaurant.onboarding = {};
+        if (!restaurant.onboarding.step3) restaurant.onboarding.step3 = {};
+        if (!restaurant.onboarding.step3.fssai) restaurant.onboarding.step3.fssai = {};
+        restaurant.onboarding.step3.fssai.image = fssaiImage;
       } else if (typeof fssaiImage === "string" && fssaiImage.startsWith("http")) {
         restaurant.fssaiImage = { url: fssaiImage };
+        if (!restaurant.onboarding) restaurant.onboarding = {};
+        if (!restaurant.onboarding.step3) restaurant.onboarding.step3 = {};
+        if (!restaurant.onboarding.step3.fssai) restaurant.onboarding.step3.fssai = {};
+        restaurant.onboarding.step3.fssai.image = { url: fssaiImage };
       }
     }
 
@@ -2280,6 +2329,64 @@ export const updateRestaurant = asyncHandler(async (req, res) => {
     if (featuredPrice !== undefined) restaurant.featuredPrice = parseFloat(featuredPrice) || restaurant.featuredPrice;
     if (offer !== undefined) restaurant.offer = offer;
     if (diningSettings !== undefined) restaurant.diningSettings = { ...restaurant.diningSettings, ...diningSettings };
+
+    // Sync onboarding fields
+    if (!restaurant.onboarding) restaurant.onboarding = { step1: {}, step2: {}, step3: {}, step4: {} };
+    if (!restaurant.onboarding.step1) restaurant.onboarding.step1 = {};
+    if (!restaurant.onboarding.step2) restaurant.onboarding.step2 = {};
+    if (!restaurant.onboarding.step3) restaurant.onboarding.step3 = {};
+    if (!restaurant.onboarding.step4) restaurant.onboarding.step4 = {};
+
+    // Sync Step 1
+    if (restaurantName !== undefined) restaurant.onboarding.step1.restaurantName = restaurantName;
+    if (ownerName !== undefined) restaurant.onboarding.step1.ownerName = ownerName;
+    if (ownerEmail !== undefined) restaurant.onboarding.step1.ownerEmail = ownerEmail;
+    if (ownerPhone !== undefined) restaurant.onboarding.step1.ownerPhone = ownerPhone;
+    if (primaryContactNumber !== undefined) restaurant.onboarding.step1.primaryContactNumber = primaryContactNumber;
+    if (location !== undefined) {
+      restaurant.onboarding.step1.location = {
+        ...restaurant.onboarding.step1.location,
+        ...location,
+      };
+    }
+
+    // Sync Step 2
+    if (cuisines !== undefined) restaurant.onboarding.step2.cuisines = cuisines;
+    if (openingTime !== undefined || closingTime !== undefined) {
+      restaurant.onboarding.step2.deliveryTimings = {
+        openingTime: openingTime || restaurant.onboarding.step2.deliveryTimings?.openingTime,
+        closingTime: closingTime || restaurant.onboarding.step2.deliveryTimings?.closingTime,
+      };
+    }
+    if (openDays !== undefined) restaurant.onboarding.step2.openDays = openDays;
+
+    // Sync Step 3
+    if (!restaurant.onboarding.step3.pan) restaurant.onboarding.step3.pan = {};
+    if (!restaurant.onboarding.step3.gst) restaurant.onboarding.step3.gst = {};
+    if (!restaurant.onboarding.step3.fssai) restaurant.onboarding.step3.fssai = {};
+    if (!restaurant.onboarding.step3.bank) restaurant.onboarding.step3.bank = {};
+
+    if (panNumber !== undefined) restaurant.onboarding.step3.pan.panNumber = panNumber;
+    if (nameOnPan !== undefined) restaurant.onboarding.step3.pan.nameOnPan = nameOnPan;
+    
+    if (gstRegistered !== undefined) restaurant.onboarding.step3.gst.isRegistered = gstRegistered;
+    if (gstNumber !== undefined) restaurant.onboarding.step3.gst.gstNumber = gstNumber;
+    if (gstLegalName !== undefined) restaurant.onboarding.step3.gst.legalName = gstLegalName;
+    if (gstAddress !== undefined) restaurant.onboarding.step3.gst.address = gstAddress;
+    
+    if (fssaiNumber !== undefined) restaurant.onboarding.step3.fssai.registrationNumber = fssaiNumber;
+    if (fssaiExpiry !== undefined) restaurant.onboarding.step3.fssai.expiryDate = fssaiExpiry;
+    
+    if (accountNumber !== undefined) restaurant.onboarding.step3.bank.accountNumber = accountNumber;
+    if (ifscCode !== undefined) restaurant.onboarding.step3.bank.ifscCode = ifscCode;
+    if (accountHolderName !== undefined) restaurant.onboarding.step3.bank.accountHolderName = accountHolderName;
+    if (accountType !== undefined) restaurant.onboarding.step3.bank.accountType = accountType;
+
+    // Sync Step 4
+    if (estimatedDeliveryTime !== undefined) restaurant.onboarding.step4.estimatedDeliveryTime = estimatedDeliveryTime;
+    if (featuredDish !== undefined) restaurant.onboarding.step4.featuredDish = featuredDish;
+    if (featuredPrice !== undefined) restaurant.onboarding.step4.featuredPrice = parseFloat(featuredPrice) || restaurant.onboarding.step4.featuredPrice;
+    if (offer !== undefined) restaurant.onboarding.step4.offer = offer;
 
     await restaurant.save();
 
@@ -3725,4 +3832,187 @@ export const getCustomerWalletReport = asyncHandler(async (req, res) => {
       error.message || "Failed to fetch customer wallet report",
     );
   }
+});
+
+/**
+ * Get restaurant menu (for Admin)
+ * GET /api/admin/restaurants/:restaurantId/menu
+ */
+export const getRestaurantMenuForAdmin = asyncHandler(async (req, res) => {
+  const { restaurantId } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(restaurantId)) {
+    return errorResponse(res, 400, "Invalid restaurant ID format");
+  }
+
+  // Find or create menu
+  let menu = await Menu.findOne({ restaurant: restaurantId });
+
+  if (!menu) {
+    // Create empty menu if it doesn't exist
+    menu = new Menu({
+      restaurant: restaurantId,
+      sections: [],
+      isActive: true,
+    });
+    await menu.save();
+  }
+
+  return successResponse(res, 200, "Menu retrieved successfully", {
+    menu: {
+      sections: menu.sections || [],
+      isActive: menu.isActive,
+    },
+  });
+});
+
+/**
+ * Update restaurant menu (for Admin)
+ * PUT /api/admin/restaurants/:restaurantId/menu
+ */
+export const updateRestaurantMenuForAdmin = asyncHandler(async (req, res) => {
+  const { restaurantId } = req.params;
+  const { sections } = req.body;
+
+  if (!mongoose.Types.ObjectId.isValid(restaurantId)) {
+    return errorResponse(res, 400, "Invalid restaurant ID format");
+  }
+
+  const existingMenu = await Menu.findOne({ restaurant: restaurantId });
+
+  // Normalize and validate sections (Reusing logic from menuController.js but with admin privileges)
+  const normalizedSections = Array.isArray(sections) ? sections.map((section, index) => {
+    const existingSection = existingMenu?.sections?.find(s => s.id === section.id);
+
+    return {
+      id: section.id || `section-${index}`,
+      name: section.name || "Unnamed Section",
+      items: Array.isArray(section.items) ? section.items.map(item => {
+        const existingItem = existingSection?.items?.find(i => String(i.id) === String(item.id));
+
+        return {
+          id: String(item.id || Date.now() + Math.random()),
+          name: item.name || "Unnamed Item",
+          nameArabic: item.nameArabic || "",
+          image: item.image || "",
+          category: item.category || section.name,
+          rating: item.rating ?? 0.0,
+          reviews: item.reviews ?? 0,
+          price: item.price || 0,
+          stock: item.stock || "Unlimited",
+          discount: item.discount || null,
+          originalPrice: item.originalPrice || null,
+          foodType: item.foodType || "Non-Veg",
+          availabilityTimeStart: item.availabilityTimeStart || "12:01 AM",
+          availabilityTimeEnd: item.availabilityTimeEnd || "11:57 PM",
+          description: item.description || "",
+          discountType: item.discountType || "Percent",
+          discountAmount: item.discountAmount ?? 0.0,
+          isAvailable: item.isAvailable !== undefined ? item.isAvailable : true,
+          isRecommended: item.isRecommended || false,
+          variations: Array.isArray(item.variations) ? item.variations.map(v => ({
+            id: String(v.id || Date.now() + Math.random()),
+            name: v.name || "",
+            price: v.price || 0,
+            stock: v.stock || "Unlimited",
+          })) : [],
+          tags: Array.isArray(item.tags) ? item.tags : [],
+          nutrition: Array.isArray(item.nutrition) ? item.nutrition : [],
+          allergies: Array.isArray(item.allergies) ? item.allergies : [],
+          photoCount: item.photoCount ?? 1,
+          subCategory: item.subCategory || "",
+          servesInfo: item.servesInfo || "",
+          itemSize: item.itemSize || "",
+          itemSizeQuantity: item.itemSizeQuantity || "",
+          itemSizeUnit: item.itemSizeUnit || "piece",
+          gst: item.gst ?? 0,
+          preparationTime: item.preparationTime || existingItem?.preparationTime || "",
+          images: Array.isArray(item.images) ? item.images : (item.image ? [item.image] : []),
+          // Admin updates mark items as approved by default
+          approvalStatus: 'approved', 
+          approvedAt: existingItem?.approvedAt || new Date(),
+          approvedBy: req.user._id,
+        };
+      }) : [],
+      subsections: Array.isArray(section.subsections) ? section.subsections.map(subsection => {
+        const existingSubsection = existingSection?.subsections?.find(s => s.id === subsection.id);
+
+        return {
+          id: subsection.id || `subsection-${Date.now()}`,
+          name: subsection.name || "Unnamed Subsection",
+          items: Array.isArray(subsection.items) ? subsection.items.map(item => {
+            const existingItem = existingSubsection?.items?.find(i => String(i.id) === String(item.id));
+
+            return {
+              id: String(item.id || Date.now() + Math.random()),
+              name: item.name || "Unnamed Item",
+              nameArabic: item.nameArabic || "",
+              image: item.image || "",
+              category: item.category || section.name,
+              rating: item.rating ?? 0.0,
+              reviews: item.reviews ?? 0,
+              price: item.price || 0,
+              stock: item.stock || "Unlimited",
+              discount: item.discount || null,
+              originalPrice: item.originalPrice || null,
+              foodType: item.foodType || "Non-Veg",
+              availabilityTimeStart: item.availabilityTimeStart || "12:01 AM",
+              availabilityTimeEnd: item.availabilityTimeEnd || "11:57 PM",
+              description: item.description || "",
+              discountType: item.discountType || "Percent",
+              discountAmount: item.discountAmount ?? 0.0,
+              isAvailable: item.isAvailable !== undefined ? item.isAvailable : true,
+              isRecommended: item.isRecommended || false,
+              variations: Array.isArray(item.variations) ? item.variations.map(v => ({
+                id: String(v.id || Date.now() + Math.random()),
+                name: v.name || "",
+                price: v.price || 0,
+                stock: v.stock || "Unlimited",
+              })) : [],
+              tags: Array.isArray(item.tags) ? item.tags : [],
+              nutrition: Array.isArray(item.nutrition) ? item.nutrition : [],
+              allergies: Array.isArray(item.allergies) ? item.allergies : [],
+              photoCount: item.photoCount ?? 1,
+              subCategory: item.subCategory || "",
+              servesInfo: item.servesInfo || "",
+              itemSize: item.itemSize || "",
+              itemSizeQuantity: item.itemSizeQuantity || "",
+              itemSizeUnit: item.itemSizeUnit || "piece",
+              gst: item.gst ?? 0,
+              preparationTime: item.preparationTime || existingItem?.preparationTime || "",
+              images: Array.isArray(item.images) ? item.images : (item.image ? [item.image] : []),
+              // Admin updates mark items as approved by default
+              approvalStatus: 'approved',
+              approvedAt: existingItem?.approvedAt || new Date(),
+              approvedBy: req.user._id,
+            };
+          }) : [],
+        };
+      }) : [],
+      isEnabled: section.isEnabled !== undefined ? section.isEnabled : true,
+      order: section.order !== undefined ? section.order : index,
+    };
+  }) : [];
+
+  let menu = await Menu.findOne({ restaurant: restaurantId });
+
+  if (!menu) {
+    menu = new Menu({
+      restaurant: restaurantId,
+      sections: normalizedSections,
+      isActive: true,
+    });
+  } else {
+    menu.set('sections', normalizedSections);
+    menu.markModified('sections');
+  }
+
+  await menu.save();
+
+  return successResponse(res, 200, "Menu updated successfully by admin", {
+    menu: {
+      sections: menu.sections,
+      isActive: menu.isActive,
+    },
+  });
 });

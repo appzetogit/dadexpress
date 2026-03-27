@@ -194,14 +194,11 @@ const buildChartData = (orders) => {
     buckets[bucketKey].sales += saleAmount;
   });
 
-  return [
-    ...DEFAULT_BUCKETS.map((bucket) => ({
-      hour: bucket,
-      orders: buckets[bucket].orders,
-      sales: Math.round(buckets[bucket].sales * 100) / 100
-    })),
-    { hour: "12am", orders: 0, sales: 0 }
-  ];
+  return DEFAULT_BUCKETS.map((bucket) => ({
+    hour: bucket,
+    orders: buckets[bucket].orders,
+    sales: Math.round(buckets[bucket].sales * 100) / 100
+  }));
 };
 
 const buildMealtimeMetrics = (orders) => {

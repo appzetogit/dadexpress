@@ -824,6 +824,16 @@ export default function OrderTracking() {
     order?.deliveryState?.currentPhase
   ])
 
+  // Auto-open rating modal when order is delivered (only once, only if not already rated)
+  useEffect(() => {
+    if (orderStatus === 'delivered' && order && !order.rating) {
+      const timer = setTimeout(() => {
+        handleOpenRating(order)
+      }, 1500) // Small delay so "Order delivered" UI settles first
+      return () => clearTimeout(timer)
+    }
+  }, [orderStatus, order?.rating])
+
   // Sync ETA updates emitted from the tracking socket
   useEffect(() => {
     const handleEtaUpdated = (event) => {
@@ -1792,20 +1802,22 @@ export default function OrderTracking() {
           </div>
         </motion.div>
 
-        {/* Help Section */}
-        <motion.div
-          className="bg-white rounded-xl shadow-sm overflow-hidden"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.8 }}
-        >
-          <SectionItem
-            icon={CircleSlash}
-            title="Cancel order"
-            subtitle=""
-            onClick={handleCancelOrder}
-          />
-        </motion.div>
+        {/* Help Section — Cancel order: only show while window is open and order not yet picked up */}
+        {isEditWindowOpen && !['pickup', 'delivered', 'cancelled'].includes(orderStatus) && (
+          <motion.div
+            className="bg-white rounded-xl shadow-sm overflow-hidden"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.8 }}
+          >
+            <SectionItem
+              icon={CircleSlash}
+              title="Cancel order"
+              subtitle=""
+              onClick={handleCancelOrder}
+            />
+          </motion.div>
+        )}
 
       </div>
 

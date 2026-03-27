@@ -19,6 +19,8 @@ export default function TaxReport() {
     totalIncome: 0,
     totalTax: 0,
   })
+  const [isViewOpen, setIsViewOpen] = useState(false)
+  const [selectedTxn, setSelectedTxn] = useState(null)
 
   const formatCurrency = (value) => {
     const amount = Number(value || 0)
@@ -107,8 +109,10 @@ export default function TaxReport() {
   const fetchTaxReport = async (activeFilters = filters) => {
     try {
       const params = getDateRangeFromType(activeFilters.dateRangeType)
-      const response = await adminAPI.getTransactionReport(params)
+      // Force "total" metric to align date filtering with Dashboard (deliveredAt) and revenue-only orders.
+      const response = await adminAPI.getTransactionReport({ ...params, metric: "total", limit: 3000 })
       const transactions = response?.data?.data?.transactions || []
+      const backendSummary = response?.data?.data?.summary || {}
 
       const mappedRows = transactions.map((txn, index) => {
         const totalIncome = Number(txn.orderAmount || 0)
@@ -124,54 +128,27 @@ export default function TaxReport() {
           incomeSource: txn.orderId || "N/A",
           totalIncome: formatCurrency(totalIncome),
           totalTax: formatCurrency(totalTax),
+          rawTxn: txn // Keep raw data for View modal
         }
       })
 
-      const totalIncome = transactions.reduce(
-        (sum, txn) => sum + Number(txn.orderAmount || 0),
-        0,
-      )
-      const totalTax = transactions.reduce(
-        (sum, txn) =>
-          sum +
-          calculateTaxForRow({
-            income: Number(txn.orderAmount || 0),
-            backendTax: txn.vatTax || 0,
-            calculateTax: activeFilters.calculateTax,
-            taxRate: activeFilters.taxRate,
-          }),
-        0,
-      )
+      // Use global summary from backend for basic standard tax cards
+      // This ensures we match Dashboard exactly for All Time, Today, etc.
+      let globalIncome = Number(backendSummary.completedTransaction || 0)
+      let globalTax = Number(backendSummary.totalGST || 0)
 
-      // Keep GST summary aligned with dashboard GST card source for standard periods.
-      // For custom ranges, keep transaction-derived totals.
-      const isCustomRange = activeFilters.dateRangeType === "Custom Range"
-      const isManualTaxCalculation =
-        activeFilters.calculateTax &&
-        activeFilters.calculateTax !== "Select Calculate Tax"
-
-      let summaryTotalIncome = totalIncome
-      let summaryTotalTax = totalTax
-
-      if (!isCustomRange && !isManualTaxCalculation) {
-        try {
-          const dashboardPeriod = getDashboardPeriodFromDateRangeType(activeFilters.dateRangeType)
-          const dashboardResponse = await adminAPI.getDashboardStats(
-            dashboardPeriod ? { period: dashboardPeriod } : {}
-          )
-          const dashboardData = dashboardResponse?.data?.data || {}
-
-          summaryTotalIncome = Number(dashboardData?.revenue?.total || totalIncome)
-          summaryTotalTax = Number(dashboardData?.gst?.total || totalTax)
-        } catch (dashboardError) {
-          console.error("Failed to fetch dashboard GST summary:", dashboardError)
+      // If user selected manual Percentage calculation, apply it to the global income
+      if (activeFilters.calculateTax === "Percentage") {
+        const parsedRate = parseTaxRate(activeFilters.taxRate)
+        if (parsedRate !== null) {
+          globalTax = (globalIncome * parsedRate) / 100
         }
       }
 
       setReportRows(mappedRows)
       setSummaryStats({
-        totalIncome: summaryTotalIncome,
-        totalTax: summaryTotalTax,
+        totalIncome: globalIncome,
+        totalTax: globalTax,
       })
     } catch (error) {
       console.error("Failed to fetch tax report:", error)
@@ -456,7 +433,13 @@ export default function TaxReport() {
                         <span className="text-sm font-medium text-slate-900">{report.totalTax}</span>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <button className="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                        <button 
+                          onClick={() => {
+                            setSelectedTxn(report.rawTxn);
+                            setIsViewOpen(true);
+                          }}
+                          className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                        >
                           View
                         </button>
                       </td>
@@ -491,6 +474,64 @@ export default function TaxReport() {
               Close
             </button>
           </div>
+        </DialogContent>
+      </Dialog>
+      {/* View Details Dialog */}
+      <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
+        <DialogContent className="max-w-md bg-white p-0">
+          <DialogHeader className="px-6 pt-6 pb-4">
+            <DialogTitle>Order Tax Details</DialogTitle>
+          </DialogHeader>
+          {selectedTxn && (
+            <div className="px-6 pb-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase">Order ID</p>
+                  <p className="text-sm font-medium text-slate-900">{selectedTxn.orderId}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase">Restaurant</p>
+                  <p className="text-sm font-medium text-slate-900">{selectedTxn.restaurant}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase">Customer</p>
+                  <p className="text-sm font-medium text-slate-900">{selectedTxn.customerName}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase">Total Amount</p>
+                  <p className="text-sm font-bold text-blue-600">{formatCurrency(selectedTxn.orderAmount)}</p>
+                </div>
+              </div>
+              <div className="border-t border-slate-100 pt-4">
+                <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Tax Breakdown</p>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-600">Calculated GST ({filters.calculateTax !== "Select Calculate Tax" ? filters.calculateTax : "Standard"})</span>
+                    <span className="font-semibold text-slate-900">
+                      {formatCurrency(calculateTaxForRow({
+                        income: selectedTxn.orderAmount,
+                        backendTax: selectedTxn.vatTax,
+                        calculateTax: filters.calculateTax,
+                        taxRate: filters.taxRate
+                      }))}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-xs text-slate-400">
+                    <span>Original Platform VAT/Tax</span>
+                    <span>{formatCurrency(selectedTxn.vatTax)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter className="px-6 pb-6">
+            <button
+              onClick={() => setIsViewOpen(false)}
+              className="w-full px-4 py-2 text-sm font-medium rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition-all"
+            >
+              Close
+            </button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

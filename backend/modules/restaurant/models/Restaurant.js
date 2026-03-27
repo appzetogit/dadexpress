@@ -150,11 +150,11 @@ const restaurantSchema = new mongoose.Schema(
     },
     isActive: {
       type: Boolean,
-      default: true,
+      default: false,
     },
     isAcceptingOrders: {
       type: Boolean,
-      default: true,
+      default: false,
     },
     // Explicit registration completion flag for onboarding redirect logic.
     // Backward compatible: legacy records may not have onboarding data; controllers compute a safe fallback.

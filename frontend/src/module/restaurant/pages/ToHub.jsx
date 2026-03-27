@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useEffect, useCallback } from "react"
 import { useNavigate } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import { DateRangeCalendar } from "@/components/ui/date-range-calendar"
-import { Bell, HelpCircle, Menu, Search, TrendingUp, BarChart3, Users, CalendarRange, Download, MoreVertical, ChevronLeft, ChevronRight, Wand2, X, MapPin } from "lucide-react"
+import { HelpCircle, Menu, Search, TrendingUp, BarChart3, Users, CalendarRange, Download, MoreVertical, ChevronLeft, ChevronRight, Wand2, X, MapPin } from "lucide-react"
 import {
   FaPhone,
   FaHistory,
@@ -507,7 +507,7 @@ export default function ToHub() {
   ])
   const [isDateSelectorOpen, setIsDateSelectorOpen] = useState(false)
   const [isCustomDateOpen, setIsCustomDateOpen] = useState(false)
-  const [selectedDateRange, setSelectedDateRange] = useState("yesterday")
+  const [selectedDateRange, setSelectedDateRange] = useState("today")
   const [customDateRange, setCustomDateRange] = useState({ start: null, end: null })
   const [isDateLoading, setIsDateLoading] = useState(false)
   
@@ -560,6 +560,12 @@ export default function ToHub() {
       
       // Get date range
       const ranges = getDateRanges()
+      const formatDateLocal = (d) => {
+        const year = d.getFullYear()
+        const month = String(d.getMonth() + 1).padStart(2, '0')
+        const day = String(d.getDate()).padStart(2, '0')
+        return `${year}-${month}-${day}`
+      }
       let startDate, endDate
       
       switch (rangeId) {
@@ -607,8 +613,8 @@ export default function ToHub() {
       
       const response = await restaurantAPI.getAnalytics({
         range: rangeId,
-        startDate: new Date(startDate).toISOString().split("T")[0],
-        endDate: new Date(endDate).toISOString().split("T")[0],
+        startDate: formatDateLocal(startDate),
+        endDate: formatDateLocal(endDate),
       })
 
       const analytics = response?.data?.data
@@ -621,7 +627,6 @@ export default function ToHub() {
           { hour: "12pm", orders: 0, sales: 0 },
           { hour: "4pm", orders: 0, sales: 0 },
           { hour: "8pm", orders: 0, sales: 0 },
-          { hour: "12am", orders: 0, sales: 0 },
         ])
         setSalesSummary(analytics.summary || {
           netSales: 0,
@@ -717,8 +722,22 @@ export default function ToHub() {
   
   // Fetch orders on mount and when date range changes
   useEffect(() => {
-    if (!restaurantData) return // Don't fetch if restaurant data is not loaded yet
+    if (!restaurantData) return
+    
+    // Initial fetch
     fetchOrdersAndUpdateChart(selectedDateRange)
+
+    // Set up polling for "today"
+    let intervalId = null
+    if (selectedDateRange === "today") {
+      intervalId = setInterval(() => {
+        fetchOrdersAndUpdateChart(selectedDateRange)
+      }, 30000) // Poll every 30 seconds
+    }
+
+    return () => {
+      if (intervalId) clearInterval(intervalId)
+    }
   }, [restaurantData, selectedDateRange, fetchOrdersAndUpdateChart])
 
   const formatDateShort = (date) =>
@@ -1728,12 +1747,6 @@ export default function ToHub() {
           <div className="flex items-center">
             <button
               className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-              onClick={() => navigate("/restaurant/notifications")}
-            >
-              <Bell className="w-5 h-5 text-gray-700" />
-            </button>
-            <button
-              className="p-2 ml-1 hover:bg-gray-100 rounded-full transition-colors"
               onClick={() => navigate("/restaurant/help-centre")}
             >
               <HelpCircle className="w-5 h-5 text-gray-700" />

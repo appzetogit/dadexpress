@@ -28,16 +28,20 @@ const computeIsProfileCompleted = (restaurant) => {
   if (!restaurant) return false;
   if (restaurant.isProfileCompleted === true) return true;
   // Active restaurants should land on dashboard (legacy-safe).
+  const completedSteps = restaurant?.onboarding?.completedSteps;
+  
+  // If we have onboarding data, use the steps to determine completion
+  if (typeof completedSteps === 'number' && completedSteps > 0) {
+    return completedSteps >= 4;
+  }
+
+  // Fallback for legacy records or restaurants without onboarding data:
+  // Active restaurants should land on dashboard.
   if (restaurant?.isActive === true) return true;
   // Google sign-in restaurants should not be forced back to onboarding.
   if (restaurant?.signupMethod === 'google' || !!restaurant?.googleId) return true;
 
-  const completedSteps = restaurant?.onboarding?.completedSteps;
-  if (typeof completedSteps === 'number') return completedSteps >= 4;
-
   // Backward compatibility for legacy records:
-  // many approved/active restaurants can still have default `isProfileCompleted=false`
-  // even though onboarding is effectively not required anymore.
   if (restaurant?.onboarding === undefined || restaurant?.onboarding === null) {
     if (restaurant?.isActive === true) return true;
     if (restaurant?.signupMethod === 'google') return true;

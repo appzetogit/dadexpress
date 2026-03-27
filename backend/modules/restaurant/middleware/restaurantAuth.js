@@ -57,7 +57,11 @@ export const authenticate = async (req, res, next) => {
     // /owner/me is directly under /api/restaurant, so reqPath would be /owner/me
     const isProfileRoute = requestPath.includes('/auth/me') || requestPath.includes('/auth/reverify') || 
                           requestPath.includes('/owner/me') || 
+                          requestPath.includes('/profile') ||
+                          requestPath.includes('/fcm-token') ||
+                          requestPath.includes('fcm-token') ||
                           reqPath === '/me' || reqPath === '/reverify' || reqPath === '/owner/me' ||
+                          reqPath.includes('profile') ||
                           (baseUrl.includes('/auth') && (reqPath === '/me' || reqPath === '/reverify'));
     
     // Check for menu routes - restaurants need to access menu even when inactive

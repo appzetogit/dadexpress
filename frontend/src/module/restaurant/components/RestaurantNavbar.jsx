@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { Search, Menu, ChevronRight, MapPin, X, Bell } from "lucide-react"
+import { Search, Menu, ChevronRight, MapPin, X } from "lucide-react"
 import { restaurantAPI } from "@/lib/api"
 
 export default function RestaurantNavbar({
@@ -328,17 +328,6 @@ export default function RestaurantNavbar({
             aria-label="Search"
           >
             <Search className="w-5 h-5 text-gray-700" />
-          </button>
-        )}
-
-        {/* Notifications Icon */}
-        {showNotifications && (
-          <button
-            onClick={handleNotificationsClick}
-            className="p-2 ml-1 hover:bg-gray-100 rounded-full transition-colors"
-            aria-label="Notifications"
-          >
-            <Bell className="w-5 h-5 text-gray-700" />
           </button>
         )}
 

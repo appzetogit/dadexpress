@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { Search, Download, ChevronDown, Eye, Settings, ArrowUpDown, Loader2, X, MapPin, Phone, Mail, Clock, Star, Building2, User, FileText, CreditCard, Calendar, Image as ImageIcon, ExternalLink, ShieldX, AlertTriangle, Trash2, Plus, Pencil } from "lucide-react"
+import { Search, Download, ChevronDown, Eye, Settings, ArrowUpDown, Loader2, X, MapPin, Phone, Mail, Clock, Star, Building2, User, FileText, CreditCard, Calendar, Image as ImageIcon, ExternalLink, ShieldX, AlertTriangle, Trash2, Plus, Pencil, Utensils } from "lucide-react"
 import { adminAPI, restaurantAPI } from "../../../../lib/api"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { exportRestaurantsToPDF } from "../../components/restaurants/restaurantsExportUtils"
@@ -697,6 +697,13 @@ export default function RestaurantsList() {
                               title={!restaurant.status ? "Unban Restaurant" : "Ban Restaurant"}
                             >
                               <ShieldX className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => navigate(`/admin/restaurants/${restaurant._id || restaurant.id}/menu`)}
+                              className="p-1.5 rounded text-green-600 hover:bg-green-50 transition-colors"
+                              title="Manage Menu"
+                            >
+                              <Utensils className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => handleDeleteRestaurant(restaurant)}

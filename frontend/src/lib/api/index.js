@@ -1019,7 +1019,7 @@ export const deliveryAPI = {
       API_ENDPOINTS.DELIVERY.ORDER_REACHED_DROP.replace(":orderId", orderId),
     );
   },
-  completeDelivery: (orderId, rating = null, review = "", dropImageUrl = null) => {
+  completeDelivery: (orderId, rating = null, review = "", dropImageUrl = null, actualTripDistance = 0) => {
     return apiClient.patch(
       API_ENDPOINTS.DELIVERY.ORDER_COMPLETE_DELIVERY.replace(
         ":orderId",
@@ -1029,6 +1029,7 @@ export const deliveryAPI = {
         rating,
         review,
         dropImageUrl,
+        actualTripDistance,
       },
     );
   },
@@ -1278,6 +1279,13 @@ export const adminAPI = {
     );
   },
 
+  // Reverify restaurant (move back to pending)
+  reverifyRestaurant: (id) => {
+    return apiClient.post(
+      API_ENDPOINTS.ADMIN.RESTAURANT_REVERIFY.replace(":id", id),
+    );
+  },
+
   // Delete restaurant
   deleteRestaurant: (id) => {
     return apiClient.delete(
@@ -1447,6 +1455,20 @@ export const adminAPI = {
     return apiClient.patch(
       API_ENDPOINTS.ADMIN.DELIVERY_PARTNER_STATUS.replace(":id", id),
       payload,
+    );
+  },
+
+  // Restaurant Menu Management (Admin)
+  getRestaurantMenu: (restaurantId) => {
+    return apiClient.get(
+      API_ENDPOINTS.ADMIN.RESTAURANT_MENU.replace(":restaurantId", restaurantId),
+    );
+  },
+
+  updateRestaurantMenu: (restaurantId, menuData) => {
+    return apiClient.put(
+      API_ENDPOINTS.ADMIN.RESTAURANT_MENU.replace(":restaurantId", restaurantId),
+      menuData,
     );
   },
 

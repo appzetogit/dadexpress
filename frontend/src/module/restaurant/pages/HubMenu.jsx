@@ -21,12 +21,19 @@ import {
 } from "lucide-react"
 import BottomNavOrders from "../components/BottomNavOrders"
 // Removed foodManagement - now using backend API directly
-import { useNavigate } from "react-router-dom"
-import { restaurantAPI, uploadAPI } from "@/lib/api"
+import { useNavigate, useParams, useLocation } from "react-router-dom"
+import { restaurantAPI, uploadAPI, adminAPI } from "@/lib/api"
 import { toast } from "sonner"
 
 export default function HubMenu() {
   const navigate = useNavigate()
+  const { restaurantId: paramRestaurantId } = useParams()
+  const { pathname } = useLocation()
+  
+  // Detect if we are in admin mode (either by URL path or by presence of restaurantId param)
+  const adminMode = pathname.includes('/admin/restaurants/') || !!paramRestaurantId
+  const effectiveRestaurantId = paramRestaurantId
+  
   const [loadingMenu, setLoadingMenu] = useState(true)
   const [activeTab, setActiveTab] = useState("all")
   const [isFilterOpen, setIsFilterOpen] = useState(false)
@@ -91,9 +98,47 @@ export default function HubMenu() {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
-  // Calculate filter counts from menu data
-  const calculateFilterCounts = useMemo(() => {
-    // Get all items from menuData (including subsections)
+  // Fetch menu and restaurant info
+  const fetchMenu = async (showLoading = true) => {
+    try {
+      if (showLoading) setLoadingMenu(true)
+      
+      let menuResponse;
+      let restaurantResponse;
+      
+      if (adminMode && effectiveRestaurantId) {
+        menuResponse = await adminAPI.getRestaurantMenu(effectiveRestaurantId)
+        restaurantResponse = await adminAPI.getRestaurantById(effectiveRestaurantId)
+      } else {
+        menuResponse = await restaurantAPI.getMenu()
+        restaurantResponse = await restaurantAPI.getRestaurantByOwner()
+      }
+      
+      const sections = menuResponse?.data?.data?.menu?.sections || menuResponse?.data?.menu?.sections || []
+      const rData = restaurantResponse?.data?.data?.restaurant || restaurantResponse?.data?.restaurant || null
+      
+      setMenuData(sections)
+      if (rData) setRestaurantData(rData)
+      
+      // Auto-expand all groups by default if they have items
+      const initialExpanded = new Set()
+      sections.forEach(group => {
+        initialExpanded.add(group.id)
+      })
+      setExpandedGroups(initialExpanded)
+    } catch (error) {
+      console.error('Error fetching menu:', error)
+      toast.error('Failed to load menu')
+    } finally {
+      if (showLoading) setLoadingMenu(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchMenu()
+  }, [adminMode, effectiveRestaurantId])
+  // Helper function to get all items from menuData
+  const getAllFoods = () => {
     const allItems = []
     menuData.forEach(section => {
       if (section.items && Array.isArray(section.items)) {
@@ -107,6 +152,12 @@ export default function HubMenu() {
         })
       }
     })
+    return allItems
+  }
+
+  // Calculate filter counts from menu data
+  const calculateFilterCounts = useMemo(() => {
+    const allItems = getAllFoods()
 
     // Calculate counts for each filter (matching the filtering logic exactly)
     const counts = {
@@ -154,60 +205,6 @@ export default function HubMenu() {
 
   // Menu groups are now directly from menuData (fetched from backend)
 
-  // Fetch restaurant data on mount
-  useEffect(() => {
-    const fetchRestaurantData = async () => {
-      try {
-        const response = await restaurantAPI.getCurrentRestaurant()
-        const data = response?.data?.data?.restaurant || response?.data?.restaurant
-        if (data) {
-          setRestaurantData(data)
-        }
-      } catch (error) {
-        // Only log error if it's not a network/timeout error (backend might be down/slow)
-        if (error.code !== 'ERR_NETWORK' && error.code !== 'ECONNABORTED' && !error.message?.includes('timeout')) {
-        console.error('Error fetching restaurant data:', error)
-        }
-        // Continue with default values if fetch fails
-      }
-    }
-    
-    fetchRestaurantData()
-  }, [])
-
-  // Fetch menu from API - reusable function
-  const fetchMenu = async (showLoading = true) => {
-    try {
-      if (showLoading) {
-        setLoadingMenu(true)
-      }
-      const response = await restaurantAPI.getMenu()
-      
-      if (response.data && response.data.success && response.data.data && response.data.data.menu) {
-        const menuSections = response.data.data.menu.sections || []
-        setMenuData(menuSections)
-        
-        // Menu data is now directly from backend, no need to transform
-      } else {
-        // Empty menu - start fresh
-        setMenuData([])
-      }
-    } catch (error) {
-      // Only log and show toast if it's not a network/timeout error
-      if (error.code !== 'ERR_NETWORK' && error.code !== 'ECONNABORTED' && !error.message?.includes('timeout')) {
-      console.error('Error fetching menu:', error)
-        toast.error('Failed to load menu')
-      } else if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
-        // Silently handle network errors - backend is not running
-        // The axios interceptor already handles these with proper error messages
-      }
-      setMenuData([])
-    } finally {
-      if (showLoading) {
-        setLoadingMenu(false)
-      }
-    }
-  }
 
   // Fetch menu from API on mount
   useEffect(() => {
@@ -255,108 +252,49 @@ export default function HubMenu() {
     if (!loadingMenu && menuData.length >= 0) {
       const timeoutId = setTimeout(async () => {
         try {
-          // Normalize menuData before saving to ensure proper structure matching backend schema
+          // Flatten and normalize menu data for saving
           const normalizedSections = menuData.map((section, index) => ({
-            id: section.id || `section-${index}`,
-            name: section.name || "Unnamed Section",
+            id: section.id,
+            name: section.name,
             items: Array.isArray(section.items) ? section.items.map(item => ({
-              id: String(item.id || Date.now() + Math.random()),
+              ...item,
+              // Ensure required fields are present
+              id: String(item.id),
               name: item.name || "Unnamed Item",
-              nameArabic: item.nameArabic || "",
-              image: item.image || "",
-              category: item.category || section.name,
-              rating: item.rating ?? 0.0,
-              reviews: item.reviews ?? 0,
-              price: item.price || 0,
-              stock: item.stock || "Unlimited",
-              discount: item.discount || null,
-              originalPrice: item.originalPrice || null,
-              foodType: item.foodType || "Non-Veg",
-              availabilityTimeStart: item.availabilityTimeStart || "12:01 AM",
-              availabilityTimeEnd: item.availabilityTimeEnd || "11:57 PM",
-              description: item.description || "",
-              discountType: item.discountType || "Percent",
-              discountAmount: item.discountAmount ?? 0.0,
-              isAvailable: item.isAvailable !== undefined ? item.isAvailable : true,
-              isRecommended: item.isRecommended || false,
-              variations: Array.isArray(item.variations) ? item.variations.map(v => ({
-                id: String(v.id || Date.now() + Math.random()),
-                name: v.name || "",
-                price: v.price || 0,
-                stock: v.stock || "Unlimited",
-              })) : [],
-              tags: Array.isArray(item.tags) ? item.tags : [],
-              nutrition: Array.isArray(item.nutrition) ? item.nutrition : [],
-              allergies: Array.isArray(item.allergies) ? item.allergies : [],
-              photoCount: item.photoCount ?? 1,
-              // Approval status fields
-              approvalStatus: item.approvalStatus || 'pending',
-              rejectionReason: item.rejectionReason || '',
-              requestedAt: item.requestedAt,
-              approvedAt: item.approvedAt,
+              price: Number(item.price) || 0,
+              approvalStatus: adminMode ? 'approved' : (item.approvalStatus || 'approved')
             })) : [],
             subsections: Array.isArray(section.subsections) ? section.subsections.map(subsection => ({
-              id: subsection.id || `subsection-${Date.now()}`,
-              name: subsection.name || "Unnamed Subsection",
+              ...subsection,
               items: Array.isArray(subsection.items) ? subsection.items.map(item => ({
-                id: String(item.id || Date.now() + Math.random()),
+                ...item,
+                id: String(item.id),
                 name: item.name || "Unnamed Item",
-                nameArabic: item.nameArabic || "",
-                image: item.image || "",
-                category: item.category || section.name,
-                rating: item.rating ?? 0.0,
-                reviews: item.reviews ?? 0,
-                price: item.price || 0,
-                stock: item.stock || "Unlimited",
-                discount: item.discount || null,
-                originalPrice: item.originalPrice || null,
-                foodType: item.foodType || "Non-Veg",
-                availabilityTimeStart: item.availabilityTimeStart || "12:01 AM",
-                availabilityTimeEnd: item.availabilityTimeEnd || "11:57 PM",
-                description: item.description || "",
-                discountType: item.discountType || "Percent",
-                discountAmount: item.discountAmount ?? 0.0,
-                isAvailable: item.isAvailable !== undefined ? item.isAvailable : true,
-                isRecommended: item.isRecommended || false,
-                variations: Array.isArray(item.variations) ? item.variations.map(v => ({
-                  id: String(v.id || Date.now() + Math.random()),
-                  name: v.name || "",
-                  price: v.price || 0,
-                  stock: v.stock || "Unlimited",
-                })) : [],
-                tags: Array.isArray(item.tags) ? item.tags : [],
-                nutrition: Array.isArray(item.nutrition) ? item.nutrition : [],
-                allergies: Array.isArray(item.allergies) ? item.allergies : [],
-                photoCount: item.photoCount ?? 1,
-                // Approval status fields
-                approvalStatus: item.approvalStatus || 'pending',
-                rejectionReason: item.rejectionReason || '',
-                requestedAt: item.requestedAt,
-                approvedAt: item.approvedAt,
-              })) : [],
+                price: Number(item.price) || 0,
+                approvalStatus: adminMode ? 'approved' : (item.approvalStatus || 'approved')
+              })) : []
             })) : [],
             isEnabled: section.isEnabled !== undefined ? section.isEnabled : true,
             order: section.order !== undefined ? section.order : index,
           }))
           
-          await restaurantAPI.updateMenu({ sections: normalizedSections })
-          console.log('✅ Menu saved successfully with', normalizedSections.length, 'sections')
+          if (adminMode && effectiveRestaurantId) {
+            await adminAPI.updateRestaurantMenu(effectiveRestaurantId, { sections: normalizedSections })
+          } else {
+            await restaurantAPI.updateMenu({ sections: normalizedSections })
+          }
+          console.log('✅ Menu saved successfully')
         } catch (error) {
           console.error('Error saving menu:', error)
-          // Check if it's a network error (backend not running)
-          if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
-            console.warn('Backend server may not be running. Menu changes will be saved when connection is restored.')
-            // Don't show error toast for network errors during auto-save to avoid spam
-            // The user will see the error when they manually try to save
-          } else {
+          if (error.code !== 'ERR_NETWORK' && error.message !== 'Network Error') {
             toast.error('Failed to save menu changes')
           }
         }
-      }, 1000) // Debounce: save 1 second after last change
+      }, 1000)
       
       return () => clearTimeout(timeoutId)
     }
-  }, [menuData, loadingMenu])
+  }, [menuData, loadingMenu, adminMode, effectiveRestaurantId])
 
   // Fetch add-ons when add-ons tab is active
   const fetchAddons = async (showLoading = true) => {
@@ -781,36 +719,22 @@ export default function HubMenu() {
   const handleSaveCategoryName = () => {
     if (!editCategoryName.trim() || !selectedCategory) return
     
-    const newCategoryName = editCategoryName.trim()
-    if (newCategoryName === selectedCategory.name) {
+    const newName = editCategoryName.trim()
+    if (newName === selectedCategory.name) {
       setIsEditCategoryOpen(false)
       setSelectedCategory(null)
       return
     }
 
-    // Update all foods in this category
-    const allFoods = getAllFoods()
-    const updatedFoods = allFoods.map(food => {
-      if (food.category === selectedCategory.name) {
-        return { ...food, category: newCategoryName }
-      }
-      return food
-    })
-
-    // Save updated foods
-    try {
-      localStorage.setItem('restaurant_foods', JSON.stringify(updatedFoods))
-      window.dispatchEvent(new CustomEvent('foodsChanged'))
-      window.dispatchEvent(new Event('storage'))
-    } catch (error) {
-      console.error('Error updating category:', error)
-      alert('Error updating category name')
-      return
-    }
+    // Update menuData locally - auto-save will handle backend update
+    setMenuData(prev => prev.map(section => 
+      section.id === selectedCategory.id ? { ...section, name: newName } : section
+    ))
 
     setIsEditCategoryOpen(false)
     setSelectedCategory(null)
     setEditCategoryName("")
+    toast.success('Category name updated. Saving...')
   }
 
   // Sub-category handlers
@@ -2207,7 +2131,8 @@ export default function HubMenu() {
         )}
       </AnimatePresence>
 
-      <BottomNavOrders />
+      {/* {!adminMode && <BottomNavOrders />} */}
+      {!adminMode && <div className="h-16" />} {/* Spacing for bottom nav if not admin */}
     </div>
   )
 }

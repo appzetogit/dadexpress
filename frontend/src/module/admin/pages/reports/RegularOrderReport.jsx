@@ -47,6 +47,7 @@ export default function RegularOrderReport() {
   })
   const [searchQuery, setSearchQuery] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
 
   // Fetch zones, restaurants, and customers for filter dropdowns
   useEffect(() => {
@@ -158,7 +159,7 @@ export default function RegularOrderReport() {
     }
 
     fetchOrders()
-  }, [filters, searchQuery])
+  }, [filters, searchQuery, refreshTrigger])
 
   const filteredOrders = useMemo(() => {
     return orders // Orders are already filtered by backend
@@ -192,7 +193,7 @@ export default function RegularOrderReport() {
   }
 
   const handleFilterApply = () => {
-    // Filters are already applied via useMemo
+    setRefreshTrigger(prev => prev + 1)
   }
 
   const handleResetFilters = () => {

@@ -99,55 +99,67 @@ export const getOrders = asyncHandler(async (req, res) => {
       }
     }
 
-    // Restaurant filter
-    if (restaurant && restaurant !== 'All restaurants') {
-      // Try to find restaurant by name or ID
-      const Restaurant = (await import('../../restaurant/models/Restaurant.js')).default;
-      const restaurantDoc = await Restaurant.findOne({
-        $or: [
-          { name: { $regex: restaurant, $options: 'i' } },
-          { _id: mongoose.Types.ObjectId.isValid(restaurant) ? restaurant : null },
-          { restaurantId: restaurant }
-        ]
-      }).select('_id restaurantId').lean();
+    // Zone filter
+    if (zone && zone !== 'All Zones') {
+      const Zone = (await import('../models/Zone.js')).default;
+      const zoneDoc = await Zone.findOne({ name: { $regex: zone, $options: 'i' } });
+      
+      if (zoneDoc) {
+        // Find all restaurants belonging to this zone
+        const Restaurant = (await import('../../restaurant/models/Restaurant.js')).default;
+        const restaurants = await Restaurant.find({ isActive: true }).select('name location').lean();
+        
+        const restaurantNamesInZone = restaurants
+          .filter(r => {
+            const lat = r.location?.latitude || r.location?.coordinates?.[1];
+            const lng = r.location?.longitude || r.location?.coordinates?.[0];
+            if (!lat || !lng) return false;
+            
+            // Simplified ray casting for point-in-polygon check
+            const coords = zoneDoc.boundary.coordinates[0];
+            let inside = false;
+            for (let i = 0, j = coords.length - 1; i < coords.length; j = i++) {
+              const xi = coords[i][0], yi = coords[i][1];
+              const xj = coords[j][0], yj = coords[j][1];
+              const intersect = ((yi > lat) !== (yj > lat)) &&
+                (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi);
+              if (intersect) inside = !inside;
+            }
+            return inside;
+          })
+          .map(r => r.name);
 
-      if (restaurantDoc) {
-        const restaurantObjectId = restaurantDoc._id;
-        const restaurantStringId = restaurantDoc._id?.toString() || restaurantDoc.restaurantId;
-        query.restaurantId = {
-          $in: [restaurantObjectId, restaurantStringId].filter(Boolean)
-        };
+        query.$or = query.$or || [];
+        query.$or.push(
+          { 'assignmentInfo.zoneName': { $regex: zone, $options: 'i' } },
+          { 'assignmentInfo.zoneId': zoneDoc._id?.toString() },
+          { 'restaurantName': { $in: restaurantNamesInZone } }
+        );
+      } else {
+        query['assignmentInfo.zoneName'] = { $regex: zone, $options: 'i' };
       }
     }
 
-    // Zone filter
-    if (zone && zone !== 'All Zones') {
-      // Find zone by name
-      const Zone = (await import('../models/Zone.js')).default;
-      const zoneDoc = await Zone.findOne({
-        name: { $regex: zone, $options: 'i' }
-      }).select('_id name').lean();
-
-      if (zoneDoc) {
-        query['assignmentInfo.zoneId'] = zoneDoc._id?.toString();
-      }
+    // Restaurant filter
+    if (restaurant && restaurant !== 'All restaurants') {
+      query.restaurantName = { $regex: restaurant, $options: 'i' };
     }
 
     // Customer filter
     if (customer && customer !== 'All customers') {
       const User = (await import('../../auth/models/User.js')).default;
-      const userDoc = await User.findOne({
+      const users = await User.find({
         name: { $regex: customer, $options: 'i' }
       }).select('_id').lean();
 
-      if (userDoc) {
-        query.userId = userDoc._id;
+      if (users.length > 0) {
+        query.userId = { $in: users.map(u => u._id) };
       }
     }
 
     // Search filter (orderId, customer name, customer phone)
     if (search) {
-      query.$or = [
+      const searchOr = [
         { orderId: { $regex: search, $options: 'i' } }
       ];
 
@@ -163,24 +175,32 @@ export const getOrders = asyncHandler(async (req, res) => {
         const users = await User.find(userSearchQuery).select('_id').lean();
         const userIds = users.map(u => u._id);
         if (userIds.length > 0) {
-          query.$or.push({ userId: { $in: userIds } });
+          searchOr.push({ userId: { $in: userIds } });
         }
       }
 
       // Also search by customer name
-      const User = (await import('../../auth/models/User.js')).default;
-      const usersByName = await User.find({
-        name: { $regex: search, $options: 'i' }
-      }).select('_id').lean();
-      const userIdsByName = usersByName.map(u => u._id);
-      if (userIdsByName.length > 0) {
-        if (!query.$or) query.$or = [];
-        query.$or.push({ userId: { $in: userIdsByName } });
+      {
+        const User = (await import('../../auth/models/User.js')).default;
+        const usersByName = await User.find({
+          name: { $regex: search, $options: 'i' }
+        }).select('_id').lean();
+        const userIdsByName = usersByName.map(u => u._id);
+        if (userIdsByName.length > 0) {
+          searchOr.push({ userId: { $in: userIdsByName } });
+        }
       }
 
-      // Ensure $or array is not empty
-      if (query.$or && query.$or.length === 0) {
+      if (query.$or) {
+        // Correctly merge existing $or (like from Zone filter) with search $or
+        const existingOr = query.$or;
         delete query.$or;
+        query.$and = [
+          { $or: existingOr },
+          { $or: searchOr }
+        ];
+      } else {
+        query.$or = searchOr;
       }
     }
 
@@ -1092,20 +1112,7 @@ export const getTransactionReport = asyncHandler(async (req, res) => {
 
     // Restaurant filter
     if (restaurant && restaurant !== 'All restaurants') {
-      const Restaurant = (await import('../../restaurant/models/Restaurant.js')).default;
-      const restaurantDoc = await Restaurant.findOne({
-        $or: [
-          { name: { $regex: restaurant, $options: 'i' } },
-          { _id: mongoose.Types.ObjectId.isValid(restaurant) ? restaurant : null },
-          { restaurantId: restaurant }
-        ]
-      }).select('_id restaurantId').lean();
-
-      if (restaurantDoc) {
-        query.restaurantId = {
-          $in: [restaurantDoc._id?.toString(), restaurantDoc.restaurantId].filter(Boolean)
-        };
-      }
+      query.restaurantName = { $regex: restaurant, $options: 'i' };
     }
 
     // Zone filter
@@ -1116,12 +1123,9 @@ export const getTransactionReport = asyncHandler(async (req, res) => {
       }).select('_id name coordinates boundary').lean();
 
       if (zoneDoc) {
-        // Identify all restaurants belonging to this zone for backward compatibility with old orders.
-        // We find all restaurants and filter them manually based on their coordinates if they fall within the zone.
         const Restaurant = (await import('../../restaurant/models/Restaurant.js')).default;
         const allRestaurants = await Restaurant.find({ isActive: true }).select('_id restaurantId location').lean();
         
-        // Use the point-in-polygon logic manually on the lean doc coordinates.
         const restaurantIdsInZone = allRestaurants.filter(r => {
           const lat = r.location?.latitude || r.location?.coordinates?.[1];
           const lng = r.location?.longitude || r.location?.coordinates?.[0];
@@ -1138,11 +1142,8 @@ export const getTransactionReport = asyncHandler(async (req, res) => {
           return inside;
         }).flatMap(r => [r._id?.toString(), r.restaurantId]).filter(Boolean);
 
-        // Filter by both the persisted zone info (for new orders) and matching restaurant IDs (for all orders).
-        // Using $in to support multiple formats (ID string, ObjectId string, Name).
         query.$or = [
-          { 'assignmentInfo.zoneId': { $in: [zoneDoc._id?.toString(), zoneDoc.name].filter(Boolean) } },
-          { 'assignmentInfo.zoneName': { $in: [zoneDoc.name, zoneDoc.zoneName].filter(Boolean) } },
+          { 'assignmentInfo.zoneName': { $regex: zone, $options: 'i' } },
           { restaurantId: { $in: restaurantIdsInZone } }
         ];
       }
@@ -1180,7 +1181,16 @@ export const getTransactionReport = asyncHandler(async (req, res) => {
         }
       }
 
-      query.$or = searchOrConditions;
+      if (query.$or) {
+        const existingOr = query.$or;
+        delete query.$or;
+        query.$and = [
+          { $or: existingOr },
+          { $or: searchOrConditions }
+        ];
+      } else {
+        query.$or = searchOrConditions;
+      }
     }
 
     // Calculate pagination
@@ -1235,47 +1245,23 @@ export const getTransactionReport = asyncHandler(async (req, res) => {
       }
     }
 
-    // Gross revenue and other financial cards should show stats 
-    // filtered by current filters (Zone/Restaurant/Dates).
-    // If a specific metric is requested (like from Dashboard), we keep the 'delivered' status.
-    // Otherwise, we calculate summary based on the same query used for the list.
+    // summaryQuery respects all filters (Zone, Restaurant, Date, status via query)
     const summaryQuery = { ...query };
     if (metric === undefined) {
       delete summaryQuery.status;
     }
 
-    const allOrdersForSummary = await Order.find(summaryQuery)
-      .populate('userId', 'name')
-      .populate('restaurantId', 'name')
-      .lean();
+    const allOrdersForSummary = await Order.find(summaryQuery).lean();
 
-    // For payment-driven financial metrics (gross/total revenue and earnings),
-    // date filtering should follow payment completion lifecycle (deliveredAt)
-    // instead of order creation time.
+    // Financial base query for "Completed/Earnings" should also respect all filters
     const financialBaseQuery = { ...query };
-    delete financialBaseQuery.createdAt;
-
-    if (fromDate || toDate) {
-      financialBaseQuery.deliveredAt = {};
-      if (fromDate) {
-        const startDate = new Date(fromDate);
-        startDate.setHours(0, 0, 0, 0);
-        financialBaseQuery.deliveredAt.$gte = startDate;
-      }
-      if (toDate) {
-        const endDate = new Date(toDate);
-        endDate.setHours(23, 59, 59, 999);
-        financialBaseQuery.deliveredAt.$lte = endDate;
-      }
-    }
-
+    
+    // If we're not in a specific metric view, we use the same primary status/date as used for the main list 
+    // to ensure summary boxes match the table results perfectly.
     const completedOrdersRaw = await Order.find({
       ...financialBaseQuery,
       status: 'delivered'
-    })
-      .populate('userId', 'name')
-      .populate('restaurantId', 'name')
-      .lean();
+    }).lean();
 
     // Calculate completed transactions (delivered + paid orders)
     const completedOrders = completedOrdersRaw;
@@ -1435,12 +1421,12 @@ export const getTransactionReport = asyncHandler(async (req, res) => {
     const deliveryWalletResult = await DeliveryWallet.aggregate(deliveryWalletPipeline);
     const deliverymanEarningFromWallets = Number(deliveryWalletResult?.[0]?.total || 0);
     
-    // If restaurant/zone filters are active, we MUST use order-based calculations
-    // for deliveryman earnings as wallet transactions are global.
-    const hasActiveFilters = (restaurant && restaurant !== 'All restaurants') || (zone && zone !== 'All Zones');
-    const deliverymanEarning = (hasActiveFilters || deliverymanEarningFromWallets === 0)
+    // If filters are active, we ALWAYS rely on order-based calculations (which are correctly filtered)
+    // Wallet transactions are typically global/accumulated and don't easily map to restaurants/zones.
+    const hasActiveFilters = (restaurant && restaurant !== 'All restaurants') || (zone && zone !== 'All Zones') || search;
+    const deliverymanEarning = (hasActiveFilters)
       ? deliverymanEarningFromOrders
-      : deliverymanEarningFromWallets;
+      : (deliverymanEarningFromWallets || deliverymanEarningFromOrders);
 
     // Gross revenue: total value of completed paid transactions.
     const grossRevenue = completedTransaction;
@@ -1526,7 +1512,8 @@ export const getTransactionReport = asyncHandler(async (req, res) => {
         restaurantEarning,
         deliverymanEarning,
         grossRevenue,
-        totalRevenue
+        totalRevenue,
+        totalGST: settlementRevenueBreakdown.gst
       },
       transactions: transformedTransactions,
       pagination: {

@@ -56,11 +56,7 @@ export default function BottomPopup({
       e.stopPropagation()
       e.preventDefault()
     }
-    setIsCollapsed(prev => {
-      const newState = !prev
-      console.log('🔄 Collapse toggle:', prev, '->', newState)
-      return newState
-    })
+    setIsCollapsed(prev => !prev)
   }
 
   // Handle touch start for swipe detection
@@ -284,7 +280,7 @@ export default function BottomPopup({
             }}
             className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl z-[110] overflow-hidden flex flex-col"
             style={{
-              maxHeight: isCollapsed ? "120px" : maxHeight,
+              maxHeight: isCollapsed ? (collapsedContent ? "120px" : "320px") : maxHeight,
               touchAction: 'none'
             }}
           >

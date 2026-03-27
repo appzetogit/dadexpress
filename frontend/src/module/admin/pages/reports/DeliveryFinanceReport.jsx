@@ -158,7 +158,7 @@ export default function DeliveryFinanceReport() {
       orderNumber: s.orderNumber,
       date: format(new Date(s.createdAt), "dd MMM yyyy HH:mm"),
       deliveryBoy: s.deliveryName,
-      distance: s.deliveryEarning?.distance ?? 0,
+      distance: (s.deliveryEarning?.distance ?? 0).toFixed(2),
       basePayout: s.deliveryEarning?.basePayout ?? 0,
       totalEarning: s.deliveryEarning?.totalEarning ?? 0,
       status: "Delivered"
@@ -388,7 +388,7 @@ export default function DeliveryFinanceReport() {
                         <span className="text-sm font-bold text-slate-700">{s.deliveryName}</span>
                       </td>
                       <td className="px-6 py-4">
-                        <span className="text-sm font-bold text-slate-600">{s.deliveryEarning?.distance ?? 0} km</span>
+                        <span className="text-sm font-bold text-slate-600">{(s.deliveryEarning?.distance ?? 0).toFixed(2)} km</span>
                       </td>
                       <td className="px-6 py-4">
                         <span className="text-sm font-bold text-slate-700">₹{s.deliveryEarning?.basePayout ?? 0}</span>

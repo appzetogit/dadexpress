@@ -778,6 +778,8 @@ export default function DeliveryHome() {
   // Trip distance and time from Google Maps API
   const [tripDistance, setTripDistance] = useState(null) // in meters
   const [tripTime, setTripTime] = useState(null) // in seconds
+  const [actualTripDistance, setActualTripDistance] = useState(0) // meters - tracked during live trip since pickup
+  const lastDistanceCalcLocationRef = useRef(null) 
   const pickupRouteDistanceRef = useRef(0) // Distance to pickup in meters
   const pickupRouteTimeRef = useRef(0) // Time to pickup in seconds
   const deliveryRouteDistanceRef = useRef(0) // Distance to delivery in meters
@@ -837,6 +839,7 @@ export default function DeliveryHome() {
   // Real-time Trip Duration Effect
   useEffect(() => {
     if (selectedRestaurant?.orderId && !showOrderDeliveredAnimation) {
+      // Restore elapsed time
       const storedPickedAt = localStorage.getItem(`pickedAt_${selectedRestaurant.orderId}`);
       if (storedPickedAt) {
         const start = parseInt(storedPickedAt);
@@ -844,8 +847,15 @@ export default function DeliveryHome() {
           setElapsedTripSeconds(Math.floor((Date.now() - start) / 1000));
         }, 1000);
       }
+
+      // Restore actual distance
+      const storedDist = localStorage.getItem(`trip_actual_dist_${selectedRestaurant.orderId}`);
+      if (storedDist) {
+        setActualTripDistance(parseFloat(storedDist) || 0);
+      }
     } else if (!selectedRestaurant) {
       setElapsedTripSeconds(0);
+      setActualTripDistance(0);
       if (tripIntervalRef.current) clearInterval(tripIntervalRef.current);
     }
     
@@ -1361,6 +1371,35 @@ export default function DeliveryHome() {
   const todayTrips = hasStoreDataForToday && todayData
     ? (todayData.trips ?? calculatedTrips)
     : calculatedTrips
+
+  // Calculate today's distance (sum of actualTripDistance for today's tasks)
+  const todayDistance = (() => {
+    const todayMeters = allOrders.filter(order => {
+      const orderId = order.orderId || order.id
+      const orderDateKey = `delivery_order_date_${orderId}`
+      const orderDateStr = localStorage.getItem(orderDateKey)
+      if (!orderDateStr) return false
+      const orderDate = new Date(orderDateStr)
+      orderDate.setHours(0, 0, 0, 0)
+      return orderDate.getTime() === today.getTime()
+    }).reduce((sum, order) => {
+      const orderId = order.orderId || order.id
+      // For the active order, use the state actualTripDistance for real-time updates
+      const activeOrderId = selectedRestaurant?.orderId || selectedRestaurant?.id || selectedRestaurant?._id
+      if (activeOrderId && (orderId === activeOrderId)) {
+        return sum + (actualTripDistance || 0)
+      }
+      const distStr = localStorage.getItem(`trip_actual_dist_${orderId}`)
+      return sum + (distStr ? Number(distStr) : 0)
+    }, 0)
+
+    // Ensure active order is counted even if not in allOrders yet
+    const activeOrderId = selectedRestaurant?.orderId || selectedRestaurant?.id || selectedRestaurant?._id
+    const isAlreadyCounted = activeOrderId && allOrders.some(o => (o.orderId || o.id) === activeOrderId)
+    const finalMeters = (activeOrderId && !isAlreadyCounted) ? (todayMeters + (actualTripDistance || 0)) : todayMeters
+    
+    return finalMeters / 1000
+  })()
 
   // Calculate today's gigs count
   const todayGigsCount = bookedGigs.filter(gig => gig.date === todayDateKey).length
@@ -2507,7 +2546,46 @@ export default function DeliveryHome() {
           const lastSentTime = window.lastLocationSentTime || 0;
           const timeSinceLastSend = now - lastSentTime;
 
-          // Use smoothed location for backend (not raw GPS) - already declared above
+          // Track actual distance traveled during trip for extra km payment logic
+          // Only track if order is out for delivery / en route to delivery
+          const currentDeliveryPhase = selectedRestaurant?.deliveryPhase || selectedRestaurant?.deliveryState?.currentPhase
+          const isEnRouteToDelivery = currentDeliveryPhase === 'en_route_to_delivery' ||
+            selectedRestaurant?.orderStatus === 'out_for_delivery'
+
+          if (isEnRouteToDelivery && lastDistanceCalcLocationRef.current) {
+            const [lastLat, lastLng] = lastDistanceCalcLocationRef.current
+            const [currLat, currLng] = smoothedLocation
+
+            // Helper for distance calc if not defined globally
+            const haversineDist = (lat1, lng1, lat2, lng2) => {
+              const R = 6371; // km
+              const dLat = (lat2 - lat1) * Math.PI / 180;
+              const dLng = (lng2 - lng1) * Math.PI / 180;
+              const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLng / 2) * Math.sin(dLng / 2);
+              const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+              return R * c;
+            };
+
+            const jumpKm = haversineDist(lastLat, lastLng, currLat, currLng)
+            // Valid jump: 2m to 500m (reject GPS drifts/jumps)
+            if (jumpKm > 0.002 && jumpKm < 0.5) {
+              const jumpMeters = jumpKm * 1000;
+              setActualTripDistance(prev => {
+                const newDist = prev + jumpMeters;
+                // Persist to localStorage for survival
+                const orderId = selectedRestaurant?.orderId || selectedRestaurant?.id
+                if (orderId) {
+                  localStorage.setItem(`trip_actual_dist_${orderId}`, newDist.toString())
+                }
+                return newDist;
+              });
+              lastDistanceCalcLocationRef.current = smoothedLocation
+            }
+          } else if (isEnRouteToDelivery && !lastDistanceCalcLocationRef.current) {
+            lastDistanceCalcLocationRef.current = smoothedLocation
+          }
 
           // Simple distance check using Haversine formula
           const calculateDistance = (lat1, lng1, lat2, lng2) => {
@@ -3091,7 +3169,9 @@ export default function DeliveryHome() {
                   currentPhase: 'en_route_to_pickup', // CRITICAL: Set to en_route_to_pickup after order acceptance
                   status: 'accepted' // Set status to accepted
                 }, // Store delivery state (currentPhase, status, etc.)
-                deliveryPhase: 'en_route_to_pickup' // CRITICAL: Set to en_route_to_pickup after order acceptance so Reached Pickup popup can show
+                deliveryPhase: 'en_route_to_pickup', // CRITICAL: Set to en_route_to_pickup after order acceptance
+                estimatedDistance: orderData.deliveryDistance || order.assignmentInfo?.distance || 0, // Store initial estimated distance
+                customerTip: Number(order.customerTip || 0) // Store customer tip
               }
 
               false && console.log('🏪 Updated restaurant info from backend:', restaurantInfo)
@@ -3929,6 +4009,17 @@ export default function DeliveryHome() {
       // Close popup, confirm reached drop, and show order delivered animation instantly (no delay)
       // Show Order Delivered popup instantly after Reached Drop is confirmed
       false && console.log('✅ Showing Order Delivered popup instantly after Reached Drop confirmation')
+      // Stamp the delivery date and final distance so Today's Stats can accumulate correctly
+      ;(() => {
+        const completedOrderId = selectedRestaurant?.orderId || selectedRestaurant?.id || selectedRestaurant?._id
+        if (completedOrderId) {
+          localStorage.setItem(`delivery_order_date_${completedOrderId}`, new Date().toISOString())
+          // Also ensure final distance is persisted (may already be written by watchPosition, but write again for safety)
+          if (actualTripDistance > 0) {
+            localStorage.setItem(`trip_actual_dist_${completedOrderId}`, actualTripDistance.toString())
+          }
+        }
+      })()
       setWorkflowStage('delivered')
 
         // API call in background (async, doesn't block popup)
@@ -5463,11 +5554,9 @@ export default function DeliveryHome() {
     ...(supportNumber ? [{
       id: "supportCenter",
       title: "Help centre",
-      subtitle: "Call support for help",
+      subtitle: "Dedicated help & support",
       icon: "helpCenter",
-      onClick: () => {
-        window.location.href = `tel:${supportNumber}`;
-      }
+      path: "/delivery/help-centre"
     }] : []),
     {
       id: "supportTickets",
@@ -10537,28 +10626,52 @@ export default function DeliveryHome() {
                     <Calendar className="w-5 h-5 text-white" />
                     <CheckCircle className="w-3 h-3 text-green-500 absolute -top-1 -right-1 bg-white rounded-full" fill="currentColor" />
                   </div>
-                  <span className="text-white font-semibold">Today's progress</span>
+                  <span className="text-white font-semibold">Today's stats</span>
                 </div>
 
                 {/* Content */}
                 <div className="p-4">
                   {/* Grid Layout - 2x2 */}
                   <div className="grid grid-cols-2 gap-4">
-                    {/* Top Left - Earnings */}
+                    {/* Top Left - Distance */}
+                    <div className="flex flex-col items-start gap-1">
+                      <span className="text-2xl font-bold text-gray-900">
+                        {todayDistance.toFixed(2)} km
+                      </span>
+                      <div className="flex items-center gap-1 text-sm text-gray-600">
+                        <span>Total Distance</span>
+                      </div>
+                    </div>
+
+                    {/* Top Right - Earnings */}
                     <button
                       onClick={() => navigate("/delivery/earnings")}
-                      className="flex flex-col items-start gap-1 hover:opacity-80 transition-opacity"
+                      className="flex flex-col items-end gap-1 hover:opacity-80 transition-opacity"
                     >
                       <span className="text-2xl font-bold text-gray-900">
                         {formatCurrency(todayEarnings)}
                       </span>
                       <div className="flex items-center gap-1 text-sm text-gray-600">
-                        <span>Earnings</span>
+                        <span>Total Earnings</span>
                         <ArrowRight className="w-4 h-4" />
                       </div>
                     </button>
 
-                    {/* Top Right - Trips */}
+                    {/* Bottom Left - Login Time */}
+                    <button
+                      onClick={() => navigate("/delivery/time-on-orders")}
+                      className="flex flex-col items-start gap-1 hover:opacity-80 transition-opacity"
+                    >
+                      <span className="text-2xl font-bold text-gray-900">
+                        {`${formatHours(todayHoursWorked)}`}
+                      </span>
+                      <div className="flex items-center gap-1 text-sm text-gray-600">
+                        <span>Login Time</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </div>
+                    </button>
+
+                    {/* Bottom Right - Deliveries */}
                     <button
                       onClick={() => navigate("/delivery/trip-history")}
                       className="flex flex-col items-end gap-1 hover:opacity-80 transition-opacity"
@@ -10567,35 +10680,7 @@ export default function DeliveryHome() {
                         {todayTrips}
                       </span>
                       <div className="flex items-center gap-1 text-sm text-gray-600">
-                        <span>Trips</span>
-                        <ArrowRight className="w-4 h-4" />
-                      </div>
-                    </button>
-
-                    {/* Bottom Left - Time on orders */}
-                    <button
-                      onClick={() => navigate("/delivery/time-on-orders")}
-                      className="flex flex-col items-start gap-1 hover:opacity-80 transition-opacity"
-                    >
-                      <span className="text-2xl font-bold text-gray-900">
-                        {`${formatHours(todayHoursWorked)} hrs`}
-                      </span>
-                      <div className="flex items-center gap-1 text-sm text-gray-600">
-                        <span>Time on orders</span>
-                        <ArrowRight className="w-4 h-4" />
-                      </div>
-                    </button>
-
-                    {/* Bottom Right - Gigs History */}
-                    <button
-                      onClick={() => navigate("/delivery/gig")}
-                      className="flex flex-col items-end gap-1 hover:opacity-80 transition-opacity"
-                    >
-                      <span className="text-2xl font-bold text-gray-900">
-                        {`${todayGigsCount} Gigs`}
-                      </span>
-                      <div className="flex items-center gap-1 text-sm text-gray-600">
-                        <span>History</span>
+                        <span>Deliveries</span>
                         <ArrowRight className="w-4 h-4" />
                       </div>
                     </button>
@@ -11011,6 +11096,9 @@ export default function DeliveryHome() {
                                   Base: ₹{earnings.basePayout?.toFixed(0) || '0'}
                                   {earnings.distanceCommission > 0 && (
                                     <> + Distance ({earnings.distance?.toFixed(1)} km × ₹{earnings.commissionPerKm?.toFixed(0)}/km) = ₹{earnings.distanceCommission?.toFixed(0)}</>
+                                  )}
+                                  {(earnings.customerTip > 0 || earnings.tip > 0) && (
+                                    <> + Tip: ₹{(earnings.customerTip || earnings.tip)?.toFixed(0)}</>
                                   )}
                                 </p>
                                 {earnings.distance <= earnings.minDistance && earnings.distanceCommission === 0 && (
@@ -12040,7 +12128,42 @@ export default function DeliveryHome() {
                 </div>
                 <div>
                   <p className="text-amber-800 font-black text-lg">COLLECT CASH</p>
-                  <p className="text-amber-700 text-xl font-bold">₹{Number(selectedRestaurant?.total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                  <p className="text-amber-700 text-xl font-bold">
+                    ₹{(() => {
+                      const total = Number(selectedRestaurant?.total || 0);
+                      const tip = Number(selectedRestaurant?.customerTip || 0);
+                      const estKm = Number(selectedRestaurant?.estimatedDistance || 0);
+                      const actualKm = actualTripDistance / 1000;
+                      // Buffer: don't charge if extra is less than 500m
+                      const extraKm = Math.max(0, actualKm - estKm);
+                      const extraCharge = actualTripDistance > (estKm * 1000 + 500) ? (extraKm * 10) : 0; // ₹10 per KM
+                      return (total + tip + extraCharge).toLocaleString('en-IN', { minimumFractionDigits: 2 });
+                    })()}
+                  </p>
+                  {(() => {
+                    const tip = Number(selectedRestaurant?.customerTip || 0);
+                    const estKm = Number(selectedRestaurant?.estimatedDistance || 0);
+                    const actualKm = actualTripDistance / 1000;
+                    const hasExtraDist = actualTripDistance > (estKm * 1000 + 500);
+                    
+                    if (tip > 0 || hasExtraDist) {
+                      return (
+                        <div className="flex flex-col gap-0.5 mt-1">
+                          {tip > 0 && (
+                            <p className="text-amber-600 text-[10px] font-bold">
+                              Rider Tip: +₹{tip.toFixed(2)} Included 🎁
+                            </p>
+                          )}
+                          {hasExtraDist && (
+                            <p className="text-amber-600 text-[10px] font-bold">
+                              Extra distance: +₹{( (actualKm - estKm) * 10 ).toFixed(2)} Included 🏍️
+                            </p>
+                          )}
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
               </div>
             ) : (
@@ -12287,7 +12410,7 @@ export default function DeliveryHome() {
                 </div>
                 <span className="text-gray-900 font-semibold">
                   {(() => {
-                    const value = tripDistance ?? selectedRestaurant?.tripDistance ?? null
+                    const value = (actualTripDistance > 0 ? actualTripDistance : tripDistance) ?? selectedRestaurant?.tripDistance ?? null
                     if (value === null || value === undefined || value === '') return 'Calculating...'
                     const numeric = Number(value)
                     if (Number.isFinite(numeric)) {
@@ -12518,12 +12641,13 @@ export default function DeliveryHome() {
                       review: customerReviewText
                     })
 
-                    // Call completeDelivery API with rating, review, and dropImageUrl
+                    // Call completeDelivery API with rating, review, dropImageUrl and actual distance
                     const response = await deliveryAPI.completeDelivery(
                       orderIdForApi,
                       customerRating > 0 ? customerRating : null,
                       customerReviewText.trim() || '',
-                      dropImageUrl
+                      dropImageUrl,
+                      actualTripDistance
                     )
 
                     if (response.data?.success) {

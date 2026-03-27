@@ -63,55 +63,85 @@ const getPerKmDeliveryCharge = (feeSettings, restaurant, deliveryAddress) => {
 /**
  * Calculate delivery fee based on order value, distance, and restaurant settings
  */
-export const calculateDeliveryFee = async (orderValue, restaurant, deliveryAddress = null, deliveryFleet = 'standard') => {
-  // 1) First try to calculate delivery fee using FeeSettings (manual overrides)
-  const feeSettings = await getFeeSettings();
-  const perKmCharge = getPerKmDeliveryCharge(feeSettings, restaurant, deliveryAddress);
-
-  // A) Check if delivery fee ranges match the order value
-  if (feeSettings.deliveryFeeRanges && Array.isArray(feeSettings.deliveryFeeRanges) && feeSettings.deliveryFeeRanges.length > 0) {
-    const sortedRanges = [...feeSettings.deliveryFeeRanges].sort((a, b) => a.min - b.min);
-    
-    for (let i = 0; i < sortedRanges.length; i++) {
-        const range = sortedRanges[i];
-        const isLastRange = i === sortedRanges.length - 1;
-        if (isLastRange ? (orderValue >= range.min && orderValue <= range.max) : (orderValue >= range.min && orderValue < range.max)) {
-           return roundCurrency(Number(range.fee) + perKmCharge);
-        }
-    }
+/**
+ * Helper to safely extract [longitude, latitude] from various coordinate formats
+ */
+const extractCoordinates = (entity) => {
+  if (!entity) return null;
+  
+  // 1. Try GeoJSON coordinates array [lng, lat]
+  if (Array.isArray(entity.location?.coordinates) && entity.location.coordinates.length >= 2) {
+    return entity.location.coordinates;
   }
+  if (Array.isArray(entity.coordinates) && entity.coordinates.length >= 2) {
+    return entity.coordinates;
+  }
+  
+  // 2. Try latitude/longitude properties
+  const lat = entity.location?.latitude ?? entity.location?.lat ?? entity.lat ?? entity.latitude;
+  const lng = entity.location?.longitude ?? entity.location?.lng ?? entity.lng ?? entity.longitude;
+  
+  if (typeof lat === 'number' && typeof lng === 'number' && lat !== 0 && lng !== 0) {
+    return [lng, lat];
+  }
+  
+  return null;
+};
 
-  // B) Fallback to Base Delivery Fee + Per Km from FeeSettings if NO matches and NO commission rules
-  const baseDeliveryFee = (feeSettings.deliveryFee !== undefined && feeSettings.deliveryFee !== null) ? feeSettings.deliveryFee : 25;
-  const legacyFee = roundCurrency(Number(baseDeliveryFee) + perKmCharge);
+export const calculateDeliveryFee = async (orderValue, restaurant, deliveryAddress = null, deliveryFleet = 'standard') => {
+  let calculatedFee = 0;
+  let commissionRuleApplied = false;
 
-  // 2) If no range matched, check DeliveryBoyCommission rules (as a backup/fallback)
+  // 1) Primary Logic: Calculate fee based on DeliveryBoyCommission (Distance-based)
   try {
-    const restaurantCoordinates = restaurant?.location?.coordinates;
-    const deliveryCoordinates = deliveryAddress?.location?.coordinates || deliveryAddress?.coordinates;
+    const restaurantCoords = extractCoordinates(restaurant);
+    const deliveryCoords = extractCoordinates(deliveryAddress);
     
     let distanceKm = null;
-    if (Array.isArray(restaurantCoordinates) && restaurantCoordinates.length >= 2 &&
-        Array.isArray(deliveryCoordinates) && deliveryCoordinates.length >= 2) {
-      distanceKm = calculateDistance(restaurantCoordinates, deliveryCoordinates);
+    if (restaurantCoords && deliveryCoords) {
+      distanceKm = calculateDistance(restaurantCoords, deliveryCoords);
     }
 
+    // Fallback to restaurant.distance string if coordinates calculation is not possible
     if ((distanceKm === null || distanceKm <= 0) && restaurant?.distance) {
       const parsedDistance = parseFloat(restaurant.distance.toString().replace(/[^\d.]/g, ''));
       if (!isNaN(parsedDistance)) distanceKm = parsedDistance;
     }
     
-    if (distanceKm !== null && distanceKm >= 0) {
-      const commissionResult = await DeliveryBoyCommission.calculateCommission(distanceKm);
-      if (commissionResult && commissionResult.commission > 0) {
-        return roundCurrency(commissionResult.commission);
-      }
+    // Default to a small distance (0.1km) if still null, to trigger at least the base payout rule
+    const searchDistance = (distanceKm !== null && distanceKm >= 0) ? distanceKm : 0.1;
+    
+    const commissionResult = await DeliveryBoyCommission.calculateCommission(searchDistance);
+    if (commissionResult && commissionResult.commission > 0) {
+      calculatedFee = roundCurrency(commissionResult.commission);
+      commissionRuleApplied = true;
     }
   } catch (err) {
-    console.error('[PRICING] Commission calculation failed, using legacy fee:', err.message);
+    console.error('[PRICING] Commission calculation logic failed:', err.message);
   }
 
-  return legacyFee;
+  // If commission rule worked and produced a fee, return it as the "Proper" dynamic fee
+  if (commissionRuleApplied && calculatedFee > 0) {
+    return calculatedFee;
+  }
+
+  // 2) Fallback Logic: FeeSettings (Order value ranges & manual overrides)
+  const feeSettings = await getFeeSettings();
+  const perKmCharge = getPerKmDeliveryCharge(feeSettings, restaurant, deliveryAddress);
+
+  // A) Check delivery fee ranges
+  if (feeSettings.deliveryFeeRanges && Array.isArray(feeSettings.deliveryFeeRanges) && feeSettings.deliveryFeeRanges.length > 0) {
+    const sortedRanges = [...feeSettings.deliveryFeeRanges].sort((a, b) => a.min - b.min);
+    for (let range of sortedRanges) {
+      if (orderValue >= range.min && orderValue <= range.max) {
+        return roundCurrency(Number(range.fee) + perKmCharge);
+      }
+    }
+  }
+
+  // B) Final Fallback: Base Delivery Fee
+  const baseDeliveryFee = Number(feeSettings.deliveryFee || 25);
+  return roundCurrency(baseDeliveryFee + perKmCharge);
 };
 
 /**

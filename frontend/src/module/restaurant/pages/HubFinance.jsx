@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
-import { Bell, Menu, ChevronDown, Calendar, Download, ArrowRight, FileText, Wallet, X } from "lucide-react"
+import { Menu, ChevronDown, Calendar, Download, ArrowRight, FileText, Wallet, X } from "lucide-react"
 import BottomNavOrders from "../components/BottomNavOrders"
 import { restaurantAPI } from "@/lib/api"
 
@@ -154,7 +154,12 @@ export default function HubFinance() {
         return null
       }
       
-      const startDate = new Date(year, startMonth, startDay)
+      let startYear = year
+      if (startMonth > endMonth) {
+        startYear = year - 1
+      }
+      
+      const startDate = new Date(startYear, startMonth, startDay)
       const endDate = new Date(year, endMonth, endDay)
       
       // Validate dates
@@ -190,8 +195,15 @@ export default function HubFinance() {
         return
       }
       
-      const startDateISO = startDateObj.toISOString().split('T')[0]
-      const endDateISO = endDateObj.toISOString().split('T')[0]
+      const formatDateLocal = (d) => {
+        const year = d.getFullYear()
+        const month = String(d.getMonth() + 1).padStart(2, '0')
+        const day = String(d.getDate()).padStart(2, '0')
+        return `${year}-${month}-${day}`
+      }
+      
+      const startDateISO = formatDateLocal(startDateObj)
+      const endDateISO = formatDateLocal(endDateObj)
       
       const response = await restaurantAPI.getFinance({
         startDate: startDateISO,
@@ -553,11 +565,19 @@ export default function HubFinance() {
         heightLeft -= pageHeight
       }
       
-      // Download PDF
+      // Save PDF or Open in new tab (better for mobile)
       const fileName = `finance-report-${reportData.dateRange.replace(/\s+/g, '-').replace(/'/g, '')}_${new Date().toISOString().split("T")[0]}.pdf`
-      false && console.log('💾 Downloading PDF:', fileName)
-      pdf.save(fileName)
-      false && console.log('✅ PDF downloaded successfully!')
+      
+      if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+        // On mobile, opening in new tab is more reliable than direct download
+        const blob = pdf.output('blob')
+        const url = URL.createObjectURL(blob)
+        window.open(url, '_blank')
+      } else {
+        pdf.save(fileName)
+      }
+      
+      false && console.log('✅ PDF generated successfully!')
     } catch (error) {
       console.error('❌ Error downloading PDF:', error)
       console.error('Error details:', error.stack)
@@ -623,13 +643,7 @@ export default function HubFinance() {
               <Wallet className="w-5 h-5 text-gray-700" />
             </button>
             <button
-              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-              onClick={() => navigate("/restaurant/notifications")}
-            >
-              <Bell className="w-5 h-5 text-gray-700" />
-            </button>
-            <button
-              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+              className="p-2 ml-1 hover:bg-gray-100 rounded-full transition-colors"
               onClick={() => navigate("/restaurant/explore")}
             >
               <Menu className="w-5 h-5 text-gray-700" />
@@ -918,31 +932,9 @@ export default function HubFinance() {
                         ))}
                       </div>
                     )}
-                    {/* Show current cycle orders if past cycles data is not available or has no orders */}
-                    {(!pastCyclesData || !pastCyclesData.orders || pastCyclesData.orders.length === 0) && !loadingPastCycles && financeData?.currentCycle?.orders && financeData.currentCycle.orders.length > 0 && (
-                      <div className="bg-white rounded-lg p-4 space-y-3">
-                        {financeData.currentCycle.orders.map((order, index) => (
-                          <div key={order.orderId || index} className="border-b border-gray-200 pb-3 last:border-b-0 last:pb-0">
-                            <div className="flex justify-between items-start">
-                              <div className="flex-1">
-                                <p className="text-sm font-semibold text-gray-900 mb-1">
-                                  Order ID: {order.orderId || 'N/A'}
-                                </p>
-                                <p className="text-xs text-gray-600">
-                                  {order.foodNames || (order.items && order.items.map(item => item.name).join(', ')) || 'N/A'}
-                                </p>
-                              </div>
-                              <div className="text-right ml-4">
-                                <p className="text-sm font-bold text-gray-900">
-                                  ₹{(order.payout || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                </p>
-                                <p className="text-xs text-gray-500">
-                                  Earning
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
+                    {(!pastCyclesData || !pastCyclesData.orders || pastCyclesData.orders.length === 0) && !loadingPastCycles && (
+                      <div className="bg-white rounded-lg p-8 text-center">
+                        <p className="text-gray-500 text-sm">No orders found for this period</p>
                       </div>
                     )}
                   </>

@@ -416,7 +416,16 @@ export const upsertOnboarding = async (req, res) => {
       if (completeRestaurant && !completeRestaurant.approvedAt) {
         const pendingRestaurant = await Restaurant.findByIdAndUpdate(
           restaurantId,
-          { $set: { isActive: false, isAcceptingOrders: false, isProfileCompleted: true } },
+          {
+            $set: {
+              isActive: false,
+              isAcceptingOrders: false,
+              isProfileCompleted: true,
+              rejectionReason: null,
+              rejectedAt: null,
+              rejectedBy: null,
+            },
+          },
           { new: true },
         ).lean();
         if (pendingRestaurant) {

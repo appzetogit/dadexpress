@@ -936,17 +936,22 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       const breakdown = commissionResult.breakdown || {};
       const rule = commissionResult.rule || { minDistance: 4 };
 
+      const tipAmount = Number(updatedOrder?.customerTip) || 0;
+      const totalPlusTip = commissionResult.commission + tipAmount;
+
       estimatedEarnings = {
         basePayout: Math.round((breakdown.basePayout || 10) * 100) / 100,
         distance: Math.round(deliveryDistance * 100) / 100,
         commissionPerKm: Math.round((breakdown.commissionPerKm || 5) * 100) / 100,
         distanceCommission: Math.round((breakdown.distanceCommission || 0) * 100) / 100,
-        totalEarning: Math.round(commissionResult.commission * 100) / 100,
+        customerTip: tipAmount,
+        totalEarning: Math.round(totalPlusTip * 100) / 100,
         breakdown: {
           basePayout: breakdown.basePayout || 10,
           distance: deliveryDistance,
           commissionPerKm: breakdown.commissionPerKm || 5,
           distanceCommission: breakdown.distanceCommission || 0,
+          customerTip: tipAmount,
           minDistance: rule.minDistance || 4
         }
       };
@@ -956,17 +961,22 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       console.error('❌ Error calculating estimated earnings:', earningsError);
       console.error('❌ Earnings error stack:', earningsError.stack);
       // Fallback to default
+      const tipAmount = Number(updatedOrder?.customerTip) || 0;
+      const totalPlusTip = 10 + (deliveryDistance > 4 ? Math.round(deliveryDistance * 5 * 100) / 100 : 0) + tipAmount;
+
       estimatedEarnings = {
         basePayout: 10,
         distance: Math.round(deliveryDistance * 100) / 100,
         commissionPerKm: 5,
         distanceCommission: deliveryDistance > 4 ? Math.round(deliveryDistance * 5 * 100) / 100 : 0,
-        totalEarning: 10 + (deliveryDistance > 4 ? Math.round(deliveryDistance * 5 * 100) / 100 : 0),
+        customerTip: tipAmount,
+        totalEarning: Math.round(totalPlusTip * 100) / 100,
         breakdown: {
           basePayout: 10,
           distance: deliveryDistance,
           commissionPerKm: 5,
           distanceCommission: deliveryDistance > 4 ? deliveryDistance * 5 : 0,
+          customerTip: tipAmount,
           minDistance: 4
         }
       };
@@ -1881,6 +1891,25 @@ export const completeDelivery = asyncHandler(async (req, res) => {
       updateData['payment.status'] = 'completed';
     }
 
+    // EXTRA KM SURCHARGE COMPONENT (USER REQUEST):
+    // If actual distance > estimated distance (+500m buffer), add surcharge to customer total
+    const actualTripDistanceMeters = Number(req.body.actualTripDistance) || 0;
+    const estimatedDistanceEnRoute = Number(order.deliveryState?.routeToDelivery?.distance) || 
+                                     Number(order.assignmentInfo?.distance) || 0;
+    
+    if (actualTripDistanceMeters > (estimatedDistanceEnRoute * 1000 + 500)) {
+      const extraKm = Math.max(0, (actualTripDistanceMeters / 1000) - estimatedDistanceEnRoute);
+      const extraCharge = Math.round(extraKm * 10); // Rate: ₹10 per KM
+
+      if (extraCharge > 0) {
+        console.log(`💰 Adding extra distance surcharge: ₹${extraCharge} for ${extraKm.toFixed(2)} km extra`);
+        updateData['pricing.total'] = (Number(order.pricing?.total) || 0) + extraCharge;
+        updateData['pricing.extraDistanceCharge'] = extraCharge;
+        // Also update the finalized distance for commission calculation and record keeping
+        updateData['deliveryState.routeToDelivery.distance'] = Number((actualTripDistanceMeters / 1000).toFixed(3));
+      }
+    }
+
     // Update order to delivered
     const updatedOrder = await Order.findByIdAndUpdate(
       orderMongoId,
@@ -1903,11 +1932,12 @@ export const completeDelivery = asyncHandler(async (req, res) => {
     // Mark COD payment as collected (admin Payment Status → Collected)
     if (order.payment?.method === 'cash' || order.payment?.method === 'cod') {
       try {
+        const finalTotal = updatedOrder.pricing?.total || order.pricing?.total;
         await Payment.updateOne(
           { orderId: orderMongoId },
-          { $set: { status: 'completed', completedAt: new Date() } }
+          { $set: { status: 'completed', completedAt: new Date(), amount: finalTotal } }
         );
-        console.log(`✅ COD payment marked as collected for order ${orderIdForLog}`);
+        console.log(`✅ COD payment marked as collected for order ${orderIdForLog} (Total: ₹${finalTotal})`);
       } catch (paymentUpdateError) {
         console.warn('⚠️ Could not update COD payment status:', paymentUpdateError.message);
       }
@@ -1991,34 +2021,33 @@ export const completeDelivery = asyncHandler(async (req, res) => {
     }
 
     // Calculate delivery earnings based on admin's commission rules
-    // Get delivery distance (in km) from order
+    // Get delivery distance (in km) from order (PREFER UPDATED ACTUAL DISTANCE)
     let deliveryDistance = 0;
+    const actualMetersProvided = Number(req.body.actualTripDistance) || 0;
 
-    // Priority 1: Get distance from routeToDelivery (most accurate)
-    if (order.deliveryState?.routeToDelivery?.distance) {
-      deliveryDistance = order.deliveryState.routeToDelivery.distance;
-    }
-    // Priority 2: Get distance from assignmentInfo
-    else if (order.assignmentInfo?.distance) {
+    // Use actual meters if provided by app, otherwise fallback to stored distance
+    if (actualMetersProvided > 0) {
+      deliveryDistance = actualMetersProvided / 1000;
+      console.log(`📏 Using live tracked distance from app: ${deliveryDistance.toFixed(3)} km`);
+    } else if (updatedOrder.deliveryState?.routeToDelivery?.distance) {
+      deliveryDistance = updatedOrder.deliveryState.routeToDelivery.distance;
+    } else if (order.assignmentInfo?.distance) {
       deliveryDistance = order.assignmentInfo.distance;
-    }
-    // Priority 3: Calculate distance from restaurant to customer if coordinates available
-    else if (order.restaurantId?.location?.coordinates && order.address?.location?.coordinates) {
-      const [restaurantLng, restaurantLat] = order.restaurantId.location.coordinates;
-      const [customerLng, customerLat] = order.address.location.coordinates;
-
-      // Calculate distance using Haversine formula
-      const R = 6371; // Earth radius in km
-      const dLat = (customerLat - restaurantLat) * Math.PI / 180;
-      const dLng = (customerLng - restaurantLng) * Math.PI / 180;
+    } else if (order.restaurantId?.location?.coordinates && order.address?.location?.coordinates) {
+      // Haversine fallback
+      const [rLng, rLat] = order.restaurantId.location.coordinates;
+      const [cLng, cLat] = order.address.location.coordinates;
+      const R = 6371; 
+      const dLat = (cLat - rLat) * Math.PI / 180;
+      const dLng = (cLng - rLng) * Math.PI / 180;
       const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(restaurantLat * Math.PI / 180) * Math.cos(customerLat * Math.PI / 180) *
+        Math.cos(rLat * Math.PI / 180) * Math.cos(cLat * Math.PI / 180) *
         Math.sin(dLng / 2) * Math.sin(dLng / 2);
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       deliveryDistance = R * c;
     }
 
-    console.log(`📏 Delivery distance: ${deliveryDistance.toFixed(2)} km for order ${orderIdForLog}`);
+    console.log(`📏 Final commission distance basis: ${deliveryDistance.toFixed(2)} km for order ${orderIdForLog}`);
 
     // Calculate earnings using admin's commission rules
     let totalEarning = 0;
@@ -2030,7 +2059,7 @@ export const completeDelivery = asyncHandler(async (req, res) => {
       totalEarning = commissionResult.commission;
       commissionBreakdown = commissionResult.breakdown;
 
-      console.log(`💰 Delivery earnings calculated using commission rules: ₹${totalEarning.toFixed(2)} for order ${orderIdForLog}`);
+      console.log(`💰 Delivery earnings calculated using actual distance: ₹${totalEarning.toFixed(2)} for order ${orderIdForLog}`);
       console.log(`📊 Commission breakdown:`, {
         rule: commissionResult.rule.name,
         basePayout: commissionResult.breakdown.basePayout,
@@ -2042,7 +2071,7 @@ export const completeDelivery = asyncHandler(async (req, res) => {
     } catch (commissionError) {
       console.error('⚠️ Error calculating commission using rules:', commissionError.message);
       // Fallback: Use delivery fee as earnings if commission calculation fails
-      totalEarning = order.pricing?.deliveryFee || 0;
+      totalEarning = updatedOrder.pricing?.deliveryFee || 0;
       console.warn(`⚠️ Using fallback earnings (delivery fee): ₹${totalEarning.toFixed(2)}`);
     }
 
@@ -2065,10 +2094,10 @@ export const completeDelivery = asyncHandler(async (req, res) => {
         const paymentMethod = (order.payment?.method || '').toString().toLowerCase();
         const isCOD = paymentMethod === 'cash' || paymentMethod === 'cod';
         walletTransaction = wallet.addTransaction({
-          amount: totalEarning,
+          amount: totalEarning + (Number(order.customerTip) || 0),
           type: 'payment',
           status: 'Completed',
-          description: `Delivery earnings for Order #${orderIdForLog} (Distance: ${deliveryDistance.toFixed(2)} km)`,
+          description: `Delivery earnings for Order #${orderIdForLog} (incl. ₹${(Number(order.customerTip) || 0).toFixed(2)} tip)`,
           orderId: orderMongoId || order._id,
           paymentMethod: isCOD ? 'cash' : 'other',
           paymentCollected: false
@@ -2076,8 +2105,8 @@ export const completeDelivery = asyncHandler(async (req, res) => {
 
         await wallet.save();
 
-        // COD: add cash collected (order total) to cashInHand so Pocket balance shows it
-        const codAmount = Number(order.pricing?.total) || 0;
+        // COD: add cash collected (order total + tip) to cashInHand so Pocket balance shows it
+        const codAmount = (Number(order.pricing?.total) || 0) + (Number(order.customerTip) || 0);
         const isCashOrder = isCOD;
         if (isCashOrder && codAmount > 0) {
           try {

@@ -35,6 +35,8 @@ import {
   deleteOffer,
   getRestaurantAnalytics,
   getCustomerWalletReport,
+  getRestaurantMenuForAdmin,
+  updateRestaurantMenuForAdmin,
 } from "../controllers/adminController.js";
 import {
   sendPushNotification,
@@ -324,6 +326,8 @@ router.post("/restaurants", createRestaurant);
 router.get("/restaurants/requests", getRestaurantJoinRequests);
 router.get("/restaurants/referral-mapping", getRestaurantReferralMappings);
 router.get("/restaurant-analytics/:restaurantId", getRestaurantAnalytics);
+router.get("/restaurants/:restaurantId/menu", getRestaurantMenuForAdmin);
+router.put("/restaurants/:restaurantId/menu", updateRestaurantMenuForAdmin);
 router.get("/restaurants/:id", getRestaurantById);
 router.put("/restaurants/:id", updateRestaurant);
 router.post("/restaurants/:id/approve", approveRestaurant);

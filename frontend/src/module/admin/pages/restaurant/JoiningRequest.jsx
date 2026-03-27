@@ -1,11 +1,13 @@
 import { useState, useMemo, useEffect, useRef } from "react"
+import { useNavigate } from "react-router-dom"
 import {
   Search, Filter, Eye, Check, X, UtensilsCrossed, ArrowUpDown, Loader2,
-  FileText, Image as ImageIcon, ExternalLink, CreditCard, Calendar, Star, Building2, User, Phone, Mail, MapPin, Clock
+  FileText, Image as ImageIcon, ExternalLink, CreditCard, Calendar, Star, Building2, User, Phone, Mail, MapPin, Clock, Trash2, RotateCcw, Edit2, Save, Utensils
 } from "lucide-react"
 import { adminAPI, restaurantAPI } from "../../../../lib/api"
 
 export default function JoiningRequest() {
+  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState("pending")
   const [searchQuery, setSearchQuery] = useState("")
   const [pendingRequests, setPendingRequests] = useState([])
@@ -26,6 +28,9 @@ export default function JoiningRequest() {
     dateFrom: "",
     dateTo: ""
   })
+  const [isEditing, setIsEditing] = useState(false)
+  const [editData, setEditData] = useState({})
+  const [uploading, setUploading] = useState(false)
 
   // Track initial mount to prevent double fetch
   const isInitialMount = useRef(true)
@@ -175,6 +180,26 @@ export default function JoiningRequest() {
     }
   }
 
+  const handleDelete = async (request) => {
+    if (window.confirm(`Are you sure you want to PERMANENTLY DELETE "${request.restaurantName}" restaurant? This action cannot be undone.`)) {
+      try {
+        setProcessing(true)
+        const response = await adminAPI.deleteRestaurant(request._id)
+        if (response.data && response.data.success) {
+          alert("Restaurant deleted successfully")
+          fetchRequests()
+        } else {
+          alert(response.data?.message || "Failed to delete restaurant")
+        }
+      } catch (err) {
+        console.error("Error deleting restaurant:", err)
+        alert(err.message || "Failed to delete restaurant")
+      } finally {
+        setProcessing(false)
+      }
+    }
+  }
+
   const handleReject = (request) => {
     setSelectedRequest(request)
     setRejectionReason("")
@@ -204,6 +229,26 @@ export default function JoiningRequest() {
       alert(err.response?.data?.message || "Failed to reject request. Please try again.")
     } finally {
       setProcessing(false)
+    }
+  }
+
+  const handleReverify = async (request) => {
+    if (window.confirm(`Are you sure you want to move "${request.restaurantName}" back to pending requests? This will clear the rejection reason.`)) {
+      try {
+        setProcessing(true)
+        const response = await adminAPI.reverifyRestaurant(request._id)
+        if (response.data && response.data.success) {
+          alert("Restaurant moved to pending successfully")
+          fetchRequests()
+        } else {
+          alert(response.data?.message || "Failed to move back to pending")
+        }
+      } catch (err) {
+        console.error("Error reverifying restaurant:", err)
+        alert(err.message || "Failed to move back to pending")
+      } finally {
+        setProcessing(false)
+      }
     }
   }
 
@@ -279,6 +324,79 @@ export default function JoiningRequest() {
     setShowDetailsModal(false)
     setSelectedRequest(null)
     setRestaurantDetails(null)
+    setIsEditing(false)
+  }
+
+  const handleEditClick = () => {
+    const data = restaurantDetails || selectedRequest
+    setEditData({
+      restaurantName: data.name || data.restaurantName || "",
+      ownerName: data.ownerName || "",
+      ownerEmail: data.ownerEmail || "",
+      ownerPhone: data.ownerPhone || data.phone || "",
+      primaryContactNumber: data.primaryContactNumber || data.phone || "",
+      // PAN
+      panNumber: data.onboarding?.step3?.pan?.panNumber || data.panNumber || "",
+      nameOnPan: data.onboarding?.step3?.pan?.nameOnPan || data.nameOnPan || "",
+      // GST
+      gstRegistered: data.onboarding?.step3?.gst?.isRegistered || data.gstRegistered || false,
+      gstNumber: data.onboarding?.step3?.gst?.gstNumber || data.gstNumber || "",
+      gstLegalName: data.onboarding?.step3?.gst?.legalName || data.gstLegalName || "",
+      gstAddress: data.onboarding?.step3?.gst?.address || data.gstAddress || "",
+      // FSSAI
+      fssaiNumber: data.onboarding?.step3?.fssai?.registrationNumber || data.fssaiNumber || "",
+      fssaiExpiry: data.onboarding?.step3?.fssai?.expiryDate || data.fssaiExpiry || "",
+      // Bank
+      accountNumber: data.onboarding?.step3?.bank?.accountNumber || data.accountNumber || "",
+      ifscCode: data.onboarding?.step3?.bank?.ifscCode || data.ifscCode || "",
+      accountHolderName: data.onboarding?.step3?.bank?.accountHolderName || data.accountHolderName || "",
+      accountType: data.onboarding?.step3?.bank?.accountType || data.accountType || "savings"
+    })
+    setIsEditing(true)
+  }
+
+  const handleFieldChange = (field, value) => {
+    setEditData(prev => ({ ...prev, [field]: value }))
+  }
+
+  const handleFileChange = async (field, file) => {
+    if (!file) return
+    try {
+      setUploading(true)
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setEditData(prev => ({ ...prev, [field]: reader.result }))
+        setUploading(false)
+      }
+      reader.readAsDataURL(file)
+    } catch (err) {
+      console.error("Error reading file:", err)
+      setUploading(false)
+    }
+  }
+
+  const handleSaveDetails = async () => {
+    const restaurantId = restaurantDetails?._id || selectedRequest?._id
+    if (!restaurantId) return
+
+    try {
+      setProcessing(true)
+      const response = await adminAPI.updateRestaurant(restaurantId, editData)
+      if (response.data && response.data.success) {
+        alert("Restaurant details updated successfully")
+        setIsEditing(false)
+        // Refresh details
+        handleViewDetails({ ...selectedRequest, _id: restaurantId })
+        fetchRequests()
+      } else {
+        alert(response.data?.message || "Failed to update restaurant")
+      }
+    } catch (err) {
+      console.error("Error updating restaurant:", err)
+      alert(err.response?.data?.message || err.message || "Failed to update restaurant")
+    } finally {
+      setProcessing(false)
+    }
   }
 
   return (
@@ -456,37 +574,62 @@ export default function JoiningRequest() {
                           {request.status}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <button
-                            onClick={() => handleViewDetails(request)}
-                            className="p-1.5 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
-                            title="View Details"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          {activeTab === "pending" && (
-                            <>
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                            <div className="flex items-center justify-center gap-2">
                               <button
-                                onClick={() => handleApprove(request)}
-                                disabled={processing}
-                                className="p-1.5 rounded-full bg-green-50 text-green-600 hover:bg-green-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                title="Approve"
+                                onClick={() => handleViewDetails(request)}
+                                className="p-1.5 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+                                title="View Details"
                               >
-                                <Check className="w-4 h-4" />
+                                <Eye className="w-4 h-4" />
                               </button>
+                            <button
+                                onClick={() => navigate(`/admin/restaurants/${request._id || request.id}/menu`)}
+                                className="p-1.5 rounded-full bg-purple-50 text-purple-600 hover:bg-purple-100 transition-colors"
+                                title="Manage Menu"
+                              >
+                                <Utensils className="w-4 h-4" />
+                              </button>
+                              {activeTab === "pending" && (
+                                <>
+                                  <button
+                                    onClick={() => handleApprove(request)}
+                                    disabled={processing}
+                                    className="p-1.5 rounded-full bg-green-50 text-green-600 hover:bg-green-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title="Approve"
+                                  >
+                                    <Check className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleReject(request)}
+                                    disabled={processing}
+                                    className="p-1.5 rounded-full bg-red-50 text-red-600 hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title="Reject"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </>
+                              )}
+                              {activeTab === "rejected" && (
+                                <button
+                                  onClick={() => handleReverify(request)}
+                                  disabled={processing}
+                                  className="p-1.5 rounded-full bg-orange-50 text-orange-600 hover:bg-orange-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title="Move to Pending"
+                                >
+                                  <RotateCcw className="w-4 h-4" />
+                                </button>
+                              )}
                               <button
-                                onClick={() => handleReject(request)}
+                                onClick={() => handleDelete(request)}
                                 disabled={processing}
-                                className="p-1.5 rounded-full bg-red-50 text-red-600 hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                title="Reject"
+                                className="p-1.5 rounded-full bg-slate-100 text-slate-600 hover:bg-red-100 hover:text-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Delete Permanently"
                               >
-                                <X className="w-4 h-4" />
+                                <Trash2 className="w-4 h-4" />
                               </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
+                            </div>
+                          </td>
                     </tr>
                   ))
                 )}
@@ -676,7 +819,37 @@ export default function JoiningRequest() {
           <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             {/* Modal Header */}
             <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between z-10">
-              <h2 className="text-2xl font-bold text-slate-900">Restaurant Details - {selectedRequest.restaurantName || "N/A"}</h2>
+              <div className="flex items-center gap-4">
+                <h2 className="text-2xl font-bold text-slate-900">Restaurant Details - {selectedRequest.restaurantName || "N/A"}</h2>
+                {!loadingDetails && !isEditing && (
+                  <button
+                    onClick={handleEditClick}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                    Edit Details
+                  </button>
+                )}
+                {isEditing && (
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={handleSaveDetails}
+                      disabled={processing || uploading}
+                      className="flex items-center gap-2 px-4 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium disabled:opacity-50"
+                    >
+                      <Save className="w-4 h-4" />
+                      {processing ? "Saving..." : "Save Changes"}
+                    </button>
+                    <button
+                      onClick={() => setIsEditing(false)}
+                      disabled={processing}
+                      className="px-4 py-1.5 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors text-sm font-medium"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+              </div>
               <button
                 onClick={closeDetailsModal}
                 className="p-2 rounded-lg hover:bg-slate-100 transition-colors"
@@ -697,20 +870,40 @@ export default function JoiningRequest() {
                 <div className="space-y-6">
                   {/* Restaurant Basic Info */}
                   <div className="flex items-start gap-6 pb-6 border-b border-slate-200">
-                    <div className="w-24 h-24 rounded-lg overflow-hidden bg-slate-100 flex-shrink-0">
+                    <div className="w-24 h-24 rounded-lg overflow-hidden bg-slate-100 flex-shrink-0 relative group">
                       <img
-                        src={restaurantDetails?.profileImage?.url || restaurantDetails?.profileImageUrl?.url || selectedRequest?.restaurantImage || "https://via.placeholder.com/96"}
+                        src={(isEditing && typeof editData.profileImage === 'string' && editData.profileImage.startsWith('data:')) ? editData.profileImage : (restaurantDetails?.profileImage?.url || restaurantDetails?.profileImageUrl?.url || selectedRequest?.restaurantImage || "https://via.placeholder.com/96")}
                         alt={restaurantDetails?.name || selectedRequest?.restaurantName || "Restaurant"}
                         className="w-full h-full object-cover"
                         onError={(e) => {
                           e.target.src = "https://via.placeholder.com/96"
                         }}
                       />
+                      {isEditing && (
+                        <label className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => handleFileChange("profileImage", e.target.files[0])}
+                          />
+                          <ImageIcon className="w-6 h-6 text-white" />
+                        </label>
+                      )}
                     </div>
                     <div className="flex-1">
-                      <h3 className="text-2xl font-bold text-slate-900 mb-2">
-                        {restaurantDetails?.name || selectedRequest?.restaurantName || "N/A"}
-                      </h3>
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={editData.restaurantName}
+                          onChange={(e) => handleFieldChange("restaurantName", e.target.value)}
+                          className="text-2xl font-bold text-slate-900 mb-2 w-full px-3 py-1.5 rounded border border-slate-300 focus:ring-1 focus:ring-blue-500 outline-none"
+                        />
+                      ) : (
+                        <h3 className="text-2xl font-bold text-slate-900 mb-2">
+                          {restaurantDetails?.name || selectedRequest?.restaurantName || "N/A"}
+                        </h3>
+                      )}
                       <div className="flex items-center gap-4 flex-wrap">
                         {restaurantDetails?.rating && (
                           <div className="flex items-center gap-1">
@@ -741,18 +934,36 @@ export default function JoiningRequest() {
                           <User className="w-5 h-5 text-slate-400" />
                           <div>
                             <p className="text-xs text-slate-500">Owner Name</p>
-                            <p className="text-sm font-medium text-slate-900">
-                              {restaurantDetails?.ownerName || selectedRequest?.ownerName || "N/A"}
-                            </p>
+                            {isEditing ? (
+                              <input
+                                type="text"
+                                value={editData.ownerName}
+                                onChange={(e) => handleFieldChange("ownerName", e.target.value)}
+                                className="w-full px-3 py-1.5 text-sm rounded border border-slate-300 focus:ring-1 focus:ring-blue-500 outline-none"
+                              />
+                            ) : (
+                              <p className="text-sm font-medium text-slate-900">
+                                {restaurantDetails?.ownerName || selectedRequest?.ownerName || "N/A"}
+                              </p>
+                            )}
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
                           <Phone className="w-5 h-5 text-slate-400" />
                           <div>
                             <p className="text-xs text-slate-500">Phone</p>
-                            <p className="text-sm font-medium text-slate-900">
-                              {restaurantDetails?.ownerPhone || restaurantDetails?.phone || selectedRequest?.ownerPhone || "N/A"}
-                            </p>
+                            {isEditing ? (
+                              <input
+                                type="text"
+                                value={editData.ownerPhone}
+                                onChange={(e) => handleFieldChange("ownerPhone", e.target.value)}
+                                className="w-full px-3 py-1.5 text-sm rounded border border-slate-300 focus:ring-1 focus:ring-blue-500 outline-none"
+                              />
+                            ) : (
+                              <p className="text-sm font-medium text-slate-900">
+                                {restaurantDetails?.ownerPhone || restaurantDetails?.phone || selectedRequest?.ownerPhone || "N/A"}
+                              </p>
+                            )}
                           </div>
                         </div>
                         {(restaurantDetails?.ownerEmail || restaurantDetails?.email) && (
@@ -760,7 +971,16 @@ export default function JoiningRequest() {
                             <Mail className="w-5 h-5 text-slate-400" />
                             <div>
                               <p className="text-xs text-slate-500">Email</p>
-                              <p className="text-sm font-medium text-slate-900">{restaurantDetails.ownerEmail || restaurantDetails.email}</p>
+                              {isEditing ? (
+                                <input
+                                  type="email"
+                                  value={editData.ownerEmail}
+                                  onChange={(e) => handleFieldChange("ownerEmail", e.target.value)}
+                                  className="w-full px-3 py-1.5 text-sm rounded border border-slate-300 focus:ring-1 focus:ring-blue-500 outline-none"
+                                />
+                              ) : (
+                                <p className="text-sm font-medium text-slate-900">{restaurantDetails.ownerEmail || restaurantDetails.email}</p>
+                              )}
                             </div>
                           </div>
                         )}
@@ -894,31 +1114,63 @@ export default function JoiningRequest() {
                               PAN Details
                             </h5>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                              {restaurantDetails.onboarding.step3.pan.panNumber && (
+                              { (restaurantDetails.onboarding.step3.pan.panNumber || isEditing) && (
                                 <div>
                                   <p className="text-xs text-slate-500 mb-1">PAN Number</p>
-                                  <p className="font-medium text-slate-900">{restaurantDetails.onboarding.step3.pan.panNumber}</p>
+                                  {isEditing ? (
+                                    <input
+                                      type="text"
+                                      value={editData.panNumber}
+                                      onChange={(e) => handleFieldChange("panNumber", e.target.value)}
+                                      className="w-full px-3 py-1.5 text-sm rounded border border-slate-300 focus:ring-1 focus:ring-blue-500 outline-none"
+                                    />
+                                  ) : (
+                                    <p className="font-medium text-slate-900">{restaurantDetails.onboarding.step3.pan.panNumber}</p>
+                                  )}
                                 </div>
                               )}
-                              {restaurantDetails.onboarding.step3.pan.nameOnPan && (
+                              { (restaurantDetails.onboarding.step3.pan.nameOnPan || isEditing) && (
                                 <div>
                                   <p className="text-xs text-slate-500 mb-1">Name on PAN</p>
-                                  <p className="font-medium text-slate-900">{restaurantDetails.onboarding.step3.pan.nameOnPan}</p>
+                                  {isEditing ? (
+                                    <input
+                                      type="text"
+                                      value={editData.nameOnPan}
+                                      onChange={(e) => handleFieldChange("nameOnPan", e.target.value)}
+                                      className="w-full px-3 py-1.5 text-sm rounded border border-slate-300 focus:ring-1 focus:ring-blue-500 outline-none"
+                                    />
+                                  ) : (
+                                    <p className="font-medium text-slate-900">{restaurantDetails.onboarding.step3.pan.nameOnPan}</p>
+                                  )}
                                 </div>
                               )}
-                              {restaurantDetails.onboarding.step3.pan.image?.url && (
+                              {(restaurantDetails.onboarding.step3.pan.image?.url || isEditing) && (
                                 <div className="md:col-span-2">
                                   <p className="text-xs text-slate-500 mb-2">PAN Document</p>
-                                  <a
-                                    href={restaurantDetails.onboarding.step3.pan.image.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700"
-                                  >
-                                    <ImageIcon className="w-4 h-4" />
-                                    <span>View PAN Document</span>
-                                    <ExternalLink className="w-3 h-3" />
-                                  </a>
+                                  {isEditing ? (
+                                    <div className="flex flex-col gap-2">
+                                      <input
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={(e) => handleFileChange("panImage", e.target.files[0])}
+                                        className="text-xs text-slate-600"
+                                      />
+                                      {editData.panImage && typeof editData.panImage === "string" && editData.panImage.startsWith("data:") && (
+                                        <p className="text-[10px] text-green-600 font-medium">New image selected!</p>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <a
+                                      href={restaurantDetails.onboarding.step3.pan.image.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700"
+                                    >
+                                      <ImageIcon className="w-4 h-4" />
+                                      <span>View PAN Document</span>
+                                      <ExternalLink className="w-3 h-3" />
+                                    </a>
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -935,41 +1187,93 @@ export default function JoiningRequest() {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                               <div>
                                 <p className="text-xs text-slate-500 mb-1">GST Registered</p>
-                                <p className="font-medium text-slate-900">
-                                  {restaurantDetails.onboarding.step3.gst.isRegistered ? "Yes" : "No"}
-                                </p>
+                                {isEditing ? (
+                                  <select
+                                    value={editData.gstRegistered}
+                                    onChange={(e) => handleFieldChange("gstRegistered", e.target.value === "true")}
+                                    className="w-full px-3 py-1.5 text-sm rounded border border-slate-300 focus:ring-1 focus:ring-blue-500 outline-none"
+                                  >
+                                    <option value="true">Yes</option>
+                                    <option value="false">No</option>
+                                  </select>
+                                ) : (
+                                  <p className="font-medium text-slate-900">
+                                    {restaurantDetails.onboarding.step3.gst.isRegistered ? "Yes" : "No"}
+                                  </p>
+                                )}
                               </div>
-                              {restaurantDetails.onboarding.step3.gst.gstNumber && (
+                              {(restaurantDetails.onboarding.step3.gst.gstNumber || isEditing) && (
                                 <div>
                                   <p className="text-xs text-slate-500 mb-1">GST Number</p>
-                                  <p className="font-medium text-slate-900">{restaurantDetails.onboarding.step3.gst.gstNumber}</p>
+                                  {isEditing ? (
+                                    <input
+                                      type="text"
+                                      value={editData.gstNumber}
+                                      onChange={(e) => handleFieldChange("gstNumber", e.target.value)}
+                                      className="w-full px-3 py-1.5 text-sm rounded border border-slate-300 focus:ring-1 focus:ring-blue-500 outline-none"
+                                    />
+                                  ) : (
+                                    <p className="font-medium text-slate-900">{restaurantDetails.onboarding.step3.gst.gstNumber}</p>
+                                  )}
                                 </div>
                               )}
-                              {restaurantDetails.onboarding.step3.gst.legalName && (
+                              {(restaurantDetails.onboarding.step3.gst.legalName || isEditing) && (
                                 <div>
                                   <p className="text-xs text-slate-500 mb-1">Legal Name</p>
-                                  <p className="font-medium text-slate-900">{restaurantDetails.onboarding.step3.gst.legalName}</p>
+                                  {isEditing ? (
+                                    <input
+                                      type="text"
+                                      value={editData.gstLegalName}
+                                      onChange={(e) => handleFieldChange("gstLegalName", e.target.value)}
+                                      className="w-full px-3 py-1.5 text-sm rounded border border-slate-300 focus:ring-1 focus:ring-blue-500 outline-none"
+                                    />
+                                  ) : (
+                                    <p className="font-medium text-slate-900">{restaurantDetails.onboarding.step3.gst.legalName}</p>
+                                  )}
                                 </div>
                               )}
-                              {restaurantDetails.onboarding.step3.gst.address && (
+                              {(restaurantDetails.onboarding.step3.gst.address || isEditing) && (
                                 <div className="md:col-span-2">
                                   <p className="text-xs text-slate-500 mb-1">GST Address</p>
-                                  <p className="font-medium text-slate-900">{restaurantDetails.onboarding.step3.gst.address}</p>
+                                  {isEditing ? (
+                                    <textarea
+                                      value={editData.gstAddress}
+                                      onChange={(e) => handleFieldChange("gstAddress", e.target.value)}
+                                      className="w-full px-3 py-1.5 text-sm rounded border border-slate-300 focus:ring-1 focus:ring-blue-500 outline-none"
+                                      rows={2}
+                                    />
+                                  ) : (
+                                    <p className="font-medium text-slate-900">{restaurantDetails.onboarding.step3.gst.address}</p>
+                                  )}
                                 </div>
                               )}
-                              {restaurantDetails.onboarding.step3.gst.image?.url && (
+                              {(restaurantDetails.onboarding.step3.gst.image?.url || isEditing) && (
                                 <div className="md:col-span-2">
                                   <p className="text-xs text-slate-500 mb-2">GST Document</p>
-                                  <a
-                                    href={restaurantDetails.onboarding.step3.gst.image.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700"
-                                  >
-                                    <ImageIcon className="w-4 h-4" />
-                                    <span>View GST Document</span>
-                                    <ExternalLink className="w-3 h-3" />
-                                  </a>
+                                  {isEditing ? (
+                                    <div className="flex flex-col gap-2">
+                                      <input
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={(e) => handleFileChange("gstImage", e.target.files[0])}
+                                        className="text-xs text-slate-600"
+                                      />
+                                      {editData.gstImage && typeof editData.gstImage === "string" && editData.gstImage.startsWith("data:") && (
+                                        <p className="text-[10px] text-green-600 font-medium">New image selected!</p>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <a
+                                      href={restaurantDetails.onboarding.step3.gst.image.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700"
+                                    >
+                                      <ImageIcon className="w-4 h-4" />
+                                      <span>View GST Document</span>
+                                      <ExternalLink className="w-3 h-3" />
+                                    </a>
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -984,37 +1288,69 @@ export default function JoiningRequest() {
                               FSSAI Details
                             </h5>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                              {restaurantDetails.onboarding.step3.fssai.registrationNumber && (
+                              {(restaurantDetails.onboarding.step3.fssai.registrationNumber || isEditing) && (
                                 <div>
                                   <p className="text-xs text-slate-500 mb-1">FSSAI Registration Number</p>
-                                  <p className="font-medium text-slate-900">{restaurantDetails.onboarding.step3.fssai.registrationNumber}</p>
+                                  {isEditing ? (
+                                    <input
+                                      type="text"
+                                      value={editData.fssaiNumber}
+                                      onChange={(e) => handleFieldChange("fssaiNumber", e.target.value)}
+                                      className="w-full px-3 py-1.5 text-sm rounded border border-slate-300 focus:ring-1 focus:ring-blue-500 outline-none"
+                                    />
+                                  ) : (
+                                    <p className="font-medium text-slate-900">{restaurantDetails.onboarding.step3.fssai.registrationNumber}</p>
+                                  )}
                                 </div>
                               )}
-                              {restaurantDetails.onboarding.step3.fssai.expiryDate && (
+                              {(restaurantDetails.onboarding.step3.fssai.expiryDate || isEditing) && (
                                 <div>
                                   <p className="text-xs text-slate-500 mb-1">FSSAI Expiry Date</p>
-                                  <p className="font-medium text-slate-900">
-                                    {new Date(restaurantDetails.onboarding.step3.fssai.expiryDate).toLocaleDateString('en-IN', {
-                                      year: 'numeric',
-                                      month: 'long',
-                                      day: 'numeric'
-                                    })}
-                                  </p>
+                                  {isEditing ? (
+                                    <input
+                                      type="date"
+                                      value={editData.fssaiExpiry ? new Date(editData.fssaiExpiry).toISOString().split('T')[0] : ""}
+                                      onChange={(e) => handleFieldChange("fssaiExpiry", e.target.value)}
+                                      className="w-full px-3 py-1.5 text-sm rounded border border-slate-300 focus:ring-1 focus:ring-blue-500 outline-none"
+                                    />
+                                  ) : (
+                                    <p className="font-medium text-slate-900">
+                                      {new Date(restaurantDetails.onboarding.step3.fssai.expiryDate).toLocaleDateString('en-IN', {
+                                        year: 'numeric',
+                                        month: 'long',
+                                        day: 'numeric'
+                                      })}
+                                    </p>
+                                  )}
                                 </div>
                               )}
-                              {restaurantDetails.onboarding.step3.fssai.image?.url && (
+                              {(restaurantDetails.onboarding.step3.fssai.image?.url || isEditing) && (
                                 <div className="md:col-span-2">
                                   <p className="text-xs text-slate-500 mb-2">FSSAI Document</p>
-                                  <a
-                                    href={restaurantDetails.onboarding.step3.fssai.image.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700"
-                                  >
-                                    <ImageIcon className="w-4 h-4" />
-                                    <span>View FSSAI Document</span>
-                                    <ExternalLink className="w-3 h-3" />
-                                  </a>
+                                  {isEditing ? (
+                                    <div className="flex flex-col gap-2">
+                                      <input
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={(e) => handleFileChange("fssaiImage", e.target.files[0])}
+                                        className="text-xs text-slate-600"
+                                      />
+                                      {editData.fssaiImage && typeof editData.fssaiImage === "string" && editData.fssaiImage.startsWith("data:") && (
+                                        <p className="text-[10px] text-green-600 font-medium">New image selected!</p>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <a
+                                      href={restaurantDetails.onboarding.step3.fssai.image.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700"
+                                    >
+                                      <ImageIcon className="w-4 h-4" />
+                                      <span>View FSSAI Document</span>
+                                      <ExternalLink className="w-3 h-3" />
+                                    </a>
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -1029,30 +1365,68 @@ export default function JoiningRequest() {
                               Bank Details
                             </h5>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                              {restaurantDetails.onboarding.step3.bank.accountNumber && (
+                              {(restaurantDetails.onboarding.step3.bank.accountNumber || isEditing) && (
                                 <div>
                                   <p className="text-xs text-slate-500 mb-1">Account Number</p>
-                                  <p className="font-medium text-slate-900">
-                                    {restaurantDetails.onboarding.step3.bank.accountNumber}
-                                  </p>
+                                  {isEditing ? (
+                                    <input
+                                      type="text"
+                                      value={editData.accountNumber}
+                                      onChange={(e) => handleFieldChange("accountNumber", e.target.value)}
+                                      className="w-full px-3 py-1.5 text-sm rounded border border-slate-300 focus:ring-1 focus:ring-blue-500 outline-none"
+                                    />
+                                  ) : (
+                                    <p className="font-medium text-slate-900">
+                                      {restaurantDetails.onboarding.step3.bank.accountNumber}
+                                    </p>
+                                  )}
                                 </div>
                               )}
-                              {restaurantDetails.onboarding.step3.bank.ifscCode && (
+                              {(restaurantDetails.onboarding.step3.bank.ifscCode || isEditing) && (
                                 <div>
                                   <p className="text-xs text-slate-500 mb-1">IFSC Code</p>
-                                  <p className="font-medium text-slate-900">{restaurantDetails.onboarding.step3.bank.ifscCode}</p>
+                                  {isEditing ? (
+                                    <input
+                                      type="text"
+                                      value={editData.ifscCode}
+                                      onChange={(e) => handleFieldChange("ifscCode", e.target.value)}
+                                      className="w-full px-3 py-1.5 text-sm rounded border border-slate-300 focus:ring-1 focus:ring-blue-500 outline-none"
+                                    />
+                                  ) : (
+                                    <p className="font-medium text-slate-900">{restaurantDetails.onboarding.step3.bank.ifscCode}</p>
+                                  )}
                                 </div>
                               )}
-                              {restaurantDetails.onboarding.step3.bank.accountHolderName && (
+                              {(restaurantDetails.onboarding.step3.bank.accountHolderName || isEditing) && (
                                 <div>
                                   <p className="text-xs text-slate-500 mb-1">Account Holder Name</p>
-                                  <p className="font-medium text-slate-900">{restaurantDetails.onboarding.step3.bank.accountHolderName}</p>
+                                  {isEditing ? (
+                                    <input
+                                      type="text"
+                                      value={editData.accountHolderName}
+                                      onChange={(e) => handleFieldChange("accountHolderName", e.target.value)}
+                                      className="w-full px-3 py-1.5 text-sm rounded border border-slate-300 focus:ring-1 focus:ring-blue-500 outline-none"
+                                    />
+                                  ) : (
+                                    <p className="font-medium text-slate-900">{restaurantDetails.onboarding.step3.bank.accountHolderName}</p>
+                                  )}
                                 </div>
                               )}
-                              {restaurantDetails.onboarding.step3.bank.accountType && (
+                              {(restaurantDetails.onboarding.step3.bank.accountType || isEditing) && (
                                 <div>
                                   <p className="text-xs text-slate-500 mb-1">Account Type</p>
-                                  <p className="font-medium text-slate-900 capitalize">{restaurantDetails.onboarding.step3.bank.accountType}</p>
+                                  {isEditing ? (
+                                    <select
+                                      value={editData.accountType}
+                                      onChange={(e) => handleFieldChange("accountType", e.target.value)}
+                                      className="w-full px-3 py-1.5 text-sm rounded border border-slate-300 focus:ring-1 focus:ring-blue-500 outline-none"
+                                    >
+                                      <option value="savings">Savings</option>
+                                      <option value="current">Current</option>
+                                    </select>
+                                  ) : (
+                                    <p className="font-medium text-slate-900 capitalize">{restaurantDetails.onboarding.step3.bank.accountType}</p>
+                                  )}
                                 </div>
                               )}
                             </div>

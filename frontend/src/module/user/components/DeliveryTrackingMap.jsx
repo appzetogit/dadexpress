@@ -73,7 +73,11 @@ const DeliveryTrackingMap = ({
 
   useEffect(() => {
     hasRealtimePolylineRef.current = false;
-  }, [trackingIdsKey]);
+    routePolylinePointsRef.current = null;
+    if (animationControllerRef.current) {
+      animationControllerRef.current.lastProgress = 0;
+    }
+  }, [trackingIdsKey, order?.deliveryState?.currentPhase, order?.deliveryState?.status]);
 
   const applyPolylineToMap = useCallback((polylinePoints) => {
     if (!Array.isArray(polylinePoints) || polylinePoints.length < 2) return;
