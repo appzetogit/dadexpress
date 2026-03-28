@@ -46,7 +46,8 @@ export default function ItemDetailsPage() {
   const [gst, setGst] = useState("5.0")
   const [isRecommended, setIsRecommended] = useState(false)
   const [isInStock, setIsInStock] = useState(true)
-  const [weightPerServing, setWeightPerServing] = useState("")
+  const [isAddingCategory, setIsAddingCategory] = useState(false)
+  const [newCategoryName, setNewCategoryName] = useState("")
   const [calorieCount, setCalorieCount] = useState("")
   const [proteinCount, setProteinCount] = useState("")
   const [carbohydrates, setCarbohydrates] = useState("")
@@ -243,51 +244,79 @@ export default function ItemDetailsPage() {
     fetchItemData()
   }, [id, isNewItem, location.state, defaultCategory, adminMode, restaurantId])
 
-  // Fetch categories from restaurant-specific API
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        setLoadingCategories(true)
-        const response = adminMode
-          ? await adminAPI.getRestaurantById(restaurantId)
-          : await restaurantAPI.getCategories()
+  const fetchCategories = async () => {
+    try {
+      setLoadingCategories(true)
+      const response = adminMode
+        ? await adminAPI.getRestaurantMenu(restaurantId)
+        : await restaurantAPI.getMenu()
 
-        if (adminMode) {
-          // For admin, categories are usually in the restaurant object or we might need to fetch them differently
-          // In HubMenu.jsx adminMode, it uses adminAPI.getRestaurantById
-          if (response.data.success && response.data.data.restaurant?.categories) {
-            const formattedCategories = response.data.data.restaurant.categories.map(cat => ({
-              id: cat._id || cat.id || cat.name,
-              name: cat.name
-            }))
-            setCategories(formattedCategories)
-          } else {
-            setCategories([])
-          }
-        } else if (response.data.success && response.data.data.categories) {
-          // Format categories for the UI - flat list, no subcategories
-          const formattedCategories = response.data.data.categories.map(cat => ({
-            id: cat._id || cat.id,
-            name: cat.name
-          }))
-
-          console.log('Formatted restaurant categories:', formattedCategories)
-          setCategories(formattedCategories)
-        } else {
-          // If no categories exist, show empty array (user can add categories)
-          setCategories([])
-        }
-      } catch (error) {
-        console.error('Error fetching restaurant categories:', error)
-        // Show empty array on error - user can add categories
+      if (response.data.success && response.data.data.menu?.sections) {
+        const formattedCategories = response.data.data.menu.sections.map(sec => ({
+          id: sec.id,
+          name: sec.name
+        }))
+        setCategories(formattedCategories)
+      } else {
         setCategories([])
-      } finally {
-        setLoadingCategories(false)
       }
+    } catch (error) {
+      console.error('Error fetching restaurant categories:', error)
+      setCategories([])
+    } finally {
+      setLoadingCategories(false)
     }
+  }
 
+  useEffect(() => {
     fetchCategories()
   }, [adminMode, restaurantId])
+
+  const handleAddNewCategory = async () => {
+    if (!newCategoryName.trim()) {
+      toast.error("Please enter a category name")
+      return
+    }
+
+    try {
+      if (adminMode) {
+        const menuResp = await adminAPI.getRestaurantMenu(restaurantId)
+        if (menuResp.data.success) {
+          const menu = menuResp.data.data.menu || { sections: [] }
+          const sections = menu.sections || []
+          
+          if (sections.some(s => s.name.toLowerCase() === newCategoryName.trim().toLowerCase())) {
+            toast.error("Category already exists")
+            return
+          }
+
+          const newSection = {
+            id: `section-${Date.now()}`,
+            name: newCategoryName.trim(),
+            items: [],
+            subsections: [],
+            isEnabled: true,
+            order: sections.length
+          }
+
+          await adminAPI.updateRestaurantMenu(restaurantId, { sections: [...sections, newSection] })
+        }
+      } else {
+        await restaurantAPI.addSection(newCategoryName.trim())
+      }
+      
+      toast.success("Category added successfully")
+      const addedName = newCategoryName.trim()
+      setNewCategoryName("")
+      setIsAddingCategory(false)
+      
+      await fetchCategories()
+      setCategory(addedName)
+    } catch (error) {
+      console.error("Error adding category:", error)
+      toast.error("Failed to add category")
+    }
+  }
 
   // Serves info options
   const servesOptions = [
@@ -1298,10 +1327,7 @@ return (
               <h2 className="text-lg font-bold text-gray-900">Select category</h2>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => {
-                    setIsCategoryPopupOpen(false)
-                    navigate(adminMode ? `/admin/restaurants/${restaurantId}/menu` : '/restaurant/menu-categories')
-                  }}
+                  onClick={() => setIsAddingCategory(true)}
                   className="p-2 rounded-lg bg-black text-white hover:bg-gray-800 transition-colors flex items-center gap-1.5"
                   title="Add Category"
                 >
@@ -1317,7 +1343,35 @@ return (
               </div>
             </div>
             <div className="flex-1 overflow-y-auto p-2">
-              {loadingCategories ? (
+              {isAddingCategory ? (
+                <div className="p-4 space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">Category Name</label>
+                    <input
+                      type="text"
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      placeholder="Enter category name"
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-black/5"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setIsAddingCategory(false)}
+                      className="flex-1 px-4 py-3 rounded-xl border border-gray-200 text-sm font-semibold hover:bg-gray-50 mb-4"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleAddNewCategory}
+                      className="flex-1 px-4 py-3 rounded-xl bg-black text-white text-sm font-semibold hover:bg-gray-800 mb-4"
+                    >
+                      Add Category
+                    </button>
+                  </div>
+                </div>
+              ) : loadingCategories ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="w-6 h-6 animate-spin text-gray-600" />
                 </div>
@@ -1325,10 +1379,7 @@ return (
                 <div className="text-center py-12 space-y-4">
                   <p className="text-sm text-gray-500">No categories available</p>
                   <button
-                    onClick={() => {
-                      setIsCategoryPopupOpen(false)
-                      navigate(adminMode ? `/admin/restaurants/${restaurantId}/menu` : '/restaurant/menu-categories')
-                    }}
+                    onClick={() => setIsAddingCategory(true)}
                     className="inline-flex items-center gap-2 px-4 py-2 bg-black text-white rounded-lg font-semibold hover:bg-gray-800 transition-colors"
                   >
                     <Plus className="w-5 h-5" />
