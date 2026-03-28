@@ -102,8 +102,8 @@ export function ProfileProvider({ children }) {
   // VegMode state - stored in localStorage for persistence
   const [vegMode, setVegMode] = useState(() => {
     const saved = safeStorage.getItem("userVegMode")
-    // Default to true (ON) if not set
-    return saved !== null ? saved === "true" : true
+    // Default to false (OFF) if not set
+    return saved !== null ? saved === "true" : false
   })
 
   // Save to localStorage whenever userProfile, addresses or paymentMethods change
@@ -496,7 +496,7 @@ export function useProfile() {
       removeDishFavorite: () => console.warn("ProfileProvider not available"),
       isDishFavorite: () => false,
       getDishFavorites: () => [],
-      vegMode: true,
+      vegMode: false,
       setVegMode: () => console.warn("ProfileProvider not available")
     }
   }
