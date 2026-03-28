@@ -748,7 +748,11 @@ export default function HubMenu() {
     if (!subCategoryName.trim() || !selectedGroupForSubCategory) return
     
     // Navigate to new item page with sub-category info
-    navigate('/restaurant/hub-menu/item/new', {
+    const itemPath = adminMode 
+      ? `/admin/restaurants/${effectiveRestaurantId}/menu/item/new`
+      : '/restaurant/hub-menu/item/new'
+      
+    navigate(itemPath, {
       state: {
         groupId: selectedGroupForSubCategory.id,
         category: selectedGroupForSubCategory.name,
@@ -789,7 +793,11 @@ export default function HubMenu() {
         toast.success('Category added successfully!')
         
         // Navigate to new item page with new category
-        navigate('/restaurant/hub-menu/item/new', {
+        const itemPath = adminMode 
+          ? `/admin/restaurants/${effectiveRestaurantId}/menu/item/new`
+          : '/restaurant/hub-menu/item/new'
+          
+        navigate(itemPath, {
           state: {
             category: newCategoryName.trim(),
             isNewCategory: true,
@@ -1201,7 +1209,12 @@ export default function HubMenu() {
                         {/* Action buttons - below image */}
                         <div className="flex items-center justify-center gap-3 mt-4">
                           <button 
-                            onClick={() => navigate(`/restaurant/hub-menu/item/${item.id}`, { state: { item, groupId: group.id } })}
+                            onClick={() => {
+                              const editPath = adminMode 
+                                ? `/admin/restaurants/${effectiveRestaurantId}/menu/item/${item.id}`
+                                : `/restaurant/hub-menu/item/${item.id}`
+                              navigate(editPath, { state: { item, groupId: group.id } })
+                            }}
                             className="flex items-center gap-1.5 bg-transparent text-gray-700 text-sm font-medium"
                           >
                             <Edit className="w-3.5 h-3.5" />
@@ -1322,7 +1335,10 @@ export default function HubMenu() {
               <div className="px-4 py-4 space-y-2">
                 <button
                   onClick={() => {
-                    navigate(`/restaurant/hub-menu/item/new`)
+                    const addPath = adminMode 
+                      ? `/admin/restaurants/${effectiveRestaurantId}/menu/item/new`
+                      : '/restaurant/hub-menu/item/new'
+                    navigate(addPath)
                   }}
                   className="w-full py-3 px-4 text-left rounded-lg hover:bg-gray-50 transition-colors"
                 >

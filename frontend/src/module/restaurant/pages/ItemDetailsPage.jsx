@@ -18,14 +18,15 @@ import {
 import { Switch } from "@/components/ui/switch"
 // Removed getAllFoods and saveFood - now using menu API
 import api from "@/lib/api"
-import { restaurantAPI, uploadAPI } from "@/lib/api"
+import { restaurantAPI, uploadAPI, adminAPI } from "@/lib/api"
 import { toast } from "sonner"
 
 export default function ItemDetailsPage() {
   const navigate = useNavigate()
-  const { id } = useParams()
+  const { id, restaurantId } = useParams()
   const location = useLocation()
   const isNewItem = id === "new"
+  const adminMode = !!restaurantId && location.pathname.includes('/admin/')
   const groupId = location.state?.groupId
   const defaultCategory = location.state?.category || "Varieties"
   const fileInputRef = useRef(null)
@@ -140,7 +141,9 @@ export default function ItemDetailsPage() {
       if (!isNewItem && id) {
         try {
           setLoadingItem(true)
-          const menuResponse = await restaurantAPI.getMenu()
+          const menuResponse = adminMode 
+            ? await adminAPI.getRestaurantMenu(restaurantId)
+            : await restaurantAPI.getMenu()
           const menu = menuResponse.data?.data?.menu
           const sections = menu?.sections || []
 
@@ -244,8 +247,23 @@ export default function ItemDetailsPage() {
     const fetchCategories = async () => {
       try {
         setLoadingCategories(true)
-        const response = await restaurantAPI.getCategories()
-        if (response.data.success && response.data.data.categories) {
+        const response = adminMode
+          ? await adminAPI.getRestaurantById(restaurantId)
+          : await restaurantAPI.getCategories()
+          
+        if (adminMode) {
+          // For admin, categories are usually in the restaurant object or we might need to fetch them differently
+          // In HubMenu.jsx adminMode, it uses adminAPI.getRestaurantById
+          if (response.data.success && response.data.data.restaurant?.categories) {
+            const formattedCategories = response.data.data.restaurant.categories.map(cat => ({
+              id: cat._id || cat.id || cat.name,
+              name: cat.name
+            }))
+            setCategories(formattedCategories)
+          } else {
+            setCategories([])
+          }
+        } else if (response.data.success && response.data.data.categories) {
           // Format categories for the UI - flat list, no subcategories
           const formattedCategories = response.data.data.categories.map(cat => ({
             id: cat._id || cat.id,
@@ -676,7 +694,9 @@ export default function ItemDetailsPage() {
       console.log('==========================')
 
       // Get current menu
-      const menuResponse = await restaurantAPI.getMenu()
+      const menuResponse = adminMode
+        ? await adminAPI.getRestaurantMenu(restaurantId)
+        : await restaurantAPI.getMenu()
       let menu = menuResponse.data?.data?.menu
       let sections = menu?.sections || []
 
@@ -839,18 +859,12 @@ export default function ItemDetailsPage() {
       console.log('Images count:', itemDataToSave.images?.length)
       console.log('PhotoCount:', itemDataToSave.photoCount)
       console.log('Full itemDataToSave:', JSON.stringify(itemDataToSave, null, 2))
+      
+      console.log('Final sections to save:', JSON.stringify(sections, null, 2))
 
-      // Verify sections structure
-      console.log('Sections being sent:', sections.length, 'sections')
-      const itemSection = sections.find(s => s.items?.some(item => item.id === itemId))
-      if (itemSection) {
-        const itemInSection = itemSection.items.find(item => item.id === itemId)
-        if (itemInSection) {
-          console.log('Item in section before API call - images:', itemInSection.images, 'count:', itemInSection.images?.length)
-        }
-      }
-
-      const updateResponse = await restaurantAPI.updateMenu({ sections })
+      const updateResponse = adminMode
+        ? await adminAPI.updateRestaurantMenu(restaurantId, { sections })
+        : await restaurantAPI.updateMenu({ sections })
 
       if (updateResponse.data?.success) {
         const imageCount = allImageUrls.length
@@ -862,7 +876,10 @@ export default function ItemDetailsPage() {
         // Small delay to ensure backend has processed the update
         await new Promise(resolve => setTimeout(resolve, 300))
         // Navigate back to HubMenu with replace to prevent back navigation issues
-        navigate("/restaurant/hub-menu", { replace: true })
+        const menuPath = adminMode 
+          ? `/admin/restaurants/${restaurantId}/menu`
+          : "/restaurant/hub-menu"
+        navigate(menuPath, { replace: true })
         // Trigger a page refresh event
         window.dispatchEvent(new CustomEvent('foodsChanged'))
       } else {
@@ -884,7 +901,8 @@ export default function ItemDetailsPage() {
   const handleDelete = () => {
     // Delete logic here
     console.log("Deleting item:", id)
-    navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : "/restaurant")
+    const backPath = adminMode ? `/admin/restaurants/${restaurantId}/menu` : "/restaurant/hub-menu"
+    navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : backPath)
   }
 
   return (
@@ -901,7 +919,10 @@ export default function ItemDetailsPage() {
       <div className="sticky top-0 z-40 bg-white border-b border-gray-200 flex-shrink-0">
         <div className="px-4 py-3 flex items-center gap-3">
           <button
-            onClick={() => navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : "/restaurant")}
+            onClick={() => {
+              const backPath = adminMode ? `/admin/restaurants/${restaurantId}/menu` : "/restaurant/hub-menu"
+              navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : backPath)
+            }}
             className="p-1 rounded-full hover:bg-gray-100"
           >
             <ArrowLeft className="w-5 h-5 text-gray-700" />

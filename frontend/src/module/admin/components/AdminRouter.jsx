@@ -32,6 +32,7 @@ const RestaurantComplaints = lazy(() => import("../pages/restaurant/RestaurantCo
 const RestaurantsBulkImport = lazy(() => import("../pages/restaurant/RestaurantsBulkImport"));
 const RestaurantsBulkExport = lazy(() => import("../pages/restaurant/RestaurantsBulkExport"));
 const HubMenu = lazy(() => import("../../restaurant/pages/HubMenu"));
+const ItemDetailsPage = lazy(() => import("../../restaurant/pages/ItemDetailsPage"));
 // Food Management
 const FoodsList = lazy(() => import("../pages/foods/FoodsList"));
 const AddonsList = lazy(() => import("../pages/addons/AddonsList"));
@@ -197,6 +198,7 @@ export default function AdminRouter() {
           <Route path="restaurants/bulk-import" element={<RestaurantsBulkImport />} />
           <Route path="restaurants/bulk-export" element={<RestaurantsBulkExport />} />
           <Route path="restaurants/:restaurantId/menu" element={<HubMenu />} />
+          <Route path="restaurants/:restaurantId/menu/item/:id" element={<ItemDetailsPage />} />
 
           {/* FOOD MANAGEMENT */}
           {/* Categories */}
