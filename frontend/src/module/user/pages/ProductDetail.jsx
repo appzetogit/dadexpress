@@ -62,7 +62,7 @@ export default function ProductDetail() {
 
         const mappedProduct = {
           id: item.id,
-          name: item.name,
+          name: item.name?.toLowerCase().includes("size") ? item.name.replace(/size/gi, "").trim() : item.name,
           image:
             item.image ||
             (Array.isArray(item.images) && item.images.length > 0

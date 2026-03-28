@@ -45,7 +45,10 @@ export default function FoodDetailsPage() {
         description: food.description || "",
         discountType: food.discountType || "Percent",
         discountAmount: food.discountAmount || 0.0,
-        variations: food.variations || [],
+        variations: (food.variations || []).map(v => ({
+          ...v,
+          name: v.name?.toLowerCase().includes("size") ? v.name.replace(/size/gi, "").trim() : v.name
+        })),
         tags: food.tags || [],
         nutrition: food.nutrition || [],
         allergies: food.allergies || [],
@@ -140,7 +143,7 @@ export default function FoodDetailsPage() {
         mainStock: typeof food.stock === 'number' ? food.stock : (food.stock === 'Unlimited' || food.stock === 'unlimited' ? 'Unlimited' : 0),
         variations: food.variations ? food.variations.map(v => ({
           id: v.id,
-          name: v.name,
+          name: v.name?.toLowerCase().includes("size") ? v.name.replace(/size/gi, "").trim() : v.name,
           stock: v.stock || 0
         })) : []
       })

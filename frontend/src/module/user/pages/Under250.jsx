@@ -283,7 +283,7 @@ export default function Under250() {
     // Prepare cart item with all required properties
     const cartItem = {
       id: item.id,
-      name: item.name,
+      name: item.name?.toLowerCase().includes("size") ? item.name.replace(/size/gi, "").trim() : item.name,
       price: item.price,
       image: item.image,
       restaurant: restaurant,

@@ -1228,7 +1228,17 @@ export default function Home() {
   // Refetch restaurants when filters or GPS zone changes
   useEffect(() => {
     fetchRestaurants(appliedFilters)
-  }, [appliedFilters, fetchRestaurants, resolvedZoneId, zoneResolveLoading, zoneLoading, selectedAddress, selectedCoords?.lat, selectedCoords?.lng])
+  }, [
+    appliedFilters,
+    fetchRestaurants,
+    resolvedZoneId,
+    zoneResolveLoading,
+    zoneLoading,
+    selectedAddress,
+    // Use stable coordinate references (rounded to 3 decimal places) to prevent jitter re-renders
+    Number(selectedCoords?.lat || 0).toFixed(3),
+    Number(selectedCoords?.lng || 0).toFixed(3)
+  ])
 
   useEffect(() => {
     setRestaurantsData([])

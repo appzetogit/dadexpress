@@ -41,18 +41,18 @@ export default function FoodDetailPage() {
           // Map backend item to frontend foodData structure
           const formattedData = {
             id: item.id,
-            name: item.name,
+            name: item.name?.toLowerCase().includes("size") ? item.name.replace(/size/gi, "").trim() : item.name,
             image: item.image || (item.images && item.images.length > 0 ? item.images[0] : "https://via.placeholder.com/800x600?text=Food+Image"),
             rating: item.rating || 4.5,
             description: item.description || "No description available.",
             sizes: item.variations && item.variations.length > 0
               ? item.variations.map(v => ({
-                name: v.name,
+                name: v.name?.toLowerCase().includes("size") ? v.name.replace(/size/gi, "").trim() : v.name,
                 price: v.price,
                 originalPrice: v.price + (item.discountAmount || 0) // Placeholder for original price
               }))
               : [{
-                name: item.itemSize || "Standard",
+                name: (item.itemSize || "Standard").toLowerCase().includes("size") ? (item.itemSize || "Standard").replace(/size/gi, "").trim() : (item.itemSize || "Standard"),
                 price: item.price,
                 originalPrice: item.originalPrice || item.price
               }],

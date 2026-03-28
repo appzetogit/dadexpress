@@ -36,7 +36,7 @@ export default function CategoryFoodsPage() {
         // Map backend items to frontend categoryFoods structure
         const items = response.data.data.items.map(item => ({
           id: item.id,
-          name: item.name,
+          name: item.name?.toLowerCase().includes("size") ? item.name.replace(/size/gi, "").trim() : item.name,
           image: item.image || (item.images && item.images.length > 0 ? item.images[0] : "https://via.placeholder.com/400x300?text=Food+Image"),
           discount: item.discountAmount > 0
             ? (item.discountType === 'Percent' ? `${item.discountAmount}% OFF` : `₹${item.discountAmount} OFF`)

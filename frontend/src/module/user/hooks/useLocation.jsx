@@ -1849,8 +1849,8 @@ export function useLocation() {
               const newParts = completeFormattedAddress.split(',').filter(p => p.trim()).length
               const addressImproved = newParts > currentParts
 
-              // Only update if moved >10 meters OR address significantly improved
-              if (distanceMeters <= 10 && !addressImproved) {
+              // Only update if moved >150 meters OR address significantly improved
+              if (distanceMeters <= 150 && !addressImproved) {
                 false && console.log(`📍 Location unchanged (${distanceMeters.toFixed(1)}m change), keeping stable address`)
                 return // Don't update - keep current stable address
               }
@@ -1891,8 +1891,8 @@ export function useLocation() {
               }
             }
 
-            // Check if coordinates have changed significantly (threshold: ~10 meters)
-            const coordThreshold = 0.0001 // approximately 10 meters
+            // Check if coordinates have changed significantly (threshold: ~150 meters)
+            const coordThreshold = 0.001 // approximately 150 meters
             const coordsChanged =
               !prevLocationCoordsRef.current.latitude ||
               !prevLocationCoordsRef.current.longitude ||

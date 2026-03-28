@@ -915,11 +915,17 @@ export default function RestaurantDetails() {
       const clonedSection = {
         ...section,
         name: sectionTitle, // normalized name
-        items: [...(section.items || [])],
+        items: (section.items || []).map(item => ({
+          ...item,
+          name: item.name?.toLowerCase().includes("size") ? item.name.replace(/size/gi, "").trim() : item.name
+        })),
         subsections: (section.subsections || []).map(sub => ({
           ...sub,
           name: sub.name || sub.title || 'Subsection',
-          items: [...(sub.items || [])]
+          items: (sub.items || []).map(item => ({
+            ...item,
+            name: item.name?.toLowerCase().includes("size") ? item.name.replace(/size/gi, "").trim() : item.name
+          }))
         }))
       }
 
