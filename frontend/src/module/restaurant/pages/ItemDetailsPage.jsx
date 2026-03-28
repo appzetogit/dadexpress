@@ -1327,12 +1327,19 @@ return (
               <h2 className="text-lg font-bold text-gray-900">Select category</h2>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setIsAddingCategory(true)}
-                  className="p-2 rounded-lg bg-black text-white hover:bg-gray-800 transition-colors flex items-center gap-1.5"
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    // Diagnostic alert to confirm this code is running
+                    window.alert("Opening Add Category Form...");
+                    setIsAddingCategory(true);
+                  }}
+                  className="p-2 rounded-lg bg-violet-600 text-white hover:bg-violet-700 transition-colors flex items-center gap-1.5 shadow-lg"
                   title="Add Category"
                 >
                   <Plus className="w-4 h-4" />
-                  <span className="text-sm font-medium">Add</span>
+                  <span className="text-sm font-medium">Add Category</span>
                 </button>
                 <button
                   onClick={() => setIsCategoryPopupOpen(false)}
@@ -1379,11 +1386,17 @@ return (
                 <div className="text-center py-12 space-y-4">
                   <p className="text-sm text-gray-500">No categories available</p>
                   <button
-                    onClick={() => setIsAddingCategory(true)}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-black text-white rounded-lg font-semibold hover:bg-gray-800 transition-colors"
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      window.alert("Opening Add Category Form...");
+                      setIsAddingCategory(true);
+                    }}
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-violet-600 text-white rounded-xl font-bold hover:bg-violet-700 transition-all shadow-lg transform active:scale-95"
                   >
                     <Plus className="w-5 h-5" />
-                    Add Category
+                    + ADD NEW CATEGORY
                   </button>
                 </div>
               ) : (
