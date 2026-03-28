@@ -32,7 +32,7 @@ const RestaurantComplaints = lazy(() => import("../pages/restaurant/RestaurantCo
 const RestaurantsBulkImport = lazy(() => import("../pages/restaurant/RestaurantsBulkImport"));
 const RestaurantsBulkExport = lazy(() => import("../pages/restaurant/RestaurantsBulkExport"));
 const HubMenu = lazy(() => import("../../restaurant/pages/HubMenu"));
-const ItemDetailsPage = lazy(() => import("../../restaurant/pages/ItemDetailsPage"));
+const ItemDetailsPage = lazy(() => import("@/module/restaurant/pages/ItemDetailsPage"));
 // Food Management
 const FoodsList = lazy(() => import("../pages/foods/FoodsList"));
 const AddonsList = lazy(() => import("../pages/addons/AddonsList"));

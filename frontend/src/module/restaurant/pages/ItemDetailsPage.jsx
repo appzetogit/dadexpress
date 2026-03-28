@@ -71,6 +71,7 @@ export default function ItemDetailsPage() {
   const [categories, setCategories] = useState([])
   const [loadingCategories, setLoadingCategories] = useState(true)
   const [loadingItem, setLoadingItem] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
 
   const maxNameLength = 70
   const maxDescriptionLength = 1000
@@ -138,10 +139,10 @@ export default function ItemDetailsPage() {
       }
 
       // If no item in location.state but we have an id, fetch from menu API
-      if (!isNewItem && id) {
+      if (!isNewItem && id && id !== "undefined") {
         try {
           setLoadingItem(true)
-          const menuResponse = adminMode 
+          const menuResponse = adminMode
             ? await adminAPI.getRestaurantMenu(restaurantId)
             : await restaurantAPI.getMenu()
           const menu = menuResponse.data?.data?.menu
@@ -240,7 +241,7 @@ export default function ItemDetailsPage() {
     }
 
     fetchItemData()
-  }, [id, isNewItem, location.state, defaultCategory])
+  }, [id, isNewItem, location.state, defaultCategory, adminMode, restaurantId])
 
   // Fetch categories from restaurant-specific API
   useEffect(() => {
@@ -250,7 +251,7 @@ export default function ItemDetailsPage() {
         const response = adminMode
           ? await adminAPI.getRestaurantById(restaurantId)
           : await restaurantAPI.getCategories()
-          
+
         if (adminMode) {
           // For admin, categories are usually in the restaurant object or we might need to fetch them differently
           // In HubMenu.jsx adminMode, it uses adminAPI.getRestaurantById
@@ -286,7 +287,7 @@ export default function ItemDetailsPage() {
     }
 
     fetchCategories()
-  }, [])
+  }, [adminMode, restaurantId])
 
   // Serves info options
   const servesOptions = [
@@ -617,297 +618,301 @@ export default function ItemDetailsPage() {
   }
 
   const handleSave = async () => {
-    if (!itemName.trim()) {
-      toast.error("Please enter an item name")
-      return
-    }
+    if (isSaving || uploadingImages) return;
 
-    if (images.length === 0) {
-      toast.error("Please upload at least one photo")
-      return
-    }
+  if (!itemName.trim()) {
+    toast.error("Please enter an item name")
+    return
+  }
 
-    try {
-      setUploadingImages(true)
+  if (images.length === 0) {
+    toast.error("Please upload at least one photo")
+    return
+  }
 
-      // Upload new images to Cloudinary
-      const uploadedImageUrls = []
+  try {
+    setIsSaving(true)
+    setUploadingImages(true)
 
-      // Separate existing URLs (already uploaded) from new files (blob URLs)
-      const existingImageUrls = images.filter(img =>
-        typeof img === 'string' &&
-        (img.startsWith('http://') || img.startsWith('https://')) &&
-        !img.startsWith('blob:')
-      )
+    // Upload new images to Cloudinary
+    const uploadedImageUrls = []
 
-      console.log('Images state:', images)
-      console.log('Existing image URLs (already uploaded):', existingImageUrls)
-      console.log('Image files map:', imageFiles)
+    // Separate existing URLs (already uploaded) from new files (blob URLs)
+    const existingImageUrls = images.filter(img =>
+      typeof img === 'string' &&
+      (img.startsWith('http://') || img.startsWith('https://')) &&
+      !img.startsWith('blob:')
+    )
 
-      // Upload new File objects to Cloudinary (files that are blob URLs)
-      const filesToUpload = Array.from(imageFiles.values())
-      console.log('Files to upload:', filesToUpload.length, filesToUpload)
+    console.log('Images state:', images)
+    console.log('Existing image URLs (already uploaded):', existingImageUrls)
+    console.log('Image files map:', imageFiles)
 
-      if (filesToUpload.length > 0) {
-        toast.info(`Uploading ${filesToUpload.length} image(s)...`)
-        for (let i = 0; i < filesToUpload.length; i++) {
-          const file = filesToUpload[i]
-          try {
-            console.log(`Uploading image ${i + 1}/${filesToUpload.length}:`, file.name)
-            const uploadResponse = await uploadAPI.uploadMedia(file, {
-              folder: 'appzeto/restaurant/menu-items'
-            })
-            const imageUrl = uploadResponse?.data?.data?.url || uploadResponse?.data?.url
-            if (imageUrl) {
-              uploadedImageUrls.push(imageUrl)
-              console.log(`Successfully uploaded image ${i + 1}:`, imageUrl)
-            } else {
-              console.error('Upload response:', uploadResponse)
-              throw new Error("Failed to get uploaded image URL")
-            }
-          } catch (uploadError) {
-            console.error(`Error uploading image ${i + 1} (${file.name}):`, uploadError)
-            toast.error(`Failed to upload ${file.name}. Please try again.`)
-            setUploadingImages(false)
-            return
+    // Upload new File objects to Cloudinary (files that are blob URLs)
+    const filesToUpload = Array.from(imageFiles.values())
+    console.log('Files to upload:', filesToUpload.length, filesToUpload)
+
+    if (filesToUpload.length > 0) {
+      toast.info(`Uploading ${filesToUpload.length} image(s)...`)
+      for (let i = 0; i < filesToUpload.length; i++) {
+        const file = filesToUpload[i]
+        try {
+          console.log(`Uploading image ${i + 1}/${filesToUpload.length}:`, file.name)
+          const uploadResponse = await uploadAPI.uploadMedia(file, {
+            folder: 'appzeto/restaurant/menu-items'
+          })
+          const imageUrl = uploadResponse?.data?.data?.url || uploadResponse?.data?.url
+          if (imageUrl) {
+            uploadedImageUrls.push(imageUrl)
+            console.log(`Successfully uploaded image ${i + 1}:`, imageUrl)
+          } else {
+            console.error('Upload response:', uploadResponse)
+            throw new Error("Failed to get uploaded image URL")
           }
+        } catch (uploadError) {
+          console.error(`Error uploading image ${i + 1} (${file.name}):`, uploadError)
+          toast.error(`Failed to upload ${file.name}. Please try again.`)
+          setUploadingImages(false)
+          return
         }
       }
+    }
 
-      // Combine existing URLs and newly uploaded URLs
-      // Remove duplicates and filter out any empty strings
-      const allImageUrls = [
-        ...existingImageUrls,
-        ...uploadedImageUrls
-      ].filter((url, index, self) =>
-        url &&
-        typeof url === 'string' &&
-        url.trim() !== '' &&
-        self.indexOf(url) === index // Remove duplicates
-      )
+    // Combine existing URLs and newly uploaded URLs
+    // Remove duplicates and filter out any empty strings
+    const allImageUrls = [
+      ...existingImageUrls,
+      ...uploadedImageUrls
+    ].filter((url, index, self) =>
+      url &&
+      typeof url === 'string' &&
+      url.trim() !== '' &&
+      self.indexOf(url) === index // Remove duplicates
+    )
 
-      // Debug: Log image URLs
-      console.log('=== IMAGE UPLOAD SUMMARY ===')
-      console.log('Existing image URLs:', existingImageUrls.length, existingImageUrls)
-      console.log('Newly uploaded URLs:', uploadedImageUrls.length, uploadedImageUrls)
-      console.log('Total image URLs to save:', allImageUrls.length, allImageUrls)
-      console.log('==========================')
+    // Debug: Log image URLs
+    console.log('=== IMAGE UPLOAD SUMMARY ===')
+    console.log('Existing image URLs:', existingImageUrls.length, existingImageUrls)
+    console.log('Newly uploaded URLs:', uploadedImageUrls.length, uploadedImageUrls)
+    console.log('Total image URLs to save:', allImageUrls.length, allImageUrls)
+    console.log('==========================')
 
-      // Get current menu
-      const menuResponse = adminMode
-        ? await adminAPI.getRestaurantMenu(restaurantId)
-        : await restaurantAPI.getMenu()
-      let menu = menuResponse.data?.data?.menu
-      let sections = menu?.sections || []
+    // Get current menu
+    const menuResponse = adminMode
+      ? await adminAPI.getRestaurantMenu(restaurantId)
+      : await restaurantAPI.getMenu()
+    let menu = menuResponse.data?.data?.menu
+    let sections = menu?.sections || []
 
-      // Prepare item data according to menu model
-      // For editing, use the existing ID; for new items, generate a new ID
-      // Ensure we use the ID from itemData if available, otherwise use the URL param id
-      let itemId
-      if (isNewItem) {
+    // Prepare item data according to menu model
+    // For editing, use the existing ID; for new items, generate a new ID
+    // Ensure we use the ID from itemData if available, otherwise use the URL param id
+    let itemId
+    if (isNewItem) {
+      itemId = `item-${Date.now()}-${Math.random()}`
+    } else {
+      // Try to get ID from itemData first (most reliable), then from URL param
+      itemId = itemData?.id || id
+      if (!itemId) {
+        console.warn('No item ID found, generating new one')
         itemId = `item-${Date.now()}-${Math.random()}`
-      } else {
-        // Try to get ID from itemData first (most reliable), then from URL param
-        itemId = itemData?.id || id
-        if (!itemId) {
-          console.warn('No item ID found, generating new one')
-          itemId = `item-${Date.now()}-${Math.random()}`
-        }
-        // Ensure ID is a string
-        itemId = String(itemId)
       }
+      // Ensure ID is a string
+      itemId = String(itemId)
+    }
 
-      console.log('Item ID for save:', itemId, 'From itemData:', itemData?.id, 'From URL:', id)
+    console.log('Item ID for save:', itemId, 'From itemData:', itemData?.id, 'From URL:', id)
 
-      // If editing, remove item from its current location (in case category changed or it's in a subsection)
-      if (!isNewItem && itemId) {
-        const searchId = String(itemId).trim()
-        const urlId = String(id || '').trim()
-        let itemRemoved = false
+    // If editing, remove item from its current location (in case category changed or it's in a subsection)
+    if (!isNewItem && itemId) {
+      const searchId = String(itemId).trim()
+      const urlId = String(id || '').trim()
+      let itemRemoved = false
 
-        for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex++) {
-          const section = sections[sectionIndex]
+      for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex++) {
+        const section = sections[sectionIndex]
 
-          // Check items in section
-          if (section.items && Array.isArray(section.items)) {
-            const itemIndex = section.items.findIndex(item => {
-              const itemIdStr = String(item.id || item._id || '').trim()
-              // Try multiple ID formats
-              return itemIdStr === searchId || itemIdStr === urlId ||
-                String(item.id) === String(itemId) || String(item.id) === String(id)
-            })
-            if (itemIndex !== -1) {
-              section.items.splice(itemIndex, 1)
-              itemRemoved = true
-              console.log(`Removed item from section: ${section.name}, item ID was: ${section.items[itemIndex]?.id}`)
-              break
-            }
+        // Check items in section
+        if (section.items && Array.isArray(section.items)) {
+          const itemIndex = section.items.findIndex(item => {
+            const itemIdStr = String(item.id || item._id || '').trim()
+            // Try multiple ID formats
+            return itemIdStr === searchId || itemIdStr === urlId ||
+              String(item.id) === String(itemId) || String(item.id) === String(id)
+          })
+          if (itemIndex !== -1) {
+            section.items.splice(itemIndex, 1)
+            itemRemoved = true
+            console.log(`Removed item from section: ${section.name}, item ID was: ${section.items[itemIndex]?.id}`)
+            break
           }
+        }
 
-          // Check items in subsections
-          if (!itemRemoved && section.subsections && Array.isArray(section.subsections)) {
-            for (let subIndex = 0; subIndex < section.subsections.length; subIndex++) {
-              const subsection = section.subsections[subIndex]
-              if (subsection.items && Array.isArray(subsection.items)) {
-                const subItemIndex = subsection.items.findIndex(item => {
-                  const itemIdStr = String(item.id || item._id || '').trim()
-                  // Try multiple ID formats
-                  return itemIdStr === searchId || itemIdStr === urlId ||
-                    String(item.id) === String(itemId) || String(item.id) === String(id)
-                })
-                if (subItemIndex !== -1) {
-                  subsection.items.splice(subItemIndex, 1)
-                  itemRemoved = true
-                  console.log(`Removed item from subsection: ${subsection.name} in section: ${section.name}`)
-                  break
-                }
+        // Check items in subsections
+        if (!itemRemoved && section.subsections && Array.isArray(section.subsections)) {
+          for (let subIndex = 0; subIndex < section.subsections.length; subIndex++) {
+            const subsection = section.subsections[subIndex]
+            if (subsection.items && Array.isArray(subsection.items)) {
+              const subItemIndex = subsection.items.findIndex(item => {
+                const itemIdStr = String(item.id || item._id || '').trim()
+                // Try multiple ID formats
+                return itemIdStr === searchId || itemIdStr === urlId ||
+                  String(item.id) === String(itemId) || String(item.id) === String(id)
+              })
+              if (subItemIndex !== -1) {
+                subsection.items.splice(subItemIndex, 1)
+                itemRemoved = true
+                console.log(`Removed item from subsection: ${subsection.name} in section: ${section.name}`)
+                break
               }
             }
-            if (itemRemoved) break
           }
-        }
-
-        if (!itemRemoved && !isNewItem) {
-          console.warn(`Item with ID ${itemId} (URL: ${id}) not found in menu for removal. It will be added as new.`)
+          if (itemRemoved) break
         }
       }
 
-      // Find or create the category section
-      let targetSection = sections.find(s => s.name === category)
-      if (!targetSection) {
-        // Create new section for this category
-        targetSection = {
-          id: `section-${Date.now()}`,
-          name: category,
-          items: [],
-          subsections: [],
-          isEnabled: true,
-          order: sections.length
-        }
-        sections.push(targetSection)
+      if (!itemRemoved && !isNewItem) {
+        console.warn(`Item with ID ${itemId} (URL: ${id}) not found in menu for removal. It will be added as new.`)
       }
-
-      // Ensure items array exists
-      if (!targetSection.items) {
-        targetSection.items = []
-      }
-
-      // Prepare nutrition data as strings (as per menu model)
-      const nutritionStrings = []
-
-      // Prepare item data according to menu model
-      const itemDataToSave = {
-        id: String(itemId), // Ensure ID is a string
-        name: itemName.trim(),
-        nameArabic: "",
-        image: allImageUrls.length > 0 ? allImageUrls[0] : "",
-        images: allImageUrls.length > 0 ? allImageUrls : [], // Multiple images support - all Cloudinary URLs (ensure it's always an array)
-        category: category,
-        rating: itemData?.rating || 0.0,
-        reviews: itemData?.reviews || 0,
-        price: parseFloat(basePrice) || 0,
-        preparationTime: preparationTime || "",
-        stock: "Unlimited",
-        discount: null,
-        originalPrice: null,
-        foodType: foodType === "Egg" ? "Non-Veg" : foodType, // Menu model only supports Veg/Non-Veg
-        availabilityTimeStart: "12:01 AM",
-        availabilityTimeEnd: "11:57 PM",
-        description: itemDescription.trim(),
-        discountType: "Percent",
-        discountAmount: 0.0,
-        isAvailable: isInStock,
-        isRecommended: isRecommended,
-        variations: [],
-        tags: [],
-        nutrition: nutritionStrings,
-        allergies: [],
-        photoCount: allImageUrls.length || 1,
-        // Additional fields for complete item details
-        subCategory: subCategory || "",
-        servesInfo: "",
-        itemSize: "",
-        itemSizeQuantity: "",
-        itemSizeUnit: "piece",
-        gst: parseFloat(gst) || 0,
-      }
-
-      // Add or update item in target section
-      // Since we already removed the item from its old location, we should always add it here
-      // But check if it somehow still exists (shouldn't happen, but safety check)
-      const existingItemIndex = targetSection.items.findIndex(item => {
-        const itemIdStr = String(item.id || item._id || '').trim()
-        return itemIdStr === String(itemId).trim()
-      })
-
-      if (existingItemIndex !== -1) {
-        // Update existing item (shouldn't happen if removal worked, but handle it)
-        console.log(`Updating existing item at index ${existingItemIndex} in section: ${targetSection.name}`)
-        targetSection.items[existingItemIndex] = itemDataToSave
-      } else {
-        // Add new item (or re-add after removal)
-        console.log(`Adding item to section: ${targetSection.name}`)
-        targetSection.items.push(itemDataToSave)
-      }
-
-      // Update menu with new sections
-      console.log('=== SAVING ITEM DATA ===')
-      console.log('Item ID:', itemId, 'Is new item:', isNewItem)
-      console.log('Item name:', itemDataToSave.name)
-      console.log('Images array type:', Array.isArray(itemDataToSave.images) ? 'Array' : typeof itemDataToSave.images)
-      console.log('Images array:', itemDataToSave.images)
-      console.log('Images count:', itemDataToSave.images?.length)
-      console.log('PhotoCount:', itemDataToSave.photoCount)
-      console.log('Full itemDataToSave:', JSON.stringify(itemDataToSave, null, 2))
-      
-      console.log('Final sections to save:', JSON.stringify(sections, null, 2))
-
-      const updateResponse = adminMode
-        ? await adminAPI.updateRestaurantMenu(restaurantId, { sections })
-        : await restaurantAPI.updateMenu({ sections })
-
-      if (updateResponse.data?.success) {
-        const imageCount = allImageUrls.length
-        toast.success(
-          isNewItem
-            ? `Item created successfully with ${imageCount} image(s)`
-            : `Item updated successfully with ${imageCount} image(s)`
-        )
-        // Small delay to ensure backend has processed the update
-        await new Promise(resolve => setTimeout(resolve, 300))
-        // Navigate back to HubMenu with replace to prevent back navigation issues
-        const menuPath = adminMode 
-          ? `/admin/restaurants/${restaurantId}/menu`
-          : "/restaurant/hub-menu"
-        navigate(menuPath, { replace: true })
-        // Trigger a page refresh event
-        window.dispatchEvent(new CustomEvent('foodsChanged'))
-      } else {
-        console.error('Update failed:', updateResponse.data)
-        toast.error(updateResponse.data?.message || "Failed to save item")
-      }
-    } catch (error) {
-      console.error('Error saving menu:', error)
-      if (error.code === 'ERR_NETWORK') {
-        toast.error('Network error. Please check if backend server is running and try again.')
-      } else {
-        toast.error(error.response?.data?.message || error.message || "Failed to save item. Please try again.")
-      }
-    } finally {
-      setUploadingImages(false)
     }
-  }
 
-  const handleDelete = () => {
-    // Delete logic here
-    console.log("Deleting item:", id)
-    const backPath = adminMode ? `/admin/restaurants/${restaurantId}/menu` : "/restaurant/hub-menu"
-    navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : backPath)
-  }
+    // Find or create the category section
+    let targetSection = sections.find(s => s.name === category)
+    if (!targetSection) {
+      // Create new section for this category
+      targetSection = {
+        id: `section-${Date.now()}`,
+        name: category,
+        items: [],
+        subsections: [],
+        isEnabled: true,
+        order: sections.length
+      }
+      sections.push(targetSection)
+    }
 
-  return (
-    <div className="h-screen bg-white flex flex-col overflow-hidden">
-      <style>{`
+    // Ensure items array exists
+    if (!targetSection.items) {
+      targetSection.items = []
+    }
+
+    // Prepare nutrition data as strings (as per menu model)
+    const nutritionStrings = []
+
+    // Prepare item data according to menu model
+    const itemDataToSave = {
+      id: String(itemId), // Ensure ID is a string
+      name: itemName.trim(),
+      nameArabic: "",
+      image: allImageUrls.length > 0 ? allImageUrls[0] : "",
+      images: allImageUrls.length > 0 ? allImageUrls : [], // Multiple images support - all Cloudinary URLs (ensure it's always an array)
+      category: category,
+      rating: itemData?.rating || 0.0,
+      reviews: itemData?.reviews || 0,
+      price: parseFloat(basePrice) || 0,
+      preparationTime: preparationTime || "",
+      stock: "Unlimited",
+      discount: null,
+      originalPrice: null,
+      foodType: foodType === "Egg" ? "Non-Veg" : foodType, // Menu model only supports Veg/Non-Veg
+      availabilityTimeStart: "12:01 AM",
+      availabilityTimeEnd: "11:57 PM",
+      description: itemDescription.trim(),
+      discountType: "Percent",
+      discountAmount: 0.0,
+      isAvailable: isInStock,
+      isRecommended: isRecommended,
+      variations: [],
+      tags: [],
+      nutrition: nutritionStrings,
+      allergies: [],
+      photoCount: allImageUrls.length || 1,
+      // Additional fields for complete item details
+      subCategory: subCategory || "",
+      servesInfo: "",
+      itemSize: "",
+      itemSizeQuantity: "",
+      itemSizeUnit: "piece",
+      gst: parseFloat(gst) || 0,
+    }
+
+    // Add or update item in target section
+    // Since we already removed the item from its old location, we should always add it here
+    // But check if it somehow still exists (shouldn't happen, but safety check)
+    const existingItemIndex = targetSection.items.findIndex(item => {
+      const itemIdStr = String(item.id || item._id || '').trim()
+      return itemIdStr === String(itemId).trim()
+    })
+
+    if (existingItemIndex !== -1) {
+      // Update existing item (shouldn't happen if removal worked, but handle it)
+      console.log(`Updating existing item at index ${existingItemIndex} in section: ${targetSection.name}`)
+      targetSection.items[existingItemIndex] = itemDataToSave
+    } else {
+      // Add new item (or re-add after removal)
+      console.log(`Adding item to section: ${targetSection.name}`)
+      targetSection.items.push(itemDataToSave)
+    }
+
+    // Update menu with new sections
+    console.log('=== SAVING ITEM DATA ===')
+    console.log('Item ID:', itemId, 'Is new item:', isNewItem)
+    console.log('Item name:', itemDataToSave.name)
+    console.log('Images array type:', Array.isArray(itemDataToSave.images) ? 'Array' : typeof itemDataToSave.images)
+    console.log('Images array:', itemDataToSave.images)
+    console.log('Images count:', itemDataToSave.images?.length)
+    console.log('PhotoCount:', itemDataToSave.photoCount)
+    console.log('Full itemDataToSave:', JSON.stringify(itemDataToSave, null, 2))
+
+    console.log('Final sections to save:', JSON.stringify(sections, null, 2))
+
+    const updateResponse = adminMode
+      ? await adminAPI.updateRestaurantMenu(restaurantId, { sections })
+      : await restaurantAPI.updateMenu({ sections })
+
+    if (updateResponse.data?.success) {
+      const imageCount = allImageUrls.length
+      toast.success(
+        isNewItem
+          ? `Item created successfully with ${imageCount} image(s)`
+          : `Item updated successfully with ${imageCount} image(s)`
+      )
+      // Small delay to ensure backend has processed the update
+      await new Promise(resolve => setTimeout(resolve, 300))
+      // Navigate back to HubMenu with replace to prevent back navigation issues
+      const menuPath = adminMode
+        ? `/admin/restaurants/${restaurantId}/menu`
+        : "/restaurant/hub-menu"
+      navigate(menuPath, { replace: true })
+      // Trigger a page refresh event
+      window.dispatchEvent(new CustomEvent('foodsChanged'))
+    } else {
+      console.error('Update failed:', updateResponse.data)
+      toast.error(updateResponse.data?.message || "Failed to save item")
+    }
+  } catch (error) {
+    console.error('Error saving menu:', error)
+    if (error.code === 'ERR_NETWORK') {
+      toast.error('Network error. Please check if backend server is running and try again.')
+    } else {
+      toast.error(error.response?.data?.message || error.message || "Failed to save item. Please try again.")
+    }
+  } finally {
+    setIsSaving(false)
+    setUploadingImages(false)
+  }
+}
+
+const handleDelete = () => {
+  // Delete logic here
+  console.log("Deleting item:", id)
+  const backPath = adminMode ? `/admin/restaurants/${restaurantId}/menu` : "/restaurant/hub-menu"
+  navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : backPath)
+}
+
+return (
+  <div className="h-screen bg-white flex flex-col overflow-hidden">
+    <style>{`
         [data-slot="switch"][data-state="checked"] {
           background-color: #16a34a !important;
         }
@@ -915,322 +920,322 @@ export default function ItemDetailsPage() {
           background-color: #ffffff !important;
         }
       `}</style>
-      {/* Header */}
-      <div className="sticky top-0 z-40 bg-white border-b border-gray-200 flex-shrink-0">
-        <div className="px-4 py-3 flex items-center gap-3">
-          <button
-            onClick={() => {
-              const backPath = adminMode ? `/admin/restaurants/${restaurantId}/menu` : "/restaurant/hub-menu"
-              navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : backPath)
-            }}
-            className="p-1 rounded-full hover:bg-gray-100"
-          >
-            <ArrowLeft className="w-5 h-5 text-gray-700" />
-          </button>
-          <h1 className="text-xl font-bold text-gray-900">Item details</h1>
-        </div>
+    {/* Header */}
+    <div className="sticky top-0 z-40 bg-white border-b border-gray-200 flex-shrink-0">
+      <div className="px-4 py-3 flex items-center gap-3">
+        <button
+          onClick={() => {
+            const backPath = adminMode ? `/admin/restaurants/${restaurantId}/menu` : "/restaurant/hub-menu"
+            navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : backPath)
+          }}
+          className="p-1 rounded-full hover:bg-gray-100"
+        >
+          <ArrowLeft className="w-5 h-5 text-gray-700" />
+        </button>
+        <h1 className="text-xl font-bold text-gray-900">Item details</h1>
       </div>
+    </div>
 
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto pb-24">
-        {/* Image Carousel */}
-        <div className="relative bg-white">
-          {images.length > 0 ? (
-            <div className="relative w-full h-80 overflow-hidden bg-gray-100">
-              {/* Image container with swipe support */}
-              <div
-                ref={carouselRef}
-                onTouchStart={onTouchStart}
-                onTouchMove={onTouchMove}
-                onTouchEnd={onTouchEnd}
-                className="relative w-full h-full"
-              >
-                <AnimatePresence mode="wait" custom={direction}>
-                  <motion.div
-                    key={currentImageIndex}
-                    custom={direction}
-                    initial={{ opacity: 0, x: direction > 0 ? 300 : -300 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: direction > 0 ? -300 : 300 }}
-                    transition={{ duration: 0.3, ease: "easeInOut" }}
-                    className="absolute inset-0"
-                  >
-                    {images[currentImageIndex] ? (
-                      <img
-                        src={images[currentImageIndex]}
-                        alt={`${itemName} - Image ${currentImageIndex + 1}`}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : null}
-                  </motion.div>
-                </AnimatePresence>
-
-                {/* Navigation arrows */}
-                {images.length > 1 && (
-                  <>
-                    <button
-                      onClick={goToPrevious}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-lg hover:bg-white transition-all z-10"
-                    >
-                      <ChevronLeft className="w-5 h-5 text-gray-900" />
-                    </button>
-                    <button
-                      onClick={goToNext}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-lg hover:bg-white transition-all z-10"
-                    >
-                      <ChevronRight className="w-5 h-5 text-gray-900" />
-                    </button>
-                  </>
-                )}
-
-                {/* Delete image button */}
-                <button
-                  onClick={() => handleImageDelete(currentImageIndex)}
-                  className="absolute top-4 right-4 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-lg hover:bg-white transition-all z-10"
+    {/* Content */}
+    <div className="flex-1 overflow-y-auto pb-24">
+      {/* Image Carousel */}
+      <div className="relative bg-white">
+        {images.length > 0 ? (
+          <div className="relative w-full h-80 overflow-hidden bg-gray-100">
+            {/* Image container with swipe support */}
+            <div
+              ref={carouselRef}
+              onTouchStart={onTouchStart}
+              onTouchMove={onTouchMove}
+              onTouchEnd={onTouchEnd}
+              className="relative w-full h-full"
+            >
+              <AnimatePresence mode="wait" custom={direction}>
+                <motion.div
+                  key={currentImageIndex}
+                  custom={direction}
+                  initial={{ opacity: 0, x: direction > 0 ? 300 : -300 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: direction > 0 ? -300 : 300 }}
+                  transition={{ duration: 0.3, ease: "easeInOut" }}
+                  className="absolute inset-0"
                 >
-                  <Trash2 className="w-5 h-5 text-gray-900" />
-                </button>
-
-                {/* Image counter */}
-                {images.length > 1 && (
-                  <div className="absolute top-4 left-4 bg-black/60 backdrop-blur-sm px-3 py-1.5 rounded-full z-10">
-                    <span className="text-white text-xs font-medium">
-                      {currentImageIndex + 1} / {images.length}
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Carousel dots */}
-              {images.length > 1 && (
-                <div className="flex items-center justify-center gap-2 py-4 bg-white">
-                  {images.map((_, index) => (
-                    <button
-                      key={index}
-                      onClick={() => {
-                        setDirection(index > currentImageIndex ? 1 : -1)
-                        setCurrentImageIndex(index)
-                      }}
-                      className={`transition-all duration-300 rounded-full ${index === currentImageIndex
-                        ? "w-8 h-2 bg-gray-900"
-                        : "w-2 h-2 bg-gray-300 hover:bg-gray-400"
-                        }`}
+                  {images[currentImageIndex] ? (
+                    <img
+                      src={images[currentImageIndex]}
+                      alt={`${itemName} - Image ${currentImageIndex + 1}`}
+                      className="w-full h-full object-cover"
                     />
-                  ))}
+                  ) : null}
+                </motion.div>
+              </AnimatePresence>
+
+              {/* Navigation arrows */}
+              {images.length > 1 && (
+                <>
+                  <button
+                    onClick={goToPrevious}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-lg hover:bg-white transition-all z-10"
+                  >
+                    <ChevronLeft className="w-5 h-5 text-gray-900" />
+                  </button>
+                  <button
+                    onClick={goToNext}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-lg hover:bg-white transition-all z-10"
+                  >
+                    <ChevronRight className="w-5 h-5 text-gray-900" />
+                  </button>
+                </>
+              )}
+
+              {/* Delete image button */}
+              <button
+                onClick={() => handleImageDelete(currentImageIndex)}
+                className="absolute top-4 right-4 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-lg hover:bg-white transition-all z-10"
+              >
+                <Trash2 className="w-5 h-5 text-gray-900" />
+              </button>
+
+              {/* Image counter */}
+              {images.length > 1 && (
+                <div className="absolute top-4 left-4 bg-black/60 backdrop-blur-sm px-3 py-1.5 rounded-full z-10">
+                  <span className="text-white text-xs font-medium">
+                    {currentImageIndex + 1} / {images.length}
+                  </span>
                 </div>
               )}
             </div>
-          ) : (
-            <div className="relative w-full h-80 bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
-              <div className="text-center">
-                <div className="w-20 h-20 bg-white/80 rounded-full flex items-center justify-center mx-auto mb-3 shadow-lg">
-                  <Camera className="w-10 h-10 text-gray-400" />
-                </div>
-                <p className="text-sm font-medium text-gray-600">No images added yet</p>
-                <p className="text-xs text-gray-500 mt-1">Tap the button below to add multiple images</p>
-              </div>
-            </div>
-          )}
 
-          {/* Add image button - redesigned */}
-          <div className="px-4 py-4 bg-white border-t border-gray-100">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={handleImageAdd}
-              className="hidden"
-              id="image-upload"
-            />
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={handleAddImagesClick}
-                className="flex items-center justify-center gap-2.5 px-4 py-3.5 bg-gradient-to-r from-gray-900 to-gray-800 text-white rounded-xl text-sm font-semibold hover:from-gray-800 hover:to-gray-700 transition-all shadow-md hover:shadow-lg active:scale-95"
-              >
-                <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center">
-                  <Plus className="w-4 h-4" />
-                </div>
-                <span>Add Images</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleCameraCapture}
-                className="flex items-center justify-center gap-2.5 px-4 py-3.5 bg-white text-gray-900 border border-gray-300 rounded-xl text-sm font-semibold hover:bg-gray-50 transition-all shadow-sm active:scale-95"
-              >
-                <div className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center">
-                  <Camera className="w-4 h-4" />
-                </div>
-                <span>Live Camera</span>
-              </button>
+            {/* Carousel dots */}
+            {images.length > 1 && (
+              <div className="flex items-center justify-center gap-2 py-4 bg-white">
+                {images.map((_, index) => (
+                  <button
+                    key={index}
+                    onClick={() => {
+                      setDirection(index > currentImageIndex ? 1 : -1)
+                      setCurrentImageIndex(index)
+                    }}
+                    className={`transition-all duration-300 rounded-full ${index === currentImageIndex
+                      ? "w-8 h-2 bg-gray-900"
+                      : "w-2 h-2 bg-gray-300 hover:bg-gray-400"
+                      }`}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="relative w-full h-80 bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
+            <div className="text-center">
+              <div className="w-20 h-20 bg-white/80 rounded-full flex items-center justify-center mx-auto mb-3 shadow-lg">
+                <Camera className="w-10 h-10 text-gray-400" />
+              </div>
+              <p className="text-sm font-medium text-gray-600">No images added yet</p>
+              <p className="text-xs text-gray-500 mt-1">Tap the button below to add multiple images</p>
             </div>
+          </div>
+        )}
+
+        {/* Add image button - redesigned */}
+        <div className="px-4 py-4 bg-white border-t border-gray-100">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={handleImageAdd}
+            className="hidden"
+            id="image-upload"
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={handleAddImagesClick}
+              className="flex items-center justify-center gap-2.5 px-4 py-3.5 bg-gradient-to-r from-gray-900 to-gray-800 text-white rounded-xl text-sm font-semibold hover:from-gray-800 hover:to-gray-700 transition-all shadow-md hover:shadow-lg active:scale-95"
+            >
+              <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center">
+                <Plus className="w-4 h-4" />
+              </div>
+              <span>Add Images</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleCameraCapture}
+              className="flex items-center justify-center gap-2.5 px-4 py-3.5 bg-white text-gray-900 border border-gray-300 rounded-xl text-sm font-semibold hover:bg-gray-50 transition-all shadow-sm active:scale-95"
+            >
+              <div className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center">
+                <Camera className="w-4 h-4" />
+              </div>
+              <span>Live Camera</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Form Fields */}
+      <div className="p-4 space-y-3">
+        {/* Category Selector */}
+        <div>
+          <label className="block text-sm font-medium text-gray-900 mb-2">
+            Category
+          </label>
+          <button
+            onClick={() => setIsCategoryPopupOpen(true)}
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg text-left flex items-center justify-between bg-white hover:bg-gray-50 transition-colors"
+          >
+            <span className="text-sm text-gray-900">
+              {category}
+            </span>
+            <ChevronDown className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
+
+        {/* Item Name */}
+        <div>
+          <label className="block text-sm font-medium text-gray-900 mb-2">
+            Item name
+          </label>
+          <div className="relative">
+            <input
+              type="text"
+              value={itemName}
+              onChange={(e) => setItemName(e.target.value)}
+              maxLength={maxNameLength}
+              className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="Enter item name"
+            />
+            <button className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-gray-100">
+              <EditIcon className="w-4 h-4 text-gray-500" />
+            </button>
+          </div>
+          <div className="text-right mt-1">
+            <span className="text-xs text-gray-500">
+              {nameLength} / {maxNameLength}
+            </span>
           </div>
         </div>
 
-        {/* Form Fields */}
-        <div className="p-4 space-y-3">
-          {/* Category Selector */}
-          <div>
-            <label className="block text-sm font-medium text-gray-900 mb-2">
-              Category
-            </label>
-            <button
-              onClick={() => setIsCategoryPopupOpen(true)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg text-left flex items-center justify-between bg-white hover:bg-gray-50 transition-colors"
-            >
-              <span className="text-sm text-gray-900">
-                {category}
-              </span>
-              <ChevronDown className="w-5 h-5 text-gray-500" />
+
+        {/* Item Description */}
+        <div>
+          <label className="block text-sm font-medium text-gray-900 mb-2">
+            Item description
+          </label>
+          <div className="relative">
+            <textarea
+              value={itemDescription}
+              onChange={(e) => setItemDescription(e.target.value)}
+              maxLength={maxDescriptionLength}
+              rows={4}
+              placeholder="Eg: Yummy veg paneer burger with a soft patty, veggies, cheese, and special sauce"
+              className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+            />
+            <button className="absolute right-3 top-3 p-1 rounded-full hover:bg-gray-100">
+              <EditIcon className="w-4 h-4 text-gray-500" />
             </button>
           </div>
-
-          {/* Item Name */}
-          <div>
-            <label className="block text-sm font-medium text-gray-900 mb-2">
-              Item name
-            </label>
-            <div className="relative">
-              <input
-                type="text"
-                value={itemName}
-                onChange={(e) => setItemName(e.target.value)}
-                maxLength={maxNameLength}
-                className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Enter item name"
-              />
-              <button className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-gray-100">
-                <EditIcon className="w-4 h-4 text-gray-500" />
-              </button>
-            </div>
-            <div className="text-right mt-1">
-              <span className="text-xs text-gray-500">
-                {nameLength} / {maxNameLength}
-              </span>
-            </div>
+          <div className="flex items-center justify-between mt-1">
+            <span className={`text-xs ${descriptionLength < minDescriptionLength ? "text-red-500" : "text-gray-500"}`}>
+              {descriptionLength < minDescriptionLength ? "Min 5 characters required" : ""}
+            </span>
+            <span className="text-xs text-gray-500">
+              {descriptionLength} / {maxDescriptionLength}
+            </span>
           </div>
-
-
-          {/* Item Description */}
-          <div>
-            <label className="block text-sm font-medium text-gray-900 mb-2">
-              Item description
-            </label>
-            <div className="relative">
-              <textarea
-                value={itemDescription}
-                onChange={(e) => setItemDescription(e.target.value)}
-                maxLength={maxDescriptionLength}
-                rows={4}
-                placeholder="Eg: Yummy veg paneer burger with a soft patty, veggies, cheese, and special sauce"
-                className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-              />
-              <button className="absolute right-3 top-3 p-1 rounded-full hover:bg-gray-100">
-                <EditIcon className="w-4 h-4 text-gray-500" />
-              </button>
-            </div>
-            <div className="flex items-center justify-between mt-1">
-              <span className={`text-xs ${descriptionLength < minDescriptionLength ? "text-red-500" : "text-gray-500"}`}>
-                {descriptionLength < minDescriptionLength ? "Min 5 characters required" : ""}
-              </span>
-              <span className="text-xs text-gray-500">
-                {descriptionLength} / {maxDescriptionLength}
-              </span>
-            </div>
-            {/* Dietary Options */}
-            <div className="flex gap-2 mt-3">
-              <button
-                onClick={() => setFoodType("Veg")}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${foodType === "Veg"
-                  ? "border-green-600 border-2 text-green-600"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  }`}
-              >
-                {foodType === "Veg" && <Check className="w-4 h-4" />}
-                <span>Veg</span>
-              </button>
-              <button
-                onClick={() => setFoodType("Non-Veg")}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${foodType === "Non-Veg"
-                  ? "border-red-600 border-2 text-red-600"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  }`}
-              >
-                {foodType === "Non-Veg" && <Check className="w-4 h-4" />}
-                <span>Non-Veg</span>
-              </button>
-              <button
-                onClick={() => setFoodType("Egg")}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${foodType === "Egg"
-                  ? "border-yellow-600 border-2 text-yellow-600"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  }`}
-              >
-                {foodType === "Egg" && <Check className="w-4 h-4" />}
-                <span>Egg</span>
-              </button>
-            </div>
+          {/* Dietary Options */}
+          <div className="flex gap-2 mt-3">
+            <button
+              onClick={() => setFoodType("Veg")}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${foodType === "Veg"
+                ? "border-green-600 border-2 text-green-600"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+            >
+              {foodType === "Veg" && <Check className="w-4 h-4" />}
+              <span>Veg</span>
+            </button>
+            <button
+              onClick={() => setFoodType("Non-Veg")}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${foodType === "Non-Veg"
+                ? "border-red-600 border-2 text-red-600"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+            >
+              {foodType === "Non-Veg" && <Check className="w-4 h-4" />}
+              <span>Non-Veg</span>
+            </button>
+            <button
+              onClick={() => setFoodType("Egg")}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${foodType === "Egg"
+                ? "border-yellow-600 border-2 text-yellow-600"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+            >
+              {foodType === "Egg" && <Check className="w-4 h-4" />}
+              <span>Egg</span>
+            </button>
           </div>
+        </div>
 
-          {/* Item Price */}
-          <div>
-            <label className="block text-sm font-medium text-gray-900 mb-2">
-              Item price
-            </label>
-            <div className="space-y-3">
+        {/* Item Price */}
+        <div>
+          <label className="block text-sm font-medium text-gray-900 mb-2">
+            Item price
+          </label>
+          <div className="space-y-3">
+            <div className="relative">
+              <label className="block text-xs text-gray-600 mb-1">Base price</label>
               <div className="relative">
-                <label className="block text-xs text-gray-600 mb-1">Base price</label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={basePrice}
-                    onChange={(e) => {
-                      // Remove rupee symbol and any non-numeric characters except decimal point
-                      const value = e.target.value.replace(/[₹\s,]/g, '').replace(/[^0-9.]/g, '')
-                      // Allow only one decimal point
-                      const parts = value.split('.')
-                      const cleanedValue = parts.length > 2
-                        ? parts[0] + '.' + parts.slice(1).join('')
-                        : value
-                      setBasePrice(cleanedValue)
-                    }}
-                    onFocus={(e) => {
-                      // Remove rupee symbol when focused for easier editing
-                      if (e.target.value.startsWith('₹')) {
-                        e.target.value = e.target.value.replace(/₹\s*/g, '')
-                      }
-                    }}
-                    placeholder="Enter price"
-                    className="w-full pl-8 pr-12 py-3 border border-gray-300 rounded-lg text-sm text-gray-900 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-600">₹</span>
-                  <button className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-gray-100">
-                    <EditIcon className="w-4 h-4 text-gray-500" />
-                  </button>
-                </div>
+                <input
+                  type="text"
+                  value={basePrice}
+                  onChange={(e) => {
+                    // Remove rupee symbol and any non-numeric characters except decimal point
+                    const value = e.target.value.replace(/[₹\s,]/g, '').replace(/[^0-9.]/g, '')
+                    // Allow only one decimal point
+                    const parts = value.split('.')
+                    const cleanedValue = parts.length > 2
+                      ? parts[0] + '.' + parts.slice(1).join('')
+                      : value
+                    setBasePrice(cleanedValue)
+                  }}
+                  onFocus={(e) => {
+                    // Remove rupee symbol when focused for easier editing
+                    if (e.target.value.startsWith('₹')) {
+                      e.target.value = e.target.value.replace(/₹\s*/g, '')
+                    }
+                  }}
+                  placeholder="Enter price"
+                  className="w-full pl-8 pr-12 py-3 border border-gray-300 rounded-lg text-sm text-gray-900 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-600">₹</span>
+                <button className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-gray-100">
+                  <EditIcon className="w-4 h-4 text-gray-500" />
+                </button>
               </div>
+            </div>
 
-              {/* Preparation Time */}
+            {/* Preparation Time */}
+            <div className="relative">
+              <label className="block text-xs text-gray-600 mb-1">Preparation Time</label>
               <div className="relative">
-                <label className="block text-xs text-gray-600 mb-1">Preparation Time</label>
-                <div className="relative">
-                  <select
-                    value={preparationTime}
-                    onChange={(e) => setPreparationTime(e.target.value)}
-                    className="w-full pl-4 pr-10 py-3 border border-gray-300 rounded-lg text-sm text-gray-900 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
-                  >
-                    <option value="">Select timing</option>
-                    <option value="10-20 mins">10-20 mins</option>
-                    <option value="20-25 mins">20-25 mins</option>
-                    <option value="25-35 mins">25-35 mins</option>
-                    <option value="35-45 mins">35-45 mins</option>
-                  </select>
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 pointer-events-none" />
-                </div>
+                <select
+                  value={preparationTime}
+                  onChange={(e) => setPreparationTime(e.target.value)}
+                  className="w-full pl-4 pr-10 py-3 border border-gray-300 rounded-lg text-sm text-gray-900 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
+                >
+                  <option value="">Select timing</option>
+                  <option value="10-20 mins">10-20 mins</option>
+                  <option value="20-25 mins">20-25 mins</option>
+                  <option value="25-35 mins">25-35 mins</option>
+                  <option value="35-45 mins">35-45 mins</option>
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 pointer-events-none" />
               </div>
-              {/* <div>
+            </div>
+            {/* <div>
                 <label className="block text-xs text-gray-600 mb-1">GST</label>
                 <button
                   onClick={() => setIsGstPopupOpen(true)}
@@ -1240,121 +1245,121 @@ export default function ItemDetailsPage() {
                   <ChevronDown className="w-5 h-5 text-gray-500" />
                 </button>
               </div> */}
-            </div>
-
           </div>
-
-          {/* Recommend and In Stock */}
-          <div className="flex items-center justify-between py-3 border-t border-gray-200">
-            <button
-              onClick={() => setIsRecommended(!isRecommended)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${isRecommended
-                ? "bg-blue-100 text-blue-700"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
-            >
-              <ThumbsUp className="w-4 h-4" />
-              <span>Recommend</span>
-            </button>
-            <div className="flex items-center gap-2">
-              <Switch
-                checked={isInStock}
-                onCheckedChange={setIsInStock}
-                className="data-[state=unchecked]:bg-gray-300"
-              />
-              <span className="text-sm text-gray-700">In stock</span>
-            </div>
-          </div>
-
 
         </div>
-      </div>
 
-      {/* Category Selection Popup */}
-      <AnimatePresence>
-        {isCategoryPopupOpen && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsCategoryPopupOpen(false)}
-              className="fixed inset-0 bg-black/50 z-50"
+        {/* Recommend and In Stock */}
+        <div className="flex items-center justify-between py-3 border-t border-gray-200">
+          <button
+            onClick={() => setIsRecommended(!isRecommended)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${isRecommended
+              ? "bg-blue-100 text-blue-700"
+              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+          >
+            <ThumbsUp className="w-4 h-4" />
+            <span>Recommend</span>
+          </button>
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={isInStock}
+              onCheckedChange={setIsInStock}
+              className="data-[state=unchecked]:bg-gray-300"
             />
-            <motion.div
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 30, stiffness: 300 }}
-              className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl z-50 max-h-[85vh] flex flex-col"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200">
-                <h2 className="text-lg font-bold text-gray-900">Select category</h2>
-                <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-700">In stock</span>
+          </div>
+        </div>
+
+
+      </div>
+    </div>
+
+    {/* Category Selection Popup */}
+    <AnimatePresence>
+      {isCategoryPopupOpen && (
+        <>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsCategoryPopupOpen(false)}
+            className="fixed inset-0 bg-black/50 z-50"
+          />
+          <motion.div
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", damping: 30, stiffness: 300 }}
+            className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl z-50 max-h-[85vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-bold text-gray-900">Select category</h2>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setIsCategoryPopupOpen(false)
+                    navigate('/restaurant/menu-categories')
+                  }}
+                  className="p-2 rounded-lg bg-black text-white hover:bg-gray-800 transition-colors flex items-center gap-1.5"
+                  title="Add Category"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span className="text-sm font-medium">Add</span>
+                </button>
+                <button
+                  onClick={() => setIsCategoryPopupOpen(false)}
+                  className="p-1 rounded-full hover:bg-gray-100"
+                >
+                  <X className="w-5 h-5 text-gray-600" />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-2">
+              {loadingCategories ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-6 h-6 animate-spin text-gray-600" />
+                </div>
+              ) : categories.length === 0 ? (
+                <div className="text-center py-12 space-y-4">
+                  <p className="text-sm text-gray-500">No categories available</p>
                   <button
                     onClick={() => {
                       setIsCategoryPopupOpen(false)
                       navigate('/restaurant/menu-categories')
                     }}
-                    className="p-2 rounded-lg bg-black text-white hover:bg-gray-800 transition-colors flex items-center gap-1.5"
-                    title="Add Category"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-black text-white rounded-lg font-semibold hover:bg-gray-800 transition-colors"
                   >
-                    <Plus className="w-4 h-4" />
-                    <span className="text-sm font-medium">Add</span>
-                  </button>
-                  <button
-                    onClick={() => setIsCategoryPopupOpen(false)}
-                    className="p-1 rounded-full hover:bg-gray-100"
-                  >
-                    <X className="w-5 h-5 text-gray-600" />
+                    <Plus className="w-5 h-5" />
+                    Add Category
                   </button>
                 </div>
-              </div>
-              <div className="flex-1 overflow-y-auto p-2">
-                {loadingCategories ? (
-                  <div className="flex items-center justify-center py-12">
-                    <Loader2 className="w-6 h-6 animate-spin text-gray-600" />
-                  </div>
-                ) : categories.length === 0 ? (
-                  <div className="text-center py-12 space-y-4">
-                    <p className="text-sm text-gray-500">No categories available</p>
+              ) : (
+                <div className="space-y-2">
+                  {categories.map((cat) => (
                     <button
-                      onClick={() => {
-                        setIsCategoryPopupOpen(false)
-                        navigate('/restaurant/menu-categories')
-                      }}
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-black text-white rounded-lg font-semibold hover:bg-gray-800 transition-colors"
+                      key={cat.id}
+                      onClick={() => handleCategorySelect(cat.id, cat.name)}
+                      className={`w-full text-left px-4 py-3 rounded-lg text-sm font-medium transition-colors ${category === cat.name
+                        ? "bg-gray-900 text-white"
+                        : "bg-gray-50 text-gray-900 hover:bg-gray-100"
+                        }`}
                     >
-                      <Plus className="w-5 h-5" />
-                      Add Category
+                      {cat.name}
                     </button>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {categories.map((cat) => (
-                      <button
-                        key={cat.id}
-                        onClick={() => handleCategorySelect(cat.id, cat.name)}
-                        className={`w-full text-left px-4 py-3 rounded-lg text-sm font-medium transition-colors ${category === cat.name
-                          ? "bg-gray-900 text-white"
-                          : "bg-gray-50 text-gray-900 hover:bg-gray-100"
-                          }`}
-                      >
-                        {cat.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+                  ))}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
 
 
-      {/* GST Popup */}
-      {/* <AnimatePresence>
+    {/* GST Popup */}
+    {/* <AnimatePresence>
         {isGstPopupOpen && (
           <>
             <motion.div
@@ -1404,37 +1409,38 @@ export default function ItemDetailsPage() {
       </AnimatePresence> */}
 
 
-      {/* Bottom Sticky Buttons */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200  z-40">
-        <div className={`flex gap-3 px-4 py-4 ${isNewItem ? 'justify-end' : ''}`}>
-          {!isNewItem && (
-            <button
-              onClick={handleDelete}
-              className="flex-1 py-3 px-4 border border-black rounded-lg text-sm font-semibold text-black bg-white hover:bg-gray-50 transition-colors"
-            >
-              Delete
-            </button>
-          )}
+    {/* Bottom Sticky Buttons */}
+    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200  z-40">
+      <div className={`flex gap-3 px-4 py-4 ${isNewItem ? 'justify-end' : ''}`}>
+        {!isNewItem && (
           <button
-            onClick={handleSave}
-            disabled={uploadingImages}
-            className={`${isNewItem ? 'w-full' : 'flex-1'} py-3 px-4 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${!uploadingImages
-              ? "bg-black text-white hover:bg-black"
-              : "bg-gray-300 text-gray-500 cursor-not-allowed"
-              }`}
+            onClick={handleDelete}
+            className="flex-1 py-3 px-4 border border-black rounded-lg text-sm font-semibold text-black bg-white hover:bg-gray-50 transition-colors"
           >
-            {uploadingImages ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Uploading...</span>
-              </>
-            ) : (
-              "Save"
-            )}
+            Delete
           </button>
-        </div>
+        )}
+        <button
+          onClick={handleSave}
+          disabled={isSaving || uploadingImages}
+          className={`${isNewItem ? 'w-full' : 'flex-1'} py-3 px-4 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${!(isSaving || uploadingImages)
+            ? "bg-black text-white hover:bg-black"
+            : "bg-gray-300 text-gray-500 cursor-not-allowed"
+            }`}
+        >
+          {isSaving || uploadingImages ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>{uploadingImages ? 'Uploading...' : 'Saving...'}</span>
+            </>
+          ) : (
+            "Save"
+          )}
+        </button>
       </div>
     </div>
-  )
+  </div>
+)
 }
+
 

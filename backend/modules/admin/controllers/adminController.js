@@ -1,4 +1,4 @@
-import Admin from "../models/Admin.js";
+﻿import Admin from "../models/Admin.js";
 import Order from "../../order/models/Order.js";
 import Restaurant from "../../restaurant/models/Restaurant.js";
 import Delivery from "../../delivery/models/Delivery.js";
@@ -252,13 +252,13 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     }).lean();
 
     console.log(
-      `📊 Dashboard Stats - Total settlements found: ${allSettlements.length}`,
+      `ðŸ“Š Dashboard Stats - Total settlements found: ${allSettlements.length}`,
     );
 
     // Debug: Log first settlement to see actual structure
     if (allSettlements.length > 0) {
       const firstSettlement = allSettlements[0];
-      console.log("🔍 First settlement sample:", {
+      console.log("ðŸ” First settlement sample:", {
         orderNumber: firstSettlement.orderNumber,
         adminEarning: firstSettlement.adminEarning,
         userPayment: firstSettlement.userPayment,
@@ -290,7 +290,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       if (index < 5) {
         // Log first 5 settlements
         console.log(
-          `📦 Settlement ${index + 1} (${s.orderNumber}): Commission: ₹${commission}, Platform: ₹${platformFee}, Delivery: ₹${deliveryFee}, GST: ₹${gst}`,
+          `ðŸ“¦ Settlement ${index + 1} (${s.orderNumber}): Commission: â‚¹${commission}, Platform: â‚¹${platformFee}, Delivery: â‚¹${deliveryFee}, GST: â‚¹${gst}`,
         );
       }
     });
@@ -305,7 +305,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     ) / 100;
 
     console.log(
-      `💰 Final calculated totals - Commission: ₹${totalCommission}, Platform Fee: ₹${totalPlatformFee}, Delivery Fee: ₹${totalDeliveryFee}, GST: ₹${totalGST}`,
+      `ðŸ’° Final calculated totals - Commission: â‚¹${totalCommission}, Platform Fee: â‚¹${totalPlatformFee}, Delivery Fee: â‚¹${totalDeliveryFee}, GST: â‚¹${totalGST}`,
     );
 
     // Get last 30 days data from OrderSettlement
@@ -1374,7 +1374,7 @@ export const getRestaurants = asyncHandler(async (req, res) => {
       query.isActive = true;
     }
 
-    console.log("🔍 Admin Restaurants List Query:", {
+    console.log("ðŸ” Admin Restaurants List Query:", {
       status,
       isActive: query.isActive,
       query: JSON.stringify(query, null, 2),
@@ -1707,7 +1707,7 @@ export const getRestaurantJoinRequests = asyncHandler(async (req, res) => {
     }
 
     console.log(
-      "🔍 Restaurant Join Requests Query:",
+      "ðŸ” Restaurant Join Requests Query:",
       JSON.stringify(query, null, 2),
     );
 
@@ -1723,7 +1723,7 @@ export const getRestaurantJoinRequests = asyncHandler(async (req, res) => {
       .lean();
 
     // Debug: Log found restaurants with detailed info
-    console.log(`📊 Found ${restaurants.length} restaurants matching query:`, {
+    console.log(`ðŸ“Š Found ${restaurants.length} restaurants matching query:`, {
       status,
       queryStructure: Object.keys(query).length,
       restaurantsFound: restaurants.length,
@@ -1744,7 +1744,7 @@ export const getRestaurantJoinRequests = asyncHandler(async (req, res) => {
     // Get total count
     const total = await Restaurant.countDocuments(query);
 
-    console.log(`📊 Total count: ${total} restaurants`);
+    console.log(`ðŸ“Š Total count: ${total} restaurants`);
 
     // Also log a sample of ALL inactive restaurants (for debugging)
     if (status === "pending" && restaurants.length === 0) {
@@ -1786,7 +1786,7 @@ export const getRestaurantJoinRequests = asyncHandler(async (req, res) => {
       });
 
       console.log(
-        "⚠️ No restaurants found with query. Debugging inactive restaurants:",
+        "âš ï¸ No restaurants found with query. Debugging inactive restaurants:",
         {
           totalInactive,
           queryUsed: JSON.stringify(query, null, 2),
@@ -3068,7 +3068,7 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
     const restaurantIdField = restaurant?.restaurantId || restaurantIdString;
     const restaurantObjectIdString = restaurant._id.toString();
 
-    logger.info(`📊 Fetching order statistics for restaurant:`, {
+    logger.info(`ðŸ“Š Fetching order statistics for restaurant:`, {
       restaurantId: restaurantId,
       restaurantIdString: restaurantIdString,
       restaurantIdField: restaurantIdField,
@@ -3085,7 +3085,7 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
       ],
     };
 
-    logger.info(`🔍 Order query:`, orderMatchQuery);
+    logger.info(`ðŸ” Order query:`, orderMatchQuery);
 
     const orderStats = await Order.aggregate([
       {
@@ -3108,7 +3108,7 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
       },
     ]);
 
-    logger.info(`📊 Order stats found:`, orderStats);
+    logger.info(`ðŸ“Š Order stats found:`, orderStats);
 
     const orderStatusMap = {};
     let totalRevenue = 0;
@@ -3130,7 +3130,7 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
     const completedOrders = orderStatusMap.delivered || 0;
     const cancelledOrders = orderStatusMap.cancelled || 0;
 
-    logger.info(`📊 Calculated order statistics:`, {
+    logger.info(`ðŸ“Š Calculated order statistics:`, {
       totalOrders,
       completedOrders,
       cancelledOrders,
@@ -3287,7 +3287,7 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
         ? restaurant._id
         : new mongoose.Types.ObjectId(restaurant._id);
 
-    logger.info(`🔍 Looking for commission config:`, {
+    logger.info(`ðŸ” Looking for commission config:`, {
       restaurantId: restaurantId,
       restaurantObjectId: restaurantIdForQuery.toString(),
       restaurantName: restaurant.name,
@@ -3305,13 +3305,13 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
       commissionConfig = commissionConfig.toObject
         ? commissionConfig.toObject()
         : commissionConfig;
-      logger.info(`✅ Found commission using static method`);
+      logger.info(`âœ… Found commission using static method`);
     }
 
     // If not found, try direct query
     if (!commissionConfig) {
       logger.info(
-        `⚠️ Static method didn't find commission, trying direct query`,
+        `âš ï¸ Static method didn't find commission, trying direct query`,
       );
       commissionConfig = await RestaurantCommission.findOne({
         restaurant: restaurantIdForQuery,
@@ -3327,7 +3327,7 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
 
     // If still not found, try without status filter
     if (!commissionConfig) {
-      logger.info(`⚠️ Trying without status filter`);
+      logger.info(`âš ï¸ Trying without status filter`);
       commissionConfig = await RestaurantCommission.findOne({
         restaurant: restaurantIdForQuery,
       });
@@ -3342,7 +3342,7 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
     // Also try by restaurantId string field
     if (!commissionConfig && restaurant?.restaurantId) {
       logger.info(
-        `🔄 Trying by restaurantId string: ${restaurant.restaurantId}`,
+        `ðŸ”„ Trying by restaurantId string: ${restaurant.restaurantId}`,
       );
       commissionConfig = await RestaurantCommission.findOne({
         restaurantId: restaurant.restaurantId,
@@ -3359,10 +3359,10 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
     if (!commissionConfig) {
       const allCommissions = await RestaurantCommission.find({}).lean();
       logger.warn(
-        `❌ No commission found. Total commissions in DB: ${allCommissions.length}`,
+        `âŒ No commission found. Total commissions in DB: ${allCommissions.length}`,
       );
       logger.info(
-        `📋 All commissions:`,
+        `ðŸ“‹ All commissions:`,
         allCommissions.map((c) => ({
           _id: c._id,
           restaurant: c.restaurant?.toString
@@ -3382,12 +3382,12 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
           : String(c.restaurant);
         return cRestaurantId === restaurantIdForQuery.toString();
       });
-      logger.info(`🔍 Matching commissions: ${matching.length}`, matching);
+      logger.info(`ðŸ” Matching commissions: ${matching.length}`, matching);
     }
 
     let commissionPercentage = 0;
     if (commissionConfig) {
-      logger.info(`✅ Commission config found for restaurant ${restaurantId}`);
+      logger.info(`âœ… Commission config found for restaurant ${restaurantId}`);
       logger.info(`Commission config details:`, {
         _id: commissionConfig._id,
         restaurant: commissionConfig.restaurant?.toString
@@ -3403,7 +3403,7 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
 
       if (commissionConfig.defaultCommission) {
         // Get default commission value - if type is percentage, show the percentage value
-        logger.info(`📊 Processing defaultCommission:`, {
+        logger.info(`ðŸ“Š Processing defaultCommission:`, {
           type: commissionConfig.defaultCommission.type,
           value: commissionConfig.defaultCommission.value,
           valueType: typeof commissionConfig.defaultCommission.value,
@@ -3414,38 +3414,38 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
           commissionPercentage =
             typeof rawValue === "number" ? rawValue : parseFloat(rawValue) || 0;
           logger.info(
-            `✅ Found commission percentage: ${commissionPercentage}% for restaurant ${restaurantId} (raw value: ${rawValue})`,
+            `âœ… Found commission percentage: ${commissionPercentage}% for restaurant ${restaurantId} (raw value: ${rawValue})`,
           );
         } else if (commissionConfig.defaultCommission.type === "amount") {
           // For amount type, we can't show a percentage, so keep it as 0
           commissionPercentage = 0;
           logger.info(
-            `⚠️ Commission type is 'amount', not 'percentage' for restaurant ${restaurantId}`,
+            `âš ï¸ Commission type is 'amount', not 'percentage' for restaurant ${restaurantId}`,
           );
         }
       } else {
         logger.warn(
-          `⚠️ Commission config found but no defaultCommission for restaurant ${restaurantId}`,
+          `âš ï¸ Commission config found but no defaultCommission for restaurant ${restaurantId}`,
         );
       }
     } else {
       logger.warn(
-        `❌ No commission config found for restaurant ${restaurantId} (restaurant._id: ${restaurantIdForQuery.toString()})`,
+        `âŒ No commission config found for restaurant ${restaurantId} (restaurant._id: ${restaurantIdForQuery.toString()})`,
       );
       logger.warn(
-        `⚠️ This restaurant may not have a commission configuration set up.`,
+        `âš ï¸ This restaurant may not have a commission configuration set up.`,
       );
       logger.warn(
-        `💡 To set up commission, go to Restaurant Commission page and add commission for this restaurant.`,
+        `ðŸ’¡ To set up commission, go to Restaurant Commission page and add commission for this restaurant.`,
       );
     }
 
     // Log the final commission percentage being returned
     logger.info(
-      `📊 Final commission percentage being returned: ${commissionPercentage}%`,
+      `ðŸ“Š Final commission percentage being returned: ${commissionPercentage}%`,
     );
     logger.info(
-      `📤 Sending response with commissionPercentage: ${commissionPercentage}`,
+      `ðŸ“¤ Sending response with commissionPercentage: ${commissionPercentage}`,
     );
 
     // Get ratings from FeedbackExperience (restaurantId is ObjectId in FeedbackExperience)
@@ -3457,7 +3457,7 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
         ? restaurant._id
         : new mongoose.Types.ObjectId(restaurant._id);
 
-    logger.info(`⭐ Fetching ratings for restaurant:`, {
+    logger.info(`â­ Fetching ratings for restaurant:`, {
       restaurantId: restaurantId,
       restaurantObjectId: restaurantIdForRating.toString(),
     });
@@ -3478,12 +3478,12 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
       },
     ]);
 
-    logger.info(`⭐ Rating stats found:`, ratingStats);
+    logger.info(`â­ Rating stats found:`, ratingStats);
 
     const averageRating = ratingStats[0]?.averageRating || 0;
     const totalRatings = ratingStats[0]?.totalRatings || 0;
 
-    logger.info(`⭐ Calculated ratings:`, {
+    logger.info(`â­ Calculated ratings:`, {
       averageRating,
       totalRatings,
     });
@@ -3588,10 +3588,10 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
  */
 export const getCustomerWalletReport = asyncHandler(async (req, res) => {
   try {
-    console.log("🔍 Fetching customer wallet report...");
+    console.log("ðŸ” Fetching customer wallet report...");
     const { fromDate, toDate, all, customer, search } = req.query;
 
-    console.log("📋 Query params:", {
+    console.log("ðŸ“‹ Query params:", {
       fromDate,
       toDate,
       all,
@@ -3747,7 +3747,7 @@ export const getCustomerWalletReport = asyncHandler(async (req, res) => {
 
     // Format currency
     const formatCurrency = (amount) => {
-      return `₹${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      return `â‚¹${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     };
 
     // Format date
@@ -3824,7 +3824,7 @@ export const getCustomerWalletReport = asyncHandler(async (req, res) => {
       },
     );
   } catch (error) {
-    console.error("❌ Error fetching customer wallet report:", error);
+    console.error("âŒ Error fetching customer wallet report:", error);
     console.error("Error stack:", error.stack);
     return errorResponse(
       res,
@@ -3880,7 +3880,6 @@ export const updateRestaurantMenuForAdmin = asyncHandler(async (req, res) => {
 
   const existingMenu = await Menu.findOne({ restaurant: restaurantId });
 
-  // Normalize and validate sections (Reusing logic from menuController.js but with admin privileges)
   const normalizedSections = Array.isArray(sections) ? sections.map((section, index) => {
     const existingSection = existingMenu?.sections?.find(s => s.id === section.id);
 
@@ -3928,7 +3927,6 @@ export const updateRestaurantMenuForAdmin = asyncHandler(async (req, res) => {
           gst: item.gst ?? 0,
           preparationTime: item.preparationTime || existingItem?.preparationTime || "",
           images: Array.isArray(item.images) ? item.images : (item.image ? [item.image] : []),
-          // Admin updates mark items as approved by default
           approvalStatus: 'approved', 
           approvedAt: existingItem?.approvedAt || new Date(),
           approvedBy: req.user._id,
@@ -3981,7 +3979,6 @@ export const updateRestaurantMenuForAdmin = asyncHandler(async (req, res) => {
               gst: item.gst ?? 0,
               preparationTime: item.preparationTime || existingItem?.preparationTime || "",
               images: Array.isArray(item.images) ? item.images : (item.image ? [item.image] : []),
-              // Admin updates mark items as approved by default
               approvalStatus: 'approved',
               approvedAt: existingItem?.approvedAt || new Date(),
               approvedBy: req.user._id,
@@ -3994,24 +3991,170 @@ export const updateRestaurantMenuForAdmin = asyncHandler(async (req, res) => {
     };
   }) : [];
 
+  const updatedMenu = await Menu.findOneAndUpdate(
+    { restaurant: restaurantId },
+    { 
+      $set: { 
+        sections: normalizedSections,
+        isActive: true
+      } 
+    },
+    { new: true, upsert: true }
+  );
+
+  return successResponse(res, 200, "Menu updated successfully by admin", {
+    menu: {
+      sections: updatedMenu.sections,
+      isActive: updatedMenu.isActive,
+    },
+  });
+});
+
+/**
+ * Create add-on for a restaurant (Admin)
+ * POST /api/admin/restaurants/:restaurantId/addons
+ */
+export const createAddonForAdmin = asyncHandler(async (req, res) => {
+  const { restaurantId } = req.params;
+  const { name, description, price, image, images } = req.body;
+
+  if (!mongoose.Types.ObjectId.isValid(restaurantId)) {
+    return errorResponse(res, 400, 'Invalid restaurant ID format');
+  }
+
+  if (!name || !name.trim()) {
+    return errorResponse(res, 400, 'Add-on name is required');
+  }
+
+  // Find or create menu
   let menu = await Menu.findOne({ restaurant: restaurantId });
 
   if (!menu) {
     menu = new Menu({
       restaurant: restaurantId,
-      sections: normalizedSections,
+      sections: [],
+      addons: [],
       isActive: true,
     });
-  } else {
-    menu.set('sections', normalizedSections);
-    menu.markModified('sections');
   }
 
+  const normalizedImages = Array.isArray(images) && images.length > 0
+    ? images.filter(img => img && typeof img === 'string' && img.trim() !== '')
+    : (image && image.trim() !== '' ? [image] : []);
+
+  const newAddon = {
+    id: `addon-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    name: name.trim(),
+    description: description || '',
+    price: Number(price) || 0,
+    image: normalizedImages.length > 0 ? normalizedImages[0] : '',
+    images: normalizedImages,
+    isAvailable: true,
+    approvalStatus: 'approved', // Admin added add-ons are approved by default
+    approvedAt: new Date(),
+    approvedBy: req.user._id,
+    requestedAt: new Date(),
+  };
+
+  if (!menu.addons) menu.addons = [];
+  menu.addons.push(newAddon);
+  menu.markModified('addons');
   await menu.save();
 
-  return successResponse(res, 200, "Menu updated successfully by admin", {
+  return successResponse(res, 201, 'Add-on added successfully by admin', {
+    addon: newAddon,
     menu: {
-      sections: menu.sections,
+      addons: menu.addons,
+      isActive: menu.isActive,
+    },
+  });
+});
+
+/**
+ * Update add-on for a restaurant (Admin)
+ * PUT /api/admin/restaurants/:restaurantId/addons/:addonId
+ */
+export const updateAddonForAdmin = asyncHandler(async (req, res) => {
+  const { restaurantId, addonId } = req.params;
+  const { name, description, price, image, images, isAvailable } = req.body;
+
+  if (!mongoose.Types.ObjectId.isValid(restaurantId)) {
+    return errorResponse(res, 400, 'Invalid restaurant ID format');
+  }
+
+  const menu = await Menu.findOne({ restaurant: restaurantId });
+  if (!menu) {
+    return errorResponse(res, 404, 'Menu not found');
+  }
+
+  const addonIndex = menu.addons.findIndex(a => String(a.id) === String(addonId));
+  if (addonIndex === -1) {
+    return errorResponse(res, 404, 'Add-on not found');
+  }
+
+  const addon = menu.addons[addonIndex];
+
+  if (typeof isAvailable === 'boolean') {
+    addon.isAvailable = isAvailable;
+  }
+
+  if (name) addon.name = name.trim();
+  if (description !== undefined) addon.description = description || '';
+  if (price !== undefined) addon.price = Number(price) || 0;
+  
+  if (images || image) {
+    const normalizedImages = Array.isArray(images) && images.length > 0
+      ? images.filter(img => img && typeof img === 'string' && img.trim() !== '')
+      : (image && image.trim() !== '' ? [image] : []);
+    
+    addon.images = normalizedImages;
+    addon.image = normalizedImages.length > 0 ? normalizedImages[0] : '';
+  }
+
+  addon.approvalStatus = 'approved';
+  addon.approvedAt = new Date();
+  addon.approvedBy = req.user._id;
+
+  menu.markModified('addons');
+  await menu.save();
+
+  return successResponse(res, 200, 'Add-on updated successfully by admin', {
+    addon: menu.addons[addonIndex],
+    menu: {
+      addons: menu.addons,
+      isActive: menu.isActive,
+    },
+  });
+});
+
+/**
+ * Delete add-on for a restaurant (Admin)
+ * DELETE /api/admin/restaurants/:restaurantId/addons/:addonId
+ */
+export const deleteAddonForAdmin = asyncHandler(async (req, res) => {
+  const { restaurantId, addonId } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(restaurantId)) {
+    return errorResponse(res, 400, 'Invalid restaurant ID format');
+  }
+
+  const menu = await Menu.findOne({ restaurant: restaurantId });
+  if (!menu) {
+    return errorResponse(res, 404, 'Menu not found');
+  }
+
+  const addonIndex = menu.addons.findIndex(a => String(a.id) === String(addonId));
+  if (addonIndex === -1) {
+    return errorResponse(res, 404, 'Add-on not found');
+  }
+
+  menu.addons.splice(addonIndex, 1);
+  menu.markModified('addons');
+  await menu.save();
+
+  return successResponse(res, 200, 'Add-on deleted successfully by admin', {
+    menu: {
+      addons: menu.addons,
       isActive: menu.isActive,
     },
   });

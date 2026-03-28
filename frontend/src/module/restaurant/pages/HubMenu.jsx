@@ -300,7 +300,9 @@ export default function HubMenu() {
   const fetchAddons = async (showLoading = true) => {
     try {
       if (showLoading) setLoadingAddons(true)
-      const response = await restaurantAPI.getAddons()
+      const response = adminMode && effectiveRestaurantId
+        ? await restaurantAPI.getAddonsByRestaurantId(effectiveRestaurantId)
+        : await restaurantAPI.getAddons()
       const data = response?.data?.data?.addons || response?.data?.addons || []
       // Filter to show only approved add-ons
       const approvedAddons = data.filter(addon => addon.approvalStatus === 'approved')
@@ -445,12 +447,20 @@ export default function HubMenu() {
 
       if (editingAddon) {
         // Update existing add-on
-        await restaurantAPI.updateAddon(editingAddon.id, addonData)
-        toast.success('Add-on updated successfully! Pending admin approval if previously approved.')
+        if (adminMode) {
+          await adminAPI.updateRestaurantAddon(effectiveRestaurantId, editingAddon.id, addonData)
+        } else {
+          await restaurantAPI.updateAddon(editingAddon.id, addonData)
+        }
+        toast.success('Add-on updated successfully!')
       } else {
         // Create new add-on
-        await restaurantAPI.addAddon(addonData)
-        toast.success('Add-on added successfully! Pending admin approval.')
+        if (adminMode) {
+          await adminAPI.addRestaurantAddon(effectiveRestaurantId, addonData)
+        } else {
+          await restaurantAPI.addAddon(addonData)
+        }
+        toast.success(adminMode ? 'Add-on added successfully!' : 'Add-on added successfully! Pending admin approval.')
       }
       
       // Reset form
@@ -490,7 +500,11 @@ export default function HubMenu() {
     }
 
     try {
-      await restaurantAPI.deleteAddon(addon.id)
+      if (adminMode) {
+        await adminAPI.deleteRestaurantAddon(effectiveRestaurantId, addon.id)
+      } else {
+        await restaurantAPI.deleteAddon(addon.id)
+      }
       toast.success('Add-on deleted successfully')
       fetchAddons(true)
     } catch (error) {
@@ -1910,12 +1924,15 @@ export default function HubMenu() {
                             {group.items.map((item) => (
                               <div
                                 key={item.id}
-                                onClick={() => {
-                                  setIsSearchOpen(false)
-                                  navigate(`/restaurant/hub-menu/item/${item.id}`, { 
-                                    state: { item, groupId: group.id } 
-                                  })
-                                }}
+                                 onClick={() => {
+                                   setIsSearchOpen(false)
+                                   const editPath = adminMode 
+                                     ? `/admin/restaurants/${effectiveRestaurantId}/menu/item/${item.id}`
+                                     : `/restaurant/hub-menu/item/${item.id}`
+                                   navigate(editPath, { 
+                                     state: { item, groupId: group.id } 
+                                   })
+                                 }}
                                 className="flex items-start gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors"
                               >
                                 <img

@@ -1471,6 +1471,19 @@ export const adminAPI = {
       menuData,
     );
   },
+  
+  // Add-on Management (Admin)
+  addRestaurantAddon: (restaurantId, addonData) => {
+    return apiClient.post(`/admin/restaurants/${restaurantId}/addons`, addonData);
+  },
+  
+  updateRestaurantAddon: (restaurantId, addonId, addonData) => {
+    return apiClient.put(`/admin/restaurants/${restaurantId}/addons/${addonId}`, addonData);
+  },
+  
+  deleteRestaurantAddon: (restaurantId, addonId) => {
+    return apiClient.delete(`/admin/restaurants/${restaurantId}/addons/${addonId}`);
+  },
 
   // Delete delivery partner
   deleteDeliveryPartner: (id) => {
