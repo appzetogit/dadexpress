@@ -42,10 +42,14 @@ export default function OrdersTable({
   const itemsPerPage = 10
   const totalPages = Math.ceil(orders.length / itemsPerPage)
 
-  // Reset to page 1 when orders change
+  // Ensure current page is valid when orders change (prevents reset to page 1 on delete)
   useEffect(() => {
-    setCurrentPage(1)
-  }, [orders.length])
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages)
+    } else if (orders.length === 0 && currentPage !== 1) {
+      setCurrentPage(1)
+    }
+  }, [orders.length, totalPages, currentPage])
 
   const paginatedOrders = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage
