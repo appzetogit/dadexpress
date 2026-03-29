@@ -111,27 +111,45 @@ export const calculateDeliveryFee = async (orderValue, restaurant, deliveryAddre
 
   if (restaurantCoordinates && deliveryCoordinates) {
     distanceKm = calculateDistance(restaurantCoordinates, deliveryCoordinates);
+    console.log(`[PRICING] Calculated Haversine distance: ${distanceKm} km between`, restaurantCoordinates, 'and', deliveryCoordinates);
   }
 
   // Fallback to provided distance strings if coordinates extraction fails
   if ((distanceKm === null || distanceKm <= 0) && (restaurant?.distance || restaurant?.deliveryDistance)) {
     const distStr = String(restaurant.distance || restaurant.deliveryDistance || '');
     const parsedDist = parseFloat(distStr.replace(/[^\d.]/g, ''));
-    if (!isNaN(parsedDist)) distanceKm = parsedDist;
+    if (!isNaN(parsedDist)) {
+      distanceKm = parsedDist;
+      console.log(`[PRICING] Fallback distance from restaurant object: ${distanceKm} km`);
+    }
   }
 
-  // 2) If we have a valid distance, try to use DeliveryBoyCommission settings (User's preferred source)
-  if (distanceKm !== null && distanceKm > 0) {
+  // 2) Use DeliveryBoyCommission settings (User's preferred source)
+  // Even if distance is 0, we should use the commission rules (e.g. 0-1km tier)
+  if (distanceKm !== null && distanceKm >= 0) {
     try {
       // Use the static method already defined in DeliveryBoyCommission model to find applicable rule + calculate
       const commissionInfo = await DeliveryBoyCommission.calculateCommission(distanceKm);
-      if (commissionInfo && commissionInfo.commission > 0) {
+      if (commissionInfo && (commissionInfo.commission > 0 || (commissionInfo.rule && commissionInfo.rule.basePayout >= 0))) {
+        console.log(`[PRICING] Using DeliveryBoyCommission for ${distanceKm}km:`, commissionInfo.commission);
         // High priority: Use the commission calculation as the delivery fee
         return roundCurrency(commissionInfo.commission);
       }
     } catch (err) {
       console.warn(`[PRICING] DeliveryBoyCommission skipped for ${distanceKm}km order:`, err.message);
     }
+  } else {
+    // Distance not available, try to at least use the first admin-configured rule's base payout
+    try {
+      const firstRule = await DeliveryBoyCommission.findOne({ status: true }).sort({ minDistance: 1 }).lean();
+      if (firstRule) {
+        console.log(`[PRICING] Distance unknown, using first commission rule base payout: ${firstRule.basePayout}`);
+        return roundCurrency(firstRule.basePayout);
+      }
+    } catch (e) {
+      console.warn(`[PRICING] Failed to get default commission rule while distance is unknown: ${e.message}`);
+    }
+    console.warn(`[PRICING] Distance not available and no commission rules found. addr:`, deliveryAddress ? 'present' : 'missing');
   }
 
   // 3) FALLBACK: Use existing FeeSettings logic if distance was unavailable or no commission rules matched
@@ -150,7 +168,9 @@ export const calculateDeliveryFee = async (orderValue, restaurant, deliveryAddre
   const perKmCharge = getPerKmDeliveryCharge(feeSettings, restaurant, deliveryAddress);
 
   // Final calculation: Base + KM charge from FeeSettings
-  return roundCurrency(baseFee + perKmCharge);
+  const finalFallbackFee = roundCurrency(baseFee + perKmCharge);
+  console.log(`[PRICING] Falling back to FeeSettings: base=${baseFee}, kmCharge=${perKmCharge}, total=${finalFallbackFee}`);
+  return finalFallbackFee;
 };
 
 /**
