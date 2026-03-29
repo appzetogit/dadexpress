@@ -2075,6 +2075,9 @@ export const completeDelivery = asyncHandler(async (req, res) => {
       console.warn(`⚠️ Using fallback earnings (delivery fee): ₹${totalEarning.toFixed(2)}`);
     }
 
+    // Get payment collection method from body (new USER feature for QR payments)
+    const { paymentCollectedBy } = req.body;
+
     // Add earning to delivery boy's wallet
     let walletTransaction = null;
     try {
@@ -2091,15 +2094,19 @@ export const completeDelivery = asyncHandler(async (req, res) => {
         console.warn(`⚠️ Earning already added for order ${orderIdForLog}, skipping wallet update`);
       } else {
         // Add payment transaction (earning) with paymentCollected: false so cashInHand gets COD amount, not commission
-        const paymentMethod = (order.payment?.method || '').toString().toLowerCase();
-        const isCOD = paymentMethod === 'cash' || paymentMethod === 'cod';
+        const paymentMethod = (order.payment?.method || "").toString().toLowerCase();
+        const isCOD = paymentMethod === "cash" || paymentMethod === "cod";
+        
+        // If paymentCollectedBy is 'qr', it's NOT a cash order in terms of rider holding cash
+        const isCashCollectedByRider = isCOD && paymentCollectedBy !== "qr";
+
         walletTransaction = wallet.addTransaction({
           amount: totalEarning + (Number(order.customerTip) || 0),
-          type: 'payment',
-          status: 'Completed',
+          type: "payment",
+          status: "Completed",
           description: `Delivery earnings for Order #${orderIdForLog} (incl. ₹${(Number(order.customerTip) || 0).toFixed(2)} tip)`,
           orderId: orderMongoId || order._id,
-          paymentMethod: isCOD ? 'cash' : 'other',
+          paymentMethod: isCashCollectedByRider ? "cash" : "other",
           paymentCollected: false
         });
 
@@ -2107,8 +2114,8 @@ export const completeDelivery = asyncHandler(async (req, res) => {
 
         // COD: add cash collected (order total + tip) to cashInHand so Pocket balance shows it
         const codAmount = (Number(order.pricing?.total) || 0) + (Number(order.customerTip) || 0);
-        const isCashOrder = isCOD;
-        if (isCashOrder && codAmount > 0) {
+        
+        if (isCashCollectedByRider && codAmount > 0) {
           try {
             const updateResult = await DeliveryWallet.updateOne(
               { deliveryId: delivery._id },
@@ -2122,9 +2129,11 @@ export const completeDelivery = asyncHandler(async (req, res) => {
           } catch (codErr) {
             console.error(`❌ Failed to add COD to cashInHand:`, codErr.message);
           }
+        } else if (isCOD && paymentCollectedBy === "qr") {
+          console.log(`📡 QR Payment detected for order ${orderIdForLog}, skipping cashInHand increment for rider`);
         }
 
-        const cashCollectedThisOrder = isCOD ? codAmount : 0;
+        const cashCollectedThisOrder = isCashCollectedByRider ? codAmount : 0;
         logger.info(`💰 Earning added to wallet for delivery: ${delivery._id}`, {
           deliveryId: delivery.deliveryId || delivery._id.toString(),
           orderId: orderIdForLog,

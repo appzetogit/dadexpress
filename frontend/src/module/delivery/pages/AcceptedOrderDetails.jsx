@@ -29,6 +29,7 @@ export default function AcceptedOrderDetails() {
   const { orderId } = useParams()
   const [orderStatus, setOrderStatus] = useState(() => getDeliveryOrderStatus(orderId))
   const [paymentStatus, setPaymentStatus] = useState("Unpaid")
+  const [paymentCollectedBy, setPaymentCollectedBy] = useState("cash")
   const [activeOrderInfo, setActiveOrderInfo] = useState(null)
   const [loading, setLoading] = useState(true)
   const [orderData, setOrderData] = useState(null)
@@ -205,7 +206,7 @@ export default function AcceptedOrderDetails() {
     if (!apiOrderId || statusUpdating) return
     try {
       setStatusUpdating(true)
-      await deliveryAPI.completeDelivery(apiOrderId)
+      await deliveryAPI.completeDelivery(apiOrderId, null, '', null, 0, paymentCollectedBy)
       saveDeliveryOrderStatus(orderId, DELIVERY_ORDER_STATUS.DELIVERED)
       setOrderStatus(DELIVERY_ORDER_STATUS.DELIVERED)
       // Notify wallet listeners so earnings/pocket cards refresh immediately.
@@ -752,13 +753,42 @@ export default function AcceptedOrderDetails() {
               )}
               
               {normalizedStatus === DELIVERY_ORDER_STATUS.ON_THE_WAY && (
-                <button
-                  onClick={handleMarkDelivered}
-                  disabled={statusUpdating}
-                  className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-semibold py-3 rounded-lg transition-colors"
-                >
-                  {statusUpdating ? "Updating..." : "Mark as Delivered"}
-                </button>
+                <div className="space-y-3">
+                  {(displayOrderData.paymentMethod.method === "Cash" || displayOrderData.paymentMethod.method === "cod") && (
+                    <div className="flex flex-col gap-2 bg-gray-50 p-2 rounded-lg border border-gray-200">
+                      <p className="text-xs font-bold text-gray-500 px-1 uppercase tracking-wider">Collect Payment Via:</p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setPaymentCollectedBy("cash")}
+                          className={`flex-1 py-2 px-3 rounded-md text-sm font-semibold transition-all border-2 ${
+                            paymentCollectedBy === "cash"
+                              ? "bg-green-50 border-green-600 text-green-700 shadow-sm"
+                              : "bg-white border-transparent text-gray-600 hover:bg-gray-100"
+                          }`}
+                        >
+                          💵 Cash
+                        </button>
+                        <button
+                          onClick={() => setPaymentCollectedBy("qr")}
+                          className={`flex-1 py-2 px-3 rounded-md text-sm font-semibold transition-all border-2 ${
+                            paymentCollectedBy === "qr"
+                              ? "bg-blue-50 border-blue-600 text-blue-700 shadow-sm"
+                              : "bg-white border-transparent text-gray-600 hover:bg-gray-100"
+                          }`}
+                        >
+                          📱 QR Scan
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  <button
+                    onClick={handleMarkDelivered}
+                    disabled={statusUpdating}
+                    className={`w-full ${paymentCollectedBy === 'qr' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'} disabled:opacity-60 text-white font-semibold py-3 rounded-lg transition-colors shadow-md`}
+                  >
+                    {statusUpdating ? "Updating..." : `Mark as Delivered ${paymentCollectedBy === 'qr' ? '(QR)' : '(Cash)'}`}
+                  </button>
+                </div>
               )}
             </div>
           </div>

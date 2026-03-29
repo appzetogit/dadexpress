@@ -249,9 +249,12 @@ export default function RestaurantsList() {
 
   // Show full phone number without masking
   const formatPhone = (phone) => {
-    if (!phone) return ""
-    return phone
-  }
+    if (!phone) return "";
+    let cleaned = phone.toString().trim();
+    if (cleaned.startsWith("+91")) return cleaned.slice(3).trim();
+    if (cleaned.startsWith("91") && cleaned.length > 10) return cleaned.slice(2).trim();
+    return cleaned.replace(/[-\s]/g, "");
+  };
 
   const renderStars = (rating) => {
     return "★".repeat(rating) + "☆".repeat(5 - rating)
@@ -830,7 +833,7 @@ export default function RestaurantsList() {
                           <div>
                             <p className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider mb-0.5">Contact Number</p>
                             <p className="text-base font-bold text-slate-800">
-                              {restaurantDetails?.ownerPhone || restaurantDetails?.phone || selectedRestaurant?.ownerPhone || selectedRestaurant?.originalData?.ownerPhone || selectedRestaurant?.originalData?.phone || "N/A"}
+                              {formatPhone(restaurantDetails?.ownerPhone || restaurantDetails?.phone || selectedRestaurant?.ownerPhone || selectedRestaurant?.originalData?.ownerPhone || selectedRestaurant?.originalData?.phone || "N/A")}
                             </p>
                           </div>
                         </div>
@@ -872,7 +875,7 @@ export default function RestaurantsList() {
                             <Phone className="w-5 h-5 text-slate-400" />
                             <div>
                               <p className="text-xs text-slate-500">Primary Contact</p>
-                              <p className="text-sm font-medium text-slate-900">{restaurantDetails.primaryContactNumber}</p>
+                              <p className="text-sm font-medium text-slate-900">{formatPhone(restaurantDetails.primaryContactNumber)}</p>
                             </div>
                           </div>
                         )}

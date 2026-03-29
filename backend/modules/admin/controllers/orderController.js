@@ -3,7 +3,8 @@ import { successResponse, errorResponse } from '../../../shared/utils/response.j
 import asyncHandler from '../../../shared/middleware/asyncHandler.js';
 import mongoose from 'mongoose';
 import { findNearestDeliveryBoys } from '../../order/services/deliveryAssignmentService.js';
-import { notifyMultipleDeliveryBoys } from '../../order/services/deliveryNotificationService.js';
+import { notifyMultipleDeliveryBoys, notifyDeliveryBoyNewOrder } from '../../order/services/deliveryNotificationService.js';
+import Delivery from '../../delivery/models/Delivery.js';
 
 /**
  * Get all orders for admin
@@ -2361,6 +2362,78 @@ export const processRefund = asyncHandler(async (req, res) => {
   } catch (error) {
     console.error('Error processing refund:', error);
     return errorResponse(res, 500, error.message || 'Failed to process refund');
+  }
+});
+
+/**
+ * Manually assign delivery partner to order
+ * POST /api/admin/orders/:id/assign-delivery-partner
+ * Body: { deliveryPartnerId: string }
+ */
+export const assignDeliveryPartner = asyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { deliveryPartnerId } = req.body;
+
+    if (!deliveryPartnerId) {
+      return errorResponse(res, 400, "Delivery partner ID is required");
+    }
+
+    const order = await findOrderByIdOrOrderId(id);
+    if (!order) {
+      return errorResponse(res, 404, "Order not found");
+    }
+
+    const deliveryPartner = await Delivery.findById(deliveryPartnerId);
+    if (!deliveryPartner) {
+      return errorResponse(res, 404, "Delivery partner not found");
+    }
+
+    // Update order with delivery partner
+    order.deliveryPartnerId = deliveryPartner._id;
+    
+    // If order was pending, move to confirmed/preparing
+    // Admin assignment usually means it's ready or preparing
+    if (order.status === 'pending') {
+      order.status = 'confirmed';
+      order.tracking.confirmed = { status: true, timestamp: new Date() };
+    }
+
+    // Set assignment info
+    order.assignmentInfo = {
+      ...(order.assignmentInfo || {}),
+      assignedAt: new Date(),
+      assignmentType: 'manual_admin',
+      assignedBy: req.user._id,
+      notificationPhase: 'manual'
+    };
+
+    await order.save();
+
+    // Populate order for notification
+    const populatedOrder = await Order.findById(order._id)
+      .populate('userId', 'name phone')
+      .populate('restaurantId', 'name address location phone ownerPhone')
+      .lean();
+
+    // Notify the delivery boy specifically
+    try {
+      await notifyDeliveryBoyNewOrder(populatedOrder, deliveryPartner._id);
+    } catch (notifyErr) {
+      console.error('Manual assign notification failed:', notifyErr);
+    }
+
+    return successResponse(res, 200, "Delivery partner assigned successfully", {
+      order: {
+        id: order._id.toString(),
+        orderId: order.orderId,
+        status: order.status,
+        deliveryPartnerName: deliveryPartner.name
+      }
+    });
+  } catch (error) {
+    console.error("Error manually assigning delivery partner:", error);
+    return errorResponse(res, 500, "Failed to assign delivery partner");
   }
 });
 

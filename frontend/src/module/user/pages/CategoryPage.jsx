@@ -125,6 +125,7 @@ export default function CategoryPage() {
         return true
       }
 
+      // Check section items
       if (section.items && Array.isArray(section.items)) {
         for (const item of section.items) {
           const itemNameLower = (item.name || '').toLowerCase()
@@ -134,6 +135,24 @@ export default function CategoryPage() {
             itemNameLower.includes(keyword) || itemCategoryLower.includes(keyword)
           )) {
             return true
+          }
+        }
+      }
+
+      // Check subsection items
+      if (section.subsections && Array.isArray(section.subsections)) {
+        for (const subsection of section.subsections) {
+          if (subsection.items && Array.isArray(subsection.items)) {
+            for (const item of subsection.items) {
+              const itemNameLower = (item.name || '').toLowerCase()
+              const itemCategoryLower = (item.category || '').toLowerCase()
+
+              if (keywords.some(keyword =>
+                itemNameLower.includes(keyword) || itemCategoryLower.includes(keyword)
+              )) {
+                return true
+              }
+            }
           }
         }
       }
@@ -156,6 +175,7 @@ export default function CategoryPage() {
     const matchingDishes = []
 
     for (const section of menu.sections) {
+      // Process items in section
       if (section.items && Array.isArray(section.items)) {
         for (const item of section.items) {
           const itemNameLower = (item.name || '').toLowerCase()
@@ -182,6 +202,41 @@ export default function CategoryPage() {
               itemId: item._id || item.id || `${item.name}-${finalPrice}`,
               foodType: item.foodType, // Include foodType for vegMode filtering
             })
+          }
+        }
+      }
+
+      // Process items in subsections
+      if (section.subsections && Array.isArray(section.subsections)) {
+        for (const subsection of section.subsections) {
+          if (subsection.items && Array.isArray(subsection.items)) {
+            for (const item of subsection.items) {
+              const itemNameLower = (item.name || '').toLowerCase()
+              const itemCategoryLower = (item.category || '').toLowerCase()
+
+              if (keywords.some(keyword =>
+                itemNameLower.includes(keyword) || itemCategoryLower.includes(keyword)
+              )) {
+                // Calculate final price
+                const originalPrice = item.originalPrice || item.price || 0
+                const discountPercent = item.discountPercent || 0
+                const finalPrice = discountPercent > 0
+                  ? Math.round(originalPrice * (1 - discountPercent / 100))
+                  : originalPrice
+
+                // Get dish image
+                const dishImage = item.image?.url || item.image || subsection.image?.url || subsection.image || section.image?.url || section.image || null
+
+                matchingDishes.push({
+                  name: item.name,
+                  price: finalPrice,
+                  image: dishImage,
+                  originalPrice: originalPrice,
+                  itemId: item._id || item.id || `${item.name}-${finalPrice}`,
+                  foodType: item.foodType,
+                })
+              }
+            }
           }
         }
       }

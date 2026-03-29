@@ -179,8 +179,8 @@ export default function Checkout() {
       } catch (err) {
         console.error("Error calculating order:", err)
         // Fallback to local calculation if API fails
-        const sub = cart.reduce((sum, item) => sum + item.price * item.quantity * 83, 0)
-        const df = 2.99 * 83
+        const sub = cart.reduce((sum, item) => sum + item.price * item.quantity, 0)
+        const df = 2.99
         const pf = calculatePlatformFeeFromPercentage(sub, 0)
         const tx = sub * 0.08
         const maxRedeem = sub * (referralSettings.maxRedemptionPercentage / 100)
@@ -524,11 +524,11 @@ export default function Checkout() {
                         <div className="flex-1">
                           <p className="font-medium text-sm md:text-base dark:text-gray-200">{item.name}</p>
                           <p className="text-xs md:text-sm text-muted-foreground">
-                            ₹{(item.price * 83).toFixed(2)} × {item.quantity}
+                            ₹{(item.price).toFixed(2)} × {item.quantity}
                           </p>
                         </div>
                         <p className="font-semibold text-sm md:text-base dark:text-gray-200">
-                          ₹{(item.price * 83 * item.quantity).toFixed(2)}
+                          ₹{(item.price * item.quantity).toFixed(2)}
                         </p>
                       </div>
                     ))}

@@ -75,6 +75,14 @@ export default function ViewOrderDialog({ isOpen, onOpenChange, order }) {
     return null
   }
 
+  const formatPhone = (phone) => {
+    if (!phone) return "";
+    let cleaned = phone.toString().trim();
+    if (cleaned.startsWith("+91")) return cleaned.slice(3).trim();
+    if (cleaned.startsWith("91") && cleaned.length > 10) return cleaned.slice(2).trim();
+    return cleaned.replace(/[-\s]/g, "");
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] bg-white p-0 overflow-y-auto">
@@ -208,7 +216,7 @@ export default function ViewOrderDialog({ isOpen, onOpenChange, order }) {
                     <Phone className="w-4 h-4" />
                     Phone
                   </p>
-                  <p className="text-sm font-medium text-slate-900">{order.customerPhone}</p>
+                  <p className="text-sm font-medium text-slate-900">{formatPhone(order.customerPhone)}</p>
                 </div>
               )}
               {order.customerEmail && (
@@ -418,7 +426,7 @@ export default function ViewOrderDialog({ isOpen, onOpenChange, order }) {
                 {order.deliveryPartnerPhone && (
                   <div className="space-y-1">
                     <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Phone</p>
-                    <p className="text-sm font-medium text-slate-900">{order.deliveryPartnerPhone}</p>
+                    <p className="text-sm font-medium text-slate-900">{formatPhone(order.deliveryPartnerPhone)}</p>
                   </div>
                 )}
               </div>

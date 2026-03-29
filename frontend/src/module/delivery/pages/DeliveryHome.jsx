@@ -428,6 +428,7 @@ export default function DeliveryHome() {
     return stored ? JSON.parse(stored) : null
   })
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(() => getUnreadDeliveryNotificationCount())
+  const [paymentCollectedBy, setPaymentCollectedBy] = useState("cash")
 
   // Delivery notifications hook
   const { newOrder, clearNewOrder, orderReady, clearOrderReady, isConnected } = useDeliveryNotificationContext()
@@ -12508,12 +12509,72 @@ export default function DeliveryHome() {
             )
           })()}
 
+          {/* Payment Method Selector Section (COD only) */}
+          {selectedRestaurant && isCashPaymentMethod(selectedRestaurant.paymentMethod || selectedRestaurant.payment) && (
+            <div className="mb-6 space-y-3">
+              <div className="flex flex-col gap-2.5 bg-gray-50 p-3 rounded-2xl border border-gray-200 shadow-sm transition-all duration-300">
+                <div className="flex items-center justify-between px-1">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Select Payment Mode</p>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${paymentCollectedBy === 'qr' ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600'}`}>
+                    {paymentCollectedBy === 'qr' ? 'Digital' : 'Liquid Cash'}
+                  </span>
+                </div>
+                
+                <div className="flex gap-2.5">
+                  <button
+                    onClick={() => setPaymentCollectedBy("cash")}
+                    className={`flex-1 flex flex-col items-center justify-center gap-1.5 py-3 px-2 rounded-xl text-sm font-bold transition-all border-2 relative overflow-hidden ${
+                      paymentCollectedBy === "cash"
+                        ? "bg-white border-green-500 text-green-700 shadow-md ring-4 ring-green-50"
+                        : "bg-white/50 border-gray-100 text-gray-400 hover:border-gray-200 grayscale opacity-60"
+                    }`}
+                  >
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${paymentCollectedBy === 'cash' ? 'bg-green-100' : 'bg-gray-100'}`}>
+                      <IndianRupee className="w-4 h-4" />
+                    </div>
+                    <span>CASH</span>
+                    {paymentCollectedBy === 'cash' && (
+                      <motion.div layoutId="paymentSelection" className="absolute top-1.5 right-1.5 w-2 h-2 bg-green-500 rounded-full" />
+                    )}
+                  </button>
+                  
+                  <button
+                    onClick={() => setPaymentCollectedBy("qr")}
+                    className={`flex-1 flex flex-col items-center justify-center gap-1.5 py-3 px-2 rounded-xl text-sm font-bold transition-all border-2 relative overflow-hidden ${
+                      paymentCollectedBy === "qr"
+                        ? "bg-white border-blue-500 text-blue-700 shadow-md ring-4 ring-blue-50"
+                        : "bg-white/50 border-gray-100 text-gray-400 hover:border-gray-200 grayscale opacity-60"
+                    }`}
+                  >
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${paymentCollectedBy === 'qr' ? 'bg-blue-100' : 'bg-gray-100'}`}>
+                      <ScanLine className="w-4 h-4" />
+                    </div>
+                    <span>QR SCAN</span>
+                    {paymentCollectedBy === 'qr' && (
+                      <motion.div layoutId="paymentSelection" className="absolute top-1.5 right-1.5 w-2 h-2 bg-blue-500 rounded-full" />
+                    )}
+                  </button>
+                </div>
+              </div>
+              
+              {paymentCollectedBy === 'qr' && (
+                <motion.p 
+                  initial={{ opacity: 0, y: -5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="text-[11px] text-blue-600 font-bold bg-blue-50 py-2 px-3 rounded-lg text-center"
+                >
+                  ✨ Payment goes to company account (No deduction)
+                </motion.p>
+              )}
+            </div>
+          )}
+
           {/* Order Delivered Button with Swipe */}
           <div className="relative w-full">
             <motion.div
               ref={orderDeliveredButtonRef}
-              className="relative w-full bg-green-600 rounded-full overflow-hidden shadow-xl"
-              style={{ touchAction: 'pan-x' }} // Prevent vertical scrolling, allow horizontal pan
+              className={`relative w-full rounded-full overflow-hidden shadow-xl ${paymentCollectedBy === 'qr' ? 'bg-blue-600' : 'bg-green-600'}`}
+              style={{ touchAction: 'pan-x' }}
               onTouchStart={handleOrderDeliveredTouchStart}
               onTouchMove={handleOrderDeliveredTouchMove}
               onTouchEnd={handleOrderDeliveredTouchEnd}
@@ -12522,7 +12583,7 @@ export default function DeliveryHome() {
             >
               {/* Swipe progress background */}
               <motion.div
-                className="absolute inset-0 bg-green-500 rounded-full"
+                className={`absolute inset-0 rounded-full ${paymentCollectedBy === 'qr' ? 'bg-blue-500' : 'bg-green-500'}`}
                 animate={{
                   width: `${orderDeliveredButtonProgress * 100}%`
                 }}
@@ -12564,7 +12625,7 @@ export default function DeliveryHome() {
                       damping: 25
                     } : { duration: 0 }}
                   >
-                    {orderDeliveredButtonProgress > 0.5 ? 'Release to Confirm' : 'Order Delivered'}
+                    {orderDeliveredButtonProgress > 0.5 ? 'Release to Confirm' : `Delivered (${paymentCollectedBy === 'qr' ? 'QR' : 'Cash'})`}
                   </motion.span>
                 </div>
               </div>
@@ -12647,7 +12708,8 @@ export default function DeliveryHome() {
                       customerRating > 0 ? customerRating : null,
                       customerReviewText.trim() || '',
                       dropImageUrl,
-                      actualTripDistance
+                      actualTripDistance,
+                      paymentCollectedBy
                     )
 
                     if (response.data?.success) {

@@ -358,7 +358,7 @@ export default function ProductDetail() {
               </div>
               <div className="flex-shrink-0 text-right">
                 <div className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold text-primary-orange">
-                  ₹{(product.price * 83).toFixed(0)}
+                  ₹{product.price.toFixed(0)}
                 </div>
                 <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">per serving</p>
               </div>
@@ -412,9 +412,9 @@ export default function ProductDetail() {
                   </div>
                   <div className="flex-1">
                     <p className="text-sm text-muted-foreground">In cart</p>
-                    <p className="text-lg font-bold text-primary-orange">
-                      ₹{(product.price * 83 * (cartItem?.quantity || 0)).toFixed(0)}
-                    </p>
+                    <div className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-primary-orange">
+                      ₹{(product.price * (cartItem?.quantity || 0)).toFixed(0)}
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -447,9 +447,9 @@ export default function ProductDetail() {
                       onClick={handleAddToCart}
                       className="bg-primary-orange hover:opacity-90 text-white"
                     >
-                      <ShoppingBag className="h-5 w-5 mr-2" />
-                      Add to Cart - ₹{(product.price * 83 * quantity).toFixed(0)}
-                    </Button>
+                      <span className="text-sm sm:text-base md:text-lg lg:text-xl font-bold">
+                    Add to Cart - ₹{(product.price * quantity).toFixed(0)}
+                  </span>  </Button>
                   </div>
                 </div>
               )}

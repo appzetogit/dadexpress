@@ -44,6 +44,14 @@ export default function ShowIdCard() {
     return validTill.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
   }
 
+  const formatPhone = (phone) => {
+    if (!phone || phone === "N/A") return phone;
+    let cleaned = phone.toString().trim();
+    if (cleaned.startsWith("+91")) return cleaned.slice(3).trim();
+    if (cleaned.startsWith("91") && cleaned.length > 10) return cleaned.slice(2).trim();
+    return cleaned.replace(/[-\s]/g, "");
+  };
+
   // Get status display
   const getStatusDisplay = () => {
     if (!profileData) return "Active"
@@ -183,7 +191,7 @@ export default function ShowIdCard() {
           {/* Phone Section */}
           <div className="w-full max-w-md mb-4 text-center">
             <p className="text-xs text-gray-500 mb-1">PHONE</p>
-            <p className="text-lg font-bold text-black">{idCardData.phone}</p>
+            <p className="text-lg font-bold text-black">{formatPhone(idCardData.phone)}</p>
           </div>
 
           {/* Vehicle Section */}

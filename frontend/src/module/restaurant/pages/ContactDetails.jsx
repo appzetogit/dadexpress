@@ -99,6 +99,14 @@ export default function ContactDetails() {
     }
   }, [])
 
+  const formatPhone = (phone) => {
+    if (!phone || phone === "N/A") return phone;
+    let cleaned = phone.toString().trim();
+    if (cleaned.startsWith("+91")) return cleaned.slice(3).trim();
+    if (cleaned.startsWith("91") && cleaned.length > 10) return cleaned.slice(2).trim();
+    return cleaned.replace(/[-\s]/g, "");
+  };
+
 
   const handleInviteClick = (role = "") => {
     navigate(`/restaurant/invite-user?role=${role}`)
@@ -233,7 +241,7 @@ export default function ContactDetails() {
               <p className="text-sm text-gray-900 font-normal flex items-center gap-2">
                 <Phone className="w-3.5 h-3.5 text-blue-600" />
                 <a href={`tel:${ownerData.phone}`} className="hover:underline">
-                  {loading ? "Loading..." : (ownerData.phone || "N/A")}
+                  {loading ? "Loading..." : (formatPhone(ownerData.phone) || "N/A")}
                 </a>
               </p>
               <p className="text-sm text-gray-900 font-normal flex items-center gap-2">
@@ -310,7 +318,7 @@ export default function ContactDetails() {
                                 <span className="flex items-center gap-2">
                                   <Phone className="w-3.5 h-3.5 text-orange-600" />
                                   <a href={`tel:${user.phone}`} className="hover:underline">
-                                    {user.phone}
+                                    {formatPhone(user.phone)}
                                   </a>
                                 </span>
                               )}
@@ -390,7 +398,7 @@ export default function ContactDetails() {
                                 <span className="flex items-center gap-2">
                                   <Phone className="w-3.5 h-3.5 text-orange-600" />
                                   <a href={`tel:${user.phone}`} className="hover:underline">
-                                    {user.phone}
+                                    {formatPhone(user.phone)}
                                   </a>
                                 </span>
                               )}

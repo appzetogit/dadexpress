@@ -219,6 +219,7 @@ import {
   rejectOrder,
   deleteOrder,
   getSearchingDeliverymanOrders,
+  assignDeliveryPartner,
   getRefundRequests,
   processRefund,
   getOngoingOrders,
@@ -508,6 +509,7 @@ router.patch("/orders/:id/accept", acceptOrder);
 router.patch("/orders/:id/reject", rejectOrder);
 router.delete("/orders/:id", deleteOrder);
 router.get("/orders/searching-deliveryman", getSearchingDeliverymanOrders);
+router.post("/orders/:id/assign-delivery-partner", assignDeliveryPartner);
 router.get("/orders/ongoing", getOngoingOrders);
 router.get("/orders/transaction-report", getTransactionReport);
 router.get("/orders/restaurant-report", getRestaurantReport);

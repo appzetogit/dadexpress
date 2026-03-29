@@ -1,8 +1,10 @@
 import { useState, useEffect, useMemo } from "react"
-import { Eye, Printer, ArrowUpDown } from "lucide-react"
+import { Eye, Printer, ArrowUpDown, Bike, UserPlus } from "lucide-react"
+import ManualAssignmentDialog from "./ManualAssignmentDialog"
 
-export default function DispatchOrdersTable({ orders, visibleColumns, onViewOrder, onPrintOrder }) {
+export default function DispatchOrdersTable({ orders, visibleColumns, onViewOrder, onPrintOrder, onAssigned }) {
   const [currentPage, setCurrentPage] = useState(1)
+  const [assigningOrder, setAssigningOrder] = useState(null)
   const itemsPerPage = 10
   const totalPages = Math.ceil(orders.length / itemsPerPage)
   
@@ -171,8 +173,15 @@ export default function DispatchOrdersTable({ orders, visibleColumns, onViewOrde
                         <Eye className="w-4 h-4" />
                       </button>
                       <button 
-                        onClick={() => onPrintOrder(order)}
+                        onClick={() => setAssigningOrder(order)}
                         className="p-1.5 rounded text-blue-600 hover:bg-blue-50 transition-colors"
+                        title="Manual Assign Rider"
+                      >
+                        <UserPlus className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => onPrintOrder(order)}
+                        className="p-1.5 rounded text-slate-600 hover:bg-slate-50 transition-colors"
                         title="Print Order"
                       >
                         <Printer className="w-4 h-4" />
@@ -185,6 +194,13 @@ export default function DispatchOrdersTable({ orders, visibleColumns, onViewOrde
           </tbody>
         </table>
       </div>
+
+      <ManualAssignmentDialog
+        isOpen={!!assigningOrder}
+        onOpenChange={(open) => !open && setAssigningOrder(null)}
+        order={assigningOrder}
+        onAssigned={onAssigned}
+      />
       
       {totalPages > 1 && (
         <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">

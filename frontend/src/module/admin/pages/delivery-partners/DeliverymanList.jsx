@@ -183,6 +183,14 @@ export default function DeliverymanList() {
     actions: "Actions",
   }
 
+  const formatPhone = (phone) => {
+    if (!phone) return "";
+    let cleaned = phone.toString().trim();
+    if (cleaned.startsWith("+91")) return cleaned.slice(3).trim();
+    if (cleaned.startsWith("91") && cleaned.length > 10) return cleaned.slice(2).trim();
+    return cleaned.replace(/[-\s]/g, "");
+  };
+
   return (
     <div className="p-4 lg:p-6 bg-slate-50 min-h-screen">
       <div className="max-w-7xl mx-auto">
@@ -361,7 +369,7 @@ export default function DeliverymanList() {
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex flex-col">
                               <span className="text-sm text-slate-700">{dm.email}</span>
-                              <span className="text-xs text-slate-500">{dm.phone}</span>
+                              <span className="text-xs text-slate-500">{formatPhone(dm.phone)}</span>
                             </div>
                           </td>
                         )}
@@ -487,7 +495,7 @@ export default function DeliverymanList() {
                       <label className="text-xs font-semibold text-slate-500 uppercase flex items-center gap-1">
                         <Phone className="w-3 h-3" /> Phone
                       </label>
-                      <p className="text-sm text-slate-900 mt-1">{viewDetails.phone || "N/A"}</p>
+                      <p className="text-sm text-slate-900 mt-1">{formatPhone(viewDetails.phone) || "N/A"}</p>
                     </div>
                     <div>
                       <label className="text-xs font-semibold text-slate-500 uppercase">Delivery ID</label>

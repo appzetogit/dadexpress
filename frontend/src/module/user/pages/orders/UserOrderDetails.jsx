@@ -159,6 +159,14 @@ export default function UserOrderDetails() {
     order.restaurantPhone ||
     ""
 
+  const formatPhone = (phone) => {
+    if (!phone) return "";
+    let cleaned = phone.toString().trim();
+    if (cleaned.startsWith("+91")) return cleaned.slice(3).trim();
+    if (cleaned.startsWith("91") && cleaned.length > 10) return cleaned.slice(2).trim();
+    return cleaned.replace(/[-\s]/g, "");
+  };
+
   const handleCallRestaurant = () => {
     if (!restaurantPhone) {
       toast.error("Restaurant phone number not available")
@@ -314,7 +322,7 @@ export default function UserOrderDetails() {
         <div className="bg-white p-4 rounded-xl shadow-sm space-y-5">
           <div className="flex gap-3">
              <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center"><User className="w-5 h-5 text-gray-500" /></div>
-             <div><h4 className="font-semibold text-gray-800 text-sm">{userName || "Customer"}</h4><p className="text-gray-500 text-xs">{userPhone}</p></div>
+             <div><h4 className="font-semibold text-gray-800 text-sm">{userName || "Customer"}</h4><p className="text-gray-500 text-xs">{formatPhone(userPhone)}</p></div>
           </div>
           <div className="flex gap-3">
              <div className="mt-0.5"><CreditCard className="w-5 h-5 text-gray-500" /></div>

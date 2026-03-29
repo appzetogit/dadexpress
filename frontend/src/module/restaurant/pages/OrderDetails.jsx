@@ -394,6 +394,14 @@ export default function OrderDetails() {
     
   }
 
+  const formatPhone = (phone) => {
+    if (!phone) return "";
+    let cleaned = phone.toString().trim();
+    if (cleaned.startsWith("+91")) return cleaned.slice(3).trim();
+    if (cleaned.startsWith("91") && cleaned.length > 10) return cleaned.slice(2).trim();
+    return cleaned.replace(/[-\s]/g, "");
+  };
+
   const getStatusColor = (status) => {
     switch (status) {
       case "REJECTED":
@@ -557,7 +565,7 @@ export default function OrderDetails() {
                   <p className="text-xs text-blue-600 mt-1 flex items-center gap-1 font-medium">
                     <Phone className="w-3 h-3" />
                     <a href={`tel:${orderData.customer.phone}`} className="hover:underline">
-                      {orderData.customer.phone}
+                      {formatPhone(orderData.customer.phone)}
                     </a>
                   </p>
                 )}

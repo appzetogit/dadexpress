@@ -35,66 +35,45 @@ export default function SearchingDeliveryMan() {
   }, [searchQuery])
 
   // Fetch orders from API
-  useEffect(() => {
-    const fetchOrders = async () => {
-      try {
-        setLoading(true)
-        const response = await adminAPI.getSearchingDeliverymanOrders({
-          search: debouncedSearchQuery || undefined,
-          limit: 1000 // Get all orders
-        })
+  const fetchOrders = async () => {
+    try {
+      setLoading(true)
+      const response = await adminAPI.getSearchingDeliverymanOrders({
+        search: debouncedSearchQuery || undefined,
+        limit: 1000 // Get all orders
+      })
 
-        if (response?.data?.success && response.data.data?.orders) {
-          setOrders(response.data.data.orders)
-        } else {
-          setOrders([])
-          if (response?.data?.message) {
-            toast.error(response.data.message)
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching searching deliveryman orders:", error)
-        console.error("Error details:", {
-          message: error.message,
-          code: error.code,
-          response: error.response ? {
-            status: error.response.status,
-            statusText: error.response.statusText,
-            data: error.response.data
-          } : null,
-          request: error.request ? {
-            url: error.config?.url,
-            method: error.config?.method,
-            baseURL: error.config?.baseURL
-          } : null
-        })
-        
-        if (error.response) {
-          const status = error.response.status
-          const errorData = error.response.data
-          
-          if (status === 401) {
-            toast.error('Authentication required. Please login again.')
-          } else if (status === 403) {
-            toast.error('Access denied. You do not have permission.')
-          } else if (status === 404) {
-            toast.error('Endpoint not found. Please check backend server.')
-          } else if (status >= 500) {
-            toast.error('Server error. Please try again later.')
-          } else {
-            toast.error(errorData?.message || `Error ${status}: Failed to fetch orders`)
-          }
-        } else if (error.request) {
-          toast.error('Cannot connect to server. Please check if backend is running.')
-        } else {
-          toast.error(error.message || 'Failed to fetch orders')
-        }
+      if (response?.data?.success && response.data.data?.orders) {
+        setOrders(response.data.data.orders)
+      } else {
         setOrders([])
-      } finally {
-        setLoading(false)
+        if (response?.data?.message) {
+          toast.error(response.data.message)
+        }
       }
+    } catch (error) {
+      console.error("Error fetching searching deliveryman orders:", error)
+      if (error.response) {
+        const status = error.response.status
+        if (status === 401) {
+          toast.error('Authentication required. Please login again.')
+        } else if (status === 403) {
+          toast.error('Access denied. You do not have permission.')
+        } else {
+          toast.error(error.response.data?.message || `Error ${status}: Failed to fetch orders`)
+        }
+      } else if (error.request) {
+        toast.error('Cannot connect to server. Please check if backend is running.')
+      } else {
+        toast.error(error.message || 'Failed to fetch orders')
+      }
+      setOrders([])
+    } finally {
+      setLoading(false)
     }
+  }
 
+  useEffect(() => {
     fetchOrders()
   }, [debouncedSearchQuery])
 
@@ -209,6 +188,7 @@ export default function SearchingDeliveryMan() {
         visibleColumns={visibleColumns}
         onViewOrder={handleViewOrder}
         onPrintOrder={handlePrintOrder}
+        onAssigned={fetchOrders}
       />
     </div>
   )

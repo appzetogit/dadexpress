@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react"
-import { Search, Trash2, Loader2 } from "lucide-react"
+import { Search, Trash2, Loader2, Eye, X } from "lucide-react"
 import { adminAPI, restaurantAPI } from "@/lib/api"
 import apiClient from "@/lib/api"
 import { toast } from "sonner"
@@ -9,6 +9,7 @@ export default function FoodsList() {
   const [foods, setFoods] = useState([])
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState(false)
+  const [viewingFood, setViewingFood] = useState(null)
 
   // Fetch all foods from all restaurants
   useEffect(() => {
@@ -214,15 +215,10 @@ export default function FoodsList() {
       }
 
       // Update menu in backend
-      // Note: Since we're admin, we need to use a workaround
-      // The restaurant menu update endpoint requires restaurant authentication
-      // For now, we'll try using the restaurant endpoint directly
-      // TODO: Create admin endpoint: PUT /api/admin/restaurants/:id/menu
       try {
-        // Try using restaurant menu update endpoint
-        // This might fail if backend doesn't allow admin to update restaurant menus
-        const response = await apiClient.put(
-          `/restaurant/menu`,
+        // Use the admin API endpoint which is authorized for admins
+        const response = await adminAPI.updateRestaurantMenu(
+          food.restaurantId, 
           { sections: updatedSections }
         )
         
@@ -230,12 +226,8 @@ export default function FoodsList() {
           throw new Error(response.data?.message || "Failed to update menu")
         }
       } catch (apiError) {
-        // If direct API call fails, we need an admin endpoint
-        // For now, show a helpful error message
-        if (apiError.response?.status === 401 || apiError.response?.status === 403) {
-          throw new Error("Admin cannot directly update restaurant menus. Please contact developer to add admin menu update endpoint.")
-        }
-        throw apiError
+        console.error("API Error during delete:", apiError)
+        throw new Error(apiError.response?.data?.message || apiError.message || "Failed to update menu")
       }
 
       // Remove from local state
@@ -360,18 +352,27 @@ export default function FoodsList() {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <button
-                        onClick={() => handleDelete(food.id)}
-                        disabled={deleting}
-                        className="p-1.5 rounded text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Delete"
-                      >
-                        {deleting ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="w-4 h-4" />
-                        )}
-                      </button>
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          onClick={() => setViewingFood(food)}
+                          className="p-1.5 rounded text-blue-600 hover:bg-blue-50 transition-colors"
+                          title="View Details"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(food.id)}
+                          disabled={deleting}
+                          className="p-1.5 rounded text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Delete"
+                        >
+                          {deleting ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -380,6 +381,99 @@ export default function FoodsList() {
           </table>
         </div>
       </div>
+
+      {/* View Food Details Modal */}
+      {viewingFood && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-900">Food Details</h3>
+              <button 
+                onClick={() => setViewingFood(null)}
+                className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-20 h-20 rounded-xl overflow-hidden bg-slate-100 border border-slate-200">
+                  <img
+                    src={viewingFood.image}
+                    alt={viewingFood.name}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.target.src = "https://via.placeholder.com/80"
+                    }}
+                  />
+                </div>
+                <div>
+                  <h4 className="text-xl font-bold text-slate-900">{viewingFood.name}</h4>
+                  <p className="text-sm text-slate-500 font-medium tracking-wide">
+                    ID #{formatFoodId(viewingFood.id)}
+                  </p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                      viewingFood.foodType === 'Veg' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                    }`}>
+                      {viewingFood.foodType}
+                    </span>
+                    <span className="text-xs text-slate-400">•</span>
+                    <span className="text-xs font-semibold text-slate-600">
+                      {viewingFood.sectionName}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Price</p>
+                    <p className="text-lg font-bold text-slate-900">₹{viewingFood.price}</p>
+                  </div>
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Status</p>
+                    <div className="flex items-center gap-1.5">
+                      <div className={`w-2 h-2 rounded-full ${viewingFood.status ? 'bg-emerald-500' : 'bg-slate-300'}`}></div>
+                      <p className="text-sm font-bold text-slate-700">{viewingFood.status ? 'Active' : 'Inactive'}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Restaurant Information</p>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-slate-500 font-medium">Name:</span>
+                    <span className="text-xs font-bold text-slate-900">{viewingFood.restaurantName}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-500 font-medium">Location:</span>
+                    <span className="text-xs font-bold text-slate-900 truncate max-w-[150px]">{viewingFood.originalItem?.location || "N/A"}</span>
+                  </div>
+                </div>
+
+                {viewingFood.originalItem?.description && (
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Description</p>
+                    <p className="text-xs text-slate-600 leading-relaxed italic">{viewingFood.originalItem.description}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-100">
+              <button 
+                onClick={() => setViewingFood(null)}
+                className="w-full py-2.5 bg-white border border-slate-200 text-slate-700 font-bold text-sm rounded-xl hover:bg-slate-100 transition-colors shadow-sm"
+              >
+                Close View
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

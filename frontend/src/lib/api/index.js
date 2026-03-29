@@ -1019,7 +1019,7 @@ export const deliveryAPI = {
       API_ENDPOINTS.DELIVERY.ORDER_REACHED_DROP.replace(":orderId", orderId),
     );
   },
-  completeDelivery: (orderId, rating = null, review = "", dropImageUrl = null, actualTripDistance = 0) => {
+  completeDelivery: (orderId, rating = null, review = "", dropImageUrl = null, actualTripDistance = 0, paymentCollectedBy = "cash") => {
     return apiClient.patch(
       API_ENDPOINTS.DELIVERY.ORDER_COMPLETE_DELIVERY.replace(
         ":orderId",
@@ -1030,6 +1030,7 @@ export const deliveryAPI = {
         review,
         dropImageUrl,
         actualTripDistance,
+        paymentCollectedBy,
       },
     );
   },
@@ -1542,6 +1543,16 @@ export const adminAPI = {
   // Get ongoing orders
   getOngoingOrders: (params = {}) => {
     return apiClient.get(API_ENDPOINTS.ADMIN.ORDERS_ONGOING, { params });
+  },
+
+  // Assign delivery partner manually
+  assignDeliveryPartner: (id, deliveryPartnerId) => {
+    return apiClient.post(
+      `/admin/orders/${encodeURIComponent(id)}/assign-delivery-partner`,
+      {
+        deliveryPartnerId,
+      },
+    );
   },
 
   // Get transaction report

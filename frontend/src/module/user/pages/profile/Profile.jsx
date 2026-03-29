@@ -90,6 +90,14 @@ export default function Profile() {
     window.dispatchEvent(new Event("userVegModeChanged"))
   }
 
+  const formatPhone = (phone) => {
+    if (!phone) return "";
+    let cleaned = phone.toString().trim();
+    if (cleaned.startsWith("+91")) return cleaned.slice(3).trim();
+    if (cleaned.startsWith("91") && cleaned.length > 10) return cleaned.slice(2).trim();
+    return cleaned.replace(/[-\s]/g, "");
+  };
+
   // Get first letter of name for avatar
   const avatarInitial = userProfile?.name?.charAt(0)?.toUpperCase() || userProfile?.phone?.charAt(1)?.toUpperCase() || 'U'
   const displayName = userProfile?.name || userProfile?.phone || 'User'
@@ -302,7 +310,7 @@ export default function Profile() {
                 )}
                 {userProfile?.phone && (
                   <p className={`text-sm ${hasValidEmail ? 'text-gray-600 dark:text-gray-400' : 'text-black dark:text-white'} mb-3`}>
-                    {userProfile.phone}
+                    {formatPhone(userProfile.phone)}
                   </p>
                 )}
                 {!hasValidEmail && !userProfile?.phone && (

@@ -156,6 +156,14 @@ export default function Customers() {
     }
   }
 
+  const formatPhone = (phone) => {
+    if (!phone) return "";
+    let cleaned = phone.toString().trim();
+    if (cleaned.startsWith("+91")) return cleaned.slice(3);
+    if (cleaned.startsWith("91") && cleaned.length > 10) return cleaned.slice(2);
+    return cleaned;
+  };
+
   return (
     <div className="p-4 lg:p-6 bg-slate-50 min-h-screen">
       <div className="max-w-7xl mx-auto">
@@ -360,7 +368,7 @@ export default function Customers() {
                       <td className="px-6 py-4">
                         <div className="flex flex-col">
                           <span className="text-sm text-slate-700">{customer.email}</span>
-                          <span className="text-xs text-slate-500">{customer.phone}</span>
+                          <span className="text-xs text-slate-500">{formatPhone(customer.phone)}</span>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">

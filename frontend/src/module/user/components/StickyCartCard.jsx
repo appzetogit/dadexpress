@@ -46,7 +46,7 @@ export default function StickyCartCard() {
   const restaurantSlug = restaurantName.toLowerCase().replace(/\s+/g, "-")
 
   // Calculate total price
-  const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity * 83), 0)
+  const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0)
 
   // Animation variants for the popout effect
   const cardVariants = {

@@ -120,8 +120,21 @@ export default function PhoneNumbersPage() {
     setOtp(["", "", "", "", "", ""])
   }
 
+  const formatPhone = (phone) => {
+    if (!phone) return "";
+    let cleaned = phone.toString().trim();
+    // Handle country-phone combo like "+91-9981127415"
+    if (cleaned.includes("-")) {
+      const parts = cleaned.split("-");
+      cleaned = parts[1] || parts[0];
+    }
+    if (cleaned.startsWith("+91")) return cleaned.slice(3).trim();
+    if (cleaned.startsWith("91") && cleaned.length > 10) return cleaned.slice(2).trim();
+    return cleaned.replace(/[-\s]/g, "");
+  };
+
   const getDisplayNumber = (type) => {
-    return phoneData[type] || ""
+    return formatPhone(phoneData[type]) || ""
   }
 
   return (

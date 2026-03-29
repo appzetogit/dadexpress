@@ -127,6 +127,24 @@ export default function SearchResults() {
           }
         }
       }
+
+      // Check items in subsections
+      if (section.subsections && Array.isArray(section.subsections)) {
+        for (const subsection of section.subsections) {
+          if (subsection.items && Array.isArray(subsection.items)) {
+            for (const item of subsection.items) {
+              const itemNameLower = (item.name || '').toLowerCase()
+              if (keywords.some(keyword => itemNameLower.includes(keyword))) {
+                return true
+              }
+              const itemCategoryLower = (item.category || '').toLowerCase()
+              if (keywords.some(keyword => itemCategoryLower.includes(keyword))) {
+                return true
+              }
+            }
+          }
+        }
+      }
     }
 
     return false
@@ -154,6 +172,23 @@ export default function SearchResults() {
             itemNameLower.includes(keyword) || itemCategoryLower.includes(keyword)
           )) {
             return item.name
+          }
+        }
+      }
+
+      if (section.subsections && Array.isArray(section.subsections)) {
+        for (const subsection of section.subsections) {
+          if (subsection.items && Array.isArray(subsection.items)) {
+            for (const item of subsection.items) {
+              const itemNameLower = (item.name || '').toLowerCase()
+              const itemCategoryLower = (item.category || '').toLowerCase()
+
+              if (keywords.some(keyword =>
+                itemNameLower.includes(keyword) || itemCategoryLower.includes(keyword)
+              )) {
+                return item.name
+              }
+            }
           }
         }
       }
@@ -539,6 +574,7 @@ export default function SearchResults() {
         let menuMatch = false
         if (r.menu && r.menu.sections) {
           for (const section of r.menu.sections) {
+            // Check section items
             if (section.items) {
               for (const item of section.items) {
                 if (item.name?.toLowerCase().includes(lowerQuery) ||
@@ -546,6 +582,23 @@ export default function SearchResults() {
                   menuMatch = true
                   break
                 }
+              }
+            }
+            if (menuMatch) break
+
+            // Check subsection items
+            if (section.subsections) {
+              for (const subsection of section.subsections) {
+                if (subsection.items) {
+                  for (const item of subsection.items) {
+                    if (item.name?.toLowerCase().includes(lowerQuery) ||
+                      item.category?.toLowerCase().includes(lowerQuery)) {
+                      menuMatch = true
+                      break
+                    }
+                  }
+                }
+                if (menuMatch) break
               }
             }
             if (menuMatch) break
