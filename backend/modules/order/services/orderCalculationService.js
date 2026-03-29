@@ -89,59 +89,31 @@ const extractCoordinates = (entity) => {
 };
 
 export const calculateDeliveryFee = async (orderValue, restaurant, deliveryAddress = null, deliveryFleet = 'standard') => {
-  let calculatedFee = 0;
-  let commissionRuleApplied = false;
-
-  // 1) Primary Logic: Calculate fee based on DeliveryBoyCommission (Distance-based)
-  try {
-    const restaurantCoords = extractCoordinates(restaurant);
-    const deliveryCoords = extractCoordinates(deliveryAddress);
-    
-    let distanceKm = null;
-    if (restaurantCoords && deliveryCoords) {
-      distanceKm = calculateDistance(restaurantCoords, deliveryCoords);
-    }
-
-    // Fallback to restaurant.distance string if coordinates calculation is not possible
-    if ((distanceKm === null || distanceKm <= 0) && restaurant?.distance) {
-      const parsedDistance = parseFloat(restaurant.distance.toString().replace(/[^\d.]/g, ''));
-      if (!isNaN(parsedDistance)) distanceKm = parsedDistance;
-    }
-    
-    // Default to a small distance (0.1km) if still null, to trigger at least the base payout rule
-    const searchDistance = (distanceKm !== null && distanceKm >= 0) ? distanceKm : 0.1;
-    
-    const commissionResult = await DeliveryBoyCommission.calculateCommission(searchDistance);
-    if (commissionResult && commissionResult.commission > 0) {
-      calculatedFee = roundCurrency(commissionResult.commission);
-      commissionRuleApplied = true;
-    }
-  } catch (err) {
-    console.error('[PRICING] Commission calculation logic failed:', err.message);
-  }
-
-  // If commission rule worked and produced a fee, return it as the "Proper" dynamic fee
-  if (commissionRuleApplied && calculatedFee > 0) {
-    return calculatedFee;
-  }
-
-  // 2) Fallback Logic: FeeSettings (Order value ranges & manual overrides)
   const feeSettings = await getFeeSettings();
-  const perKmCharge = getPerKmDeliveryCharge(feeSettings, restaurant, deliveryAddress);
 
-  // A) Check delivery fee ranges
+  // 1) Free Delivery Threshold Check (Orders above this value get ₹0 delivery fee)
+  if (feeSettings.freeDeliveryThreshold > 0 && orderValue >= feeSettings.freeDeliveryThreshold) {
+    return 0;
+  }
+
+  // 2) Determine Base Delivery Fee (via order value ranges OR default base fee)
+  let baseFee = Number(feeSettings.deliveryFee || 25);
+
   if (feeSettings.deliveryFeeRanges && Array.isArray(feeSettings.deliveryFeeRanges) && feeSettings.deliveryFeeRanges.length > 0) {
     const sortedRanges = [...feeSettings.deliveryFeeRanges].sort((a, b) => a.min - b.min);
-    for (let range of sortedRanges) {
+    for (const range of sortedRanges) {
       if (orderValue >= range.min && orderValue <= range.max) {
-        return roundCurrency(Number(range.fee) + perKmCharge);
+        baseFee = Number(range.fee);
+        break; // Stop at first match
       }
     }
   }
 
-  // B) Final Fallback: Base Delivery Fee
-  const baseDeliveryFee = Number(feeSettings.deliveryFee || 25);
-  return roundCurrency(baseDeliveryFee + perKmCharge);
+  // 3) Calculate Per-KM Dynamic Charge (Added ON TOP of the base fee)
+  const perKmCharge = getPerKmDeliveryCharge(feeSettings, restaurant, deliveryAddress);
+
+  // 4) Final calculation
+  return roundCurrency(baseFee + perKmCharge);
 };
 
 /**
