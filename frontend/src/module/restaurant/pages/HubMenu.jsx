@@ -871,7 +871,14 @@ export default function HubMenu() {
       <div className="sticky top-0 z-40 bg-white ">
         <div className="">
           {/* Top bar with Menu title and icons */}
-          <div className="px-4 py-3 flex items-center justify-between">
+          <div className="px-4 py-3 flex items-center gap-3">
+            <button
+               onClick={() => navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : "/restaurant")}
+              className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors shrink-0"
+              aria-label="Go back"
+            >
+              <ArrowLeft className="w-5 h-5 text-gray-900" />
+            </button>
             <div className="relative h-8 flex items-center flex-1 min-w-0 pr-3">
               <AnimatePresence mode="wait">
                 {!isScrolled ? (

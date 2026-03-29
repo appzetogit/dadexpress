@@ -104,7 +104,37 @@ const extractCoordinates = (entity) => {
 export const calculateDeliveryFee = async (orderValue, restaurant, deliveryAddress = null, deliveryFleet = 'standard') => {
   const feeSettings = await getFeeSettings();
 
-  // 1) Determine Base Delivery Fee (via order value ranges OR default base fee)
+  // 1) Find Distance first to determine per-KM charges or commissions
+  const restaurantCoordinates = extractCoordinates(restaurant);
+  const deliveryCoordinates = extractCoordinates(deliveryAddress);
+  let distanceKm = null;
+
+  if (restaurantCoordinates && deliveryCoordinates) {
+    distanceKm = calculateDistance(restaurantCoordinates, deliveryCoordinates);
+  }
+
+  // Fallback to provided distance strings if coordinates extraction fails
+  if ((distanceKm === null || distanceKm <= 0) && (restaurant?.distance || restaurant?.deliveryDistance)) {
+    const distStr = String(restaurant.distance || restaurant.deliveryDistance || '');
+    const parsedDist = parseFloat(distStr.replace(/[^\d.]/g, ''));
+    if (!isNaN(parsedDist)) distanceKm = parsedDist;
+  }
+
+  // 2) If we have a valid distance, try to use DeliveryBoyCommission settings (User's preferred source)
+  if (distanceKm !== null && distanceKm > 0) {
+    try {
+      // Use the static method already defined in DeliveryBoyCommission model to find applicable rule + calculate
+      const commissionInfo = await DeliveryBoyCommission.calculateCommission(distanceKm);
+      if (commissionInfo && commissionInfo.commission > 0) {
+        // High priority: Use the commission calculation as the delivery fee
+        return roundCurrency(commissionInfo.commission);
+      }
+    } catch (err) {
+      console.warn(`[PRICING] DeliveryBoyCommission skipped for ${distanceKm}km order:`, err.message);
+    }
+  }
+
+  // 3) FALLBACK: Use existing FeeSettings logic if distance was unavailable or no commission rules matched
   let baseFee = Number(feeSettings.deliveryFee || 25);
 
   if (feeSettings.deliveryFeeRanges && Array.isArray(feeSettings.deliveryFeeRanges) && feeSettings.deliveryFeeRanges.length > 0) {
@@ -112,16 +142,14 @@ export const calculateDeliveryFee = async (orderValue, restaurant, deliveryAddre
     for (const range of sortedRanges) {
       if (orderValue >= range.min && orderValue <= range.max) {
         baseFee = Number(range.fee);
-        break; // Stop at first match
+        break; 
       }
     }
   }
 
-  // 2) Calculate Per-KM Dynamic Charge (Added ON TOP of the base fee)
-  // Distance is calculated using coordinates of restaurant and delivery address.
   const perKmCharge = getPerKmDeliveryCharge(feeSettings, restaurant, deliveryAddress);
 
-  // 3) Final calculation: Base + KM charge
+  // Final calculation: Base + KM charge from FeeSettings
   return roundCurrency(baseFee + perKmCharge);
 };
 

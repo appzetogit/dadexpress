@@ -34,7 +34,7 @@ export default function ChooseDiscountType() {
       <div className="sticky top-0 z-40 bg-white border-b border-gray-200 px-4 py-3">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => navigate("/restaurant/hub-growth/create-offers")}
+            onClick={() => navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : "/restaurant/hub-growth/create-offers")}
             className="p-1 rounded-full hover:bg-gray-100"
           >
             <ArrowLeft className="w-5 h-5 text-gray-700" />

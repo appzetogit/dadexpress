@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react"
-import { Calendar, Clock, Users, Search, Filter, MessageSquare, ChevronRight, CheckCircle2, XCircle, Clock4 } from "lucide-react"
+import { useNavigate } from "react-router-dom"
+import { Calendar, Clock, Users, Search, Filter, MessageSquare, ChevronRight, CheckCircle2, XCircle, Clock4, ArrowLeft } from "lucide-react"
 import { diningAPI, restaurantAPI } from "@/lib/api"
 import Loader from "@/components/Loader"
 import { Badge } from "@/components/ui/badge"
 
 export default function DiningReservations() {
+    const navigate = useNavigate()
     const [bookings, setBookings] = useState([])
     const [loading, setLoading] = useState(true)
     const [restaurant, setRestaurant] = useState(null)
@@ -64,11 +66,19 @@ export default function DiningReservations() {
     return (
         <div className="min-h-screen bg-slate-50 pb-20">
             {/* Header */}
-            <div className="bg-white p-6 border-b sticky top-0 z-30">
+            <div className="bg-white p-4 border-b sticky top-0 z-30">
                 <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div>
-                        <h1 className="text-2xl font-bold text-slate-900">Table Reservations</h1>
-                        <p className="text-slate-500 text-sm mt-1">Manage your upcoming guest bookings</p>
+                    <div className="flex items-center gap-4">
+                        <button 
+                            onClick={() => navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : "/restaurant")}
+                            className="p-2 hover:bg-slate-100 rounded-xl transition-colors"
+                        >
+                            <ArrowLeft className="w-6 h-6 text-slate-600" />
+                        </button>
+                        <div>
+                            <h1 className="text-2xl font-bold text-slate-900">Table Reservations</h1>
+                            <p className="text-slate-500 text-sm mt-1">Manage your upcoming guest bookings</p>
+                        </div>
                     </div>
 
                     <div className="flex items-center gap-3">

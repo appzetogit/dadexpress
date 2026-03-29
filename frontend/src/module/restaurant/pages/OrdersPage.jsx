@@ -12,7 +12,8 @@ import {
   Wallet,
   Menu,
   CheckCircle,
-  Loader2
+  Loader2,
+  ArrowLeft
 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { useNavigate } from "react-router-dom"
@@ -371,11 +372,19 @@ export default function OrdersPage() {
   return (
     <div className="min-h-screen bg-[#f6e9dc] overflow-x-hidden">
       {/* Main Content */}
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200 px-4 py-3 sticky top-0 z-50 flex items-center gap-3">
+        <button 
+          onClick={() => navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : "/restaurant")}
+          className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+        >
+          <ArrowLeft className="w-5 h-5 text-gray-600" />
+        </button>
+        <h1 className="text-lg font-bold text-gray-900 flex-1">Orders</h1>
+      </div>
+
       <div className="max-w-7xl mx-auto px-4 py-6 pb-24 md:pb-6">
-        {/* Title */}
-        <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-6 text-center md:text-left">
-          Orders
-        </h1>
+        {/* Title removed since it's in the header now */}
 
         {/* Main Navigation Tabs */}
         <div className="flex gap-4 mb-6 border-b border-gray-200">

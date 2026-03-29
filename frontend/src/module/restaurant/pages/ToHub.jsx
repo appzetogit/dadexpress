@@ -1734,8 +1734,14 @@ export default function ToHub() {
       `}</style>
       <div className="">
         {/* Reuse Feedback-like navbar */}
-        <div className="sticky bg-white top-0 z-40 px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-          <div>
+        <div className="sticky bg-white top-0 z-40 px-4 py-3 border-b border-gray-200 flex items-center gap-3">
+          <button
+            onClick={() => navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : "/restaurant")}
+            className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <ChevronLeft className="w-6 h-6 text-gray-900" />
+          </button>
+          <div className="flex-1">
             <p className="text-[10px] tracking-[0.12em] text-gray-500 uppercase">
               Showing data for
             </p>

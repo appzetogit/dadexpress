@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { Search, Menu, ChevronRight, MapPin, X } from "lucide-react"
+import { Search, Menu, ChevronRight, MapPin, X, ArrowLeft } from "lucide-react"
 import { restaurantAPI } from "@/lib/api"
 
 export default function RestaurantNavbar({
@@ -275,7 +275,16 @@ export default function RestaurantNavbar({
   }
 
   return (
-    <div className="w-full bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+    <div className="w-full bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3">
+      {/* Back Button */}
+      <button
+        onClick={() => navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : "/restaurant")}
+        className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors shrink-0"
+        aria-label="Go back"
+      >
+        <ArrowLeft className="w-5 h-5 text-gray-900" />
+      </button>
+
       {/* Left Side - Restaurant Info */}
       <div className="flex-1 min-w-0 pr-4">
         {/* Restaurant Name */}

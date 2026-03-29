@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { motion } from "framer-motion"
 import { useNavigate } from "react-router-dom"
-import { ChevronRight, Menu } from "lucide-react"
+import { ArrowLeft, ChevronRight, Menu } from "lucide-react"
 import BottomNavOrders from "../components/BottomNavOrders"
 import offersAndDiscountsIcon from "@/assets/hub/icons/offersanddiscounts.png"
 
@@ -12,8 +12,16 @@ export default function HubGrowth() {
     <div className="min-h-screen bg-white flex flex-col">
       {/* Header */}
       <div className="sticky top-0 z-40 bg-white border-b border-gray-200 px-4 py-3">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold text-gray-900">Grow your business</h1>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : "/restaurant")}
+            className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <ArrowLeft className="w-6 h-6 text-gray-900" />
+          </button>
+          <div className="flex-1">
+            <h1 className="text-xl font-bold text-gray-900">Grow your business</h1>
+          </div>
           <button
             onClick={() => navigate("/restaurant/explore")}
             className="p-2 rounded-full hover:bg-gray-100 transition-colors"
