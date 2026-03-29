@@ -42,10 +42,16 @@ const isValidCoords = (lat, lng) =>
   Math.abs(lng) <= 180;
 
 const resolveAddressFromPayload = async (payload, userId) => {
-  const deliveryAddressText =
-    typeof payload?.deliveryAddress === 'string'
-      ? payload.deliveryAddress.trim()
-      : null;
+  const deliveryAddressField = payload?.deliveryAddress;
+  const deliveryAddressText = typeof deliveryAddressField === 'string'
+    ? deliveryAddressField.trim()
+    : null;
+  
+  // If deliveryAddress was passed as an object instead of a string, treat it as the address object
+  const deliveryAddressObject = (deliveryAddressField && typeof deliveryAddressField === 'object' && !Array.isArray(deliveryAddressField))
+    ? deliveryAddressField
+    : null;
+
   const addressId = payload?.addressId ?? payload?.address_id ?? null;
   const latitude = toNumber(payload?.latitude ?? payload?.lat);
   const longitude = toNumber(payload?.longitude ?? payload?.lng);
@@ -59,7 +65,8 @@ const resolveAddressFromPayload = async (payload, userId) => {
     return { address: null, error: 'Invalid latitude or longitude' };
   }
 
-  let address = payload?.address;
+  // Priority: 1. Explicit address object, 2. deliveryAddress passed as object, 3. Address resolved by ID
+  let address = payload?.address || deliveryAddressObject;
 
   if (!address && addressId && userId) {
     try {
@@ -96,23 +103,28 @@ const resolveAddressFromPayload = async (payload, userId) => {
 
   if (address) {
     const coordsFromAddress = (() => {
+      // 1. Try address.location.coordinates [lng, lat]
       if (Array.isArray(address?.location?.coordinates) && address.location.coordinates.length >= 2) {
         const [lng, lat] = address.location.coordinates;
-        // Skip [0,0] which is the MongoDB default (not a real location)
-        if (lng === 0 && lat === 0) return null;
-        return address.location.coordinates;
+        if (lng !== 0 || lat !== 0) return [lng, lat];
       }
+      // 2. Try address.coordinates [lng, lat] or [lat, lng] - check validity
+      if (Array.isArray(address?.coordinates) && address.coordinates.length >= 2) {
+         const [c1, c2] = address.coordinates;
+         if (isValidCoords(c2, c1)) return [c1, c2]; // common [lng, lat]
+         if (isValidCoords(c1, c2)) return [c2, c1]; // [lat, lng]
+      }
+      // 3. Try lat/lng properties
       const addrLat = toNumber(address?.lat ?? address?.latitude);
       const addrLng = toNumber(address?.lng ?? address?.longitude);
-      if (isValidCoords(addrLat, addrLng)) {
+      if (isValidCoords(addrLat, addrLng) && (addrLat !== 0 || addrLng !== 0)) {
         return [addrLng, addrLat];
       }
       return null;
     })();
 
     const coordsFromPayload = isValidCoords(latitude, longitude) ? [longitude, latitude] : null;
-    // Skip [0,0] payload coords too
-    const validPayloadCoords = coordsFromPayload && !(coordsFromPayload[0] === 0 && coordsFromPayload[1] === 0) ? coordsFromPayload : null;
+    const validPayloadCoords = coordsFromPayload && (coordsFromPayload[0] !== 0 || coordsFromPayload[1] !== 0) ? coordsFromPayload : null;
     const coords = validPayloadCoords || coordsFromAddress;
 
     if (coords) {
@@ -123,9 +135,8 @@ const resolveAddressFromPayload = async (payload, userId) => {
       };
     }
 
-    if (deliveryAddressText) {
-      if (!address.formattedAddress) address.formattedAddress = deliveryAddressText;
-      if (!address.address) address.address = deliveryAddressText;
+    if (deliveryAddressText && !address.formattedAddress) {
+       address.formattedAddress = deliveryAddressText;
     }
   }
 

@@ -82,20 +82,34 @@ const getPerKmDeliveryCharge = (feeSettings, restaurant, deliveryAddress) => {
 const extractCoordinates = (entity) => {
   if (!entity) return null;
   
-  // 1. Try GeoJSON coordinates array [lng, lat]
+  // 1. Try GeoJSON coordinates array [lng, lat] from location object
   if (Array.isArray(entity.location?.coordinates) && entity.location.coordinates.length >= 2) {
-    return entity.location.coordinates;
-  }
-  if (Array.isArray(entity.coordinates) && entity.coordinates.length >= 2) {
-    return entity.coordinates;
+    const [lng, lat] = entity.location.coordinates;
+    if (lng !== 0 || lat !== 0) return [lng, lat];
   }
   
-  // 2. Try latitude/longitude properties
+  // 2. Try coordinates array [lng, lat] or [lat, lng] directly on object
+  if (Array.isArray(entity.coordinates) && entity.coordinates.length >= 2) {
+    const [c1, c2] = entity.coordinates;
+    // Check if it's [lng, lat]
+    if (Math.abs(c1) <= 180 && Math.abs(c2) <= 90) {
+       if (c1 !== 0 || c2 !== 0) return [c1, c2];
+    }
+    // Check if it's [lat, lng]
+    if (Math.abs(c1) <= 90 && Math.abs(c2) <= 180) {
+       if (c1 !== 0 || c2 !== 0) return [c2, c1];
+    }
+  }
+  
+  // 3. Try latitude/longitude properties
   const lat = entity.location?.latitude ?? entity.location?.lat ?? entity.lat ?? entity.latitude;
   const lng = entity.location?.longitude ?? entity.location?.lng ?? entity.lng ?? entity.longitude;
   
-  if (typeof lat === 'number' && typeof lng === 'number' && lat !== 0 && lng !== 0) {
-    return [lng, lat];
+  if (typeof lat === 'number' && typeof lng === 'number' && (lat !== 0 || lng !== 0)) {
+    // Basic validation
+    if (Math.abs(lat) <= 90 && Math.abs(lng) <= 180) {
+      return [lng, lat];
+    }
   }
   
   return null;
@@ -124,41 +138,41 @@ export const calculateDeliveryFee = async (orderValue, restaurant, deliveryAddre
     }
   }
 
-  // 2) Use DeliveryBoyCommission settings (User's preferred source)
-  // Even if distance is 0, we should use the commission rules (e.g. 0-1km tier)
-  if (distanceKm !== null && distanceKm >= 0) {
+  // 2) Use DeliveryBoyCommission settings (Admin's preferred source for dynamic fees)
+  // Even if distance is very small (e.g. 0), we should use the commission rules (e.g. 0-1km tier)
+  if (distanceKm !== null && !isNaN(distanceKm) && distanceKm >= 0) {
     try {
       // Use the static method already defined in DeliveryBoyCommission model to find applicable rule + calculate
       const commissionInfo = await DeliveryBoyCommission.calculateCommission(distanceKm);
       if (commissionInfo && (commissionInfo.commission > 0 || (commissionInfo.rule && commissionInfo.rule.basePayout >= 0))) {
-        console.log(`[PRICING] Using DeliveryBoyCommission for ${distanceKm}km:`, commissionInfo.commission);
-        // High priority: Use the commission calculation as the delivery fee
-        return roundCurrency(commissionInfo.commission);
+        console.log(`[PRICING] Using DeliveryBoyCommission for ${distanceKm.toFixed(2)}km: ₹${commissionInfo.commission}`);
+        // Return rounding to 2 decimal places to be safe
+        return Math.max(0, Math.round(commissionInfo.commission * 100) / 100);
       }
     } catch (err) {
-      console.warn(`[PRICING] DeliveryBoyCommission skipped for ${distanceKm}km order:`, err.message);
+      console.warn(`[PRICING] DeliveryBoyCommission calculation error for ${distanceKm}km:`, err.message);
     }
   } else {
-    // Distance not available, try to at least use the first admin-configured rule's base payout
+    // Distance not available, try to at least use the default admin-configured rule's base payout instead of static fallback
     try {
       const firstRule = await DeliveryBoyCommission.findOne({ status: true }).sort({ minDistance: 1 }).lean();
       if (firstRule) {
-        console.log(`[PRICING] Distance unknown, using first commission rule base payout: ${firstRule.basePayout}`);
-        return roundCurrency(firstRule.basePayout);
+        console.log(`[PRICING] Distance unknown, using first commission rule base payout: ₹${firstRule.basePayout}`);
+        return Number(firstRule.basePayout);
       }
     } catch (e) {
-      console.warn(`[PRICING] Failed to get default commission rule while distance is unknown: ${e.message}`);
+      console.warn(`[PRICING] Failed to get default commission rule fallback: ${e.message}`);
     }
-    console.warn(`[PRICING] Distance not available and no commission rules found. addr:`, deliveryAddress ? 'present' : 'missing');
   }
 
-  // 3) FALLBACK: Use existing FeeSettings logic if distance was unavailable or no commission rules matched
+  // 3) FINAL FALLBACK: Use existing FeeSettings logic if distances/commissions above were unavailable
+  console.log('[PRICING] Distance/Commission logic failed, falling back to FeeSettings');
   let baseFee = Number(feeSettings.deliveryFee || 25);
 
   if (feeSettings.deliveryFeeRanges && Array.isArray(feeSettings.deliveryFeeRanges) && feeSettings.deliveryFeeRanges.length > 0) {
     const sortedRanges = [...feeSettings.deliveryFeeRanges].sort((a, b) => a.min - b.min);
     for (const range of sortedRanges) {
-      if (orderValue >= range.min && orderValue <= range.max) {
+      if (orderValue >= range.min && (range.max === null || range.max === undefined || orderValue <= range.max)) {
         baseFee = Number(range.fee);
         break; 
       }
@@ -169,7 +183,7 @@ export const calculateDeliveryFee = async (orderValue, restaurant, deliveryAddre
 
   // Final calculation: Base + KM charge from FeeSettings
   const finalFallbackFee = roundCurrency(baseFee + perKmCharge);
-  console.log(`[PRICING] Falling back to FeeSettings: base=${baseFee}, kmCharge=${perKmCharge}, total=${finalFallbackFee}`);
+  console.log(`[PRICING] Fallback result: base=${baseFee}, kmCharge=${perKmCharge}, total=${finalFallbackFee}`);
   return finalFallbackFee;
 };
 
