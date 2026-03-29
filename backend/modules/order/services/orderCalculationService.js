@@ -47,15 +47,28 @@ const roundCurrency = (value) => Math.round((Number(value) || 0) * 100) / 100;
 
 const getPerKmDeliveryCharge = (feeSettings, restaurant, deliveryAddress) => {
   const perKmRate = Number(feeSettings?.deliveryFeePerKm || 0);
-  const restaurantCoordinates = restaurant?.location?.coordinates;
-  const deliveryCoordinates = deliveryAddress?.location?.coordinates;
-
   if (perKmRate <= 0) return 0;
-  if (!Array.isArray(restaurantCoordinates) || restaurantCoordinates.length < 2) return 0;
-  if (!Array.isArray(deliveryCoordinates) || deliveryCoordinates.length < 2) return 0;
 
-  const distanceKm = calculateDistance(restaurantCoordinates, deliveryCoordinates);
-  if (!Number.isFinite(distanceKm) || distanceKm <= 0) return 0;
+  // Use robust extraction for coordinates
+  const restaurantCoordinates = extractCoordinates(restaurant);
+  const deliveryCoordinates = extractCoordinates(deliveryAddress);
+
+  let distanceKm = null;
+  if (restaurantCoordinates && deliveryCoordinates) {
+    distanceKm = calculateDistance(restaurantCoordinates, deliveryCoordinates);
+  }
+
+  // Fallback to restaurant.distance if coordinates are missing but distance is available
+  if ((distanceKm === null || distanceKm <= 0) && (restaurant?.distance || restaurant?.deliveryDistance)) {
+      const distStr = String(restaurant.distance || restaurant.deliveryDistance || '');
+      const parsedDist = parseFloat(distStr.replace(/[^\d.]/g, ''));
+      if (!isNaN(parsedDist)) distanceKm = parsedDist;
+  }
+
+  if (distanceKm === null || isNaN(distanceKm) || distanceKm <= 0) {
+      console.warn('[PRICING] Could not determine distance for delivery fee calculation');
+      return 0;
+  }
 
   return roundCurrency(distanceKm * perKmRate);
 };
@@ -91,12 +104,7 @@ const extractCoordinates = (entity) => {
 export const calculateDeliveryFee = async (orderValue, restaurant, deliveryAddress = null, deliveryFleet = 'standard') => {
   const feeSettings = await getFeeSettings();
 
-  // 1) Free Delivery Threshold Check (Orders above this value get ₹0 delivery fee)
-  if (feeSettings.freeDeliveryThreshold > 0 && orderValue >= feeSettings.freeDeliveryThreshold) {
-    return 0;
-  }
-
-  // 2) Determine Base Delivery Fee (via order value ranges OR default base fee)
+  // 1) Determine Base Delivery Fee (via order value ranges OR default base fee)
   let baseFee = Number(feeSettings.deliveryFee || 25);
 
   if (feeSettings.deliveryFeeRanges && Array.isArray(feeSettings.deliveryFeeRanges) && feeSettings.deliveryFeeRanges.length > 0) {
@@ -109,10 +117,11 @@ export const calculateDeliveryFee = async (orderValue, restaurant, deliveryAddre
     }
   }
 
-  // 3) Calculate Per-KM Dynamic Charge (Added ON TOP of the base fee)
+  // 2) Calculate Per-KM Dynamic Charge (Added ON TOP of the base fee)
+  // Distance is calculated using coordinates of restaurant and delivery address.
   const perKmCharge = getPerKmDeliveryCharge(feeSettings, restaurant, deliveryAddress);
 
-  // 4) Final calculation
+  // 3) Final calculation: Base + KM charge
   return roundCurrency(baseFee + perKmCharge);
 };
 
