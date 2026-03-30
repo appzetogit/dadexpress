@@ -839,7 +839,7 @@ export default function DeliveryHome() {
 
   // Real-time Trip Duration Effect
   useEffect(() => {
-    if (selectedRestaurant?.orderId && !showOrderDeliveredAnimation) {
+    if (selectedRestaurant?.orderId && !showPaymentPage) {
       // Restore elapsed time
       const storedPickedAt = localStorage.getItem(`pickedAt_${selectedRestaurant.orderId}`);
       if (storedPickedAt) {
@@ -863,7 +863,7 @@ export default function DeliveryHome() {
     return () => {
       if (tripIntervalRef.current) clearInterval(tripIntervalRef.current);
     };
-  }, [selectedRestaurant?.orderId, showOrderDeliveredAnimation]);
+  }, [selectedRestaurant?.orderId, showPaymentPage, showOrderDeliveredAnimation]);
 
   const scheduleSliderProgressUpdate = useCallback((key, nextValue, setter) => {
     const slider = sliderProgressRafRef.current[key]
@@ -5575,7 +5575,7 @@ export default function DeliveryHome() {
     }
   ]
 
-  // Handle help option click - navigate to the correct route
+  // Help option click handler (simplified)
   const handleHelpOptionClick = (option) => {
     if (option.path) {
       setShowHelpPopup(false)
@@ -5586,47 +5586,10 @@ export default function DeliveryHome() {
     }
   }
 
-  // Emergency options with phone numbers
-  const emergencyOptions = [
-    {
-      id: "ambulance",
-      title: "Call ambulance (10 mins)",
-      subtitle: "For medical emergencies",
-      phone: "108", // Indian emergency ambulance number
-      icon: "ambulance"
-    },
-    {
-      id: "accident",
-      title: "Call accident helpline",
-      subtitle: "Talk to our emergency team",
-      phone: "1073", // Indian accident helpline
-      icon: "siren"
-    },
-    {
-      id: "police",
-      title: "Call police",
-      subtitle: "Report a crime",
-      phone: "100", // Indian police emergency number
-      icon: "police"
-    },
-    {
-      id: "insurance",
-      title: "Insurance card",
-      subtitle: "View your insurance details",
-      phone: null, // No phone call for insurance
-      icon: "insurance"
-    }
-  ]
-
-  // Handle emergency option click
-  const handleEmergencyOptionClick = (option) => {
-    if (option.phone) {
-      window.location.href = `tel:${option.phone}`
-    } else if (option.id === "insurance") {
-      // Navigate to insurance page or show insurance details
-      navigate("/delivery/insurance")
-    }
-    setShowEmergencyPopup(false)
+  // Book gigs click handler
+  const handleBookGigsClick = () => {
+    setShowBookGigsPopup(false)
+    navigate("/delivery/gig")
   }
 
   // Fetch wallet data from API
@@ -9845,19 +9808,6 @@ export default function DeliveryHome() {
       // Fallback to detected zone only
       if (detectedZone) {
         setCurrentZone(detectedZone)
-        if (assignedZoneIds.length > 0 || assignedZoneNames.length > 0) {
-          const matched = (() => {
-            const { id, name } = normalizeZoneValue(detectedZone)
-            if (id && assignedZoneIds.includes(id)) return true
-            if (name && assignedZoneNames.includes(name)) return true
-            return false
-          })()
-          setIsOutOfZone(!matched)
-        } else {
-          setIsOutOfZone(false)
-        }
-      } else {
-        setCurrentZone(null)
         setIsOutOfZone(false)
       }
       return
@@ -9904,6 +9854,49 @@ export default function DeliveryHome() {
     setCurrentZone(matchedZone)
     setIsOutOfZone(hasAssignedZones ? !matchedZone : false)
   }, [riderLocation, zones, assignedZoneIds, assignedZoneNames, detectedZone])
+
+  // Emergency options with phone numbers (re-defined here for scope clarity)
+  const emergencyOptions = [
+    {
+      id: "ambulance",
+      title: "Call ambulance (10 mins)",
+      subtitle: "For medical emergencies",
+      phone: "108", // Indian emergency ambulance number
+      icon: "ambulance"
+    },
+    {
+      id: "accident",
+      title: "Call accident helpline",
+      subtitle: "Talk to our emergency team",
+      phone: "1073", // Indian accident helpline
+      icon: "siren"
+    },
+    {
+      id: "police",
+      title: "Call police",
+      subtitle: "Report a crime",
+      phone: "100", // Indian police emergency number
+      icon: "police"
+    },
+    {
+      id: "insurance",
+      title: "Insurance card",
+      subtitle: "View your insurance details",
+      phone: null, // No phone call for insurance
+      icon: "insurance"
+    }
+  ]
+
+  // Handle emergency option click
+  const handleEmergencyOptionClick = (option) => {
+    if (option.phone) {
+      window.location.href = `tel:${option.phone}`
+    } else if (option.id === "insurance") {
+      // Navigate to insurance page or show insurance details
+      navigate("/delivery/insurance")
+    }
+    setShowEmergencyPopup(false)
+  }
 
   // Render normal feed view when offline or no gig booked
   return (
@@ -12216,7 +12209,16 @@ export default function DeliveryHome() {
                     </span>
                   </div>
                   <span className={`text-lg font-bold ${isCod ? 'text-amber-700' : 'text-emerald-700'}`}>
-                    ₹{total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    ₹{(() => {
+                      const total = Number(selectedRestaurant.total) || 0
+                      const tip = Number(selectedRestaurant.customerTip || 0)
+                      const estKm = Number(selectedRestaurant?.estimatedDistance || 0)
+                      const actualKm = actualTripDistance / 1000
+                      // Buffer: don't charge if extra is less than 500m
+                      const extraKm = Math.max(0, actualKm - estKm)
+                      const extraCharge = actualTripDistance > (estKm * 1000 + 500) ? (extraKm * 10) : 0 // ₹10 per KM
+                      return (total + tip + extraCharge).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                    })()}
                   </span>
                 </div>
               </div>
@@ -12423,6 +12425,7 @@ export default function DeliveryHome() {
                       customerReviewText.trim() || '',
                       dropImageUrl,
                       actualTripDistance,
+                      elapsedTripSeconds > 0 ? elapsedTripSeconds : 0,
                       paymentCollectedBy
                     )
 
@@ -12534,6 +12537,13 @@ export default function DeliveryHome() {
                     <span className="text-gray-600">Long distance return pay</span>
                     <span className="text-gray-900 font-semibold">₹5.00</span>
                   </div>
+
+                  {Number(selectedRestaurant?.customerTip || 0) > 0 && (
+                    <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                      <span className="text-gray-600">Customer Tip 🎁</span>
+                      <span className="text-green-600 font-bold">₹{Number(selectedRestaurant.customerTip).toFixed(2)}</span>
+                    </div>
+                  )}
 
                   <div className="flex justify-between items-center py-2">
                     <span className="text-lg font-bold text-gray-900">Total Earnings</span>

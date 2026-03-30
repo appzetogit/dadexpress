@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
-import { ArrowLeft, Plus, Edit2, ChevronRight, FileText, CheckCircle, XCircle, Eye, X } from "lucide-react"
+import { ArrowLeft, Plus, Edit2, ChevronRight, FileText, CheckCircle, XCircle, Eye, X, Camera, Loader2 as LoaderIcon } from "lucide-react"
 import BottomPopup from "../components/BottomPopup"
 import { toast } from "sonner"
-import { deliveryAPI } from "@/lib/api"
+import { deliveryAPI, uploadAPI } from "@/lib/api"
 
 export default function ProfileDetails() {
   const accountHolderNameRegex = /^[A-Za-z]+(?:[ .'-][A-Za-z]+)*$/
@@ -28,6 +28,8 @@ export default function ProfileDetails() {
   })
   const [bankDetailsErrors, setBankDetailsErrors] = useState({})
   const [isUpdatingBankDetails, setIsUpdatingBankDetails] = useState(false)
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false)
+  const fileInputRef = useRef(null)
 
   // Note: All alternate phone related code has been removed
 
@@ -73,6 +75,71 @@ export default function ProfileDetails() {
     fetchProfile()
   }, [navigate])
 
+  const handlePhotoClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click()
+    }
+  }
+
+  const handlePhotoChange = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please upload an image file')
+      return
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image size should be less than 5MB')
+      return
+    }
+
+    try {
+      setIsUploadingPhoto(true)
+      const uploadToast = toast.loading('Uploading profile photo...')
+
+      // Upload to Cloudinary
+      const uploadResponse = await uploadAPI.uploadMedia(file, { folder: 'delivery_profiles' })
+      
+      if (uploadResponse?.data?.success && uploadResponse?.data?.data?.url) {
+        const photoUrl = uploadResponse.data.data.url
+        const publicId = uploadResponse.data.data.public_id
+
+        // Update profile in backend
+        await deliveryAPI.updateProfile({
+          profileImage: {
+            url: photoUrl,
+            publicId: publicId
+          }
+        })
+
+        toast.dismiss(uploadToast)
+        toast.success('Profile photo updated successfully')
+        
+        // Refresh profile data
+        const profileRes = await deliveryAPI.getProfile()
+        if (profileRes?.data?.success && profileRes?.data?.data?.profile) {
+          setProfile(profileRes.data.data.profile)
+        }
+      } else {
+        toast.dismiss(uploadToast)
+        toast.error('Upload failed. Please try again.')
+      }
+    } catch (error) {
+      console.error('Error uploading profile photo:', error)
+      toast.error(error?.response?.data?.message || 'Failed to update profile photo')
+    } finally {
+      setIsUploadingPhoto(false)
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Header */}
@@ -87,11 +154,36 @@ export default function ProfileDetails() {
       </div>
 
       {/* Profile Picture Area */}
-      <div className="relative w-full bg-gray-200 overflow-hidden flex items-center justify-center">
+      <div className="relative w-full bg-gray-200 overflow-hidden flex items-center justify-center group">
         <img
           src={profile?.profileImage?.url || profile?.documents?.photo || "https://i.pravatar.cc/400?img=12"}
           alt="Profile"
           className="w-full h-auto max-h-96 object-contain"
+        />
+        
+        {/* Update Photo Overlay/Button */}
+        <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={handlePhotoClick}
+            disabled={isUploadingPhoto}
+            className="bg-white/90 p-3 rounded-full shadow-lg hover:bg-white transition-colors flex items-center gap-2"
+          >
+            {isUploadingPhoto ? (
+              <LoaderIcon className="w-5 h-5 text-green-600 animate-spin" />
+            ) : (
+              <Camera className="w-5 h-5 text-green-600" />
+            )}
+            <span className="text-sm font-bold text-gray-900 pr-1">Update Photo</span>
+          </button>
+        </div>
+
+        {/* Hidden File Input */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handlePhotoChange}
+          accept="image/*"
+          className="hidden"
         />
       </div>
 

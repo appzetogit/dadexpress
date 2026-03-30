@@ -1693,7 +1693,7 @@ export const completeDelivery = asyncHandler(async (req, res) => {
   try {
     const delivery = req.delivery;
     const { orderId } = req.params;
-    const { rating, review, dropImageUrl } = req.body; // Optional rating and review from delivery boy, and drop image URL
+    const { rating, review, dropImageUrl, actualTripTime } = req.body; // Optional rating and review from delivery boy, and drop image URL, plus actual trip duration
 
     if (!delivery || !delivery._id) {
       return errorResponse(res, 401, 'Delivery partner authentication required');
@@ -1851,6 +1851,12 @@ export const completeDelivery = asyncHandler(async (req, res) => {
       'deliveryState.status': 'delivered',
       'deliveryState.currentPhase': 'completed'
     };
+    
+    // Add actual trip duration if provided (convert seconds to minutes)
+    const actualTripTimeSeconds = Number(actualTripTime) || 0;
+    if (actualTripTimeSeconds > 0) {
+      updateData['deliveryState.routeToDelivery.duration'] = Math.round(actualTripTimeSeconds / 60) || 1; // At least 1 min
+    }
 
     // Add review and rating if provided
     if (rating && rating >= 1 && rating <= 5) {
@@ -2111,6 +2117,10 @@ export const completeDelivery = asyncHandler(async (req, res) => {
         });
 
         await wallet.save();
+
+        // Update totalEarning to include tip for the response and logs
+        const tipAmount = Number(order.customerTip) || 0;
+        totalEarning += tipAmount;
 
         // COD: add cash collected (order total + tip) to cashInHand so Pocket balance shows it
         const codAmount = (Number(order.pricing?.total) || 0) + (Number(order.customerTip) || 0);

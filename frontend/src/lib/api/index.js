@@ -1019,7 +1019,7 @@ export const deliveryAPI = {
       API_ENDPOINTS.DELIVERY.ORDER_REACHED_DROP.replace(":orderId", orderId),
     );
   },
-  completeDelivery: (orderId, rating = null, review = "", dropImageUrl = null, actualTripDistance = 0, paymentCollectedBy = "cash") => {
+  completeDelivery: (orderId, rating = null, review = "", dropImageUrl = null, actualTripDistance = 0, actualTripTime = 0, paymentCollectedBy = "cash") => {
     return apiClient.patch(
       API_ENDPOINTS.DELIVERY.ORDER_COMPLETE_DELIVERY.replace(
         ":orderId",
@@ -1030,6 +1030,7 @@ export const deliveryAPI = {
         review,
         dropImageUrl,
         actualTripDistance,
+        actualTripTime,
         paymentCollectedBy,
       },
     );

@@ -144,7 +144,8 @@ export default function PocketPage() {
     const fetchEarningsStats = async () => {
       try {
         // Fetch this week's earnings
-        const weekRes = await deliveryAPI.getEarnings({ period: 'week', limit: 1000 })
+        const localDate = new Date(new Date().getTime() - (new Date().getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+        const weekRes = await deliveryAPI.getEarnings({ period: 'week', limit: 1000, date: localDate })
         if (weekRes?.data?.success && weekRes?.data?.data?.summary) {
           const summary = weekRes.data.data.summary
           setWeeklyEarningsFromAPI({
@@ -155,7 +156,7 @@ export default function PocketPage() {
           })
         }
         // Fetch today's earnings
-        const todayRes = await deliveryAPI.getEarnings({ period: 'today', limit: 1000 })
+        const todayRes = await deliveryAPI.getEarnings({ period: 'today', limit: 1000, date: localDate })
         if (todayRes?.data?.success && todayRes?.data?.data?.summary) {
           const summary = todayRes.data.data.summary
           setTodayEarningsFromAPI({

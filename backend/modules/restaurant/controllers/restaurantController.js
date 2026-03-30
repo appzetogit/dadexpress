@@ -384,6 +384,15 @@ export const getRestaurantById = async (req, res) => {
       return errorResponse(res, 404, 'Restaurant not found');
     }
 
+    // NEW: Check if restaurant is currently open based on outlet timings (Automatic Close)
+    if (restaurant.isAcceptingOrders !== false) {
+      const isCurrentlyOpen = await OutletTimings.isRestaurantOpen(restaurant._id);
+      if (!isCurrentlyOpen) {
+        restaurant.isAcceptingOrders = false;
+        restaurant.status = 'Closed';
+      }
+    }
+
     return successResponse(res, 200, 'Restaurant retrieved successfully', {
       restaurant,
     });

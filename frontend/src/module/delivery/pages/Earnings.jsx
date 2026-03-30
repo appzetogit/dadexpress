@@ -127,7 +127,7 @@ export default function Earnings() {
 
         // For week/month, pass the selected date
         if (activeTab === 'week' || activeTab === 'month' || activeTab === 'day') {
-          params.date = selectedDate.toISOString()
+          params.date = new Date(selectedDate.getTime() - (selectedDate.getTimezoneOffset() * 60000)).toISOString().split('T')[0]
         }
 
         const response = await deliveryAPI.getEarnings(params)

@@ -35,7 +35,7 @@ export default function TripHistory() {
       try {
         const params = {
           period: activeTab,
-          date: selectedDate.toISOString().split('T')[0],
+          date: new Date(selectedDate.getTime() - (selectedDate.getTimezoneOffset() * 60000)).toISOString().split('T')[0],
           status: selectedTripType !== "ALL TRIPS" ? selectedTripType : undefined,
           limit: 1000
         }
@@ -76,7 +76,7 @@ export default function TripHistory() {
         try {
           const params = {
             period: activeTab,
-            date: selectedDate.toISOString().split('T')[0],
+            date: new Date(selectedDate.getTime() - (selectedDate.getTimezoneOffset() * 60000)).toISOString().split('T')[0],
             status: selectedTripType !== "ALL TRIPS" ? selectedTripType : undefined,
             limit: 1000
           }
