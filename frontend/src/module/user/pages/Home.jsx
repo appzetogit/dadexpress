@@ -150,6 +150,12 @@ const getAddressSearchQuery = (address) => {
     .join(", ")
 }
 
+const normalizeCityName = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+
 const geocodeAddressCoords = async (address) => {
   const query = getAddressSearchQuery(address)
   if (!query) return null
@@ -1171,13 +1177,27 @@ export default function Home() {
           }
         })
 
+        const sourceOfTruthCity = normalizeCityName(
+          selectedAddress?.city ||
+          activeLocation?.city ||
+          currentLocation?.city ||
+          location?.city,
+        )
+
+        const cityMatchedRestaurants = sourceOfTruthCity
+          ? transformedRestaurants.filter((restaurant) => {
+              const restaurantCity = normalizeCityName(restaurant.location?.city)
+              return restaurantCity ? restaurantCity === sourceOfTruthCity : true
+            })
+          : transformedRestaurants
+
         // Keep only practically nearby restaurants for the resolved zone when precise location is available.
         const nearbyZoneRestaurants = (resolvedZoneId && userLat && userLng)
-          ? transformedRestaurants.filter((restaurant) => {
+          ? cityMatchedRestaurants.filter((restaurant) => {
               if (restaurant.distanceInKm === null || restaurant.distanceInKm === undefined) return true
               return restaurant.distanceInKm <= 30
             })
-          : transformedRestaurants
+          : cityMatchedRestaurants
 
         // Sort restaurants by distance (nearby first) - only if user location is available
         if (userLat && userLng) {
@@ -1294,15 +1314,27 @@ export default function Home() {
         distanceInKm: distanceInKm // Preserve numeric distance for sorting
       }
     })
-    const nearbyZoneRestaurants = (resolvedZoneId && userLat && userLng)
+    const sourceOfTruthCity = normalizeCityName(
+      selectedAddress?.city ||
+      activeLocation?.city ||
+      currentLocation?.city ||
+      location?.city,
+    )
+    const cityMatchedRestaurants = sourceOfTruthCity
       ? updatedRestaurants.filter((restaurant) => {
+          const restaurantCity = normalizeCityName(restaurant.location?.city)
+          return restaurantCity ? restaurantCity === sourceOfTruthCity : true
+        })
+      : updatedRestaurants
+    const nearbyZoneRestaurants = (resolvedZoneId && userLat && userLng)
+      ? cityMatchedRestaurants.filter((restaurant) => {
           if (restaurant.distanceInKm === null || restaurant.distanceInKm === undefined) return true
           return restaurant.distanceInKm <= 30
         })
-      : updatedRestaurants
+      : cityMatchedRestaurants
 
     setRestaurantsData(nearbyZoneRestaurants)
-  }, [selectedAddress, selectedCoords?.lat, selectedCoords?.lng, resolvedSelectedCoords?.lat, resolvedSelectedCoords?.lng, currentLocation?.latitude, currentLocation?.longitude, resolvedZoneId])
+  }, [selectedAddress, selectedCoords?.lat, selectedCoords?.lng, resolvedSelectedCoords?.lat, resolvedSelectedCoords?.lng, currentLocation?.latitude, currentLocation?.longitude, currentLocation?.city, activeLocation?.city, location?.city, resolvedZoneId])
 
   // Filter restaurants and foods based on active filters
   const filteredRestaurants = useMemo(() => {

@@ -1,9 +1,12 @@
 import { Link } from "react-router-dom"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { ChevronDown, ShoppingCart, Wallet, MapPin } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useLocation } from "../hooks/useLocation"
 import { useCart } from "../context/CartContext"
+import { useProfile } from "../context/ProfileContext"
+import { useSelectedDeliveryAddress } from "../hooks/useSelectedDeliveryAddress"
+import { resolveDeliveryAddress } from "../utils/deliveryAddress"
 import { useLocationSelector } from "./UserLayout"
 import { getCachedSettings, loadBusinessSettings } from "@/lib/utils/businessSettings"
 import quickSpicyLogo from "@/assets/quicky-spicy-logo.png"
@@ -14,12 +17,54 @@ export default function PageNavbar({
   showProfile = false,
   onNavClick
 }) {
-  const { location, loading, requestLocation } = useLocation()
+  const { location: geoLocation, loading, requestLocation } = useLocation()
   const { getCartCount } = useCart()
+  const { addresses, getDefaultAddress } = useProfile()
+  const { selectedDeliveryAddress } = useSelectedDeliveryAddress()
   const { openLocationSelector } = useLocationSelector()
   const cartCount = getCartCount()
   const [logoUrl, setLogoUrl] = useState(null)
   const [companyName, setCompanyName] = useState(null)
+  const defaultAddress = useMemo(
+    () => (typeof getDefaultAddress === "function" ? getDefaultAddress() : null),
+    [getDefaultAddress, addresses],
+  )
+  const resolvedDeliveryAddress = useMemo(
+    () =>
+      resolveDeliveryAddress({
+        selected: selectedDeliveryAddress,
+        addresses,
+        currentLocation: geoLocation,
+        fallbackAddress: defaultAddress,
+      }),
+    [selectedDeliveryAddress, addresses, geoLocation, defaultAddress],
+  )
+  const location = useMemo(() => {
+    const address = resolvedDeliveryAddress?.address
+    if (!address) return geoLocation
+
+    const coords = Array.isArray(address.location?.coordinates)
+      ? address.location.coordinates
+      : null
+    const latitude = Number(coords?.[1] ?? address.latitude ?? geoLocation?.latitude)
+    const longitude = Number(coords?.[0] ?? address.longitude ?? geoLocation?.longitude)
+
+    return {
+      ...geoLocation,
+      ...address,
+      area: address.area || address.additionalDetails || geoLocation?.area || "",
+      address: address.address || address.street || geoLocation?.address || "",
+      formattedAddress:
+        address.formattedAddress ||
+        [address.additionalDetails, address.street, address.city, address.state, address.zipCode]
+          .filter(Boolean)
+          .join(", ") ||
+        geoLocation?.formattedAddress ||
+        "",
+      latitude: Number.isFinite(latitude) ? latitude : null,
+      longitude: Number.isFinite(longitude) ? longitude : null,
+    }
+  }, [resolvedDeliveryAddress, geoLocation])
 
   // Auto-trigger location fetch if we have placeholder values (only once on mount)
   useEffect(() => {
@@ -1029,4 +1074,3 @@ export default function PageNavbar({
     </nav>
   )
 }
-
