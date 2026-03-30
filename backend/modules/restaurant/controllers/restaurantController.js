@@ -1,5 +1,6 @@
 import Restaurant from '../models/Restaurant.js';
 import Menu from '../models/Menu.js';
+import OutletTimings from '../models/OutletTimings.js';
 import Zone from '../../admin/models/Zone.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import { uploadToCloudinary, deleteFromCloudinary } from '../../../shared/utils/cloudinaryService.js';
@@ -296,6 +297,17 @@ export const getRestaurants = async (req, res) => {
         return distMatch && parseFloat(distMatch[1]) <= maxDist;
       });
     }
+
+    // NEW: Apply automatic open/closed status check for each restaurant in the list
+    restaurants = await Promise.all(restaurants.map(async (r) => {
+      if (r.isAcceptingOrders === false) return r; // Already closed manually
+      
+      const isCurrentlyOpen = await OutletTimings.isRestaurantOpen(r._id);
+      if (!isCurrentlyOpen) {
+        return { ...r, isAcceptingOrders: false, status: 'Closed' };
+      }
+      return r;
+    }));
     
     // Get total count (before filtering by string fields)
     const totalQuery = { ...query };

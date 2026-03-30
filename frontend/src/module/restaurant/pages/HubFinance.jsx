@@ -259,16 +259,6 @@ export default function HubFinance() {
       })
     }
     
-    // Add past cycles orders
-    if (pastCyclesData?.orders && pastCyclesData.orders.length > 0) {
-      pastCyclesData.orders.forEach(order => {
-        allOrders.push({
-          ...order,
-          cycle: 'Past Cycle'
-        })
-      })
-    }
-    
     return {
       restaurantName,
       restaurantId,

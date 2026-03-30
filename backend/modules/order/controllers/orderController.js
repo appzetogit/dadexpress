@@ -8,6 +8,7 @@ import Zone from '../../admin/models/Zone.js';
 import mongoose from 'mongoose';
 import winston from 'winston';
 import { calculateOrderPricing } from '../services/orderCalculationService.js';
+import OutletTimings from '../../restaurant/models/OutletTimings.js';
 import { getRazorpayCredentials } from '../../../shared/utils/envService.js';
 import { notifyRestaurantNewOrder, notifyRestaurantOrderUpdate } from '../services/restaurantNotificationService.js';
 import { calculateOrderSettlement } from '../services/orderSettlementService.js';
@@ -340,6 +341,19 @@ export const createOrder = async (req, res) => {
       return res.status(403).json({
         success: false,
         message: 'Restaurant is currently not accepting orders'
+      });
+    }
+
+    // NEW: Check if restaurant is currently open based on outlet timings (Automatic Close)
+    const isCurrentlyOpen = await OutletTimings.isRestaurantOpen(restaurant._id);
+    if (!isCurrentlyOpen) {
+      logger.warn('⚠️ Restaurant closed based on timings:', {
+        restaurantId: restaurant._id?.toString() || restaurant.restaurantId,
+        restaurantName: restaurant.name
+      });
+      return res.status(403).json({
+        success: false,
+        message: 'This restaurant is currently closed for orders based on its scheduled timings.'
       });
     }
 

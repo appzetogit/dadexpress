@@ -1602,7 +1602,7 @@ export default function OrderTracking() {
             </p>
             <div className="w-48 h-48 sm:w-56 sm:h-56 rounded-xl overflow-hidden border-2 border-orange-100 shadow-sm p-2">
               <img 
-                src="/qr%20code.jpeg" 
+                src="/newbarcode.jpeg" 
                 alt="Payment QR Code" 
                 className="w-full h-full object-contain"
                 onError={(e) => e.target.style.display = 'none'}

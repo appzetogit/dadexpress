@@ -16,12 +16,17 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
     const restaurant = req.restaurant;
     const { startDate, endDate } = req.query;
 
-    // Get restaurant ID
-    const restaurantId = restaurant._id?.toString() || restaurant.restaurantId || restaurant.id;
+    // Get all possible restaurant identifier variations
+    const restaurantIdVariations = [];
+    if (restaurant._id) restaurantIdVariations.push(restaurant._id.toString());
+    if (restaurant.restaurantId) restaurantIdVariations.push(restaurant.restaurantId);
+    if (restaurant.id) restaurantIdVariations.push(restaurant.id.toString());
 
-    if (!restaurantId) {
-      return errorResponse(res, 500, 'Restaurant ID not found');
+    if (restaurantIdVariations.length === 0) {
+      return errorResponse(res, 500, 'Restaurant identifiers not found');
     }
+
+    const restaurantId = restaurantIdVariations[0];
 
     // Calculate current cycle dates (default: Monday to Sunday of current week)
     const now = new Date();
@@ -38,19 +43,9 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
     currentCycleEnd.setDate(currentCycleStart.getDate() + 6);
     currentCycleEnd.setHours(23, 59, 59, 999);
 
-    // Query for restaurant orders - handle multiple restaurantId formats
-    const restaurantIdVariations = [restaurantId];
-    if (mongoose.Types.ObjectId.isValid(restaurantId)) {
-      const objectIdString = new mongoose.Types.ObjectId(restaurantId).toString();
-      if (!restaurantIdVariations.includes(objectIdString)) {
-        restaurantIdVariations.push(objectIdString);
-      }
-    }
-
     const restaurantIdQuery = {
       $or: [
-        { restaurantId: { $in: restaurantIdVariations } },
-        { restaurantId: restaurantId }
+        { restaurantId: { $in: restaurantIdVariations } }
       ]
     };
 
@@ -67,12 +62,21 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
 
     // Helper function to calculate commission for an order
     const calculateCommissionForOrder = (orderAmount) => {
-      if (!restaurantCommission || !restaurantCommission.status) {
-        // Default 10% if no commission setup
+      // If no entry exists at all, default to 10% (safety fallback)
+      if (!restaurantCommission) {
         return {
           commission: (orderAmount * 10) / 100,
           type: 'percentage',
           value: 10
+        };
+      }
+
+      // If commission is explicitly disabled, it's 0%
+      if (!restaurantCommission.status) {
+        return {
+          commission: 0,
+          type: 'percentage',
+          value: 0
         };
       }
 
@@ -110,7 +114,9 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
         }
       } else if (restaurantCommission.defaultCommission) {
         commissionType = restaurantCommission.defaultCommission.type || 'percentage';
-        commissionValue = restaurantCommission.defaultCommission.value || 10;
+        commissionValue = (restaurantCommission.defaultCommission.value !== undefined && restaurantCommission.defaultCommission.value !== null) 
+          ? restaurantCommission.defaultCommission.value 
+          : 10;
         if (commissionType === 'percentage') {
           commission = (orderAmount * commissionValue) / 100;
         } else {
