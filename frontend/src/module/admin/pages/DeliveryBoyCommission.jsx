@@ -52,7 +52,7 @@ export default function DeliveryBoyCommission() {
     if (distance < commission.minDistance) return 0
     if (commission.maxDistance !== null && distance > commission.maxDistance) return 0
     
-    // Calculate commission: base payout + (distance × commission per km)
+    // Calculate commission: bonus + (distance × commission per km)
     const distanceCommission = distance * commission.commissionPerKm
     return commission.basePayout + distanceCommission
   }
@@ -189,7 +189,7 @@ export default function DeliveryBoyCommission() {
       errors.commissionPerKm = "Commission per km must be 0 or greater"
     }
     if (!formData.basePayout.trim() || parseFloat(formData.basePayout) < 0) {
-      errors.basePayout = "Base payout must be 0 or greater"
+      errors.basePayout = "Bonus must be 0 or greater"
     }
     
     setFormErrors(errors)
@@ -319,7 +319,7 @@ export default function DeliveryBoyCommission() {
     minDistance: "Min Distance",
     maxDistance: "Max Distance",
     commissionPerKm: "Commission/Km",
-    basePayout: "Base Payout",
+    basePayout: "Bonus",
     status: "Status",
     actions: "Actions",
   }
@@ -377,7 +377,7 @@ export default function DeliveryBoyCommission() {
               <div className="text-sm text-slate-700">
                 <p className="font-semibold text-blue-900 mb-1">Distance-Based Commission System</p>
                 <p className="text-slate-600">
-                  Commission is calculated as: <strong>Base Payout + (Distance × Commission Per Km)</strong>. 
+                  Commission is calculated as: <strong>Bonus + (Distance × Commission Per Km)</strong>. 
                   Each rule applies to a specific distance range. For orders outside any range, the nearest applicable rule will be used.
                 </p>
                 <p className="text-slate-600 mt-2">
@@ -421,7 +421,7 @@ export default function DeliveryBoyCommission() {
                     <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">Amount Per/Km (₹)</th>
                   )}
                   {visibleColumns.basePayout && (
-                    <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">Base Payout (₹)</th>
+                    <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">Bonus (₹)</th>
                   )}
                   {visibleColumns.status && (
                     <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">Status</th>
@@ -607,7 +607,7 @@ export default function DeliveryBoyCommission() {
             </div>
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2">
-                Base Payout (₹) <span className="text-red-500">*</span>
+                Bonus (₹) <span className="text-red-500">*</span>
               </label>
               <input
                 type="number"
@@ -622,7 +622,7 @@ export default function DeliveryBoyCommission() {
               />
               {formErrors.basePayout && <p className="text-xs text-red-500 mt-1">{formErrors.basePayout}</p>}
               <p className="text-xs text-slate-500 mt-1">
-                Base payout is given regardless of distance, plus commission per km
+                Bonus is given regardless of distance, plus commission per km
               </p>
             </div>
           </div>
@@ -700,4 +700,3 @@ export default function DeliveryBoyCommission() {
     </div>
   )
 }
-
