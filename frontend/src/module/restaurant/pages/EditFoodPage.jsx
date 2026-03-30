@@ -153,6 +153,18 @@ export default function EditFoodPage() {
     }))
   }
 
+  const handleAddPizzaPresets = () => {
+    const startId = Math.max(...formData.variations.map(v => v.id), 0) + 1
+    const presets = [
+      { id: startId, name: "Small", price: formData.price || 0, stock: 100 },
+      { id: startId + 1, name: "Large", price: (formData.price || 0) * 1.5, stock: 100 }
+    ]
+    setFormData(prev => ({
+      ...prev,
+      variations: [...prev.variations, ...presets]
+    }))
+  }
+
   const handleAddTag = () => {
     if (newTag.trim() && !formData.tags.includes(newTag.trim())) {
       setFormData(prev => ({
@@ -507,14 +519,24 @@ export default function EditFoodPage() {
             <CardContent className="p-4 md:p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-base md:text-lg font-semibold text-gray-900">Variations</h2>
-                <button
-                  type="button"
-                  onClick={handleAddVariation}
-                  className="text-[#ff8100] hover:text-[#e67300] flex items-center gap-1 text-sm font-medium"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add Variation
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleAddPizzaPresets}
+                    className="text-blue-600 hover:text-blue-700 flex items-center gap-1 text-sm font-medium border border-blue-200 px-2 py-1 rounded-md"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Pizza Presets
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAddVariation}
+                    className="text-[#ff8100] hover:text-[#e67300] flex items-center gap-1 text-sm font-medium"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Variation
+                  </button>
+                </div>
               </div>
               
               <div className="space-y-4">

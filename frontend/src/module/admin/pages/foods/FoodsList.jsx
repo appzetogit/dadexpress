@@ -16,13 +16,13 @@ export default function FoodsList() {
     const fetchAllFoods = async () => {
       try {
         setLoading(true)
-        
+
         // First, fetch all restaurants
         const restaurantsResponse = await adminAPI.getRestaurants({ limit: 1000 })
-        const restaurants = restaurantsResponse?.data?.data?.restaurants || 
-                          restaurantsResponse?.data?.restaurants || 
-                          []
-        
+        const restaurants = restaurantsResponse?.data?.data?.restaurants ||
+          restaurantsResponse?.data?.restaurants ||
+          []
+
         if (restaurants.length === 0) {
           setFoods([])
           setLoading(false)
@@ -31,13 +31,13 @@ export default function FoodsList() {
 
         // Fetch menu for each restaurant and extract all food items
         const allFoods = []
-        
+
         for (const restaurant of restaurants) {
           try {
             const restaurantId = restaurant._id || restaurant.id
             const menuResponse = await restaurantAPI.getMenuByRestaurantId(restaurantId)
             const menu = menuResponse?.data?.data?.menu || menuResponse?.data?.menu
-            
+
             if (menu && menu.sections) {
               // Extract items from sections and subsections
               menu.sections.forEach((section) => {
@@ -61,7 +61,7 @@ export default function FoodsList() {
                     })
                   })
                 }
-                
+
                 // Items in subsections
                 if (section.subsections && Array.isArray(section.subsections)) {
                   section.subsections.forEach((subsection) => {
@@ -94,7 +94,7 @@ export default function FoodsList() {
             console.warn(`Failed to fetch menu for restaurant ${restaurant._id || restaurant.id}:`, error.message)
           }
         }
-        
+
         setFoods(allFoods)
       } catch (error) {
         console.error("Error fetching foods:", error)
@@ -111,13 +111,13 @@ export default function FoodsList() {
   // Format ID to FOOD format (e.g., FOOD519399)
   const formatFoodId = (id) => {
     if (!id) return "FOOD000000"
-    
+
     const idString = String(id)
     // Extract last 6 digits from the ID
     // Handle formats like "1768285554154-0.703896654519399" or "item-1768285554154-0.703896654519399"
     const parts = idString.split(/[-.]/)
     let lastDigits = ""
-    
+
     // Get the last part and extract digits
     if (parts.length > 0) {
       const lastPart = parts[parts.length - 1]
@@ -129,7 +129,7 @@ export default function FoodsList() {
         lastDigits = allDigits.slice(-6).padStart(6, "0")
       }
     }
-    
+
     // If no digits found, use a hash of the ID
     if (!lastDigits) {
       const hash = idString.split("").reduce((acc, char) => {
@@ -137,13 +137,13 @@ export default function FoodsList() {
       }, 0)
       lastDigits = Math.abs(hash).toString().slice(-6).padStart(6, "0")
     }
-    
+
     return `FOOD${lastDigits}`
   }
 
   const filteredFoods = useMemo(() => {
     let result = [...foods]
-    
+
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim()
       result = result.filter(food =>
@@ -166,11 +166,11 @@ export default function FoodsList() {
 
     try {
       setDeleting(true)
-      
+
       // Get the restaurant's menu
       const menuResponse = await restaurantAPI.getMenuByRestaurantId(food.restaurantId)
       const menu = menuResponse?.data?.data?.menu || menuResponse?.data?.menu
-      
+
       if (!menu || !menu.sections) {
         throw new Error("Menu not found")
       }
@@ -180,8 +180,8 @@ export default function FoodsList() {
       const updatedSections = menu.sections.map(section => {
         // Check items in section
         if (section.items && Array.isArray(section.items)) {
-          const itemIndex = section.items.findIndex(item => 
-            String(item.id) === String(food.id) || 
+          const itemIndex = section.items.findIndex(item =>
+            String(item.id) === String(food.id) ||
             String(item.id) === String(food.originalItem?.id)
           )
           if (itemIndex !== -1) {
@@ -189,13 +189,13 @@ export default function FoodsList() {
             itemRemoved = true
           }
         }
-        
+
         // Check items in subsections
         if (section.subsections && Array.isArray(section.subsections)) {
           section.subsections = section.subsections.map(subsection => {
             if (subsection.items && Array.isArray(subsection.items)) {
-              const itemIndex = subsection.items.findIndex(item => 
-                String(item.id) === String(food.id) || 
+              const itemIndex = subsection.items.findIndex(item =>
+                String(item.id) === String(food.id) ||
                 String(item.id) === String(food.originalItem?.id)
               )
               if (itemIndex !== -1) {
@@ -206,7 +206,7 @@ export default function FoodsList() {
             return subsection
           })
         }
-        
+
         return section
       })
 
@@ -218,10 +218,10 @@ export default function FoodsList() {
       try {
         // Use the admin API endpoint which is authorized for admins
         const response = await adminAPI.updateRestaurantMenu(
-          food.restaurantId, 
+          food.restaurantId,
           { sections: updatedSections }
         )
-        
+
         if (!response.data || !response.data.success) {
           throw new Error(response.data?.message || "Failed to update menu")
         }
@@ -388,14 +388,14 @@ export default function FoodsList() {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="p-4 border-b border-slate-100 flex items-center justify-between">
               <h3 className="text-lg font-bold text-slate-900">Food Details</h3>
-              <button 
+              <button
                 onClick={() => setViewingFood(null)}
                 className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
+
             <div className="p-6">
               <div className="flex items-center gap-4 mb-6">
                 <div className="w-20 h-20 rounded-xl overflow-hidden bg-slate-100 border border-slate-200">
@@ -414,9 +414,8 @@ export default function FoodsList() {
                     ID #{formatFoodId(viewingFood.id)}
                   </p>
                   <div className="flex items-center gap-2 mt-1">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                      viewingFood.foodType === 'Veg' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                    }`}>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${viewingFood.foodType === 'Veg' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                      }`}>
                       {viewingFood.foodType}
                     </span>
                     <span className="text-xs text-slate-400">•</span>
@@ -454,17 +453,24 @@ export default function FoodsList() {
                   </div>
                 </div>
 
-                {viewingFood.originalItem?.description && (
+                {viewingFood.originalItem?.variations && viewingFood.originalItem.variations.length > 0 && (
                   <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Description</p>
-                    <p className="text-xs text-slate-600 leading-relaxed italic">{viewingFood.originalItem.description}</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Variations (Sizes)</p>
+                    <div className="space-y-2">
+                      {viewingFood.originalItem.variations.map((v, i) => (
+                        <div key={i} className="flex items-center justify-between py-1.5 border-b border-slate-200 last:border-0">
+                          <span className="text-xs font-bold text-slate-700">{v.name}</span>
+                          <span className="text-xs font-bold text-orange-600">₹{v.price}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
             </div>
 
             <div className="p-4 bg-slate-50 border-t border-slate-100">
-              <button 
+              <button
                 onClick={() => setViewingFood(null)}
                 className="w-full py-2.5 bg-white border border-slate-200 text-slate-700 font-bold text-sm rounded-xl hover:bg-slate-100 transition-colors shadow-sm"
               >

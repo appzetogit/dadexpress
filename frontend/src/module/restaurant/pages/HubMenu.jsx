@@ -1208,7 +1208,14 @@ export default function HubMenu() {
                                 </span>
                               )}
                             </div>
-                            <p className="text-sm font-medium text-gray-700 mb-3">₹{item.price}</p>
+                            <div className="flex items-center gap-2 mb-3">
+                              <p className="text-sm font-bold text-gray-900">₹{item.price}</p>
+                              {item.variations && item.variations.length > 0 && (
+                                <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-md font-bold uppercase">
+                                  {item.variations.length} Sizes
+                                </span>
+                              )}
+                            </div>
                           </div>
 
                           {/* Right: Image */}

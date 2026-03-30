@@ -63,6 +63,7 @@ export default function RestaurantDetails() {
   const [showManageCollections, setShowManageCollections] = useState(false)
   const [showItemDetail, setShowItemDetail] = useState(false)
   const [selectedItem, setSelectedItem] = useState(null)
+  const [selectedVariation, setSelectedVariation] = useState(null)
   const [showFilterSheet, setShowFilterSheet] = useState(false)
   const [showLocationSheet, setShowLocationSheet] = useState(false)
   const [showScheduleSheet, setShowScheduleSheet] = useState(false)
@@ -722,7 +723,13 @@ export default function RestaurantDetails() {
     const cartQuantities = {}
     cart.forEach((item) => {
       if (item.restaurant === restaurant.name) {
+        // Individual variation quantity
         cartQuantities[item.id] = item.quantity || 0
+        
+        // Aggregate quantity for the base item (across all variations)
+        const baseId = item.id.includes('-') ? item.id.split('-')[0] : item.id
+        const totalKey = `${baseId}_total`
+        cartQuantities[totalKey] = (cartQuantities[totalKey] || 0) + (item.quantity || 0)
       }
     })
     setQuantities(cartQuantities)
@@ -731,6 +738,15 @@ export default function RestaurantDetails() {
 
   // Helper function to update item quantity in both local state and cart
   const updateItemQuantity = (item, newQuantity, event = null) => {
+    // If item has variations and we are adding it (not updating existing in modal)
+    // and it's not already in specialized detail view
+    if (newQuantity > (quantities[item.id] || 0) && item.variations && item.variations.length > 0 && !showItemDetail) {
+      setSelectedItem(item)
+      setSelectedVariation(item.variations[0]) // Default to first variation
+      setShowItemDetail(true)
+      return
+    }
+
     // Check authentication
     if (!isModuleAuthenticated('user')) {
       toast.error("Please login to add items to cart")
@@ -783,16 +799,22 @@ export default function RestaurantDetails() {
     });
 
     // Prepare cart item with all required properties
+    // If a variation is selected, update ID, name and price
+    const finalId = selectedVariation ? `${item.id}-${selectedVariation.name}` : item.id
+    const finalName = selectedVariation ? `${item.name} (${selectedVariation.name})` : item.name
+    const finalPrice = selectedVariation ? selectedVariation.price : item.price
+
     const cartItem = {
-      id: item.id,
-      name: item.name,
-      price: item.price,
+      id: finalId,
+      name: finalName,
+      price: finalPrice,
       image: item.image,
       restaurant: restaurant.name, // Use restaurant.name directly (already validated)
       restaurantId: validRestaurantId, // Use validated restaurantId
       description: item.description,
-      originalPrice: item.originalPrice,
-      isVeg: item.foodType === 'Veg' || item.isVeg === true // Correctly determine isVeg
+      originalPrice: item.originalPrice || finalPrice,
+      isVeg: item.foodType === 'Veg' || item.isVeg === true, // Correctly determine isVeg
+      variation: selectedVariation ? selectedVariation.name : null
     }
 
     // Get source position for animation from event target
@@ -1707,7 +1729,7 @@ export default function RestaurantDetails() {
                   {isExpanded && section.items && section.items.length > 0 && (
                     <div className="space-y-0">
                       {section.items.map((item) => {
-                        const quantity = quantities[item.id] || 0
+                        const quantity = quantities[`${item.id}_total`] || quantities[item.id] || 0
                         // Determine veg/non-veg based on foodType or isVeg
                         const isVeg = item.foodType === "Veg" || item.isVeg === true
 
@@ -1914,7 +1936,7 @@ export default function RestaurantDetails() {
                             {isSubsectionExpanded && subsection.items && subsection.items.length > 0 && (
                               <div className="space-y-0">
                                 {subsection.items.map((item) => {
-                                  const quantity = quantities[item.id] || 0
+                                  const quantity = quantities[`${item.id}_total`] || quantities[item.id] || 0
                                   // Determine veg/non-veg based on foodType or isVeg
                                   const isVeg = item.foodType === "Veg" || item.isVeg === true
 
@@ -2742,6 +2764,30 @@ export default function RestaurantDetails() {
                         NOT ELIGIBLE FOR COUPONS
                       </p>
                     )}
+
+                    {/* Variations / Sizes Selection */}
+                    {selectedItem.variations && selectedItem.variations.length > 0 && (
+                      <div className="mt-4 mb-6">
+                        <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-3 uppercase tracking-wider">
+                          Select Size
+                        </h3>
+                        <div className="space-y-2">
+                          {selectedItem.variations.map((v, i) => (
+                            <button
+                              key={i}
+                              onClick={() => setSelectedVariation(v)}
+                              className={`w-full flex items-center justify-between p-3 rounded-xl border-2 transition-all ${selectedVariation?.name === v.name
+                                ? "border-[#EB590E] bg-orange-50 dark:bg-[#EB590E]/10 text-[#EB590E]"
+                                : "border-gray-100 dark:border-gray-800 hover:border-gray-200 dark:hover:border-gray-700 text-gray-700 dark:text-gray-300"
+                                }`}
+                            >
+                              <span className="text-sm font-semibold">{v.name}</span>
+                              <span className="text-sm font-bold">₹{v.price}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Bottom Action Bar */}
@@ -2755,10 +2801,11 @@ export default function RestaurantDetails() {
                         <button
                           onClick={(e) => {
                             if (!shouldShowGrayscale) {
-                              updateItemQuantity(selectedItem, Math.max(0, (quantities[selectedItem.id] || 0) - 1), e)
+                              const cartId = selectedVariation ? `${selectedItem.id}-${selectedVariation.name}` : selectedItem.id
+                              updateItemQuantity(selectedItem, Math.max(0, (quantities[cartId] || 0) - 1), e)
                             }
                           }}
-                          disabled={(quantities[selectedItem.id] || 0) === 0 || shouldShowGrayscale}
+                          disabled={(quantities[selectedVariation ? `${selectedItem.id}-${selectedVariation.name}` : selectedItem.id] || 0) === 0 || shouldShowGrayscale}
                           className={`${shouldShowGrayscale
                             ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
                             : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white disabled:text-gray-300 dark:disabled:text-gray-600 disabled:cursor-not-allowed'
@@ -2770,12 +2817,13 @@ export default function RestaurantDetails() {
                           ? 'text-gray-400 dark:text-gray-600'
                           : 'text-gray-900 dark:text-white'
                           }`}>
-                          {quantities[selectedItem.id] || 0}
+                          {quantities[selectedVariation ? `${selectedItem.id}-${selectedVariation.name}` : selectedItem.id] || 0}
                         </span>
                         <button
                           onClick={(e) => {
                             if (!shouldShowGrayscale) {
-                              updateItemQuantity(selectedItem, (quantities[selectedItem.id] || 0) + 1, e)
+                              const cartId = selectedVariation ? `${selectedItem.id}-${selectedVariation.name}` : selectedItem.id
+                              updateItemQuantity(selectedItem, (quantities[cartId] || 0) + 1, e)
                             }
                           }}
                           disabled={shouldShowGrayscale}
@@ -2796,21 +2844,24 @@ export default function RestaurantDetails() {
                           }`}
                         onClick={(e) => {
                           if (!shouldShowGrayscale) {
-                            updateItemQuantity(selectedItem, (quantities[selectedItem.id] || 0) + 1, e)
+                            const cartId = selectedVariation ? `${selectedItem.id}-${selectedVariation.name}` : selectedItem.id
+                            updateItemQuantity(selectedItem, (quantities[cartId] || 0) + 1, e)
+                            // Keep modal open if they want to add more? No, usually close it.
                             setShowItemDetail(false)
+                            setSelectedVariation(null)
                           }
                         }}
                         disabled={shouldShowGrayscale}
                       >
                         <span>Add item</span>
                         <div className="flex items-center gap-1">
-                          {selectedItem.originalPrice && selectedItem.originalPrice > selectedItem.price && (
+                          {selectedItem.originalPrice && selectedItem.originalPrice > (selectedVariation?.price || selectedItem.price) && (
                             <span className="text-sm line-through text-red-200">
                               ₹{Math.round(selectedItem.originalPrice)}
                             </span>
                           )}
                           <span className="text-base font-bold">
-                            ₹{Math.round(selectedItem.price)}
+                            ₹{Math.round(selectedVariation?.price || selectedItem.price)}
                           </span>
                         </div>
                       </Button>
