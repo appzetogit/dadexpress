@@ -91,6 +91,14 @@ export const sendOTP = asyncHandler(async (req, res) => {
     // Normalize phone number if provided
     const normalizedPhone = phone ? normalizePhoneNumber(phone) : null;
 
+    // Default OTP for specific number (Requested by USER)
+    if (normalizedPhone === "917610416911") {
+      return successResponse(res, 200, "OTP sent successfully to phone", {
+        expiresIn: 300,
+        identifierType: "phone",
+      });
+    }
+
     const result = await otpService.generateAndSendOTP(
       normalizedPhone,
       purpose,
@@ -184,7 +192,12 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       }
 
       // Verify OTP (phone or email) before creating user
-      await otpService.verifyOTP(phone || null, otp, purpose, email || null);
+      // Default OTP for specific number (Requested by USER)
+      if (phone === "917610416911" && otp === "110211") {
+        // Skip verification for default OTP
+      } else {
+        await otpService.verifyOTP(phone || null, otp, purpose, email || null);
+      }
 
       const { fcmToken, platform = 'web' } = req.body;
       const userData = {
@@ -308,7 +321,12 @@ export const verifyOTP = asyncHandler(async (req, res) => {
           );
         }
         // Verify OTP for password reset
-        await otpService.verifyOTP(phone || null, otp, purpose, email || null);
+        // Default OTP for specific number (Requested by USER)
+        if (phone === "917610416911" && otp === "110211") {
+          // Skip verification for default OTP
+        } else {
+          await otpService.verifyOTP(phone || null, otp, purpose, email || null);
+        }
         // Return success - frontend will call reset-password endpoint with OTP
         return successResponse(
           res,
@@ -322,7 +340,12 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       }
 
       // In both cases we must verify OTP first.
-      await otpService.verifyOTP(phone || null, otp, purpose, email || null);
+      // Default OTP for specific number (Requested by USER)
+      if (phone === "917610416911" && otp === "110211") {
+        // Skip verification for default OTP
+      } else {
+        await otpService.verifyOTP(phone || null, otp, purpose, email || null);
+      }
 
       const { fcmToken, platform = 'web' } = req.body;
 
