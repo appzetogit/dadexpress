@@ -32,12 +32,21 @@ const getReportDeliveryTimestamp = (order, settlement) => {
   return null;
 };
 
+const readMetaValue = (meta, key) => {
+  if (!meta) return undefined;
+  if (typeof meta.get === 'function') return meta.get(key);
+  return meta[key];
+};
+
 /**
  * Admin restaurant finance report rows: delivered orders with settlement (DB).
  * Escrow often sets restaurantSettled=true already, so we do NOT filter by restaurantSettled.
- * Rows hidden after "Mark as Paid" via metadata.restaurantFinanceReportMarked === true.
+ * View modes:
+ * - pending: only non-marked rows (default)
+ * - history: only marked rows
+ * - all: all rows
  */
-export const getPendingRestaurantSettlements = async (restaurantId = null, startDate = null, endDate = null) => {
+export const getPendingRestaurantSettlements = async (restaurantId = null, startDate = null, endDate = null, view = 'pending') => {
   try {
     const dateRange = buildDateRange(startDate, endDate);
     
@@ -80,19 +89,13 @@ export const getPendingRestaurantSettlements = async (restaurantId = null, start
       }
 
       // 3. Filter by paid/hidden status
-      const meta = settlement?.metadata;
-      let isHidden = false;
-      if (meta) {
-        if (typeof meta.get === 'function') {
-          isHidden = meta.get('restaurantFinanceReportMarked') === true;
-        } else {
-          isHidden = meta.restaurantFinanceReportMarked === true;
-        }
-      }
+      const isMarked = readMetaValue(settlement?.metadata, 'restaurantFinanceReportMarked') === true;
+      const includeRecord =
+        (view === 'history' && isMarked) ||
+        (view === 'all') ||
+        (view !== 'history' && !isMarked);
 
-      if (!isHidden && settlement.settlementStatus !== 'cancelled') {
-        settlements.push(settlement);
-      }
+      if (includeRecord && settlement.settlementStatus !== 'cancelled') settlements.push(settlement);
     }
 
     // Sort by delivery date descending
@@ -326,6 +329,12 @@ export const markSettlementsAsProcessed = async (settlementIds, actorType, actor
       // Mark for both reports to be safe if applicable
       settlement.metadata.set('restaurantFinanceReportMarked', true);
       settlement.metadata.set('deliveryFinanceReportMarked', true);
+      settlement.metadata.set('restaurantFinanceReportMarkedAt', new Date().toISOString());
+      settlement.metadata.set('restaurantFinanceReportMarkedByType', actorType || 'admin');
+      settlement.metadata.set('restaurantFinanceReportMarkedById', actorId ? String(actorId) : null);
+      settlement.metadata.set('deliveryFinanceReportMarkedAt', new Date().toISOString());
+      settlement.metadata.set('deliveryFinanceReportMarkedByType', actorType || 'admin');
+      settlement.metadata.set('deliveryFinanceReportMarkedById', actorId ? String(actorId) : null);
 
       if (settlement.restaurantEarning.status !== 'cancelled' && !settlement.restaurantSettled) {
         settlement.restaurantSettled = true;
@@ -343,4 +352,3 @@ export const markSettlementsAsProcessed = async (settlementIds, actorType, actor
     throw error;
   }
 };
-

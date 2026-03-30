@@ -37,12 +37,15 @@ export const getOrderSettlementDetails = asyncHandler(async (req, res) => {
  */
 export const getRestaurantSettlements = asyncHandler(async (req, res) => {
   try {
-    const { restaurantId, startDate, endDate } = req.query;
+    const { restaurantId, startDate, endDate, view } = req.query;
+    const allowedViews = new Set(['pending', 'history', 'all']);
+    const selectedView = allowedViews.has(view) ? view : 'pending';
 
     const settlements = await getPendingRestaurantSettlements(
       restaurantId || null,
       startDate || null,
       endDate || null,
+      selectedView,
     );
 
     // Calculate totals
@@ -59,7 +62,8 @@ export const getRestaurantSettlements = asyncHandler(async (req, res) => {
 
     return successResponse(res, 200, 'Restaurant settlements retrieved', {
       settlements,
-      totals
+      totals,
+      view: selectedView,
     });
   } catch (error) {
     console.error('Error getting restaurant settlements:', error);
@@ -292,4 +296,3 @@ export const getSettlementStatistics = asyncHandler(async (req, res) => {
     return errorResponse(res, 500, 'Failed to get settlement statistics');
   }
 });
-

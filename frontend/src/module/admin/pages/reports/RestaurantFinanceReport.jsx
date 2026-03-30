@@ -10,6 +10,7 @@ export default function RestaurantFinanceReport() {
   const [loading, setLoading] = useState(true)
   const [restaurants, setRestaurants] = useState([])
   const [settlements, setSettlements] = useState([])
+  const [paidHistory, setPaidHistory] = useState([])
   const [totals, setTotals] = useState({
     totalOrders: 0,
     totalEarnings: 0,
@@ -34,6 +35,13 @@ export default function RestaurantFinanceReport() {
 
   const normalizeSettlement = (settlement) => {
     const earning = settlement?.restaurantEarning || {}
+    const metadata = settlement?.metadata || {}
+    const readMetaValue = (key) => {
+      if (!metadata) return null
+      if (typeof metadata.get === "function") return metadata.get(key) ?? null
+      return metadata[key] ?? null
+    }
+
     return {
       ...settlement,
       restaurantId: settlement?.restaurantId?._id || settlement?.restaurantId || settlement?.restaurant?._id || null,
@@ -49,6 +57,9 @@ export default function RestaurantFinanceReport() {
         commission: parseAmount(earning.commission ?? settlement?.commission),
         netEarning: parseAmount(earning.netEarning ?? settlement?.netEarning ?? settlement?.originalPrice),
       },
+      paidAt: readMetaValue("restaurantFinanceReportMarkedAt") || settlement?.updatedAt || null,
+      paidByType: readMetaValue("restaurantFinanceReportMarkedByType") || null,
+      isMarkedAsPaid: readMetaValue("restaurantFinanceReportMarked") === true,
     }
   }
 
@@ -78,40 +89,44 @@ export default function RestaurantFinanceReport() {
         endDate: filters.endDate,
       }
       
-      const response = await adminAPI.getRestaurantSettlements(params)
-      
-      if (response?.data?.success) {
-        const payload = response?.data?.data || {}
-        const normalizedSettlements = (Array.isArray(payload.settlements) ? payload.settlements : []).map(normalizeSettlement)
+      const [pendingResponse, historyResponse] = await Promise.all([
+        adminAPI.getRestaurantSettlements(params),
+        adminAPI.getRestaurantSettlements({ ...params, view: "history" }),
+      ])
 
-        const backendTotals = payload.totals || {}
-        const computedTotals = normalizedSettlements.reduce(
-          (acc, settlement) => {
-            acc.totalOrders += 1
-            acc.totalCommission += parseAmount(settlement.restaurantEarning?.commission)
-            acc.totalEarnings += parseAmount(settlement.restaurantEarning?.netEarning)
-            return acc
-          },
-          { totalOrders: 0, totalEarnings: 0, totalCommission: 0 },
-        )
+      const pendingPayload = pendingResponse?.data?.data || {}
+      const historyPayload = historyResponse?.data?.data || {}
+      const normalizedSettlements = (Array.isArray(pendingPayload.settlements) ? pendingPayload.settlements : []).map(normalizeSettlement)
+      const normalizedPaidHistory = (Array.isArray(historyPayload.settlements) ? historyPayload.settlements : []).map(normalizeSettlement)
 
-        setSettlements(normalizedSettlements)
-        setTotals({
-          totalOrders: Number(backendTotals.totalOrders ?? computedTotals.totalOrders) || 0,
-          totalEarnings: parseAmount(backendTotals.totalEarnings ?? computedTotals.totalEarnings),
-          totalCommission: parseAmount(backendTotals.totalCommission ?? computedTotals.totalCommission),
-        })
-      } else {
-        setSettlements([])
-        setTotals({
-          totalOrders: 0,
-          totalEarnings: 0,
-          totalCommission: 0
-        })
-      }
+      const backendTotals = pendingPayload.totals || {}
+      const computedTotals = normalizedSettlements.reduce(
+        (acc, settlement) => {
+          acc.totalOrders += 1
+          acc.totalCommission += parseAmount(settlement.restaurantEarning?.commission)
+          acc.totalEarnings += parseAmount(settlement.restaurantEarning?.netEarning)
+          return acc
+        },
+        { totalOrders: 0, totalEarnings: 0, totalCommission: 0 },
+      )
+
+      setSettlements(normalizedSettlements)
+      setPaidHistory(normalizedPaidHistory)
+      setTotals({
+        totalOrders: Number(backendTotals.totalOrders ?? computedTotals.totalOrders) || 0,
+        totalEarnings: parseAmount(backendTotals.totalEarnings ?? computedTotals.totalEarnings),
+        totalCommission: parseAmount(backendTotals.totalCommission ?? computedTotals.totalCommission),
+      })
     } catch (error) {
       console.error("Error fetching settlements:", error)
       toast.error("Failed to fetch settlement data")
+      setSettlements([])
+      setPaidHistory([])
+      setTotals({
+        totalOrders: 0,
+        totalEarnings: 0,
+        totalCommission: 0
+      })
     } finally {
       setLoading(false)
     }
@@ -184,6 +199,23 @@ export default function RestaurantFinanceReport() {
       case "pdf": exportReportsToPDF(exportData, headers, "restaurant_finance_report", "Restaurant Finance Report"); break
       case "json": exportReportsToJSON(exportData, "restaurant_finance_report"); break
     }
+  }
+
+  const formatCurrency = (value) => {
+    const amount = parseAmount(value)
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount)
+  }
+
+  const formatDateTime = (value, formatString = "dd MMM yyyy HH:mm") => {
+    if (!value) return "N/A"
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return "N/A"
+    return format(date, formatString)
   }
 
   return (
@@ -310,11 +342,11 @@ export default function RestaurantFinanceReport() {
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 relative overflow-hidden group">
             <div className="absolute top-0 right-0 p-4">
               <div className="w-10 h-10 rounded-full bg-rose-50 flex items-center justify-center">
-                <span className="text-rose-500 font-bold text-lg">₹</span>
+                <span className="text-rose-500 font-bold text-xs">INR</span>
               </div>
             </div>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">TOTAL COMMISSION</p>
-            <h3 className="text-4xl font-extrabold text-slate-900 mb-2">₹{totals.totalCommission.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
+            <h3 className="text-4xl font-extrabold text-slate-900 mb-2">{formatCurrency(totals.totalCommission)}</h3>
             <p className="text-xs font-medium text-slate-500">Admin commission shared</p>
           </div>
 
@@ -325,7 +357,7 @@ export default function RestaurantFinanceReport() {
               </div>
             </div>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">ORIGINAL PRICE (NET)</p>
-            <h3 className="text-4xl font-extrabold text-white mb-2">₹{totals.totalEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
+            <h3 className="text-4xl font-extrabold text-white mb-2">{formatCurrency(totals.totalEarnings)}</h3>
             <p className="text-xs font-medium text-slate-400">Net amount for restaurants</p>
           </div>
         </div>
@@ -391,17 +423,95 @@ export default function RestaurantFinanceReport() {
                         <span className="text-sm font-bold text-slate-700">{s.restaurantName}</span>
                       </td>
                       <td className="px-6 py-4 text-right pr-12">
-                        <span className="text-sm font-bold text-slate-700 pr-10">₹{s.restaurantEarning?.foodPrice ?? 0}</span>
+                        <span className="text-sm font-bold text-slate-700 pr-10">{formatCurrency(s.restaurantEarning?.foodPrice ?? 0)}</span>
                       </td>
                       <td className="px-6 py-4">
-                        <span className="text-sm font-bold text-rose-500">₹{s.restaurantEarning?.commission ?? 0}</span>
+                        <span className="text-sm font-bold text-rose-500">{formatCurrency(s.restaurantEarning?.commission ?? 0)}</span>
                       </td>
                       <td className="px-6 py-4">
-                        <span className="text-sm font-bold text-blue-600 font-mono">₹{s.restaurantEarning?.netEarning ?? 0}</span>
+                        <span className="text-sm font-bold text-blue-600 font-mono">{formatCurrency(s.restaurantEarning?.netEarning ?? 0)}</span>
                       </td>
                       <td className="px-6 py-4">
                         <span className="px-2.5 py-1 rounded text-[10px] font-bold bg-emerald-50 text-emerald-600 uppercase border border-emerald-100">
                           Delivered
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Marked as Paid History Section */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="p-4 border-b border-slate-100 bg-emerald-50/40 flex items-center justify-between">
+            <h2 className="text-lg font-bold text-slate-800 tracking-tight">Marked as Paid History</h2>
+            <div className="text-[10px] font-bold px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full">
+              {paidHistory.length} records
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-[#F8FAFC]">
+                <tr>
+                  {["SL", "Order #", "Date", "Restaurant", "Food Price", "Commission", "Original Price", "Paid On", "Status"].map((header) => (
+                    <th key={header} className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">
+                      {header}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {loading ? (
+                  <tr>
+                    <td colSpan={9} className="px-6 py-16 text-center">
+                      <div className="flex flex-col items-center gap-4">
+                        <Loader2 className="w-7 h-7 text-slate-800 animate-spin" />
+                        <p className="text-sm font-bold text-slate-500">Loading paid history...</p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : paidHistory.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="px-6 py-16 text-center">
+                      <p className="text-slate-500 font-bold">No marked-as-paid history found for the selected period.</p>
+                    </td>
+                  </tr>
+                ) : (
+                  paidHistory.map((s, index) => (
+                    <tr key={s._id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-6 py-4">
+                        <span className="text-sm font-medium text-slate-400">{index + 1}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="text-sm font-bold text-slate-700">#{s.orderNumber}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col">
+                          <span className="text-sm font-bold text-slate-700">{formatDateTime(s.createdAt, "dd MMM yyyy")}</span>
+                          <span className="text-[11px] font-medium text-slate-400">{formatDateTime(s.createdAt, "HH:mm")}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="text-sm font-bold text-slate-700">{s.restaurantName}</span>
+                      </td>
+                      <td className="px-6 py-4 text-right pr-12">
+                        <span className="text-sm font-bold text-slate-700 pr-10">{formatCurrency(s.restaurantEarning?.foodPrice ?? 0)}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="text-sm font-bold text-rose-500">{formatCurrency(s.restaurantEarning?.commission ?? 0)}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="text-sm font-bold text-blue-600 font-mono">{formatCurrency(s.restaurantEarning?.netEarning ?? 0)}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="text-sm font-medium text-slate-700">{formatDateTime(s.paidAt)}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="px-2.5 py-1 rounded text-[10px] font-bold bg-emerald-50 text-emerald-600 uppercase border border-emerald-100">
+                          Paid
                         </span>
                       </td>
                     </tr>
