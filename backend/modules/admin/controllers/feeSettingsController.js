@@ -77,6 +77,9 @@ export const createOrUpdateFeeSettings = asyncHandler(async (req, res) => {
     if (deliveryFeePerKm !== undefined && Number(deliveryFeePerKm) < 0) {
       return errorResponse(res, 400, 'Delivery charge per km must be a positive number');
     }
+    if (freeDeliveryThreshold !== undefined && Number(freeDeliveryThreshold) < 0) {
+      return errorResponse(res, 400, 'Free delivery threshold must be a positive number');
+    }
 
     if (platformCommissionPercent !== undefined && (Number(platformCommissionPercent) < 0 || Number(platformCommissionPercent) > 100)) {
       return errorResponse(res, 400, 'Platform commission must be between 0 and 100');
@@ -119,7 +122,7 @@ export const createOrUpdateFeeSettings = asyncHandler(async (req, res) => {
     const feeSettingsData = {
       deliveryFee: deliveryFee !== undefined ? Number(deliveryFee) : 25,
       deliveryFeePerKm: deliveryFeePerKm !== undefined ? Number(deliveryFeePerKm) : 0,
-      freeDeliveryThreshold: freeDeliveryThreshold ? Number(freeDeliveryThreshold) : 149,
+      freeDeliveryThreshold: freeDeliveryThreshold !== undefined ? Number(freeDeliveryThreshold) : 149,
       platformFee: Number(platformFee),
       platformCommissionPercent: platformCommissionPercent !== undefined ? Number(platformCommissionPercent) : 0,
       platformFeePercentage: platformFeePercentage !== undefined ? Number(platformFeePercentage) : 0,
@@ -334,4 +337,3 @@ export const getPublicFeeSettings = asyncHandler(async (req, res) => {
     return errorResponse(res, 500, 'Failed to fetch fee settings');
   }
 });
-

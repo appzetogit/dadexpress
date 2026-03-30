@@ -117,6 +117,14 @@ const extractCoordinates = (entity) => {
 
 export const calculateDeliveryFee = async (orderValue, restaurant, deliveryAddress = null, deliveryFleet = 'standard') => {
   const feeSettings = await getFeeSettings();
+  const freeDeliveryThreshold = Number(feeSettings?.freeDeliveryThreshold ?? 149);
+
+  // Apply global free-delivery threshold before any distance/commission logic.
+  // Threshold 0 is treated as disabled.
+  if (freeDeliveryThreshold > 0 && Number(orderValue || 0) >= freeDeliveryThreshold) {
+    console.log(`[PRICING] Free delivery applied by threshold: orderValue=${orderValue}, threshold=${freeDeliveryThreshold}`);
+    return 0;
+  }
 
   // 1) Find Distance first to determine per-KM charges or commissions
   const restaurantCoordinates = extractCoordinates(restaurant);
