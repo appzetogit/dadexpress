@@ -1,12 +1,16 @@
 import { useState, useEffect } from "react"
+import { useSearchParams } from "react-router-dom"
 import { Download, ChevronDown, Filter, Briefcase, RefreshCw, FileText, FileSpreadsheet, Code, Loader2, CheckCircle2, LayoutDashboard, WalletCards } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { exportReportsToCSV, exportReportsToExcel, exportReportsToPDF, exportReportsToJSON } from "../../components/reports/reportsExportUtils"
 import { adminAPI } from "@/lib/api"
 import { toast } from "sonner"
-import { format } from "date-fns"
+import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, subDays } from "date-fns"
 
 export default function RestaurantFinanceReport() {
+  const [searchParams] = useSearchParams()
+  const timeParam = searchParams.get("time")
+
   const [loading, setLoading] = useState(true)
   const [restaurants, setRestaurants] = useState([])
   const [settlements, setSettlements] = useState([])
@@ -17,10 +21,50 @@ export default function RestaurantFinanceReport() {
     totalCommission: 0
   })
   
+  // Calculate initial dates based on search parameter
+  const getInitialDates = () => {
+    const now = new Date()
+    switch (timeParam) {
+      case "Today":
+        return {
+          startDate: format(startOfDay(now), "yyyy-MM-dd"),
+          endDate: format(endOfDay(now), "yyyy-MM-dd")
+        }
+      case "This Week":
+        return {
+          startDate: format(startOfWeek(now, { weekStartsOn: 1 }), "yyyy-MM-dd"), // Assume week starts on Monday
+          endDate: format(endOfWeek(now, { weekStartsOn: 1 }), "yyyy-MM-dd")
+        }
+      case "This Month":
+        return {
+          startDate: format(startOfMonth(now), "yyyy-MM-dd"),
+          endDate: format(endOfMonth(now), "yyyy-MM-dd")
+        }
+      case "This Year":
+        return {
+          startDate: format(startOfYear(now), "yyyy-MM-dd"),
+          endDate: format(endOfYear(now), "yyyy-MM-dd")
+        }
+      case "All Time":
+        return {
+          startDate: "",
+          endDate: ""
+        }
+      default:
+        // Default to last 7 days if no param
+        return {
+          startDate: format(subDays(now, 7), "yyyy-MM-dd"),
+          endDate: format(now, "yyyy-MM-dd")
+        }
+    }
+  }
+
+  const initialDates = getInitialDates()
+
   const [filters, setFilters] = useState({
     restaurantId: "All Restaurants",
-    startDate: format(new Date().setDate(new Date().getDate() - 7), "yyyy-MM-dd"),
-    endDate: format(new Date(), "yyyy-MM-dd"),
+    startDate: initialDates.startDate,
+    endDate: initialDates.endDate,
   })
 
   const parseAmount = (value) => {
@@ -99,8 +143,20 @@ export default function RestaurantFinanceReport() {
       const normalizedSettlements = (Array.isArray(pendingPayload.settlements) ? pendingPayload.settlements : []).map(normalizeSettlement)
       const normalizedPaidHistory = (Array.isArray(historyPayload.settlements) ? historyPayload.settlements : []).map(normalizeSettlement)
 
-      const backendTotals = pendingPayload.totals || {}
-      const computedTotals = normalizedSettlements.reduce(
+      const backendPendingTotals = pendingPayload.totals || {}
+      const backendHistoryTotals = historyPayload.totals || {}
+
+      const computedPendingTotals = normalizedSettlements.reduce(
+        (acc, settlement) => {
+          acc.totalOrders += 1
+          acc.totalCommission += parseAmount(settlement.restaurantEarning?.commission)
+          acc.totalEarnings += parseAmount(settlement.restaurantEarning?.netEarning)
+          return acc
+        },
+        { totalOrders: 0, totalEarnings: 0, totalCommission: 0 },
+      )
+
+      const computedHistoryTotals = normalizedPaidHistory.reduce(
         (acc, settlement) => {
           acc.totalOrders += 1
           acc.totalCommission += parseAmount(settlement.restaurantEarning?.commission)
@@ -112,10 +168,21 @@ export default function RestaurantFinanceReport() {
 
       setSettlements(normalizedSettlements)
       setPaidHistory(normalizedPaidHistory)
+
+      // Combine backend totals or fall back to computed totals if backend values are missing
+      const totalOrdersCombined = (Number(backendPendingTotals.totalOrders ?? computedPendingTotals.totalOrders) || 0) + 
+                                  (Number(backendHistoryTotals.totalOrders ?? computedHistoryTotals.totalOrders) || 0)
+      
+      const totalEarningsCombined = parseAmount(backendPendingTotals.totalEarnings ?? computedPendingTotals.totalEarnings) + 
+                                    parseAmount(backendHistoryTotals.totalEarnings ?? computedHistoryTotals.totalEarnings)
+                                    
+      const totalCommissionCombined = parseAmount(backendPendingTotals.totalCommission ?? computedPendingTotals.totalCommission) + 
+                                      parseAmount(backendHistoryTotals.totalCommission ?? computedHistoryTotals.totalCommission)
+
       setTotals({
-        totalOrders: Number(backendTotals.totalOrders ?? computedTotals.totalOrders) || 0,
-        totalEarnings: parseAmount(backendTotals.totalEarnings ?? computedTotals.totalEarnings),
-        totalCommission: parseAmount(backendTotals.totalCommission ?? computedTotals.totalCommission),
+        totalOrders: totalOrdersCombined,
+        totalEarnings: totalEarningsCombined,
+        totalCommission: totalCommissionCombined,
       })
     } catch (error) {
       console.error("Error fetching settlements:", error)

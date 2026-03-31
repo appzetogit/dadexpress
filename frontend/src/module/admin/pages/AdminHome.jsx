@@ -148,7 +148,7 @@ export default function AdminHome() {
     today: "Today",
     week: "This Week",
     month: "This Month",
-    year: "All Time",
+    year: "This Year",
   }
   const transactionTime = transactionTimeMap[selectedPeriod] || "All Time"
   const transactionReportPath = `/admin/transaction-report?time=${encodeURIComponent(transactionTime)}`
@@ -231,10 +231,10 @@ export default function AdminHome() {
             <MetricCard
               title="Commission earned"
               value={`₹${commissionTotal.toLocaleString("en-IN")}`}
-              helper="Restaurant commission"
+              helper={selectedPeriodLabel}
               icon={<ArrowUpRight className="h-5 w-5 text-indigo-600" />}
               accent="bg-indigo-200/40"
-              path="/admin/restaurant-report"
+              path={`/admin/restaurant-report?time=${encodeURIComponent(transactionTime)}`}
               isLoading={isLoading && !hasLoadedOnce}
             />
             <MetricCard

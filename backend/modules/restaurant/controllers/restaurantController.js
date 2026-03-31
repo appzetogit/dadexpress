@@ -1102,6 +1102,7 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
       restaurants: restaurantsWithDishes,
       total: restaurantsWithDishes.length,
     });
+    
   } catch (error) {
     console.error('Error fetching restaurants with dishes under ₹250:', error);
     return errorResponse(res, 500, 'Failed to fetch restaurants with dishes under ₹250');
