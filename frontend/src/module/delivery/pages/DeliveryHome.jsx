@@ -448,6 +448,39 @@ export default function DeliveryHome() {
   const [assignedZoneNames, setAssignedZoneNames] = useState([])
   const [currentZone, setCurrentZone] = useState(null)
   const [isOutOfZone, setIsOutOfZone] = useState(false)
+
+  // Polling for QR payment status
+  useEffect(() => {
+    let pollInterval;
+    const checkOrderPaymentStatus = async (orderId) => {
+      try {
+        const response = await deliveryAPI.getOrderDetails(orderId);
+        const paymentStatus = response?.data?.data?.payment?.status;
+        if (paymentStatus === 'completed') {
+          setPaymentConfirmed(true);
+          toast.success('✨ QR Payment verified successfully!', { duration: 5000 });
+          return true;
+        }
+        return false;
+      } catch (err) {
+        console.error('Failed to poll payment status', err);
+        return false;
+      }
+    };
+
+    if (activeOrder?._id && paymentCollectedBy === 'qr' && !paymentConfirmed) {
+      // Don't poll if we're already verifying
+      if (!isVerifyingPayment) {
+        pollInterval = setInterval(() => {
+          checkOrderPaymentStatus(activeOrder._id);
+        }, 5000); // Check every 5 seconds
+      }
+    }
+
+    return () => {
+      if (pollInterval) clearInterval(pollInterval);
+    };
+  }, [activeOrder?._id, paymentCollectedBy, paymentConfirmed, isVerifyingPayment]);
   const [detectedZone, setDetectedZone] = useState(null)
   const hasAssignedZones = assignedZoneIds.length > 0 || assignedZoneNames.length > 0
 
@@ -4921,12 +4954,15 @@ export default function DeliveryHome() {
 
   // Handle Order Delivered button swipe
   const handleOrderDeliveredTouchStart = (e) => {
-    // Check if QR payment is selected but not yet confirmed
+    // BLOCKER: Prevent starting the swipe if QR payment is pending
     if (paymentCollectedBy === 'qr' && !paymentConfirmed) {
-      toast.info('🚀 Please verify the QR payment before confirming delivery', {
+      toast.info('🚀 Payment must be confirmed before you can delivered this order', {
         icon: '💳'
       })
-      // We don't return early here to allow the button to show the 'blocked' state visually
+      // Clear any state and return early to prevent swipe movement
+      setSliderProgressImmediate('orderDelivered', 0, setOrderDeliveredButtonProgress)
+      orderDeliveredIsSwiping.current = false
+      return
     }
 
     orderDeliveredSwipeStartX.current = e.touches[0].clientX
@@ -4937,6 +4973,11 @@ export default function DeliveryHome() {
   }
 
   const handleOrderDeliveredTouchMove = (e) => {
+    // BLOCKER: Prevent swipe movement during interaction
+    if (paymentCollectedBy === 'qr' && !paymentConfirmed) {
+      return
+    }
+
     const deltaX = e.touches[0].clientX - orderDeliveredSwipeStartX.current
     const deltaY = e.touches[0].clientY - orderDeliveredSwipeStartY.current
 
@@ -12225,35 +12266,50 @@ export default function DeliveryHome() {
                     <span className="font-bold text-sm uppercase tracking-tight">Payment Verified</span>
                   </div>
                 ) : (
-                  <button
-                    onClick={async () => {
-                      setIsVerifyingPayment(true)
-                      // Simulated API call to check payment status
-                      setTimeout(() => {
-                        setIsVerifyingPayment(false)
-                        setPaymentConfirmed(true)
-                        toast.success('✨ Payment received successfully!')
-                      }, 2000)
-                    }}
-                    disabled={isVerifyingPayment}
-                    className={`w-full py-3.5 rounded-xl font-bold text-sm uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 ${
-                      isVerifyingPayment 
-                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                        : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200'
-                    }`}
-                  >
-                    {isVerifyingPayment ? (
-                      <>
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        <span>Verifying...</span>
-                      </>
-                    ) : (
-                      <>
-                        <RefreshCw className="w-4 h-4" />
-                        <span>Check Payment Status</span>
-                      </>
-                    )}
-                  </button>
+                   <>
+                    <button
+                      onClick={async () => {
+                        if (isVerifyingPayment) return
+                        setIsVerifyingPayment(true)
+                        try {
+                          const orderId = activeOrder?._id || activeOrder?.id
+                          const response = await deliveryAPI.getOrderDetails(orderId)
+                          const paymentStatus = response?.data?.data?.payment?.status
+                          if (paymentStatus === 'completed') {
+                            setPaymentConfirmed(true)
+                            toast.success('✨ Payment status updated to PAID!')
+                          } else {
+                            toast.error('❌ User hasn\'t paid yet. Refresh and check again.')
+                          }
+                        } catch (err) {
+                          toast.error('Failed to verify payment. Try again.')
+                        } finally {
+                          setIsVerifyingPayment(false)
+                        }
+                      }}
+                      disabled={isVerifyingPayment}
+                      className={`w-full py-3.5 rounded-xl font-bold text-sm uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 ${
+                        isVerifyingPayment 
+                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                          : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200'
+                      }`}
+                    >
+                      {isVerifyingPayment ? (
+                        <>
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          <span>Verifying...</span>
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="w-4 h-4" />
+                          <span>Check Payment Status</span>
+                        </>
+                      )}
+                    </button>
+                    <p className="text-[9px] text-gray-400 text-center mt-2 animate-pulse uppercase tracking-tight">
+                      Polling real-time payment status...
+                    </p>
+                  </>
                 )}
               </div>
             )}
@@ -12414,7 +12470,7 @@ export default function DeliveryHome() {
                     } : { duration: 0 }}
                   >
                     {paymentCollectedBy === 'qr' && !paymentConfirmed
-                      ? 'Verify Payment to Swipe'
+                      ? 'AWAITING QR PAYMENT'
                       : orderDeliveredButtonProgress > 0.5 
                         ? 'Release to Confirm' 
                         : `Delivered (${paymentCollectedBy === 'qr' ? 'QR' : 'Cash'})`
