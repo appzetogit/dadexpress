@@ -258,6 +258,16 @@ export default function HubFinance() {
         })
       })
     }
+
+    // Add past cycles orders
+    if (pastCyclesData?.orders && pastCyclesData.orders.length > 0) {
+      pastCyclesData.orders.forEach(order => {
+        allOrders.push({
+          ...order,
+          cycle: 'Past Cycle'
+        })
+      })
+    }
     
     return {
       restaurantName,
@@ -428,8 +438,8 @@ export default function HubFinance() {
                   const orderDate = order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-IN') : (order.deliveredAt ? new Date(order.deliveredAt).toLocaleDateString('en-IN') : 'N/A')
                   const foodItems = order.foodNames || (order.items && order.items.map(item => item.name).join(', ')) || 'N/A'
                   const itemQuantities = order.items ? order.items.map(item => (item.quantity || 1).toString()).join(', ') : 'N/A'
-                  const orderAmount = order.totalAmount || order.orderTotal || order.amount || 0
-                  const earning = order.payout || order.restaurantEarning || 0
+                  const orderAmount = Number(order.totalAmount || order.orderTotal || order.amount || 0)
+                  const earning = Number(order.payout || order.restaurantEarning || 0)
                   
                   return `
                     <tr>
@@ -509,7 +519,8 @@ export default function HubFinance() {
       // Import html2canvas and jsPDF dynamically
       false && console.log('📦 Loading libraries...')
       const html2canvas = (await import('html2canvas')).default
-      const { default: jsPDF } = await import('jspdf')
+      const jspdfModule = await import('jspdf')
+      const jsPDF = jspdfModule.jsPDF || jspdfModule.default
     
       // Get the body element from iframe
       const iframeBody = iframe.contentDocument.body
@@ -555,16 +566,21 @@ export default function HubFinance() {
         heightLeft -= pageHeight
       }
       
-      // Save PDF or Open in new tab (better for mobile)
+      // Save PDF
       const fileName = `finance-report-${reportData.dateRange.replace(/\s+/g, '-').replace(/'/g, '')}_${new Date().toISOString().split("T")[0]}.pdf`
       
+      // Always use pdf.save() as it's the most reliable way to trigger a download
+      pdf.save(fileName)
+      
+      // On mobile, also try opening in new tab as a fallback/preview
       if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-        // On mobile, opening in new tab is more reliable than direct download
-        const blob = pdf.output('blob')
-        const url = URL.createObjectURL(blob)
-        window.open(url, '_blank')
-      } else {
-        pdf.save(fileName)
+        try {
+          const blob = pdf.output('blob')
+          const url = URL.createObjectURL(blob)
+          window.open(url, '_blank')
+        } catch (e) {
+          console.error("Could not open preview in new tab", e)
+        }
       }
       
       false && console.log('✅ PDF generated successfully!')
