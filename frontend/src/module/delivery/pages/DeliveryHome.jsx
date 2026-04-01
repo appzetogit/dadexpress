@@ -429,7 +429,7 @@ export default function DeliveryHome() {
     return stored ? JSON.parse(stored) : null
   })
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(() => getUnreadDeliveryNotificationCount())
-  const [paymentCollectedBy, setPaymentCollectedBy] = useState("cash")
+  const [paymentCollectedBy, setPaymentCollectedBy] = useState("qr") // Forced QR payment mode for COD by default
   const [paymentConfirmed, setPaymentConfirmed] = useState(false)
   const [isVerifyingPayment, setIsVerifyingPayment] = useState(false)
 
@@ -4954,12 +4954,15 @@ export default function DeliveryHome() {
 
   // Handle Order Delivered button swipe
   const handleOrderDeliveredTouchStart = (e) => {
-    // BLOCKER: Prevent starting the swipe if QR payment is pending
-    if (paymentCollectedBy === 'qr' && !paymentConfirmed) {
-      toast.info('🚀 Payment must be confirmed before you can delivered this order', {
-        icon: '💳'
+    // BLOCKER: MANDATORY QR SCAN ENFORCEMENT
+    // This prevents delivery completion if the QR scan hasn't been successful,
+    // regardless of whether the rider has 'Liquid Cash' or 'QR SCAN' selected.
+    if (!paymentConfirmed) {
+      toast.info('🚀 QR Scan & Payment required to unlock delivery!', {
+        icon: '💳',
+        duration: 4000
       })
-      // Clear any state and return early to prevent swipe movement
+      // Clear any progress and return early
       setSliderProgressImmediate('orderDelivered', 0, setOrderDeliveredButtonProgress)
       orderDeliveredIsSwiping.current = false
       return
@@ -4973,8 +4976,8 @@ export default function DeliveryHome() {
   }
 
   const handleOrderDeliveredTouchMove = (e) => {
-    // BLOCKER: Prevent swipe movement during interaction
-    if (paymentCollectedBy === 'qr' && !paymentConfirmed) {
+    // BLOCKER: Force payment scan before any swipe move is allowed
+    if (!paymentConfirmed) {
       return
     }
 
@@ -5023,10 +5026,10 @@ export default function DeliveryHome() {
     const deltaX = endX - orderDeliveredSwipeStartX.current
     const threshold = maxSwipe * SWIPE_COMPLETE_THRESHOLD // Complete on 50% swipe
 
-    // BLOCKER: Prevent confirmation if QR payment is not verified
-    if (deltaX >= threshold && paymentCollectedBy === 'qr' && !paymentConfirmed) {
+    // BLOCKER: Hard safety check at point of release
+    if (!paymentConfirmed) {
       setSliderProgressImmediate('orderDelivered', 0, setOrderDeliveredButtonProgress)
-      toast.error('❌ Payment verification required!')
+      toast.error('❌ QR scan and payment required!')
       orderDeliveredSwipeStartX.current = 0
       orderDeliveredSwipeStartY.current = 0
       orderDeliveredIsSwiping.current = false
