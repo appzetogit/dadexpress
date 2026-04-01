@@ -30,6 +30,7 @@ import {
   Camera,
   ScanLine,
   XCircle,
+  RefreshCw,
 } from "lucide-react"
 import BottomPopup from "../components/BottomPopup"
 import FeedNavbar from "../components/FeedNavbar"
@@ -429,6 +430,8 @@ export default function DeliveryHome() {
   })
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(() => getUnreadDeliveryNotificationCount())
   const [paymentCollectedBy, setPaymentCollectedBy] = useState("cash")
+  const [paymentConfirmed, setPaymentConfirmed] = useState(false)
+  const [isVerifyingPayment, setIsVerifyingPayment] = useState(false)
 
   // Delivery notifications hook
   const { newOrder, clearNewOrder, orderReady, clearOrderReady, isConnected } = useDeliveryNotificationContext()
@@ -1189,6 +1192,8 @@ export default function DeliveryHome() {
     }
 
     activeMediaOrderKeyRef.current = activeOrderKey
+    setPaymentConfirmed(false)
+    setIsVerifyingPayment(false)
     setPickupImageUrl(null)
     setPickupImageUploaded(false)
     setIsUploadingPickup(false)
@@ -4916,6 +4921,14 @@ export default function DeliveryHome() {
 
   // Handle Order Delivered button swipe
   const handleOrderDeliveredTouchStart = (e) => {
+    // Check if QR payment is selected but not yet confirmed
+    if (paymentCollectedBy === 'qr' && !paymentConfirmed) {
+      toast.info('🚀 Please verify the QR payment before confirming delivery', {
+        icon: '💳'
+      })
+      // We don't return early here to allow the button to show the 'blocked' state visually
+    }
+
     orderDeliveredSwipeStartX.current = e.touches[0].clientX
     orderDeliveredSwipeStartY.current = e.touches[0].clientY
     orderDeliveredIsSwiping.current = false
@@ -4968,6 +4981,16 @@ export default function DeliveryHome() {
     const endX = typeof endTouch?.clientX === 'number' ? endTouch.clientX : fallbackEndX
     const deltaX = endX - orderDeliveredSwipeStartX.current
     const threshold = maxSwipe * SWIPE_COMPLETE_THRESHOLD // Complete on 50% swipe
+
+    // BLOCKER: Prevent confirmation if QR payment is not verified
+    if (deltaX >= threshold && paymentCollectedBy === 'qr' && !paymentConfirmed) {
+      setSliderProgressImmediate('orderDelivered', 0, setOrderDeliveredButtonProgress)
+      toast.error('❌ Payment verification required!')
+      orderDeliveredSwipeStartX.current = 0
+      orderDeliveredSwipeStartY.current = 0
+      orderDeliveredIsSwiping.current = false
+      return
+    }
 
     if (deltaX >= threshold) {
       // Animate to completion
@@ -12193,6 +12216,47 @@ export default function DeliveryHome() {
             <p className="text-[10px] text-gray-400 text-center uppercase tracking-widest font-medium">
               Powered by Razorpay
             </p>
+
+            {paymentCollectedBy === 'qr' && (
+              <div className="mt-2 w-full">
+                {paymentConfirmed ? (
+                  <div className="flex items-center justify-center gap-2 bg-green-50 text-green-700 py-3 rounded-xl border border-green-200">
+                    <CheckCircle className="w-5 h-5" />
+                    <span className="font-bold text-sm uppercase tracking-tight">Payment Verified</span>
+                  </div>
+                ) : (
+                  <button
+                    onClick={async () => {
+                      setIsVerifyingPayment(true)
+                      // Simulated API call to check payment status
+                      setTimeout(() => {
+                        setIsVerifyingPayment(false)
+                        setPaymentConfirmed(true)
+                        toast.success('✨ Payment received successfully!')
+                      }, 2000)
+                    }}
+                    disabled={isVerifyingPayment}
+                    className={`w-full py-3.5 rounded-xl font-bold text-sm uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 ${
+                      isVerifyingPayment 
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                        : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200'
+                    }`}
+                  >
+                    {isVerifyingPayment ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        <span>Verifying...</span>
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="w-4 h-4" />
+                        <span>Check Payment Status</span>
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Payment info: Online = amount paid, COD = collect from customer */}
@@ -12289,7 +12353,11 @@ export default function DeliveryHome() {
           <div className="relative w-full">
             <motion.div
               ref={orderDeliveredButtonRef}
-              className={`relative w-full rounded-full overflow-hidden shadow-xl ${paymentCollectedBy === 'qr' ? 'bg-blue-600' : 'bg-green-600'}`}
+              className={`relative w-full rounded-full overflow-hidden shadow-xl ${
+                (paymentCollectedBy === 'qr' && !paymentConfirmed) 
+                  ? 'bg-amber-500' 
+                  : (paymentCollectedBy === 'qr' ? 'bg-blue-600' : 'bg-green-600')
+              }`}
               style={{ touchAction: 'pan-x' }}
               onTouchStart={handleOrderDeliveredTouchStart}
               onTouchMove={handleOrderDeliveredTouchMove}
@@ -12299,7 +12367,11 @@ export default function DeliveryHome() {
             >
               {/* Swipe progress background */}
               <motion.div
-                className={`absolute inset-0 rounded-full ${paymentCollectedBy === 'qr' ? 'bg-blue-500' : 'bg-green-500'}`}
+                className={`absolute inset-0 rounded-full ${
+                  (paymentCollectedBy === 'qr' && !paymentConfirmed)
+                    ? 'bg-amber-400'
+                    : (paymentCollectedBy === 'qr' ? 'bg-blue-500' : 'bg-green-500')
+                }`}
                 animate={{
                   width: `${orderDeliveredButtonProgress * 100}%`
                 }}
@@ -12341,7 +12413,12 @@ export default function DeliveryHome() {
                       damping: 25
                     } : { duration: 0 }}
                   >
-                    {orderDeliveredButtonProgress > 0.5 ? 'Release to Confirm' : `Delivered (${paymentCollectedBy === 'qr' ? 'QR' : 'Cash'})`}
+                    {paymentCollectedBy === 'qr' && !paymentConfirmed
+                      ? 'Verify Payment to Swipe'
+                      : orderDeliveredButtonProgress > 0.5 
+                        ? 'Release to Confirm' 
+                        : `Delivered (${paymentCollectedBy === 'qr' ? 'QR' : 'Cash'})`
+                    }
                   </motion.span>
                 </div>
               </div>
