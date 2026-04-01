@@ -97,10 +97,10 @@ export default function OrderDetailsPage() {
       const orderTime = new Date(order.timestamp || order.date).getTime()
       const currentTime = new Date().getTime()
       const elapsed = currentTime - orderTime
-      const oneMinute = 60 * 1000 // 60 seconds in milliseconds
+      const twoMinutes = 2 * 60 * 1000 // 2 minutes in milliseconds
 
-      if (elapsed < oneMinute) {
-        const remaining = Math.ceil((oneMinute - elapsed) / 1000)
+      if (elapsed < twoMinutes) {
+        const remaining = Math.ceil((twoMinutes - elapsed) / 1000)
         setRemainingTime(remaining)
         setCanCancelOrEdit(true)
       } else {
@@ -115,23 +115,36 @@ export default function OrderDetailsPage() {
     return () => clearInterval(interval)
   }, [order])
 
-  const handleCancelOrder = () => {
+  const handleCancelOrder = async () => {
     if (!canCancelOrEdit) return
 
     if (window.confirm('Are you sure you want to cancel this order?')) {
-      // Update order status to cancelled
-      const savedOrders = localStorage.getItem('usermain_orders')
-      if (savedOrders) {
-        try {
-          const orders = JSON.parse(savedOrders)
-          const updatedOrders = orders.map(o =>
-            o.id === orderId ? { ...o, status: 'Cancelled' } : o
-          )
-          localStorage.setItem('usermain_orders', JSON.stringify(updatedOrders))
+      try {
+        const response = await import('@/lib/api').then((m) =>
+          m.orderAPI.cancelOrder(orderId, 'Cancelled by user within 2-minute window'),
+        )
+
+        if (response?.data?.success) {
+          // Update order status to cancelled (legacy local storage compatibility)
+          const savedOrders = localStorage.getItem('usermain_orders')
+          if (savedOrders) {
+            try {
+              const orders = JSON.parse(savedOrders)
+              const updatedOrders = orders.map(o =>
+                o.id === orderId ? { ...o, status: 'Cancelled' } : o
+              )
+              localStorage.setItem('usermain_orders', JSON.stringify(updatedOrders))
+            } catch (storageError) {
+              console.error('Error updating local order cache after cancellation:', storageError)
+            }
+          }
           setOrder({ ...order, status: 'Cancelled' })
-        } catch (error) {
-          console.error('Error cancelling order:', error)
+        } else {
+          window.alert(response?.data?.message || 'Failed to cancel order')
         }
+      } catch (error) {
+        console.error('Error cancelling order:', error)
+        window.alert(error?.response?.data?.message || 'Failed to cancel order')
       }
     }
   }

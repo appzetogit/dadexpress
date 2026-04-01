@@ -3,6 +3,7 @@ import { generateOrderId, normalizeOrderId } from '../../../shared/utils/idUtils
 import Payment from '../../payment/models/Payment.js';
 import { createOrder as createRazorpayOrder, verifyPayment } from '../../payment/services/razorpayService.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
+import Offer from '../../restaurant/models/Offer.js';
 import User from '../../auth/models/User.js';
 import Zone from '../../admin/models/Zone.js';
 import mongoose from 'mongoose';
@@ -18,6 +19,7 @@ import etaCalculationService from '../services/etaCalculationService.js';
 import etaWebSocketService from '../services/etaWebSocketService.js';
 import OrderEvent from '../models/OrderEvent.js';
 import UserWallet from '../../user/models/UserWallet.js';
+import { recordCouponUsage } from '../services/couponValidationService.js';
 
 const logger = winston.createLogger({
   level: 'info',
@@ -32,6 +34,7 @@ const logger = winston.createLogger({
 let cachedActiveZones = null;
 let cachedActiveZonesAt = 0;
 const ACTIVE_ZONES_TTL_MS = 30000;
+const USER_CANCEL_WINDOW_MS = 2 * 60 * 1000;
 const toNumber = (value) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
@@ -41,6 +44,51 @@ const isValidCoords = (lat, lng) =>
   Number.isFinite(lng) &&
   Math.abs(lat) <= 90 &&
   Math.abs(lng) <= 180;
+
+const resolveCouponIdForOrder = async (order) => {
+  const couponCode = order?.pricing?.couponCode || order?.pricing?.appliedCoupon?.code;
+  if (!couponCode) return null;
+
+  const directCouponId = order?.pricing?.appliedCoupon?.couponId;
+  if (directCouponId && mongoose.Types.ObjectId.isValid(directCouponId)) {
+    return directCouponId;
+  }
+
+  let restaurantObjectId = null;
+  if (mongoose.Types.ObjectId.isValid(order?.restaurantId)) {
+    restaurantObjectId = order.restaurantId;
+  } else if (order?.restaurantId) {
+    const restaurantDoc = await Restaurant.findOne({ restaurantId: String(order.restaurantId) })
+      .select("_id")
+      .lean();
+    restaurantObjectId = restaurantDoc?._id || null;
+  }
+
+  if (!restaurantObjectId) return null;
+
+  const offer = await Offer.findOne({
+    restaurant: restaurantObjectId,
+    "items.couponCode": couponCode,
+  })
+    .select("_id")
+    .lean();
+
+  return offer?._id?.toString() || null;
+};
+
+const recordCouponUsageForOrder = async ({ order, userId }) => {
+  try {
+    const couponId = await resolveCouponIdForOrder(order);
+    if (!couponId) return;
+    await recordCouponUsage({ userId, couponId });
+  } catch (error) {
+    logger.warn("Failed to record coupon usage mapping", {
+      orderId: order?.orderId,
+      userId,
+      error: error.message,
+    });
+  }
+};
 
 const resolveAddressFromPayload = async (payload, userId) => {
   const deliveryAddressField = payload?.deliveryAddress;
@@ -731,6 +779,7 @@ export const createOrder = async (req, res) => {
           timestamp: new Date()
         };
         await order.save();
+        await recordCouponUsageForOrder({ order, userId });
 
         // Notify restaurant about new wallet payment order
         try {
@@ -810,6 +859,7 @@ export const createOrder = async (req, res) => {
       order.status = 'pending';
       // tracking.confirmed will be set when the restaurant manualy accepts the order
       await order.save();
+      await recordCouponUsageForOrder({ order, userId });
 
       // Calculate order settlement and hold escrow for COD orders too
       try {
@@ -1036,6 +1086,7 @@ export const verifyOrderPayment = async (req, res) => {
     order.status = 'pending';
     // tracking.confirmed will be set when the restaurant manualy accepts the order
     await order.save();
+    await recordCouponUsageForOrder({ order, userId });
 
     // Calculate order settlement and hold escrow
     try {
@@ -1572,6 +1623,16 @@ export const cancelOrder = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Order not found'
+      });
+    }
+
+    // Allow user cancellation only within 2 minutes of order placement
+    const orderCreatedAtMs = order?.createdAt ? new Date(order.createdAt).getTime() : NaN;
+    const elapsedMs = Date.now() - orderCreatedAtMs;
+    if (!Number.isFinite(orderCreatedAtMs) || elapsedMs > USER_CANCEL_WINDOW_MS) {
+      return res.status(400).json({
+        success: false,
+        message: 'Order can only be cancelled within 2 minutes of placement'
       });
     }
 

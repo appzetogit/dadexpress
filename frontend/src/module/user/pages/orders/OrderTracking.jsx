@@ -76,6 +76,7 @@ const AnimatedCheckmark = ({ delay = 0 }) => (
 
 const RESTAURANT_REJECTION_REASON_PATTERN =
   "rejected by restaurant|restaurant rejected|restaurant cancelled|restaurant is too busy|item not available|outside delivery area|kitchen closing|technical issue|order not accepted within time limit|restaurant did not respond"
+const USER_CANCEL_WINDOW_MS = 2 * 60 * 1000
 
 const isRestaurantRejectedCancellation = (orderData) => {
   if (!orderData) return false
@@ -352,27 +353,24 @@ export default function OrderTracking() {
     window.location.href = `tel:${phone}`
   }
 
-  const isAdminAccepted = useMemo(() => {
-    const status = order?.status
-    return ['confirmed', 'preparing', 'ready'].includes(status)
+  const isCancellationEligible = useMemo(() => {
+    const status = String(order?.status || "").toLowerCase()
+    return status !== "cancelled" && status !== "canceled" && status !== "delivered"
   }, [order?.status])
 
-  const acceptedAtMs = useMemo(() => {
+  const orderPlacedAtMs = useMemo(() => {
     const timestamp =
-      order?.tracking?.confirmed?.timestamp ||
-      order?.tracking?.preparing?.timestamp ||
-      order?.updatedAt ||
       order?.createdAt
 
     const parsed = timestamp ? new Date(timestamp).getTime() : NaN
     return Number.isFinite(parsed) ? parsed : null
-  }, [order?.tracking?.confirmed?.timestamp, order?.tracking?.preparing?.timestamp, order?.updatedAt, order?.createdAt])
+  }, [order?.createdAt])
 
   const editWindowRemainingMs = useMemo(() => {
-    if (!isAdminAccepted || !acceptedAtMs) return 0
-    const remaining = 60000 - (timerNow - acceptedAtMs)
+    if (!isCancellationEligible || !orderPlacedAtMs) return 0
+    const remaining = USER_CANCEL_WINDOW_MS - (timerNow - orderPlacedAtMs)
     return Math.max(0, remaining)
-  }, [isAdminAccepted, acceptedAtMs, timerNow])
+  }, [isCancellationEligible, orderPlacedAtMs, timerNow])
 
   const isEditWindowOpen = editWindowRemainingMs > 0
 
@@ -926,8 +924,13 @@ export default function OrderTracking() {
   }, [])
 
   const handleCancelOrder = () => {
-    // Check if order can be cancelled (only Razorpay orders that aren't delivered/cancelled)
+    // Check if order can be cancelled
     if (!order) return;
+
+    if (!isEditWindowOpen) {
+      toast.error('Order can only be cancelled within 2 minutes of placement');
+      return;
+    }
 
     if (order.status === 'cancelled') {
       toast.error('Order is already cancelled');
@@ -946,6 +949,11 @@ export default function OrderTracking() {
   };
 
   const handleConfirmCancel = async () => {
+    if (!isEditWindowOpen) {
+      toast.error('Order can only be cancelled within 2 minutes of placement');
+      return;
+    }
+
     if (!cancellationReason.trim()) {
       toast.error('Please provide a reason for cancellation');
       return;
@@ -1507,8 +1515,8 @@ export default function OrderTracking() {
 
       {/* Scrollable Content */}
       <div className="max-w-4xl mx-auto px-4 md:px-6 lg:px-8 py-4 md:py-6 space-y-4 md:space-y-6 pb-24 md:pb-32">
-        {/* 1-minute cancellation window after admin acceptance */}
-        {isAdminAccepted && (
+        {/* 2-minute cancellation window after order placement */}
+        {isCancellationEligible && (
           <motion.div
             className="bg-white rounded-xl p-4 shadow-sm border border-orange-100"
             initial={{ opacity: 0, y: 20 }}
@@ -1524,7 +1532,7 @@ export default function OrderTracking() {
               </span>
             </div>
             <p className="text-xs text-gray-500 mt-1">
-              Available for 1 minute after admin acceptance.
+              Available for 2 minutes after order placement.
             </p>
             <div className="mt-3">
               <Button
