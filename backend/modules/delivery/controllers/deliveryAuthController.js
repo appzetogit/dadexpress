@@ -67,7 +67,7 @@ export const sendOTP = asyncHandler(async (req, res) => {
     const normalizedPhone = normalizePhoneNumber(phone);
 
     // Default OTP for specific number (Requested by USER)
-    if (normalizedPhone === '919993911855') {
+    if (normalizedPhone === '919009925021') {
       return successResponse(res, 200, 'OTP sent successfully to phone', {
         expiresIn: 300,
         identifierType: 'phone'
@@ -101,7 +101,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
   phone = normalizePhoneNumber(phone);
 
   // Default OTP for specific number (Requested by USER)
-  const isDefaultOTP = (phone === '919993911855' && (otp === '123123' || otp === '123456'));
+  const isDefaultOTP = (phone === '919009925021' && otp === '123456');
 
   // Normalize name - convert null/undefined to empty string for optional field
   const normalizedName = name && typeof name === 'string' ? name.trim() : null;

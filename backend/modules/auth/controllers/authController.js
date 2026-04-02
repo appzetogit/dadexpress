@@ -653,7 +653,7 @@ export const register = asyncHandler(async (req, res) => {
       referee: user._id,
       status: 'pending',
       expiryDate
-    });
+    }); 
   }
 
   // Generate tokens
