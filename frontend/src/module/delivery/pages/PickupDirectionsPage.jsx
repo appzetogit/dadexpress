@@ -136,8 +136,22 @@ export default function PickupDirectionsPage() {
     }
   }, [acceptedRestaurants, riderLocation])
 
+  const normalizePhoneNumber = (value) => {
+    if (value === null || value === undefined) return ""
+    const text = String(value).trim()
+    if (!text) return ""
+    const digits = text.replace(/\D/g, "")
+    if (!digits) return ""
+    if (digits.length > 10 && digits.startsWith("91")) {
+      return digits.slice(-10)
+    }
+    return digits
+  }
+
   const handleCall = (phoneNumber) => {
-    window.location.href = `tel:${phoneNumber}`
+    const cleanPhone = normalizePhoneNumber(phoneNumber)
+    if (!cleanPhone) return
+    window.location.href = `tel:${cleanPhone}`
   }
 
   const handleOpenMap = (lat, lng, address) => {
@@ -793,4 +807,3 @@ export default function PickupDirectionsPage() {
     </motion.div>
   )
 }
-

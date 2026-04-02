@@ -4753,7 +4753,12 @@ export default function DeliveryHome() {
     if (value === null || value === undefined) return ''
     const text = String(value).trim()
     if (!text) return ''
-    return text.replace(/[^\d+]/g, '')
+    const digits = text.replace(/\D/g, '')
+    if (!digits) return ''
+    if (digits.length > 10 && digits.startsWith('91')) {
+      return digits.slice(-10)
+    }
+    return digits
   }
 
   const normalizeEntityId = (value) => {
@@ -11429,8 +11434,11 @@ export default function DeliveryHome() {
                 }
 
                 if (restaurantPhone) {
-                  // Remove any spaces, dashes, or special characters except + and digits
-                  const cleanPhone = restaurantPhone.replace(/[^\d+]/g, '')
+                  const cleanPhone = normalizePhoneNumber(restaurantPhone)
+                  if (!cleanPhone) {
+                    toast.error('Restaurant phone number not available. Please contact support.')
+                    return
+                  }
                   false && console.log('📞 Calling restaurant:', { original: restaurantPhone, clean: cleanPhone })
                   window.location.href = `tel:${cleanPhone}`
                 } else {
@@ -12738,5 +12746,7 @@ export default function DeliveryHome() {
     </div>
   )
 }
+
+
 
 

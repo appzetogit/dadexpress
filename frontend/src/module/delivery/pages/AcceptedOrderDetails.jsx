@@ -233,7 +233,12 @@ export default function AcceptedOrderDetails() {
     if (value === null || value === undefined) return ""
     const text = String(value).trim()
     if (!text) return ""
-    return text.replace(/[^\d+]/g, "")
+    const digits = text.replace(/\D/g, "")
+    if (!digits) return ""
+    if (digits.length > 10 && digits.startsWith("91")) {
+      return digits.slice(-10)
+    }
+    return digits
   }
 
   const toValidCoord = (value) => {
@@ -798,5 +803,4 @@ export default function AcceptedOrderDetails() {
     </div>
   )
 }
-
 
