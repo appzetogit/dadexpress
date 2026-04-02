@@ -30,6 +30,7 @@ import {
   Camera,
   ScanLine,
   XCircle,
+  RefreshCw,
 } from "lucide-react"
 import BottomPopup from "../components/BottomPopup"
 import FeedNavbar from "../components/FeedNavbar"
@@ -428,7 +429,9 @@ export default function DeliveryHome() {
     return stored ? JSON.parse(stored) : null
   })
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(() => getUnreadDeliveryNotificationCount())
-  const [paymentCollectedBy, setPaymentCollectedBy] = useState("cash")
+  const [paymentCollectedBy, setPaymentCollectedBy] = useState("qr") // Forced QR payment mode for COD by default
+  const [paymentConfirmed, setPaymentConfirmed] = useState(false)
+  const [isVerifyingPayment, setIsVerifyingPayment] = useState(false)
 
   // Delivery notifications hook
   const { newOrder, clearNewOrder, orderReady, clearOrderReady, isConnected } = useDeliveryNotificationContext()
@@ -445,6 +448,39 @@ export default function DeliveryHome() {
   const [assignedZoneNames, setAssignedZoneNames] = useState([])
   const [currentZone, setCurrentZone] = useState(null)
   const [isOutOfZone, setIsOutOfZone] = useState(false)
+
+  // Polling for QR payment status
+  useEffect(() => {
+    let pollInterval;
+    const checkOrderPaymentStatus = async (orderId) => {
+      try {
+        const response = await deliveryAPI.getOrderDetails(orderId);
+        const paymentStatus = response?.data?.data?.payment?.status;
+        if (paymentStatus === 'completed') {
+          setPaymentConfirmed(true);
+          toast.success('✨ QR Payment verified successfully!', { duration: 5000 });
+          return true;
+        }
+        return false;
+      } catch (err) {
+        console.error('Failed to poll payment status', err);
+        return false;
+      }
+    };
+
+    if (activeOrder?._id && paymentCollectedBy === 'qr' && !paymentConfirmed) {
+      // Don't poll if we're already verifying
+      if (!isVerifyingPayment) {
+        pollInterval = setInterval(() => {
+          checkOrderPaymentStatus(activeOrder._id);
+        }, 5000); // Check every 5 seconds
+      }
+    }
+
+    return () => {
+      if (pollInterval) clearInterval(pollInterval);
+    };
+  }, [activeOrder?._id, paymentCollectedBy, paymentConfirmed, isVerifyingPayment]);
   const [detectedZone, setDetectedZone] = useState(null)
   const hasAssignedZones = assignedZoneIds.length > 0 || assignedZoneNames.length > 0
 
@@ -1189,6 +1225,8 @@ export default function DeliveryHome() {
     }
 
     activeMediaOrderKeyRef.current = activeOrderKey
+    setPaymentConfirmed(false)
+    setIsVerifyingPayment(false)
     setPickupImageUrl(null)
     setPickupImageUploaded(false)
     setIsUploadingPickup(false)
@@ -4916,6 +4954,19 @@ export default function DeliveryHome() {
 
   // Handle Order Delivered button swipe
   const handleOrderDeliveredTouchStart = (e) => {
+    // BLOCKER: Only block if QR mode is selected and payment is not confirmed.
+    // If rider selects 'CASH', swipe is allowed immediately as requested.
+    if (paymentCollectedBy === 'qr' && !paymentConfirmed) {
+      toast.info('🚀 QR Scan & Payment required to deliver in QR mode!', {
+        icon: '💳',
+        duration: 4000
+      })
+      // Clear any progress and return early
+      setSliderProgressImmediate('orderDelivered', 0, setOrderDeliveredButtonProgress)
+      orderDeliveredIsSwiping.current = false
+      return
+    }
+
     orderDeliveredSwipeStartX.current = e.touches[0].clientX
     orderDeliveredSwipeStartY.current = e.touches[0].clientY
     orderDeliveredIsSwiping.current = false
@@ -4924,6 +4975,11 @@ export default function DeliveryHome() {
   }
 
   const handleOrderDeliveredTouchMove = (e) => {
+    // BLOCKER: Only prevent movement if QR mode is selected and unpaid
+    if (paymentCollectedBy === 'qr' && !paymentConfirmed) {
+      return
+    }
+
     const deltaX = e.touches[0].clientX - orderDeliveredSwipeStartX.current
     const deltaY = e.touches[0].clientY - orderDeliveredSwipeStartY.current
 
@@ -4968,6 +5024,16 @@ export default function DeliveryHome() {
     const endX = typeof endTouch?.clientX === 'number' ? endTouch.clientX : fallbackEndX
     const deltaX = endX - orderDeliveredSwipeStartX.current
     const threshold = maxSwipe * SWIPE_COMPLETE_THRESHOLD // Complete on 50% swipe
+
+    // BLOCKER: Prevent confirmation if QR payment is not verified
+    if (deltaX >= threshold && paymentCollectedBy === 'qr' && !paymentConfirmed) {
+      setSliderProgressImmediate('orderDelivered', 0, setOrderDeliveredButtonProgress)
+      toast.error('❌ QR Payment verification required!')
+      orderDeliveredSwipeStartX.current = 0
+      orderDeliveredSwipeStartY.current = 0
+      orderDeliveredIsSwiping.current = false
+      return
+    }
 
     if (deltaX >= threshold) {
       // Animate to completion
@@ -12193,6 +12259,62 @@ export default function DeliveryHome() {
             <p className="text-[10px] text-gray-400 text-center uppercase tracking-widest font-medium">
               Powered by Razorpay
             </p>
+
+            {paymentCollectedBy === 'qr' && (
+              <div className="mt-2 w-full">
+                {paymentConfirmed ? (
+                  <div className="flex items-center justify-center gap-2 bg-green-50 text-green-700 py-3 rounded-xl border border-green-200">
+                    <CheckCircle className="w-5 h-5" />
+                    <span className="font-bold text-sm uppercase tracking-tight">Payment Verified</span>
+                  </div>
+                ) : (
+                   <>
+                    <button
+                      onClick={async () => {
+                        if (isVerifyingPayment) return
+                        setIsVerifyingPayment(true)
+                        try {
+                          const orderId = activeOrder?._id || activeOrder?.id
+                          const response = await deliveryAPI.getOrderDetails(orderId)
+                          const paymentStatus = response?.data?.data?.payment?.status
+                          if (paymentStatus === 'completed') {
+                            setPaymentConfirmed(true)
+                            toast.success('✨ Payment status updated to PAID!')
+                          } else {
+                            toast.error('❌ User hasn\'t paid yet. Refresh and check again.')
+                          }
+                        } catch (err) {
+                          toast.error('Failed to verify payment. Try again.')
+                        } finally {
+                          setIsVerifyingPayment(false)
+                        }
+                      }}
+                      disabled={isVerifyingPayment}
+                      className={`w-full py-3.5 rounded-xl font-bold text-sm uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 ${
+                        isVerifyingPayment 
+                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                          : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200'
+                      }`}
+                    >
+                      {isVerifyingPayment ? (
+                        <>
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          <span>Verifying...</span>
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="w-4 h-4" />
+                          <span>Check Payment Status</span>
+                        </>
+                      )}
+                    </button>
+                    <p className="text-[9px] text-gray-400 text-center mt-2 animate-pulse uppercase tracking-tight">
+                      Polling real-time payment status...
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Payment info: Online = amount paid, COD = collect from customer */}
@@ -12289,7 +12411,11 @@ export default function DeliveryHome() {
           <div className="relative w-full">
             <motion.div
               ref={orderDeliveredButtonRef}
-              className={`relative w-full rounded-full overflow-hidden shadow-xl ${paymentCollectedBy === 'qr' ? 'bg-blue-600' : 'bg-green-600'}`}
+              className={`relative w-full rounded-full overflow-hidden shadow-xl ${
+                (paymentCollectedBy === 'qr' && !paymentConfirmed) 
+                  ? 'bg-amber-500' 
+                  : (paymentCollectedBy === 'qr' ? 'bg-blue-600' : 'bg-green-600')
+              }`}
               style={{ touchAction: 'pan-x' }}
               onTouchStart={handleOrderDeliveredTouchStart}
               onTouchMove={handleOrderDeliveredTouchMove}
@@ -12299,7 +12425,11 @@ export default function DeliveryHome() {
             >
               {/* Swipe progress background */}
               <motion.div
-                className={`absolute inset-0 rounded-full ${paymentCollectedBy === 'qr' ? 'bg-blue-500' : 'bg-green-500'}`}
+                className={`absolute inset-0 rounded-full ${
+                  (paymentCollectedBy === 'qr' && !paymentConfirmed)
+                    ? 'bg-amber-400'
+                    : (paymentCollectedBy === 'qr' ? 'bg-blue-500' : 'bg-green-500')
+                }`}
                 animate={{
                   width: `${orderDeliveredButtonProgress * 100}%`
                 }}
@@ -12341,7 +12471,12 @@ export default function DeliveryHome() {
                       damping: 25
                     } : { duration: 0 }}
                   >
-                    {orderDeliveredButtonProgress > 0.5 ? 'Release to Confirm' : `Delivered (${paymentCollectedBy === 'qr' ? 'QR' : 'Cash'})`}
+                    {paymentCollectedBy === 'qr' && !paymentConfirmed
+                      ? 'AWAITING QR PAYMENT'
+                      : orderDeliveredButtonProgress > 0.5 
+                        ? 'Release to Confirm' 
+                        : `Delivered (${paymentCollectedBy === 'qr' ? 'QR' : 'Cash'})`
+                    }
                   </motion.span>
                 </div>
               </div>
