@@ -814,8 +814,11 @@ export const acceptOrder = asyncHandler(async (req, res) => {
     let updatedOrder;
     try {
       console.log(`💾 Updating order in database...`);
-      updatedOrder = await Order.findByIdAndUpdate(
-        orderMongoId,
+      updatedOrder = await Order.findOneAndUpdate(
+        {
+          _id: orderMongoId,
+          deliveryPartnerId: delivery._id
+        },
         {
           $set: {
             'deliveryState.status': 'accepted',
@@ -831,6 +834,12 @@ export const acceptOrder = asyncHandler(async (req, res) => {
         .lean();
 
       if (!updatedOrder) {
+        const latestOrder = await Order.findById(orderMongoId).select('deliveryPartnerId orderId').lean();
+        const latestAssignedId = latestOrder?.deliveryPartnerId?.toString();
+        if (latestAssignedId && latestAssignedId !== currentDeliveryId) {
+          console.warn(`⚠️ Order ${orderMongoId} is now assigned to another delivery partner ${latestAssignedId}`);
+          return errorResponse(res, 409, 'Order was accepted by another delivery partner');
+        }
         console.error(`❌ Order ${orderMongoId} not found after update attempt`);
         return errorResponse(res, 404, 'Order not found');
       }
@@ -2514,5 +2523,4 @@ export const completeDelivery = asyncHandler(async (req, res) => {
     return errorResponse(res, 500, `Failed to complete delivery: ${error.message}`);
   }
 });
-
 
