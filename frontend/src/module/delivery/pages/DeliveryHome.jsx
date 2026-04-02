@@ -432,6 +432,7 @@ export default function DeliveryHome() {
   const [paymentCollectedBy, setPaymentCollectedBy] = useState("qr") // Forced QR payment mode for COD by default
   const [paymentConfirmed, setPaymentConfirmed] = useState(false)
   const [isVerifyingPayment, setIsVerifyingPayment] = useState(false)
+  const [selectedRestaurant, setSelectedRestaurant] = useState(null)
 
   // Delivery notifications hook
   const { newOrder, clearNewOrder, orderReady, clearOrderReady, isConnected } = useDeliveryNotificationContext()
@@ -674,7 +675,7 @@ export default function DeliveryHome() {
 
     return hotspots
   })
-  const [selectedRestaurant, setSelectedRestaurant] = useState(null)
+
   const [isRefreshingPickupDetails, setIsRefreshingPickupDetails] = useState(false)
   const lastAutoPickupRefreshOrderRef = useRef(null)
   const [bottomSheetExpanded, setBottomSheetExpanded] = useState(false)
