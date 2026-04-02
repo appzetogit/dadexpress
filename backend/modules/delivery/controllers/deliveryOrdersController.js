@@ -76,9 +76,13 @@ export const getOrders = asyncHandler(async (req, res) => {
     const conditions = [];
 
     if (isDiscoverMode) {
-      // Get all restaurants in the delivery partner's zones
+      // Get all restaurants in the delivery partner's zones (legacy)
       let validRestaurantIds = [];
+      let validZoneIds = [];
+
       if (delivery.availability?.zones && delivery.availability.zones.length > 0) {
+        validZoneIds = delivery.availability.zones.map(z => z?.toString()).filter(Boolean);
+
         const zones = await Zone.find({
           _id: { $in: delivery.availability.zones },
           isActive: true
@@ -89,29 +93,51 @@ export const getOrders = asyncHandler(async (req, res) => {
           .map(z => z.restaurantId.toString());
       } else if (delivery.zoneId) {
         // Fallback for single zoneId field just in case
+        validZoneIds = [delivery.zoneId?.toString()].filter(Boolean);
         const zone = await Zone.findById(delivery.zoneId).select('restaurantId').lean();
         if (zone && zone.restaurantId && zone.isActive) {
           validRestaurantIds = [zone.restaurantId.toString()];
         }
       }
 
+      const hasZoneMatch = validZoneIds.length > 0;
+      const hasRestaurantMatch = validRestaurantIds.length > 0;
+
       // Build the base condition for discover mode
-      if (validRestaurantIds.length > 0) {
-        conditions.push({
+      if (hasZoneMatch || hasRestaurantMatch) {
+        const discoverOr = [];
+
+        // Always include already-assigned orders
+        discoverOr.push({ deliveryPartnerId: delivery._id });
+
+        // Include unassigned orders in allowed zones/restaurants
+        const unassignedCondition = {
           $or: [
-            { deliveryPartnerId: delivery._id },
-            {
-              $or: [
-                { deliveryPartnerId: null },
-                { deliveryPartnerId: { $exists: false } }
-              ],
-              status: { $in: ['pending', 'confirmed', 'preparing', 'ready'] },
-              restaurantId: { $in: validRestaurantIds }
-            }
-          ]
-        });
+            { deliveryPartnerId: null },
+            { deliveryPartnerId: { $exists: false } }
+          ],
+          status: { $in: ['pending', 'confirmed', 'preparing', 'ready'] }
+        };
+
+        // Zone-based match (new primary path)
+        if (hasZoneMatch) {
+          discoverOr.push({
+            ...unassignedCondition,
+            'assignmentInfo.zoneId': { $in: validZoneIds }
+          });
+        }
+
+        // Restaurant-based match (legacy fallback)
+        if (hasRestaurantMatch) {
+          discoverOr.push({
+            ...unassignedCondition,
+            restaurantId: { $in: validRestaurantIds }
+          });
+        }
+
+        conditions.push({ $or: discoverOr });
       } else {
-        // No zones = only their assigned orders
+        // No zones configured = only their assigned orders
         conditions.push({ deliveryPartnerId: delivery._id });
       }
     } else {
@@ -788,8 +814,11 @@ export const acceptOrder = asyncHandler(async (req, res) => {
     let updatedOrder;
     try {
       console.log(`💾 Updating order in database...`);
-      updatedOrder = await Order.findByIdAndUpdate(
-        orderMongoId,
+      updatedOrder = await Order.findOneAndUpdate(
+        {
+          _id: orderMongoId,
+          deliveryPartnerId: delivery._id
+        },
         {
           $set: {
             'deliveryState.status': 'accepted',
@@ -805,6 +834,12 @@ export const acceptOrder = asyncHandler(async (req, res) => {
         .lean();
 
       if (!updatedOrder) {
+        const latestOrder = await Order.findById(orderMongoId).select('deliveryPartnerId orderId').lean();
+        const latestAssignedId = latestOrder?.deliveryPartnerId?.toString();
+        if (latestAssignedId && latestAssignedId !== currentDeliveryId) {
+          console.warn(`⚠️ Order ${orderMongoId} is now assigned to another delivery partner ${latestAssignedId}`);
+          return errorResponse(res, 409, 'Order was accepted by another delivery partner');
+        }
         console.error(`❌ Order ${orderMongoId} not found after update attempt`);
         return errorResponse(res, 404, 'Order not found');
       }
@@ -2488,6 +2523,4 @@ export const completeDelivery = asyncHandler(async (req, res) => {
     return errorResponse(res, 500, `Failed to complete delivery: ${error.message}`);
   }
 });
-
-
 

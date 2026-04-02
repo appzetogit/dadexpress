@@ -4753,7 +4753,12 @@ export default function DeliveryHome() {
     if (value === null || value === undefined) return ''
     const text = String(value).trim()
     if (!text) return ''
-    return text.replace(/[^\d+]/g, '')
+    const digits = text.replace(/\D/g, '')
+    if (!digits) return ''
+    if (digits.length > 10 && digits.startsWith('91')) {
+      return digits.slice(-10)
+    }
+    return digits
   }
 
   const normalizeEntityId = (value) => {
@@ -7646,7 +7651,7 @@ export default function DeliveryHome() {
 
         // Verify order still exists in database before restoring
         try {
-          false && console.log('🔍 Verifying order exists in database:', orderId);
+          false && console.log('🔍 Verifying order exists in dataBonus:', orderId);
           const orderResponse = await deliveryAPI.getOrderDetails(orderId);
 
           if (!orderResponse.data?.success || !orderResponse.data?.data) {
@@ -10867,7 +10872,7 @@ export default function DeliveryHome() {
                               <div className="bg-green-50 rounded-lg p-3 mb-2">
                                 <p className="text-green-800 text-xs font-medium mb-1">Earnings Breakdown:</p>
                                 <p className="text-green-700 text-xs">
-                                  Base: ₹{earnings.basePayout?.toFixed(0) || '0'}
+                                  Bonus: ₹{earnings.basePayout?.toFixed(0) || '0'}
                                   {earnings.distanceCommission > 0 && (
                                     <> + Distance ({earnings.distance?.toFixed(1)} km × ₹{earnings.commissionPerKm?.toFixed(0)}/km) = ₹{earnings.distanceCommission?.toFixed(0)}</>
                                   )}
@@ -11429,8 +11434,11 @@ export default function DeliveryHome() {
                 }
 
                 if (restaurantPhone) {
-                  // Remove any spaces, dashes, or special characters except + and digits
-                  const cleanPhone = restaurantPhone.replace(/[^\d+]/g, '')
+                  const cleanPhone = normalizePhoneNumber(restaurantPhone)
+                  if (!cleanPhone) {
+                    toast.error('Restaurant phone number not available. Please contact support.')
+                    return
+                  }
                   false && console.log('📞 Calling restaurant:', { original: restaurantPhone, clean: cleanPhone })
                   window.location.href = `tel:${cleanPhone}`
                 } else {
@@ -12738,4 +12746,7 @@ export default function DeliveryHome() {
     </div>
   )
 }
+
+
+
 
