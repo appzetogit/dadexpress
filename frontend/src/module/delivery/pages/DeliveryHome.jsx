@@ -453,10 +453,14 @@ export default function DeliveryHome() {
   useEffect(() => {
     let pollInterval;
     const checkOrderPaymentStatus = async (orderId) => {
+      if (!orderId) return false;
       try {
         const response = await deliveryAPI.getOrderDetails(orderId);
-        const paymentStatus = response?.data?.data?.payment?.status;
-        if (paymentStatus === 'completed') {
+        const paymentData = response?.data?.data?.payment || response?.data?.payment;
+        const paymentStatus = (paymentData?.status || "").toLowerCase();
+        
+        // Accept multiple success statuses to be robust
+        if (paymentStatus === 'completed' || paymentStatus === 'paid' || paymentStatus === 'success') {
           setPaymentConfirmed(true);
           toast.success('✨ QR Payment verified successfully!', { duration: 5000 });
           return true;
@@ -468,11 +472,13 @@ export default function DeliveryHome() {
       }
     };
 
-    if (activeOrder?._id && paymentCollectedBy === 'qr' && !paymentConfirmed) {
+    const currentOrderId = selectedRestaurant?.id || selectedRestaurant?.orderMongoId || activeOrder?._id || activeOrder?.id;
+
+    if (currentOrderId && paymentCollectedBy === 'qr' && !paymentConfirmed) {
       // Don't poll if we're already verifying
       if (!isVerifyingPayment) {
         pollInterval = setInterval(() => {
-          checkOrderPaymentStatus(activeOrder._id);
+          checkOrderPaymentStatus(currentOrderId);
         }, 5000); // Check every 5 seconds
       }
     }
@@ -480,7 +486,7 @@ export default function DeliveryHome() {
     return () => {
       if (pollInterval) clearInterval(pollInterval);
     };
-  }, [activeOrder?._id, paymentCollectedBy, paymentConfirmed, isVerifyingPayment]);
+  }, [selectedRestaurant?.id, selectedRestaurant?.orderMongoId, activeOrder?._id, paymentCollectedBy, paymentConfirmed, isVerifyingPayment]);
   const [detectedZone, setDetectedZone] = useState(null)
   const hasAssignedZones = assignedZoneIds.length > 0 || assignedZoneNames.length > 0
 
@@ -12280,18 +12286,26 @@ export default function DeliveryHome() {
                     <button
                       onClick={async () => {
                         if (isVerifyingPayment) return
+                        const orderId = selectedRestaurant?.id || selectedRestaurant?.orderMongoId || activeOrder?._id || activeOrder?.id
+                        if (!orderId) {
+                          toast.error('Order ID not found')
+                          return
+                        }
+                        
                         setIsVerifyingPayment(true)
                         try {
-                          const orderId = activeOrder?._id || activeOrder?.id
                           const response = await deliveryAPI.getOrderDetails(orderId)
-                          const paymentStatus = response?.data?.data?.payment?.status
-                          if (paymentStatus === 'completed') {
+                          const paymentData = response?.data?.data?.payment || response?.data?.payment
+                          const paymentStatus = (paymentData?.status || "").toLowerCase()
+                          
+                          if (paymentStatus === 'completed' || paymentStatus === 'paid' || paymentStatus === 'success') {
                             setPaymentConfirmed(true)
                             toast.success('✨ Payment status updated to PAID!')
                           } else {
                             toast.error('❌ User hasn\'t paid yet. Refresh and check again.')
                           }
                         } catch (err) {
+                          console.error('Manual verification failed:', err)
                           toast.error('Failed to verify payment. Try again.')
                         } finally {
                           setIsVerifyingPayment(false)
