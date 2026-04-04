@@ -24,7 +24,8 @@ import {
   UtensilsCrossed,
   Gift as ReferralIcon,
   Coins,
-  MessageCircle
+  MessageCircle,
+  Headphones as HeadphonesIcon
 } from "lucide-react"
 
 import AnimatedPage from "../../components/AnimatedPage"
@@ -417,7 +418,7 @@ export default function Profile() {
             </motion.div>
           </Link>
 
-          <Link to="/user/support-chat" className="block">
+          <Link to="/user/profile/contact-support" className="block">
             <motion.div
               whileHover={{ x: 4, scale: 1.01 }}
               transition={{ duration: 0.2, type: "spring", stiffness: 300 }}
@@ -430,9 +431,9 @@ export default function Profile() {
                       whileHover={{ rotate: 15, scale: 1.1 }}
                       transition={{ duration: 0.3 }}
                     >
-                      <MessageCircle className="h-5 w-5 text-gray-700 dark:text-gray-300" />
+                      <HeadphonesIcon className="h-5 w-5 text-gray-700 dark:text-gray-300" />
                     </motion.div>
-                    <span className="text-base font-medium text-gray-900 dark:text-white">Chat</span>
+                    <span className="text-base font-medium text-gray-900 dark:text-white">Contact Support</span>
                   </div>
                   <motion.div
                     whileHover={{ x: 4 }}
