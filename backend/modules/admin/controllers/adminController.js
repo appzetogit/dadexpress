@@ -2170,6 +2170,7 @@ export const updateRestaurant = asyncHandler(async (req, res) => {
       featuredDish,
       featuredPrice,
       offer,
+      rating,
       diningSettings,
     } = req.body;
 
@@ -2328,6 +2329,14 @@ export const updateRestaurant = asyncHandler(async (req, res) => {
     if (featuredDish !== undefined) restaurant.featuredDish = featuredDish;
     if (featuredPrice !== undefined) restaurant.featuredPrice = parseFloat(featuredPrice) || restaurant.featuredPrice;
     if (offer !== undefined) restaurant.offer = offer;
+    if (rating !== undefined) {
+      const parsedRating = Number(rating);
+      // Admin rating is constrained to 0-5. Keep it an integer for consistent star UI.
+      const clampedRating = Number.isFinite(parsedRating)
+        ? Math.max(0, Math.min(5, Math.round(parsedRating)))
+        : 0;
+      restaurant.rating = clampedRating;
+    }
     if (diningSettings !== undefined) restaurant.diningSettings = { ...restaurant.diningSettings, ...diningSettings };
 
     // Sync onboarding fields

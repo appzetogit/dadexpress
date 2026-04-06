@@ -19,6 +19,7 @@ export default function RestaurantsList() {
   const [selectedRestaurant, setSelectedRestaurant] = useState(null)
   const [restaurantDetails, setRestaurantDetails] = useState(null)
   const [loadingDetails, setLoadingDetails] = useState(false)
+  const [updatingRating, setUpdatingRating] = useState(false)
   const [banConfirmDialog, setBanConfirmDialog] = useState(null) // { restaurant, action: 'ban' | 'unban' }
   const [banning, setBanning] = useState(false)
   const [deleteConfirmDialog, setDeleteConfirmDialog] = useState(null) // { restaurant }
@@ -98,7 +99,8 @@ export default function RestaurantsList() {
               ? restaurant.cuisines[0]
               : (restaurant.cuisine || "N/A"),
             status: restaurant.isActive !== false, // Default to true if not set
-            rating: restaurant.ratings?.average || restaurant.rating || 0,
+            // Prefer admin-set rating when available, fallback to computed average ratings.
+            rating: (Number(restaurant.rating || 0) > 0 ? Number(restaurant.rating || 0) : Number(restaurant.ratings?.average || 0)) || 0,
             logo: restaurant.profileImage?.url || restaurant.logo || "https://via.placeholder.com/40",
             // Preserve original restaurant data for details modal
             originalData: restaurant,
@@ -257,7 +259,50 @@ export default function RestaurantsList() {
   };
 
   const renderStars = (rating) => {
-    return "★".repeat(rating) + "☆".repeat(5 - rating)
+    const normalized = Math.max(0, Math.min(5, Math.round(Number(rating) || 0)))
+    return "★".repeat(normalized) + "☆".repeat(5 - normalized)
+  }
+
+  const getRestaurantInternalId = (restaurant) => {
+    return restaurantDetails?._id ||
+      restaurantDetails?.id ||
+      restaurant?._id ||
+      restaurant?.id ||
+      restaurant?.originalData?._id ||
+      restaurant?.originalData?.id ||
+      null
+  }
+
+  const handleUpdateRestaurantRating = async (nextRating) => {
+    const restaurantId = getRestaurantInternalId(selectedRestaurant)
+    if (!restaurantId) return
+
+    const clamped = Math.max(0, Math.min(5, Math.round(Number(nextRating) || 0)))
+
+    try {
+      setUpdatingRating(true)
+      await adminAPI.updateRestaurant(restaurantId, { rating: clamped })
+
+      setRestaurants(prev =>
+        prev.map(r => {
+          const rId = r._id || r.id || r.originalData?._id || r.originalData?.id
+          if (String(rId) !== String(restaurantId)) return r
+          return {
+            ...r,
+            rating: clamped,
+            originalData: r.originalData ? { ...r.originalData, rating: clamped } : r.originalData,
+          }
+        }),
+      )
+
+      setRestaurantDetails(prev => (prev ? { ...prev, rating: clamped } : prev))
+      setSelectedRestaurant(prev => (prev ? { ...prev, rating: clamped, originalData: prev.originalData ? { ...prev.originalData, rating: clamped } : prev.originalData } : prev))
+    } catch (err) {
+      console.error("Error updating restaurant rating:", err)
+      alert("Failed to update rating. Please try again.")
+    } finally {
+      setUpdatingRating(false)
+    }
   }
 
   // Handle view restaurant details
@@ -799,6 +844,36 @@ export default function RestaurantsList() {
                             </span>
                           </div>
                         )}
+                        <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-xl border border-slate-100">
+                          <span className="text-xs font-bold text-slate-700">Admin rating:</span>
+                          <div className="flex items-center gap-0.5">
+                            {[1, 2, 3, 4, 5].map((starValue) => {
+                              const current = Number(restaurantDetails?.rating ?? selectedRestaurant?.originalData?.rating ?? selectedRestaurant?.rating ?? 0) || 0
+                              const isFilled = starValue <= current
+                              return (
+                                <button
+                                  key={starValue}
+                                  type="button"
+                                  disabled={updatingRating || loadingDetails}
+                                  onClick={() => handleUpdateRestaurantRating(starValue)}
+                                  className="p-0.5 rounded hover:bg-white disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                                  title={`Give ${starValue} star`}
+                                >
+                                  <Star className={`w-4 h-4 ${isFilled ? "text-yellow-500 fill-yellow-400" : "text-slate-300"}`} />
+                                </button>
+                              )
+                            })}
+                          </div>
+                          <button
+                            type="button"
+                            disabled={updatingRating || loadingDetails}
+                            onClick={() => handleUpdateRestaurantRating(0)}
+                            className="text-[11px] font-bold text-slate-500 hover:text-slate-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                            title="Clear rating"
+                          >
+                            Clear
+                          </button>
+                        </div>
                         <div className="flex items-center gap-2 text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100">
                           <Building2 className="w-4 h-4" />
                           <span className="text-xs font-bold tracking-wider">{formatRestaurantId(restaurantDetails?.restaurantId || restaurantDetails?._id || selectedRestaurant?.id || selectedRestaurant?._id)}</span>
