@@ -96,6 +96,7 @@ const Wallet = lazy(() => import("../pages/Wallet"))
 
 // Complaints
 const SubmitComplaint = lazy(() => import("../pages/complaints/SubmitComplaint"))
+const ContactSupport = lazy(() => import("../pages/profile/ContactSupport"))
 
 export default function UserRouter() {
   return (
@@ -322,6 +323,11 @@ export default function UserRouter() {
                 <MyRewards />
               </ProtectedRoute>
             }
+          />
+
+          <Route
+            path="/profile/contact-support"
+            element={<ContactSupport />}
           />
 
           <Route

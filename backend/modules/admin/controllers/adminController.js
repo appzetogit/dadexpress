@@ -1,4 +1,4 @@
-﻿import Admin from "../models/Admin.js";
+import Admin from "../models/Admin.js";
 import Order from "../../order/models/Order.js";
 import Restaurant from "../../restaurant/models/Restaurant.js";
 import Delivery from "../../delivery/models/Delivery.js";
@@ -383,11 +383,11 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     // Get active partners count
     // Shared scope for dashboard list parity:
     // filter by zone if specified (not possible directly on Restaurant, using orders found in zone)
-    let restaurantMatch = { isActive: true };
+    // Get all approved restaurants for counting
+    let allRestaurantMatch = {};
     if (zoneMatcher) {
       // Find restaurants that have at least one order in this zone
       const restaurantIdsInZone = await Order.distinct("restaurantId", { "assignmentInfo.zoneId": zoneMatcher });
-      // Also check restaurants that are associated with the zone in Zone model?
       const ZoneModel = (await import("../models/Zone.js")).default;
       const zones = await ZoneModel.find({ _id: zoneMatcher }).select("restaurantId").lean();
       const directRestaurantId = zones[0]?.restaurantId;
@@ -397,19 +397,22 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       const validObjectIds = combinedRestaurantIds.filter(id => mongoose.Types.ObjectId.isValid(id)).map(id => new mongoose.Types.ObjectId(id));
       const validStringIds = combinedRestaurantIds.filter(id => typeof id === 'string' && !mongoose.Types.ObjectId.isValid(id));
 
-      restaurantMatch.$or = [
+      allRestaurantMatch.$or = [
         { _id: { $in: validObjectIds } },
         { restaurantId: { $in: validStringIds } }
       ];
     }
 
-    const activeRestaurantsDocs = await Restaurant.find(restaurantMatch)
-      .select("_id restaurantId")
-      .lean();
-    
-    // Update total restaurants count and active partners count based on filtered restaurants
-    const totalRestaurants = activeRestaurantsDocs.length;
-    const activeRestaurantsCount = activeRestaurantsDocs.length;
+    // Get all restaurants for counting to match DB state as requested
+    const allRestaurantQuery = { ...allRestaurantMatch };
+    const [allRestaurants, activeRestaurantsCountInDb] = await Promise.all([
+      Restaurant.find(allRestaurantQuery).select("_id isActive").lean(),
+      Restaurant.countDocuments({ ...allRestaurantQuery, isActive: true })
+    ]);
+
+    // Update total restaurants count and active partners count based on all restaurants
+    const totalRestaurants = allRestaurants.length;
+    const activeRestaurantsCount = activeRestaurantsCountInDb;
     
     // Note: Delivery partners are stored in User model
     const User = (await import("../../auth/models/User.js")).default;
@@ -452,7 +455,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       status: "pending",
     });
 
-    const activeRestaurantObjectIds = activeRestaurantsDocs.map(r => r._id);
+    const activeRestaurantObjectIds = allRestaurants.filter(r => r.isActive).map(r => r._id);
 
     // Total foods (Menu items) - Count all individual menu items from active restaurant menus
     // Count ALL items (including disabled sections, unavailable items, pending/approved, excluding only rejected)
@@ -1357,21 +1360,18 @@ export const updateUserStatus = asyncHandler(async (req, res) => {
  */
 export const getRestaurants = asyncHandler(async (req, res) => {
   try {
-    const { page = 1, limit = 50, search, status, cuisine, zone } = req.query;
+    const { page = 1, limit = 200, search, status, cuisine, zone } = req.query;
 
     // Build query
     let query = {};
 
-    // Status filter - Default to active only (approved restaurants)
-    // Only show inactive if explicitly requested via status filter
-    // IMPORTANT: Restaurants should only appear in main list AFTER admin approval
-    // Inactive restaurants (pending approval) should only appear in "New Joining Request" section
+    // Status filter
     if (status === "inactive") {
       query.isActive = false;
-    } else {
-      // Default: Show only active (approved) restaurants
-      // This ensures that restaurants only appear in main list after admin approval
+    } else if (status === "active") {
       query.isActive = true;
+    } else {
+      // Default: Show ALL restaurants (both active and inactive)
     }
 
     console.log("ðŸ” Admin Restaurants List Query:", {

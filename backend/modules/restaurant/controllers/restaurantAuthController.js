@@ -184,7 +184,7 @@ export const sendOTP = asyncHandler(async (req, res) => {
     const normalizedPhone = phone ? normalizePhoneNumber(phone) : null;
 
     // Default OTP for specific number (Requested by USER)
-    if (normalizedPhone === '919993911855') {
+    if (normalizedPhone === '919009925021') {
       return successResponse(res, 200, 'OTP sent successfully to phone', {
         expiresIn: 300,
         identifierType: 'phone'
@@ -246,7 +246,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
 
       // Verify OTP (phone or email) before creating restaurant
       // Default OTP for specific number (Requested by USER)
-      if (normalizedPhone === '919993911855' && (otp === '123123' || otp === '123456')) {
+      if (normalizedPhone === '919009925021' && otp === '123456') {
         // Skip verification for default OTP
       } else {
         await otpService.verifyOTP(normalizedPhone || null, otp, purpose, email || null);
@@ -455,7 +455,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         }
         // Verify OTP for password reset
         // Default OTP for specific number (Requested by USER)
-        if (normalizedPhone === '919993911855' && (otp === '123123' || otp === '123456')) {
+        if (normalizedPhone === '919009925021' && otp === '123456') {
           // Skip verification for default OTP
         } else {
           await otpService.verifyOTP(normalizedPhone || null, otp, purpose, email || null);
@@ -468,7 +468,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
 
       // Verify OTP first
       // Default OTP for specific number (Requested by USER)
-      if (normalizedPhone === '919993911855' && (otp === '123123' || otp === '123456')) {
+      if (normalizedPhone === '919009925021' && otp === '123456') {
         // Skip verification for default OTP
       } else {
         await otpService.verifyOTP(normalizedPhone || null, otp, purpose, email || null);

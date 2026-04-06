@@ -432,6 +432,7 @@ export default function DeliveryHome() {
   const [paymentCollectedBy, setPaymentCollectedBy] = useState("qr") // Forced QR payment mode for COD by default
   const [paymentConfirmed, setPaymentConfirmed] = useState(false)
   const [isVerifyingPayment, setIsVerifyingPayment] = useState(false)
+  const [selectedRestaurant, setSelectedRestaurant] = useState(null)
 
   // Delivery notifications hook
   const { newOrder, clearNewOrder, orderReady, clearOrderReady, isConnected } = useDeliveryNotificationContext()
@@ -449,38 +450,7 @@ export default function DeliveryHome() {
   const [currentZone, setCurrentZone] = useState(null)
   const [isOutOfZone, setIsOutOfZone] = useState(false)
 
-  // Polling for QR payment status
-  useEffect(() => {
-    let pollInterval;
-    const checkOrderPaymentStatus = async (orderId) => {
-      try {
-        const response = await deliveryAPI.getOrderDetails(orderId);
-        const paymentStatus = response?.data?.data?.payment?.status;
-        if (paymentStatus === 'completed') {
-          setPaymentConfirmed(true);
-          toast.success('✨ QR Payment verified successfully!', { duration: 5000 });
-          return true;
-        }
-        return false;
-      } catch (err) {
-        console.error('Failed to poll payment status', err);
-        return false;
-      }
-    };
 
-    if (activeOrder?._id && paymentCollectedBy === 'qr' && !paymentConfirmed) {
-      // Don't poll if we're already verifying
-      if (!isVerifyingPayment) {
-        pollInterval = setInterval(() => {
-          checkOrderPaymentStatus(activeOrder._id);
-        }, 5000); // Check every 5 seconds
-      }
-    }
-
-    return () => {
-      if (pollInterval) clearInterval(pollInterval);
-    };
-  }, [activeOrder?._id, paymentCollectedBy, paymentConfirmed, isVerifyingPayment]);
   const [detectedZone, setDetectedZone] = useState(null)
   const hasAssignedZones = assignedZoneIds.length > 0 || assignedZoneNames.length > 0
 
@@ -668,7 +638,47 @@ export default function DeliveryHome() {
 
     return hotspots
   })
-  const [selectedRestaurant, setSelectedRestaurant] = useState(null)
+
+
+  // Polling for QR payment status
+  useEffect(() => {
+    let pollInterval;
+    const checkOrderPaymentStatus = async (orderId) => {
+      if (!orderId) return false;
+      try {
+        const response = await deliveryAPI.getOrderDetails(orderId);
+        const paymentData = response?.data?.data?.payment || response?.data?.payment;
+        const paymentStatus = (paymentData?.status || "").toLowerCase();
+        
+        // Accept multiple success statuses to be robust
+        if (paymentStatus === 'completed' || paymentStatus === 'paid' || paymentStatus === 'success') {
+          setPaymentConfirmed(true);
+          toast.success('✨ QR Payment verified successfully!', { duration: 5000 });
+          return true;
+        }
+        return false;
+      } catch (err) {
+        console.error('Failed to poll payment status', err);
+        return false;
+      }
+    };
+
+    const currentOrderId = selectedRestaurant?.id || selectedRestaurant?.orderMongoId || activeOrder?._id || activeOrder?.id;
+
+    if (currentOrderId && paymentCollectedBy === 'qr' && !paymentConfirmed) {
+      // Don't poll if we're already verifying
+      if (!isVerifyingPayment) {
+        pollInterval = setInterval(() => {
+          checkOrderPaymentStatus(currentOrderId);
+        }, 5000); // Check every 5 seconds
+      }
+    }
+
+    return () => {
+      if (pollInterval) clearInterval(pollInterval);
+    };
+  }, [selectedRestaurant?.id, selectedRestaurant?.orderMongoId, activeOrder?._id, paymentCollectedBy, paymentConfirmed, isVerifyingPayment]);
+
   const [isRefreshingPickupDetails, setIsRefreshingPickupDetails] = useState(false)
   const lastAutoPickupRefreshOrderRef = useRef(null)
   const [bottomSheetExpanded, setBottomSheetExpanded] = useState(false)
@@ -12280,18 +12290,26 @@ export default function DeliveryHome() {
                     <button
                       onClick={async () => {
                         if (isVerifyingPayment) return
+                        const orderId = selectedRestaurant?.id || selectedRestaurant?.orderMongoId || activeOrder?._id || activeOrder?.id
+                        if (!orderId) {
+                          toast.error('Order ID not found')
+                          return
+                        }
+                        
                         setIsVerifyingPayment(true)
                         try {
-                          const orderId = activeOrder?._id || activeOrder?.id
                           const response = await deliveryAPI.getOrderDetails(orderId)
-                          const paymentStatus = response?.data?.data?.payment?.status
-                          if (paymentStatus === 'completed') {
+                          const paymentData = response?.data?.data?.payment || response?.data?.payment
+                          const paymentStatus = (paymentData?.status || "").toLowerCase()
+                          
+                          if (paymentStatus === 'completed' || paymentStatus === 'paid' || paymentStatus === 'success') {
                             setPaymentConfirmed(true)
                             toast.success('✨ Payment status updated to PAID!')
                           } else {
                             toast.error('❌ User hasn\'t paid yet. Refresh and check again.')
                           }
                         } catch (err) {
+                          console.error('Manual verification failed:', err)
                           toast.error('Failed to verify payment. Try again.')
                         } finally {
                           setIsVerifyingPayment(false)
