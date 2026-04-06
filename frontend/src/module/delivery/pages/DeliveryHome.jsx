@@ -44,7 +44,7 @@ import {
   calculatePeriodEarnings
 } from "../utils/deliveryWalletState"
 import { formatCurrency } from "../../restaurant/utils/currency"
-import { getAllDeliveryOrders } from "../utils/deliveryOrderStatus"
+import { getAllDeliveryOrders, saveDeliveryOrderStatus, DELIVERY_ORDER_STATUS } from "../utils/deliveryOrderStatus"
 import { addDeliveryNotification, getUnreadDeliveryNotificationCount } from "../utils/deliveryNotifications"
 import { deliveryAPI, restaurantAPI, uploadAPI, zoneAPI } from "@/lib/api"
 import { useDeliveryNotificationContext } from "../context/DeliveryNotificationContext"
@@ -300,6 +300,20 @@ const getOrderIdCandidates = (selectedRestaurant, newOrder) => {
     null
   const orderId = selectedRestaurant?.orderId || newOrder?.orderId || null
   return { mongoId, orderId }
+}
+
+// A single canonical key for localStorage stats (prefer human orderId, else fallback to mongo ids).
+// Keeping this consistent is important because today's stats are derived from localStorage keys.
+const getStatsOrderKey = (orderLike) => {
+  const candidate =
+    orderLike?.orderId ||
+    orderLike?.orderIdString ||
+    orderLike?.restaurantInfo?.orderId ||
+    orderLike?.id ||
+    orderLike?._id ||
+    orderLike?.orderMongoId ||
+    null
+  return candidate ? String(candidate) : null
 }
 
 const fetchOrderIdString = async (orderId, deliveryAPI) => {
@@ -826,6 +840,7 @@ export default function DeliveryHome() {
   const [tripDistance, setTripDistance] = useState(null) // in meters
   const [tripTime, setTripTime] = useState(null) // in seconds
   const [actualTripDistance, setActualTripDistance] = useState(0) // meters - tracked during live trip since pickup
+  const selectedRestaurantRef = useRef(null)
   const lastDistanceCalcLocationRef = useRef(null) 
   const pickupRouteDistanceRef = useRef(0) // Distance to pickup in meters
   const pickupRouteTimeRef = useRef(0) // Time to pickup in seconds
@@ -885,9 +900,10 @@ export default function DeliveryHome() {
 
   // Real-time Trip Duration Effect
   useEffect(() => {
-    if (selectedRestaurant?.orderId && !showPaymentPage) {
+    const orderKey = getStatsOrderKey(selectedRestaurant)
+    if (orderKey && !showPaymentPage) {
       // Restore elapsed time
-      const storedPickedAt = localStorage.getItem(`pickedAt_${selectedRestaurant.orderId}`);
+      const storedPickedAt = localStorage.getItem(`pickedAt_${orderKey}`);
       if (storedPickedAt) {
         const start = parseInt(storedPickedAt);
         tripIntervalRef.current = setInterval(() => {
@@ -896,7 +912,7 @@ export default function DeliveryHome() {
       }
 
       // Restore actual distance
-      const storedDist = localStorage.getItem(`trip_actual_dist_${selectedRestaurant.orderId}`);
+      const storedDist = localStorage.getItem(`trip_actual_dist_${orderKey}`);
       if (storedDist) {
         setActualTripDistance(parseFloat(storedDist) || 0);
       }
@@ -909,7 +925,20 @@ export default function DeliveryHome() {
     return () => {
       if (tripIntervalRef.current) clearInterval(tripIntervalRef.current);
     };
-  }, [selectedRestaurant?.orderId, showPaymentPage, showOrderDeliveredAnimation]);
+  }, [selectedRestaurant?.orderId, selectedRestaurant?.id, selectedRestaurant?._id, showPaymentPage, showOrderDeliveredAnimation]);
+
+  // Keep latest selectedRestaurant available inside long-lived callbacks (e.g. geolocation watcher).
+  useEffect(() => {
+    selectedRestaurantRef.current = selectedRestaurant
+  }, [selectedRestaurant])
+
+  // Reset distance anchor when switching to a different active order so GPS jumps don't freeze updates.
+  useEffect(() => {
+    const activeOrderId = selectedRestaurant?.orderId || selectedRestaurant?.id || selectedRestaurant?._id || null
+    if (activeOrderId) {
+      lastDistanceCalcLocationRef.current = null
+    }
+  }, [selectedRestaurant?.orderId, selectedRestaurant?.id, selectedRestaurant?._id])
 
   const scheduleSliderProgressUpdate = useCallback((key, nextValue, setter) => {
     const slider = sliderProgressRafRef.current[key]
@@ -1363,11 +1392,20 @@ export default function DeliveryHome() {
   const todayGig = bookedGigs.find(gig => gig.date === todayDateKey && gig.status === 'active') ||
     bookedGigs.find(gig => gig.date === todayDateKey && gig.status === 'booked')
 
+  // Force periodic refresh so "Today's stats" (Login Time) updates even when user is stationary.
+  const [nowTs, setNowTs] = useState(() => Date.now())
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      setNowTs(Date.now())
+    }, 30000)
+    return () => clearInterval(intervalId)
+  }, [])
+
   // Calculate login hours based on when gig started
   const calculateLoginHours = () => {
     if (!todayGig || todayGig.status !== 'active') return 0
 
-    const now = new Date()
+    const now = new Date(nowTs)
     let startTime = now
 
     // Use startedAt if available, otherwise use gig start time
@@ -1636,9 +1674,11 @@ export default function DeliveryHome() {
   const isOfferLive = activeEarningAddon?.isValid || activeEarningAddon?.isUpcoming || false
 
   // Calculate total hours worked today (prefer store, then calculated; default to 0)
-  const calculatedHours = bookedGigs
-    .filter(gig => gig.date === todayDateKey)
-    .reduce((total, gig) => total + (gig.totalHours || 0), 0)
+  const calculatedHours = todayGig && todayGig.status === 'active'
+    ? loginHours
+    : bookedGigs
+      .filter(gig => gig.date === todayDateKey)
+      .reduce((total, gig) => total + (gig.totalHours || 0), 0)
   const todayHoursWorked = hasStoreDataForToday && todayData
     ? (todayData.timeOnOrders ?? calculatedHours)
     : calculatedHours
@@ -2597,9 +2637,11 @@ export default function DeliveryHome() {
 
           // Track actual distance traveled during trip for extra km payment logic
           // Only track if order is out for delivery / en route to delivery
-          const currentDeliveryPhase = selectedRestaurant?.deliveryPhase || selectedRestaurant?.deliveryState?.currentPhase
+          const activeOrder = selectedRestaurantRef.current
+          const currentDeliveryPhase = activeOrder?.deliveryPhase || activeOrder?.deliveryState?.currentPhase
           const isEnRouteToDelivery = currentDeliveryPhase === 'en_route_to_delivery' ||
-            selectedRestaurant?.orderStatus === 'out_for_delivery'
+            activeOrder?.orderStatus === 'out_for_delivery' ||
+            activeOrder?.status === 'out_for_delivery'
 
           if (isEnRouteToDelivery && lastDistanceCalcLocationRef.current) {
             const [lastLat, lastLng] = lastDistanceCalcLocationRef.current
@@ -2624,9 +2666,9 @@ export default function DeliveryHome() {
               setActualTripDistance(prev => {
                 const newDist = prev + jumpMeters;
                 // Persist to localStorage for survival
-                const orderId = selectedRestaurant?.orderId || selectedRestaurant?.id
-                if (orderId) {
-                  localStorage.setItem(`trip_actual_dist_${orderId}`, newDist.toString())
+                const orderKey = getStatsOrderKey(activeOrder)
+                if (orderKey) {
+                  localStorage.setItem(`trip_actual_dist_${orderKey}`, newDist.toString())
                 }
                 return newDist;
               });
@@ -4059,13 +4101,17 @@ export default function DeliveryHome() {
       // Show Order Delivered popup instantly after Reached Drop is confirmed
       false && console.log('✅ Showing Order Delivered popup instantly after Reached Drop confirmation')
       // Stamp the delivery date and final distance so Today's Stats can accumulate correctly
-      ;(() => {
-        const completedOrderId = selectedRestaurant?.orderId || selectedRestaurant?.id || selectedRestaurant?._id
-        if (completedOrderId) {
-          localStorage.setItem(`delivery_order_date_${completedOrderId}`, new Date().toISOString())
+       ;(() => {
+        const completedOrderKey = getStatsOrderKey(selectedRestaurant)
+        if (completedOrderKey) {
+          // Mark delivered so the order shows up in history + today's stats (getAllDeliveryOrders reads status keys).
+          saveDeliveryOrderStatus(completedOrderKey, DELIVERY_ORDER_STATUS.DELIVERED)
+
+          // Stamp the delivery date so Today's Stats can accumulate correctly.
+          localStorage.setItem(`delivery_order_date_${completedOrderKey}`, new Date().toISOString())
           // Also ensure final distance is persisted (may already be written by watchPosition, but write again for safety)
           if (actualTripDistance > 0) {
-            localStorage.setItem(`trip_actual_dist_${completedOrderId}`, actualTripDistance.toString())
+            localStorage.setItem(`trip_actual_dist_${completedOrderKey}`, actualTripDistance.toString())
           }
         }
       })()
@@ -12764,7 +12810,3 @@ export default function DeliveryHome() {
     </div>
   )
 }
-
-
-
-
