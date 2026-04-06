@@ -327,6 +327,9 @@ const fetchOrderIdString = async (orderId, deliveryAPI) => {
   }
 }
 
+const extractOrderFromDeliveryResponse = (response) =>
+  response?.data?.data?.order || response?.data?.order || response?.data?.data || null
+
 const isLikelySwappedCoord = (coord) => {
   const lat = typeof coord === "object" ? (coord.latitude ?? coord.lat) : null
   const lng = typeof coord === "object" ? (coord.longitude ?? coord.lng) : null
@@ -7701,6 +7704,8 @@ export default function DeliveryHome() {
         if (!orderId) {
           false && console.log('⚠️ No order ID found in saved data, removing from localStorage');
           localStorage.removeItem('deliveryActiveOrder');
+          localStorage.removeItem('activeOrder');
+          setActiveOrder(null);
           setSelectedRestaurant(null);
           return;
         }
@@ -7713,16 +7718,27 @@ export default function DeliveryHome() {
           if (!orderResponse.data?.success || !orderResponse.data?.data) {
             false && console.log('⚠️ Order not found in database, removing from localStorage');
             localStorage.removeItem('deliveryActiveOrder');
+            localStorage.removeItem('activeOrder');
+            setActiveOrder(null);
             setSelectedRestaurant(null);
             return;
           }
 
-          const order = orderResponse.data.data;
+          const order = extractOrderFromDeliveryResponse(orderResponse);
+          if (!order) {
+            localStorage.removeItem('deliveryActiveOrder');
+            localStorage.removeItem('activeOrder');
+            setActiveOrder(null);
+            setSelectedRestaurant(null);
+            return;
+          }
 
           // Check if order is cancelled or deleted
           if (order.status === 'cancelled' || order.status === 'delivered') {
             false && console.log(`⚠️ Order is ${order.status}, removing from localStorage`);
             localStorage.removeItem('deliveryActiveOrder');
+            localStorage.removeItem('activeOrder');
+            setActiveOrder(null);
             setSelectedRestaurant(null);
             return;
           }
@@ -7736,6 +7752,8 @@ export default function DeliveryHome() {
           if (verifyError.response?.status === 404 || verifyError.response?.status === 403) {
             false && console.log('⚠️ Order not found or not assigned, removing from localStorage');
             localStorage.removeItem('deliveryActiveOrder');
+            localStorage.removeItem('activeOrder');
+            setActiveOrder(null);
             setSelectedRestaurant(null);
             return;
           }
@@ -8055,6 +8073,8 @@ export default function DeliveryHome() {
   const clearOrderData = useCallback(() => {
     false && console.log('🧹 Clearing order data...');
     localStorage.removeItem('deliveryActiveOrder');
+    localStorage.removeItem('activeOrder');
+    setActiveOrder(null);
     setSelectedRestaurant(null);
     setWorkflowStage('none');
     setShowNewOrderPopup(false);
@@ -8093,7 +8113,11 @@ export default function DeliveryHome() {
           return;
         }
 
-        const order = orderResponse.data.data;
+        const order = extractOrderFromDeliveryResponse(orderResponse);
+        if (!order) {
+          clearOrderData();
+          return;
+        }
 
         // Check if order is cancelled, deleted, or delivered/completed
         if (order.status === 'cancelled') {
