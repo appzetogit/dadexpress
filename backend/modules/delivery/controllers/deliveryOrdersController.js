@@ -280,9 +280,7 @@ export const getOrderDetails = asyncHandler(async (req, res) => {
         return errorResponse(res, 403, 'You are not approved to view unassigned orders');
       }
 
-      // Order not assigned yet - allow access if:
-      // 1. Order is in a valid status for acceptance (preparing/ready), OR
-      // 2. This delivery boy was notified about it
+      // Order not assigned yet - allow access only if this delivery boy was notified.
 
       const isInValidStatus = validAcceptanceStatuses.includes(order.status);
 
@@ -308,8 +306,8 @@ export const getOrderDetails = asyncHandler(async (req, res) => {
         expandedIds: normalizedExpandedIds
       });
 
-      // Allow access if order is in valid status OR delivery boy was notified
-      if (isInValidStatus || wasNotified) {
+      // Allow access only if delivery boy was notified
+      if (wasNotified) {
         console.log(`✅ Allowing access to order ${order.orderId} - Status: ${order.status}, Notified: ${wasNotified}`);
         // Allow access to view order details
       } else {
@@ -513,10 +511,7 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       const wasNotified = normalizedPriorityIds.includes(normalizedCurrentId) ||
         normalizedExpandedIds.includes(normalizedCurrentId);
 
-      // Also allow if order is in valid status (preparing/ready) - more permissive for unassigned orders
-      const isValidStatus = ['pending', 'confirmed', 'preparing', 'ready'].includes(order.status);
-
-      if (!wasNotified && !isValidStatus) {
+      if (!wasNotified) {
         console.error(`❌ Order ${order.orderId} is not assigned, delivery partner ${currentDeliveryId} was not notified, and order status is ${order.status}`);
         console.error(`❌ Full order details:`, {
           orderId: order.orderId,
@@ -530,12 +525,8 @@ export const acceptOrder = asyncHandler(async (req, res) => {
         return errorResponse(res, 403, 'This order is not available for you. It may have been assigned to another delivery partner or you were not notified about it.');
       }
 
-      // Allow acceptance if delivery boy was notified OR order is in valid status
-      if (wasNotified) {
-        console.log(`✅ Delivery partner ${currentDeliveryId} was notified about this order. Assigning order to them...`);
-      } else if (isValidStatus) {
-        console.log(`⚠️ Order ${order.orderId} is not assigned and delivery partner ${currentDeliveryId} was not notified, but order is in valid status (${order.status}). Allowing acceptance and assigning order.`);
-      }
+      // Only notified delivery partners can accept unassigned orders.
+      console.log(`✅ Delivery partner ${currentDeliveryId} was notified about this order. Assigning order to them...`);
 
       // Proceed with assignment (first come first serve)
       const validStatusesForAssignment = ['pending', 'confirmed', 'preparing', 'ready'];
@@ -561,7 +552,10 @@ export const acceptOrder = asyncHandler(async (req, res) => {
             'assignmentInfo.deliveryPartnerId': currentDeliveryId,
             'assignmentInfo.assignedAt': assignmentTimestamp,
             'assignmentInfo.assignedBy': 'delivery_accept',
-            'assignmentInfo.acceptedFromNotification': true
+            'assignmentInfo.acceptedFromNotification': true,
+            'assignmentInfo.priorityDeliveryPartnerIds': [currentDeliveryId],
+            'assignmentInfo.expandedDeliveryPartnerIds': [],
+            'assignmentInfo.notificationPhase': 'accepted'
           }
         },
         { new: true }
@@ -2523,4 +2517,3 @@ export const completeDelivery = asyncHandler(async (req, res) => {
     return errorResponse(res, 500, `Failed to complete delivery: ${error.message}`);
   }
 });
-

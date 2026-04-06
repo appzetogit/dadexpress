@@ -676,10 +676,9 @@ export async function notifyDeliveryBoyOrderReady(order, deliveryPartnerId) {
       notificationSent = true;
       console.log(`✅ Order ready notification sent to delivery partner ${normalizedDeliveryPartnerId} in room ${foundRoom}`);
     } else {
-      // Fallback: broadcast to all delivery sockets
-      console.warn(`⚠️ Delivery partner ${normalizedDeliveryPartnerId} not found in any room, broadcasting to all`);
-      deliveryNamespace.emit('order_ready', orderReadyNotification);
-      notificationSent = true;
+      // Do not broadcast to everyone; this event is rider-specific.
+      console.warn(`⚠️ Delivery partner ${normalizedDeliveryPartnerId} not found in any room, skipping socket broadcast`);
+      notificationSent = false;
     }
 
     // Send Push Notification
@@ -811,4 +810,3 @@ async function calculateEstimatedEarnings(deliveryDistance, order = null) {
     };
   }
 }
-
