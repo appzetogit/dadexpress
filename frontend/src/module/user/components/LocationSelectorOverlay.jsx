@@ -97,6 +97,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
   }, [])
   const reverseGeocodeTimeoutRef = useRef(null) // Debounce timeout for reverse geocoding
   const lastReverseGeocodeCoordsRef = useRef(null) // Track last coordinates to avoid duplicate calls
+  const ltrInputStyle = { direction: "ltr", unicodeBidi: "plaintext", textAlign: "left" }
 
   const getCurrentGpsCoordinates = (options = {}) =>
     new Promise((resolve, reject) => {
@@ -2181,6 +2182,8 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
                 }
               }}
               placeholder="Search for area, street name..."
+              dir="ltr"
+              style={ltrInputStyle}
               className="pl-12 pr-4 h-12 w-full bg-gray-50 dark:bg-[#2a2a2a] border-gray-200 dark:border-gray-700 focus:border-orange-600 dark:focus:border-orange-600 rounded-xl"
             />
           </div>
@@ -2271,6 +2274,8 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
                 placeholder="E.g. Floor, House no."
                 value={addressFormData.additionalDetails}
                 onChange={handleAddressFormChange}
+                dir="ltr"
+                style={ltrInputStyle}
                 className="bg-white dark:bg-[#1a1a1a] border-gray-200 dark:border-gray-700"
               />
             </div>
@@ -2324,6 +2329,8 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
                 placeholder="Street / Area *"
                 value={addressFormData.street}
                 onChange={handleAddressFormChange}
+                dir="ltr"
+                style={ltrInputStyle}
                 className="bg-white dark:bg-[#1a1a1a] border-gray-200 dark:border-gray-700"
                 required
               />
@@ -2333,6 +2340,8 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
                   placeholder="City *"
                   value={addressFormData.city}
                   onChange={handleAddressFormChange}
+                  dir="ltr"
+                  style={ltrInputStyle}
                   className="bg-white dark:bg-[#1a1a1a] border-gray-200 dark:border-gray-700"
                   required
                 />
@@ -2341,6 +2350,8 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
                   placeholder="State *"
                   value={addressFormData.state}
                   onChange={handleAddressFormChange}
+                  dir="ltr"
+                  style={ltrInputStyle}
                   className="bg-white dark:bg-[#1a1a1a] border-gray-200 dark:border-gray-700"
                   required
                 />
@@ -2350,6 +2361,8 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
                 placeholder="Pincode (optional)"
                 value={addressFormData.zipCode || ""}
                 onChange={handleAddressFormChange}
+                dir="ltr"
+                style={ltrInputStyle}
                 className="bg-white dark:bg-[#1a1a1a] border-gray-200 dark:border-gray-700"
                 inputMode="numeric"
               />
@@ -2432,6 +2445,8 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
             value={searchValue}
             onChange={(e) => setSearchValue(e.target.value)}
             placeholder="Search for area, street name..."
+            dir="ltr"
+            style={ltrInputStyle}
             className="pl-12 pr-4 h-12 w-full bg-gray-50 dark:bg-[#2a2a2a] border-gray-200 dark:border-gray-700 focus:border-primary-orange dark:focus:border-primary-orange rounded-xl text-base dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400"
           />
         </div>
@@ -2643,4 +2658,3 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
     </div>
   )
 }
-
