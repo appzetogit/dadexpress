@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import Restaurant from './Restaurant.js';
 
 const dayTimingSchema = new mongoose.Schema({
   day: {
@@ -126,11 +127,6 @@ outletTimingsSchema.statics.isRestaurantOpen = async function(restaurantId) {
   try {
     const outletTimings = await this.findOne({ restaurantId, isActive: true });
     
-    // If no timings are set, we default to open (to avoid blocking restaurants with legacy data)
-    if (!outletTimings || !outletTimings.timings || outletTimings.timings.length === 0) {
-      return true;
-    }
-
     const now = new Date();
     // Use IST timezone (+5:30) as requested by user's location, or local server time
     // For consistency with India business, we can adjust to IST if server is UTC
@@ -140,6 +136,34 @@ outletTimingsSchema.statics.isRestaurantOpen = async function(restaurantId) {
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const currentDay = days[istDate.getDay()];
     const currentMinutes = istDate.getHours() * 60 + istDate.getMinutes();
+
+    // If no outlet timings are set, fall back to Restaurant.deliveryTimings/openDays (legacy/onboarding flow).
+    if (!outletTimings || !outletTimings.timings || outletTimings.timings.length === 0) {
+      const restaurant = await Restaurant.findById(restaurantId)
+        .select('deliveryTimings openDays')
+        .lean();
+
+      // If nothing is configured, default to open (backward compatible).
+      if (!restaurant) return true;
+
+      const openDays = Array.isArray(restaurant.openDays) ? restaurant.openDays : [];
+      if (openDays.length > 0 && !openDays.includes(currentDay)) {
+        return false;
+      }
+
+      const openMin = timeToMinutes(restaurant.deliveryTimings?.openingTime);
+      const closeMin = timeToMinutes(restaurant.deliveryTimings?.closingTime);
+
+      if (openMin === null || closeMin === null) {
+        return true;
+      }
+
+      if (closeMin < openMin) {
+        return currentMinutes >= openMin || currentMinutes <= closeMin;
+      }
+
+      return currentMinutes >= openMin && currentMinutes <= closeMin;
+    }
 
     const todayTiming = outletTimings.timings.find(t => t.day === currentDay);
     
@@ -169,4 +193,3 @@ outletTimingsSchema.statics.isRestaurantOpen = async function(restaurantId) {
 const OutletTimings = mongoose.models.OutletTimings || mongoose.model('OutletTimings', outletTimingsSchema);
 
 export default OutletTimings;
-

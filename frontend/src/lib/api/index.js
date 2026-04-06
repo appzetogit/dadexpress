@@ -427,6 +427,28 @@ export const restaurantAPI = {
     });
   },
 
+  // Outlet timings (restaurant schedule)
+  getOutletTimings: () => {
+    return apiClient.get(API_ENDPOINTS.RESTAURANT.OUTLET_TIMINGS);
+  },
+
+  upsertOutletTimings: (data) => {
+    return apiClient.put(API_ENDPOINTS.RESTAURANT.OUTLET_TIMINGS, data);
+  },
+
+  updateOutletDayTiming: (day, data) => {
+    return apiClient.patch(
+      API_ENDPOINTS.RESTAURANT.OUTLET_TIMINGS_DAY.replace(":day", day),
+      data,
+    );
+  },
+
+  toggleOutletTimingsStatus: (isActive) => {
+    return apiClient.patch(API_ENDPOINTS.RESTAURANT.OUTLET_TIMINGS_STATUS, {
+      isActive,
+    });
+  },
+
   // Upload profile image
   uploadProfileImage: (file) => {
     const formData = new FormData();

@@ -8,6 +8,7 @@ import { MobileTimePicker } from "@mui/x-date-pickers/MobileTimePicker"
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider"
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
+import { restaurantAPI } from "@/lib/api"
 
 const STORAGE_KEY = "restaurant_outlet_timings"
 
@@ -43,6 +44,29 @@ const formatTime12Hour = (time24) => {
   return `${hours12}:${minutesStr} ${period}`
 }
 
+const normalizeTo24Hour = (timeValue) => {
+  if (!timeValue || typeof timeValue !== "string") return "09:00"
+  const trimmed = timeValue.trim()
+  const match = trimmed.match(/^(\d{1,2}):(\d{2})\s*(AM|PM|am|pm)?$/)
+  if (!match) return "09:00"
+
+  let hours = Number(match[1])
+  const minutes = Number(match[2])
+  const ampm = match[3]
+
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return "09:00"
+  hours = Math.max(0, Math.min(23, hours))
+  const safeMinutes = Math.max(0, Math.min(59, minutes))
+
+  if (ampm) {
+    const upper = ampm.toUpperCase()
+    if (upper === "PM" && hours < 12) hours += 12
+    if (upper === "AM" && hours === 12) hours = 0
+  }
+
+  return `${String(hours).padStart(2, "0")}:${String(safeMinutes).padStart(2, "0")}`
+}
+
 const getDefaultDays = () => ({
   Monday: { isOpen: true, openingTime: "09:00", closingTime: "22:00" },
   Tuesday: { isOpen: true, openingTime: "09:00", closingTime: "22:00" },
@@ -58,6 +82,8 @@ export default function OutletTimings() {
   const navigate = useNavigate()
   const [expandedDay, setExpandedDay] = useState("Monday")
   const isInternalUpdate = useRef(false)
+  const syncTimeoutRef = useRef(null)
+  const hasLoadedFromBackendRef = useRef(false)
   const [days, setDays] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
@@ -104,6 +130,51 @@ export default function OutletTimings() {
     return getDefaultDays()
   })
 
+  // Load timings from backend (source of truth for order acceptance).
+  // Keep localStorage as a fallback for offline/first render.
+  useEffect(() => {
+    let alive = true
+
+    const loadFromBackend = async () => {
+      try {
+        const resp = await restaurantAPI.getOutletTimings()
+        const outletTimings = resp?.data?.data?.outletTimings
+        const timingsArray = outletTimings?.timings
+        if (!Array.isArray(timingsArray) || timingsArray.length === 0) return
+
+        const nextDays = {}
+        timingsArray.forEach((t) => {
+          if (!t?.day) return
+          nextDays[t.day] = {
+            isOpen: t.isOpen !== false,
+            openingTime: normalizeTo24Hour(t.openingTime),
+            closingTime: normalizeTo24Hour(t.closingTime),
+          }
+        })
+
+        // Ensure all days exist (backend validation should guarantee it, but keep it safe)
+        const dayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        dayNames.forEach((day) => {
+          if (!nextDays[day]) nextDays[day] = { isOpen: true, openingTime: "09:00", closingTime: "22:00" }
+        })
+
+        if (!alive) return
+        hasLoadedFromBackendRef.current = true
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(nextDays))
+        setDays((prev) => (JSON.stringify(prev) === JSON.stringify(nextDays) ? prev : nextDays))
+        window.dispatchEvent(new Event("outletTimingsUpdated"))
+      } catch (error) {
+        // Silent fallback to localStorage timings. Backend sync will happen on next change.
+        console.error("Error loading outlet timings from backend:", error)
+      }
+    }
+
+    loadFromBackend()
+    return () => {
+      alive = false
+    }
+  }, [])
+
   // Save to localStorage whenever days change (but only if it's an internal update)
   useEffect(() => {
     if (isInternalUpdate.current) {
@@ -114,9 +185,41 @@ export default function OutletTimings() {
       } catch (error) {
         console.error("Error saving outlet timings:", error)
       }
+
+      // Persist to backend with a small debounce to avoid spamming during time picker changes.
+      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current)
+      syncTimeoutRef.current = setTimeout(async () => {
+        try {
+          const dayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+          const timings = dayNames.map((day) => {
+            const d = days[day] || { isOpen: true, openingTime: "09:00", closingTime: "22:00" }
+            return {
+              day,
+              isOpen: d.isOpen !== false,
+              openingTime: d.openingTime || "09:00",
+              closingTime: d.closingTime || "22:00",
+            }
+          })
+
+          await restaurantAPI.upsertOutletTimings({
+            outletType: "Appzeto delivery",
+            timings,
+          })
+          hasLoadedFromBackendRef.current = true
+        } catch (error) {
+          console.error("Error saving outlet timings to backend:", error)
+        }
+      }, 600)
+
       isInternalUpdate.current = false
     }
   }, [days])
+
+  useEffect(() => {
+    return () => {
+      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current)
+    }
+  }, [])
 
   // Listen for updates from other components
   useEffect(() => {
