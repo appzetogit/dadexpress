@@ -3,6 +3,49 @@ import Restaurant from '../models/Restaurant.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import asyncHandler from '../../../shared/middleware/asyncHandler.js';
 
+const getCurrentIstDay = () => {
+  const now = new Date();
+  const istOffset = 5.5 * 60 * 60 * 1000;
+  const istDate = new Date(now.getTime() + (now.getTimezoneOffset() * 60000) + istOffset);
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  return days[istDate.getUTCDay()];
+};
+
+const getDayOpenState = (timings = [], day) => {
+  const entry = Array.isArray(timings) ? timings.find((t) => t?.day === day) : null;
+  if (!entry) return null;
+  return entry.isOpen !== false;
+};
+
+const cloneTimings = (timings = []) =>
+  (Array.isArray(timings) ? timings : []).map((t) => ({
+    day: t?.day,
+    isOpen: t?.isOpen !== false,
+    openingTime: t?.openingTime,
+    closingTime: t?.closingTime,
+  }));
+
+const syncRestaurantStatusForTodayToggle = async (restaurantId, previousTimings, nextTimings) => {
+  try {
+    const today = getCurrentIstDay();
+    const prevTodayOpen = getDayOpenState(previousTimings, today);
+    const nextTodayOpen = getDayOpenState(nextTimings, today);
+
+    // Only react to explicit toggle transitions for "today" to avoid breaking
+    // manual delivery status flow during normal time edits.
+    if (prevTodayOpen === false && nextTodayOpen === true) {
+      await Restaurant.findByIdAndUpdate(restaurantId, { isAcceptingOrders: true });
+    } else if (prevTodayOpen === true && nextTodayOpen === false) {
+      await Restaurant.findByIdAndUpdate(restaurantId, { isAcceptingOrders: false });
+    } else if (prevTodayOpen === null && nextTodayOpen === true) {
+      // First-time setup where today's row is open: keep restaurant visible by default.
+      await Restaurant.findByIdAndUpdate(restaurantId, { isAcceptingOrders: true });
+    }
+  } catch (error) {
+    console.error('Failed syncing restaurant delivery status from outlet timing toggle:', error);
+  }
+};
+
 /**
  * Get outlet timings for the authenticated restaurant
  * @route GET /api/restaurant/outlet-timings
@@ -84,6 +127,7 @@ export const getOutletTimingsByRestaurantId = asyncHandler(async (req, res) => {
 export const upsertOutletTimings = asyncHandler(async (req, res) => {
   const restaurantId = req.restaurant._id;
   const { outletType, timings } = req.body;
+  const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
   // Validate timings array
   if (timings && !Array.isArray(timings)) {
@@ -95,7 +139,6 @@ export const upsertOutletTimings = asyncHandler(async (req, res) => {
     return errorResponse(res, 400, 'All 7 days must be provided');
   }
 
-  const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
   if (timings) {
     const presentDays = timings.map(t => t.day);
     const allDaysPresent = dayOrder.every(day => presentDays.includes(day));
@@ -122,6 +165,8 @@ export const upsertOutletTimings = asyncHandler(async (req, res) => {
   let outletTimings = await OutletTimings.findOne({ restaurantId });
 
   if (outletTimings) {
+    const previousTimings = cloneTimings(outletTimings.timings);
+
     // Update existing
     if (outletType) outletTimings.outletType = outletType;
     if (timings) {
@@ -130,6 +175,14 @@ export const upsertOutletTimings = asyncHandler(async (req, res) => {
       outletTimings.timings = timings;
     }
     await outletTimings.save();
+
+    if (timings) {
+      await syncRestaurantStatusForTodayToggle(
+        restaurantId,
+        previousTimings,
+        outletTimings.timings,
+      );
+    }
   } else {
     // Create new
     const defaultTimings = timings || [
@@ -147,6 +200,12 @@ export const upsertOutletTimings = asyncHandler(async (req, res) => {
       outletType: outletType || 'Appzeto delivery',
       timings: defaultTimings
     });
+
+    await syncRestaurantStatusForTodayToggle(
+      restaurantId,
+      [],
+      outletTimings.timings,
+    );
   }
 
   return successResponse(res, 200, 'Outlet timings updated successfully', {
@@ -187,6 +246,8 @@ export const updateDayTiming = asyncHandler(async (req, res) => {
     });
   }
 
+  const previousTimings = cloneTimings(outletTimings.timings);
+
   // Find and update the specific day
   const dayIndex = outletTimings.timings.findIndex(t => t.day === day);
   if (dayIndex === -1) {
@@ -212,6 +273,11 @@ export const updateDayTiming = asyncHandler(async (req, res) => {
   }
 
   await outletTimings.save();
+  await syncRestaurantStatusForTodayToggle(
+    restaurantId,
+    previousTimings,
+    outletTimings.timings,
+  );
 
   return successResponse(res, 200, `${day} timing updated successfully`, {
     outletTimings
@@ -258,4 +324,3 @@ export const deleteOutletTimings = asyncHandler(async (req, res) => {
 
   return successResponse(res, 200, 'Outlet timings deleted successfully');
 });
-
