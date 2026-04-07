@@ -135,7 +135,11 @@ outletTimingsSchema.statics.isRestaurantOpen = async function(restaurantId) {
 
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const currentDay = days[istDate.getUTCDay()];
+    const previousDay = days[(istDate.getUTCDay() + 6) % 7];
     const currentMinutes = istDate.getUTCHours() * 60 + istDate.getUTCMinutes();
+
+    const isOvernightWindow = (openMin, closeMin) =>
+      openMin !== null && closeMin !== null && closeMin < openMin;
 
     // If no outlet timings are set, fall back to Restaurant.deliveryTimings/openDays (legacy/onboarding flow).
     if (!outletTimings || !outletTimings.timings || outletTimings.timings.length === 0) {
@@ -147,13 +151,26 @@ outletTimingsSchema.statics.isRestaurantOpen = async function(restaurantId) {
       if (!restaurant) return true;
 
       const openDays = Array.isArray(restaurant.openDays) ? restaurant.openDays : [];
-      if (openDays.length > 0) {
-        // Handle abbreviations (Mon) and full names (Monday) case-insensitively
-        const isDayOpen = openDays.some(day => {
-          const d = day?.toString().trim().toLowerCase();
-          const c = currentDay.toLowerCase();
-          return d === c || d === c.substring(0, 3);
+      const isDayMarkedOpen = (dayName) => {
+        const normalizedTarget = dayName.toLowerCase();
+        const shortTarget = normalizedTarget.substring(0, 3);
+        return openDays.some(day => {
+          const normalized = day?.toString().trim().toLowerCase();
+          return normalized === normalizedTarget || normalized === shortTarget;
         });
+      };
+
+      if (openDays.length > 0 && !isDayMarkedOpen(currentDay)) {
+        // Keep overnight continuity: if previous day is open and timing crosses midnight,
+        // allow current-day early-hours until previous closing time.
+        const openMin = timeToMinutes(restaurant.deliveryTimings?.openingTime);
+        const closeMin = timeToMinutes(restaurant.deliveryTimings?.closingTime);
+        if (!(isDayMarkedOpen(previousDay) && isOvernightWindow(openMin, closeMin) && currentMinutes <= closeMin)) {
+          return false;
+        }
+      } else if (openDays.length > 0) {
+        // Handle abbreviations (Mon) and full names (Monday) case-insensitively
+        const isDayOpen = isDayMarkedOpen(currentDay);
         if (!isDayOpen) return false;
       }
 
@@ -173,24 +190,36 @@ outletTimingsSchema.statics.isRestaurantOpen = async function(restaurantId) {
     }
 
     const todayTiming = outletTimings.timings.find(t => t.day === currentDay);
+    const yesterdayTiming = outletTimings.timings.find(t => t.day === previousDay);
     
-    if (!todayTiming || !todayTiming.isOpen) {
-      return false;
+    if (todayTiming?.isOpen) {
+      const openMin = timeToMinutes(todayTiming.openingTime);
+      const closeMin = timeToMinutes(todayTiming.closingTime);
+
+      if (openMin === null || closeMin === null) {
+        return true; // Fallback if times are invalid
+      }
+
+      // Handle overnight timings (e.g., 10:00 PM to 04:00 AM)
+      if (closeMin < openMin) {
+        if (currentMinutes >= openMin || currentMinutes <= closeMin) {
+          return true;
+        }
+      } else if (currentMinutes >= openMin && currentMinutes <= closeMin) {
+        return true;
+      }
     }
 
-    const openMin = timeToMinutes(todayTiming.openingTime);
-    const closeMin = timeToMinutes(todayTiming.closingTime);
-
-    if (openMin === null || closeMin === null) {
-      return true; // Fallback if times are invalid
+    // If today's timing is closed/not matching, still allow spillover from yesterday's overnight window.
+    if (yesterdayTiming?.isOpen) {
+      const yOpenMin = timeToMinutes(yesterdayTiming.openingTime);
+      const yCloseMin = timeToMinutes(yesterdayTiming.closingTime);
+      if (isOvernightWindow(yOpenMin, yCloseMin) && currentMinutes <= yCloseMin) {
+        return true;
+      }
     }
 
-    // Handle overnight timings (e.g., 10:00 PM to 04:00 AM)
-    if (closeMin < openMin) {
-      return currentMinutes >= openMin || currentMinutes <= closeMin;
-    }
-
-    return currentMinutes >= openMin && currentMinutes <= closeMin;
+    return false;
   } catch (error) {
     console.error('Error in OutletTimings.isRestaurantOpen:', error);
     return true; // Default to open on error
