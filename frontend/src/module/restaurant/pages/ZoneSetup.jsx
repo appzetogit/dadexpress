@@ -157,8 +157,8 @@ export default function ZoneSetup() {
         return
       }
 
-      // If Google Maps is already loaded, use it directly
-      if (window.google && window.google.maps) {
+      // If Google Maps is already loaded (from main.jsx), use it directly
+      if (window.google && window.google.maps && typeof window.google.maps.Map === 'function') {
         console.log("✅ Google Maps already loaded from main.jsx, initializing map...")
         initializeMap(window.google)
         return
@@ -206,9 +206,9 @@ export default function ZoneSetup() {
         zoom: 5,
         mapTypeControl: true,
         mapTypeControlOptions: {
-          style: google.maps.MapTypeControlStyle.HORIZONTAL_BAR,
-          position: google.maps.ControlPosition.TOP_RIGHT,
-          mapTypeIds: [google.maps.MapTypeId.ROADMAP, google.maps.MapTypeId.SATELLITE]
+          style: google.maps?.MapTypeControlStyle?.HORIZONTAL_BAR || 1,
+          position: google.maps?.ControlPosition?.TOP_RIGHT || 1,
+          mapTypeIds: [google.maps?.MapTypeId?.ROADMAP || 'roadmap', google.maps?.MapTypeId?.SATELLITE || 'satellite']
         },
         zoomControl: true,
         streetViewControl: false,

@@ -511,19 +511,9 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       const wasNotified = normalizedPriorityIds.includes(normalizedCurrentId) ||
         normalizedExpandedIds.includes(normalizedCurrentId);
 
-      if (!wasNotified) {
-        console.error(`❌ Order ${order.orderId} is not assigned, delivery partner ${currentDeliveryId} was not notified, and order status is ${order.status}`);
-        console.error(`❌ Full order details:`, {
-          orderId: order.orderId,
-          orderStatus: order.status,
-          deliveryPartnerId: order.deliveryPartnerId,
-          assignmentInfo: JSON.stringify(order.assignmentInfo),
-          priorityIds: normalizedPriorityIds,
-          expandedIds: normalizedExpandedIds,
-          currentDeliveryId: normalizedCurrentId
-        });
-        return errorResponse(res, 403, 'This order is not available for you. It may have been assigned to another delivery partner or you were not notified about it.');
-      }
+      // Relaxing notification check: If a rider can see the order in discovery (passed zone check), 
+      // they should be allowed to accept it. The atomic lock below will handle race conditions correctly.
+      console.log(`✅ Allowing delivery partner ${currentDeliveryId} to attempt acceptance for unassigned order ${order.orderId}.`);
 
       // Only notified delivery partners can accept unassigned orders.
       console.log(`✅ Delivery partner ${currentDeliveryId} was notified about this order. Assigning order to them...`);

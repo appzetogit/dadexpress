@@ -646,6 +646,28 @@ export default function CategoryPage() {
     if (activeFilters.has('rating-4-plus')) {
       filtered = filtered.filter(r => r.rating && r.rating >= 4.0)
     }
+    if (activeFilters.has('distance-under-1km')) {
+      filtered = filtered.filter(r => {
+        const distMatch = r.distance?.match(/(\d+\.?\d*)/);
+        if (!distMatch) return false;
+        const val = parseFloat(distMatch[1]);
+        if (r.distance?.toLowerCase().includes('m') && !r.distance?.toLowerCase().includes('km')) {
+          return (val / 1000) <= 1.0;
+        }
+        return val <= 1.0;
+      });
+    }
+    if (activeFilters.has('distance-under-2km')) {
+      filtered = filtered.filter(r => {
+        const distMatch = r.distance?.match(/(\d+\.?\d*)/);
+        if (!distMatch) return false;
+        const val = parseFloat(distMatch[1]);
+        if (r.distance?.toLowerCase().includes('m') && !r.distance?.toLowerCase().includes('km')) {
+          return (val / 1000) <= 2.0;
+        }
+        return val <= 2.0;
+      });
+    }
     if (activeFilters.has('under-250')) {
       filtered = filtered.filter(r => r.featuredPrice && r.featuredPrice <= 250)
     }

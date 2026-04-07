@@ -105,7 +105,7 @@ export default function AllZonesMap() {
       }
 
       // If Google Maps is already loaded (from main.jsx), use it directly
-      if (window.google && window.google.maps) {
+      if (window.google && window.google.maps && typeof window.google.maps.Map === 'function') {
         initializeMap(window.google)
         return
       }
@@ -141,9 +141,9 @@ export default function AllZonesMap() {
       zoom: 5,
       mapTypeControl: true,
       mapTypeControlOptions: {
-        style: google.maps.MapTypeControlStyle.HORIZONTAL_BAR,
-        position: google.maps.ControlPosition.TOP_RIGHT,
-        mapTypeIds: [google.maps.MapTypeId.ROADMAP, google.maps.MapTypeId.SATELLITE]
+        style: google.maps?.MapTypeControlStyle?.HORIZONTAL_BAR || 1,
+        position: google.maps?.ControlPosition?.TOP_RIGHT || 1,
+        mapTypeIds: [google.maps?.MapTypeId?.ROADMAP || 'roadmap', google.maps?.MapTypeId?.SATELLITE || 'satellite']
       },
       zoomControl: true,
       streetViewControl: false,

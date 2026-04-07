@@ -1095,6 +1095,25 @@ function initializeScheduledTasks() {
   }).catch((error) => {
     console.error('❌ Failed to initialize auto-reject service:', error);
   });
+
+  // Import restaurant status service (Automatic Open/Close)
+  import('./modules/restaurant/services/restaurantStatusService.js').then(({ processAutoStatusUpdates }) => {
+    // Run every 30 seconds to check for restaurants that should be opened or closed
+    cron.schedule('*/30 * * * * *', async () => {
+      try {
+        const result = await processAutoStatusUpdates();
+        if (result.opened > 0 || result.closed > 0) {
+          console.log(`[Restaurant Status Cron] ${result.message}`);
+        }
+      } catch (error) {
+        console.error('[Restaurant Status Cron] Error:', error);
+      }
+    });
+
+    console.log('✅ Restaurant status sync scheduler initialized (runs every 30 seconds)');
+  }).catch((error) => {
+    console.error('❌ Failed to initialize restaurant status service:', error);
+  });
 }
 
 // Handle unhandled promise rejections

@@ -70,7 +70,7 @@ export default function ViewZone() {
         retries++
       }
 
-      if (window.google && window.google.maps) {
+      if (window.google && window.google.maps && typeof window.google.maps.Map === 'function') {
         console.log("Google Maps already loaded, initializing map...")
         // Wait a bit for DOM to be ready
         setTimeout(() => {
@@ -134,9 +134,9 @@ export default function ViewZone() {
         zoom: 5,
         mapTypeControl: true,
         mapTypeControlOptions: {
-          style: google.maps.MapTypeControlStyle.HORIZONTAL_BAR,
-          position: google.maps.ControlPosition.TOP_RIGHT,
-          mapTypeIds: [google.maps.MapTypeId.ROADMAP, google.maps.MapTypeId.SATELLITE]
+          style: google.maps?.MapTypeControlStyle?.HORIZONTAL_BAR || 1,
+          position: google.maps?.ControlPosition?.TOP_RIGHT || 1,
+          mapTypeIds: [google.maps?.MapTypeId?.ROADMAP || 'roadmap', google.maps?.MapTypeId?.SATELLITE || 'satellite']
         },
         zoomControl: true,
         streetViewControl: false,

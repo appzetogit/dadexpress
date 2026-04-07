@@ -380,19 +380,7 @@ export const createOrder = async (req, res) => {
       // Still proceed but log the mismatch
     }
 
-    // Block new orders when restaurant is Duty Off / not accepting orders.
-    if (restaurant.isAcceptingOrders === false) {
-      logger.warn('⚠️ Restaurant not accepting orders:', {
-        restaurantId: restaurant._id?.toString() || restaurant.restaurantId,
-        restaurantName: restaurant.name
-      });
-      return res.status(403).json({
-        success: false,
-        message: 'Restaurant is currently not accepting orders'
-      });
-    }
-
-    // NEW: Check if restaurant is currently open based on outlet timings (Automatic Close)
+    // Scheduled timings take precedence for automatic open/close status
     const isCurrentlyOpen = await OutletTimings.isRestaurantOpen(restaurant._id);
     if (!isCurrentlyOpen) {
       logger.warn('⚠️ Restaurant closed based on timings:', {

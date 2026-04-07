@@ -151,7 +151,7 @@ export default function AddZone() {
       }
 
       // If Google Maps is already loaded (from main.jsx), use it directly
-      if (window.google && window.google.maps) {
+      if (window.google && window.google.maps && typeof window.google.maps.Map === 'function') {
         initializeMap(window.google)
         return
       }
@@ -187,9 +187,9 @@ export default function AddZone() {
       zoom: 5,
       mapTypeControl: true,
       mapTypeControlOptions: {
-        style: google.maps.MapTypeControlStyle.HORIZONTAL_BAR,
-        position: google.maps.ControlPosition.TOP_RIGHT,
-        mapTypeIds: [google.maps.MapTypeId.ROADMAP, google.maps.MapTypeId.SATELLITE]
+        style: google.maps?.MapTypeControlStyle?.HORIZONTAL_BAR || 1,
+        position: google.maps?.ControlPosition?.TOP_RIGHT || 1,
+        mapTypeIds: [google.maps?.MapTypeId?.ROADMAP || 'roadmap', google.maps?.MapTypeId?.SATELLITE || 'satellite']
       },
       zoomControl: true,
       streetViewControl: false,
@@ -202,26 +202,30 @@ export default function AddZone() {
     mapInstanceRef.current = map
 
     // Initialize Drawing Manager
-    const drawingManager = new google.maps.drawing.DrawingManager({
-      drawingMode: null,
-      drawingControl: true, // Enable drawing controls
-      drawingControlOptions: {
-        position: google.maps.ControlPosition.TOP_CENTER,
-        drawingModes: [google.maps.drawing.OverlayType.POLYGON]
-      },
-      polygonOptions: {
-        fillColor: "#9333ea", // Purple color
-        fillOpacity: 0.35,
-        strokeWeight: 2,
-        strokeColor: "#9333ea",
-        clickable: false,
-        editable: true,
-        zIndex: 1
-      }
-    })
+    if (google.maps.drawing && typeof google.maps.drawing.DrawingManager === 'function') {
+      const drawingManager = new google.maps.drawing.DrawingManager({
+        drawingMode: null,
+        drawingControl: true, // Enable drawing controls
+        drawingControlOptions: {
+          position: google.maps.ControlPosition?.TOP_CENTER || 1,
+          drawingModes: [google.maps.drawing.OverlayType?.POLYGON || "polygon"]
+        },
+        polygonOptions: {
+          fillColor: "#9333ea", // Purple color
+          fillOpacity: 0.35,
+          strokeWeight: 2,
+          strokeColor: "#9333ea",
+          clickable: false,
+          editable: true,
+          zIndex: 1
+        }
+      })
 
-    drawingManager.setMap(map)
-    drawingManagerRef.current = drawingManager
+      drawingManager.setMap(map)
+      drawingManagerRef.current = drawingManager
+    } else {
+      console.error("❌ Google Maps drawing library is not available")
+    }
 
     // Track polygon path changes to show markers
     let currentPolygonPath = null

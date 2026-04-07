@@ -365,11 +365,16 @@ export const getRestaurants = async (req, res) => {
     // 4. Open/Closed status check (automatic status update)
     restaurants = await Promise.all(
       restaurants.map(async (r) => {
-        if (r.isAcceptingOrders === false) return r; // Already closed manually
-
+        // Automatic check based on outlet timings/delivery timings
         const isCurrentlyOpen = await OutletTimings.isRestaurantOpen(r._id);
         if (!isCurrentlyOpen) {
           return { ...r, isAcceptingOrders: false, status: "Closed" };
+        }
+        // If it should be open but is marked closed in DB, 
+        // we "suggest" it's open if it's within timings 
+        // (the Cron job will sync the DB eventually)
+        if (isCurrentlyOpen && r.isAcceptingOrders === false) {
+           return { ...r, isAcceptingOrders: true, status: "Open" };
         }
         return r;
       }),
@@ -448,13 +453,14 @@ export const getRestaurantById = async (req, res) => {
       return errorResponse(res, 404, 'Restaurant not found');
     }
 
-    // NEW: Check if restaurant is currently open based on outlet timings (Automatic Close)
-    if (restaurant.isAcceptingOrders !== false) {
-      const isCurrentlyOpen = await OutletTimings.isRestaurantOpen(restaurant._id);
-      if (!isCurrentlyOpen) {
-        restaurant.isAcceptingOrders = false;
-        restaurant.status = 'Closed';
-      }
+    // NEW: Check if restaurant is currently open based on outlet timings (Automatic Open/Close)
+    const isCurrentlyOpen = await OutletTimings.isRestaurantOpen(restaurant._id);
+    if (!isCurrentlyOpen) {
+      restaurant.isAcceptingOrders = false;
+      restaurant.status = 'Closed';
+    } else if (isCurrentlyOpen && restaurant.isAcceptingOrders === false) {
+      restaurant.isAcceptingOrders = true;
+      restaurant.status = 'Open';
     }
 
     return successResponse(res, 200, 'Restaurant retrieved successfully', {
