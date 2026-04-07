@@ -1177,27 +1177,13 @@ export default function Home() {
           }
         })
 
-        const sourceOfTruthCity = normalizeCityName(
-          selectedAddress?.city ||
-          activeLocation?.city ||
-          currentLocation?.city ||
-          location?.city,
-        )
-
-        const cityMatchedRestaurants = sourceOfTruthCity
-          ? transformedRestaurants.filter((restaurant) => {
-              const restaurantCity = normalizeCityName(restaurant.location?.city)
-              return restaurantCity ? restaurantCity === sourceOfTruthCity : true
-            })
-          : transformedRestaurants
-
         // Keep only practically nearby restaurants for the resolved zone when precise location is available.
         const nearbyZoneRestaurants = (resolvedZoneId && userLat && userLng)
-          ? cityMatchedRestaurants.filter((restaurant) => {
+          ? transformedRestaurants.filter((restaurant) => {
               if (restaurant.distanceInKm === null || restaurant.distanceInKm === undefined) return true
               return restaurant.distanceInKm <= 30
             })
-          : cityMatchedRestaurants
+          : transformedRestaurants
 
         // Sort restaurants by distance (nearby first) - only if user location is available
         if (userLat && userLng) {
@@ -1314,24 +1300,12 @@ export default function Home() {
         distanceInKm: distanceInKm // Preserve numeric distance for sorting
       }
     })
-    const sourceOfTruthCity = normalizeCityName(
-      selectedAddress?.city ||
-      activeLocation?.city ||
-      currentLocation?.city ||
-      location?.city,
-    )
-    const cityMatchedRestaurants = sourceOfTruthCity
-      ? updatedRestaurants.filter((restaurant) => {
-          const restaurantCity = normalizeCityName(restaurant.location?.city)
-          return restaurantCity ? restaurantCity === sourceOfTruthCity : true
-        })
-      : updatedRestaurants
     const nearbyZoneRestaurants = (resolvedZoneId && userLat && userLng)
-      ? cityMatchedRestaurants.filter((restaurant) => {
+      ? updatedRestaurants.filter((restaurant) => {
           if (restaurant.distanceInKm === null || restaurant.distanceInKm === undefined) return true
           return restaurant.distanceInKm <= 30
         })
-      : cityMatchedRestaurants
+      : updatedRestaurants
 
     setRestaurantsData(nearbyZoneRestaurants)
   }, [selectedAddress, selectedCoords?.lat, selectedCoords?.lng, resolvedSelectedCoords?.lat, resolvedSelectedCoords?.lng, currentLocation?.latitude, currentLocation?.longitude, currentLocation?.city, activeLocation?.city, location?.city, resolvedZoneId])

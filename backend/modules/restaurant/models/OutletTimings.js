@@ -130,8 +130,8 @@ outletTimingsSchema.statics.isRestaurantOpen = async function(restaurantId) {
     // Get current date/time in IST (UTC+5:30)
     const now = new Date();
     const istOffset = 5.5 * 60 * 60 * 1000;
-    // We shift the timestamp itself so that calling getUTC methods returns IST values
-    const istDate = new Date(now.getTime() + (now.getTimezoneOffset() * 60000) + istOffset);
+    // Date.getTime() is always UTC, so we add the IST offset to get IST-shifted time.
+    const istDate = new Date(now.getTime() + istOffset);
 
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const currentDay = days[istDate.getUTCDay()];
