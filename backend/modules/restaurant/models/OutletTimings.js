@@ -127,15 +127,15 @@ outletTimingsSchema.statics.isRestaurantOpen = async function(restaurantId) {
   try {
     const outletTimings = await this.findOne({ restaurantId, isActive: true });
     
+    // Get current date/time in IST (UTC+5:30)
     const now = new Date();
-    // Use IST timezone (+5:30) as requested by user's location, or local server time
-    // For consistency with India business, we can adjust to IST if server is UTC
     const istOffset = 5.5 * 60 * 60 * 1000;
+    // We shift the timestamp itself so that calling getUTC methods returns IST values
     const istDate = new Date(now.getTime() + (now.getTimezoneOffset() * 60000) + istOffset);
-    
+
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const currentDay = days[istDate.getDay()];
-    const currentMinutes = istDate.getHours() * 60 + istDate.getMinutes();
+    const currentDay = days[istDate.getUTCDay()];
+    const currentMinutes = istDate.getUTCHours() * 60 + istDate.getUTCMinutes();
 
     // If no outlet timings are set, fall back to Restaurant.deliveryTimings/openDays (legacy/onboarding flow).
     if (!outletTimings || !outletTimings.timings || outletTimings.timings.length === 0) {
@@ -147,9 +147,16 @@ outletTimingsSchema.statics.isRestaurantOpen = async function(restaurantId) {
       if (!restaurant) return true;
 
       const openDays = Array.isArray(restaurant.openDays) ? restaurant.openDays : [];
-      if (openDays.length > 0 && !openDays.includes(currentDay)) {
-        return false;
+      if (openDays.length > 0) {
+        // Handle abbreviations (Mon) and full names (Monday) case-insensitively
+        const isDayOpen = openDays.some(day => {
+          const d = day?.toString().trim().toLowerCase();
+          const c = currentDay.toLowerCase();
+          return d === c || d === c.substring(0, 3);
+        });
+        if (!isDayOpen) return false;
       }
+
 
       const openMin = timeToMinutes(restaurant.deliveryTimings?.openingTime);
       const closeMin = timeToMinutes(restaurant.deliveryTimings?.closingTime);
