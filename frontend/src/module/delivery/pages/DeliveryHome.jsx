@@ -700,6 +700,7 @@ export default function DeliveryHome() {
   }, [selectedRestaurant?.id, selectedRestaurant?.orderMongoId, activeOrder?._id, paymentCollectedBy, paymentConfirmed, isVerifyingPayment]);
 
   const [isRefreshingPickupDetails, setIsRefreshingPickupDetails] = useState(false)
+  const [isRefreshingDropDetails, setIsRefreshingDropDetails] = useState(false)
   const lastAutoPickupRefreshOrderRef = useRef(null)
   const [bottomSheetExpanded, setBottomSheetExpanded] = useState(false)
   const [acceptButtonProgress, setAcceptButtonProgress] = useState(0)
@@ -1118,6 +1119,61 @@ export default function DeliveryHome() {
 
     return null
   }, [])
+
+  const refreshReachedDropDetails = useCallback(async () => {
+    const { mongoId, orderId } = getOrderIdCandidates(selectedRestaurant, newOrder)
+    const targetOrderId = mongoId || orderId
+
+    if (!targetOrderId) {
+      toast.error("Order details not available to update")
+      return
+    }
+
+    setIsRefreshingDropDetails(true)
+    try {
+      const response = await deliveryAPI.getOrderDetails(targetOrderId)
+      const order = extractOrderFromDeliveryResponse(response)
+
+      if (!order) {
+        toast.error("Unable to update drop details")
+        return
+      }
+
+      const orderAddress =
+        order?.customerAddress ||
+        order?.address?.formattedAddress ||
+        order?.address?.address ||
+        [
+          order?.address?.addressLine1,
+          order?.address?.addressLine2,
+          order?.address?.area,
+          order?.address?.city,
+          order?.address?.state,
+          order?.address?.pincode
+        ].filter(Boolean).join(", ") ||
+        selectedRestaurant?.customerAddress ||
+        ""
+
+      setSelectedRestaurant((prev) => ({
+        ...(prev || {}),
+        orderId: order?.orderId || prev?.orderId,
+        orderMongoId: order?._id || prev?.orderMongoId || null,
+        customerName: order?.customerName || order?.userId?.name || order?.user?.name || prev?.customerName || "Customer Name",
+        customerAddress: orderAddress,
+        customerPhone: resolveCustomerPhone(order) || prev?.customerPhone || null,
+        customerId: resolveCustomerId(order) || prev?.customerId || null,
+        paymentMethod: order?.paymentMethod ?? order?.payment?.method ?? prev?.paymentMethod,
+        items: Array.isArray(order?.items) ? order.items : (prev?.items || [])
+      }))
+
+      toast.success("Drop details updated")
+    } catch (error) {
+      console.error("❌ Error refreshing reached drop details:", error)
+      toast.error("Failed to update drop details")
+    } finally {
+      setIsRefreshingDropDetails(false)
+    }
+  }, [newOrder, selectedRestaurant])
 
   const refreshReachedPickupDetails = useCallback(async () => {
     const { mongoId, orderId } = getOrderIdCandidates(selectedRestaurant, newOrder)
