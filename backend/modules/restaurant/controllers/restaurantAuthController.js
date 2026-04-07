@@ -217,6 +217,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
 
   try {
     let restaurant;
+    let staffMember = null;
     let existingRestaurantFoundForLogin = false;
     let createdNewRestaurantInLoginFlow = false;
     // Normalize phone number if provided
@@ -444,7 +445,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       const candidateRestaurants = await Restaurant.find(findQuery);
       restaurant = pickBestRestaurantForOtpLogin(candidateRestaurants);
       
-      let staffMember = null;
+      staffMember = null;
       if (!restaurant) {
         // If no restaurant found, check if this is a staff member
         const staffQuery = normalizedPhone
