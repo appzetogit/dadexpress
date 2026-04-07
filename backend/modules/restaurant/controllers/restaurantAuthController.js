@@ -1,4 +1,5 @@
 import Restaurant from '../models/Restaurant.js';
+import StaffManagement from '../models/StaffManagement.js';
 import otpService from '../../auth/services/otpService.js';
 import jwtService from '../../auth/services/jwtService.js';
 import firebaseAuthService from '../../auth/services/firebaseAuthService.js';
@@ -442,7 +443,17 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         : { email: email?.toLowerCase().trim() };
       const candidateRestaurants = await Restaurant.find(findQuery);
       restaurant = pickBestRestaurantForOtpLogin(candidateRestaurants);
-      existingRestaurantFoundForLogin = !!restaurant;
+      
+      let staffMember = null;
+      if (!restaurant) {
+        // If no restaurant found, check if this is a staff member
+        const staffQuery = normalizedPhone
+          ? { phone: normalizedPhone, status: 'active' }
+          : { email: email?.toLowerCase().trim(), status: 'active' };
+        staffMember = await StaffManagement.findOne(staffQuery);
+      }
+
+      existingRestaurantFoundForLogin = !!restaurant || !!staffMember;
 
       // If restaurant not found, we will auto-register with a placeholder name
       const restaurantName = name || (normalizedPhone || email || 'New Restaurant');
@@ -476,7 +487,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
 
       const { fcmToken, platform = 'web' } = req.body;
 
-      if (!restaurant) {
+      if (!restaurant && !staffMember) {
         // Auto-register new restaurant after OTP verification
         const { fcmToken, platform = 'web' } = req.body;
         const restaurantData = {
@@ -689,12 +700,26 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       }
     }
 
-    // Generate tokens (email may be null for phone signups)
+    // Prepare response data
+    const userId = restaurant ? restaurant._id.toString() : staffMember._id.toString();
+    const userRole = 'restaurant';
+    const userEmail = restaurant ? (restaurant.email || restaurant.phone || restaurant.restaurantId) : (staffMember.email || staffMember.phone);
+
+    // Generate tokens
     const tokens = jwtService.generateTokens({
-      userId: restaurant._id.toString(),
-      role: 'restaurant',
-      email: restaurant.email || restaurant.phone || restaurant.restaurantId
+      userId,
+      role: userRole,
+      email: userEmail
     });
+
+    // If it's a staff member, we need to return the restaurant info they belong to
+    if (staffMember && !restaurant) {
+      restaurant = await Restaurant.findById(staffMember.restaurantId);
+    }
+
+    if (!restaurant) {
+        return errorResponse(res, 404, 'Restaurant not found for this user');
+    }
 
     // Set refresh token in httpOnly cookie
     res.cookie(

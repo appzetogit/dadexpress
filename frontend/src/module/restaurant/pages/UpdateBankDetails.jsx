@@ -1,19 +1,50 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { ArrowLeft, AlertCircle } from "lucide-react"
+import { restaurantAPI } from "@/lib/api"
 
 export default function UpdateBankDetails() {
   const navigate = useNavigate()
   const [isEditMode, setIsEditMode] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   
   // Bank details state
   const [bankDetails, setBankDetails] = useState({
-    beneficiaryName: "Mr. Rajkumar Chouhan",
-    accountNumber: "42479177517",
-    confirmAccountNumber: "42479177517",
-    ifscCode: "SBIN0018764",
-    lastUpdated: "9 Dec, 2023"
+    beneficiaryName: "Not updated yet",
+    accountNumber: "Not updated yet",
+    confirmAccountNumber: "Not updated yet",
+    ifscCode: "Not updated yet",
+    lastUpdated: "Never"
   })
+
+  // Fetch restaurant bank details on mount
+  useEffect(() => {
+    const fetchRestaurantData = async () => {
+      try {
+        setLoading(true)
+        const response = await restaurantAPI.getCurrentRestaurant()
+        const data = response?.data?.data?.restaurant || response?.data?.restaurant
+        if (data && data.bank) {
+          const bankData = {
+            beneficiaryName: data.bank.bankName || "",
+            accountNumber: data.bank.accountNumber || "",
+            confirmAccountNumber: data.bank.accountNumber || "",
+            ifscCode: data.bank.ifscCode || "",
+            lastUpdated: data.updatedAt ? new Date(data.updatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+          }
+          setBankDetails(bankData)
+          setFormData(bankData)
+        }
+      } catch (error) {
+        console.error("Error fetching restaurant bank data:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchRestaurantData()
+  }, [])
 
   const [formData, setFormData] = useState({
     beneficiaryName: bankDetails.beneficiaryName,
@@ -181,7 +212,7 @@ export default function UpdateBankDetails() {
     }))
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     
     // Mark all fields as touched
@@ -208,28 +239,41 @@ export default function UpdateBankDetails() {
       return
     }
 
-    // Update bank details
-    setBankDetails({
-      beneficiaryName: formData.beneficiaryName.trim(),
-      accountNumber: formData.accountNumber.replace(/[\s\-]/g, ""),
-      confirmAccountNumber: formData.confirmAccountNumber.replace(/[\s\-]/g, ""),
-      ifscCode: formData.ifscCode.trim().toUpperCase(),
-      lastUpdated: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-    })
-    
-    // Switch back to view mode
-    setIsEditMode(false)
-    
-    // Reset touched state
-    setTouched({
-      beneficiaryName: false,
-      accountNumber: false,
-      confirmAccountNumber: false,
-      ifscCode: false
-    })
-    
-    // Here you would typically save to backend
-    console.log("Bank details updated:", formData)
+    try {
+      setSaving(true)
+      const newBankDetails = {
+        bankName: formData.beneficiaryName.trim(),
+        accountNumber: formData.accountNumber.replace(/[\s\-]/g, ""),
+        ifscCode: formData.ifscCode.trim().toUpperCase(),
+      }
+      
+      const response = await restaurantAPI.updateProfile({ bank: newBankDetails })
+      
+      if (response?.data?.success) {
+        setBankDetails({
+          beneficiaryName: newBankDetails.bankName,
+          accountNumber: newBankDetails.accountNumber,
+          confirmAccountNumber: newBankDetails.accountNumber,
+          ifscCode: newBankDetails.ifscCode,
+          lastUpdated: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+        })
+        
+        setIsEditMode(false)
+        setTouched({
+          beneficiaryName: false,
+          accountNumber: false,
+          confirmAccountNumber: false,
+          ifscCode: false
+        })
+      } else {
+        throw new Error("Invalid response from server")
+      }
+    } catch (error) {
+      console.error("Error saving bank details:", error)
+      alert(`Failed to save bank details: ${error.response?.data?.message || error.message || "Please try again."}`)
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleEditClick = () => {
@@ -278,7 +322,11 @@ export default function UpdateBankDetails() {
             {/* Account Information Section */}
             <div className="mb-6">
               <h2 className="text-base font-bold text-gray-900 mb-2">Account information</h2>
-              <p className="text-sm text-gray-500 mb-4">Last updated on {bankDetails.lastUpdated}</p>
+              {loading ? (
+                <p className="text-sm text-gray-500 mb-4">Loading bank details...</p>
+              ) : (
+                <p className="text-sm text-gray-500 mb-4">Last updated on {bankDetails.lastUpdated}</p>
+              )}
               
               <div className="space-y-3">
                 <div className="flex justify-between items-start">
@@ -329,6 +377,7 @@ export default function UpdateBankDetails() {
                       ? "border-red-500 focus:ring-red-500 focus:border-red-500"
                       : "border-gray-300 focus:ring-blue-500 focus:border-transparent"
                   }`}
+                  disabled={saving}
                   required
                 />
                 {errors.beneficiaryName && touched.beneficiaryName && (
@@ -355,6 +404,7 @@ export default function UpdateBankDetails() {
                       ? "border-red-500 focus:ring-red-500 focus:border-red-500"
                       : "border-gray-300 focus:ring-blue-500 focus:border-transparent"
                   }`}
+                  disabled={saving}
                   required
                 />
                 {errors.accountNumber && touched.accountNumber && (
@@ -381,6 +431,7 @@ export default function UpdateBankDetails() {
                       ? "border-red-500 focus:ring-red-500 focus:border-red-500"
                       : "border-gray-300 focus:ring-blue-500 focus:border-transparent"
                   }`}
+                  disabled={saving}
                   required
                 />
                 {errors.confirmAccountNumber && touched.confirmAccountNumber && (
@@ -407,6 +458,7 @@ export default function UpdateBankDetails() {
                       ? "border-red-500 focus:ring-red-500 focus:border-red-500"
                       : "border-gray-300 focus:ring-blue-500 focus:border-transparent"
                   }`}
+                  disabled={saving}
                   required
                 />
                 {errors.ifscCode && touched.ifscCode && (
@@ -433,9 +485,12 @@ export default function UpdateBankDetails() {
         ) : (
           <button
             onClick={handleSubmit}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-lg text-base transition-colors"
+            disabled={saving}
+            className={`w-full text-white font-bold py-4 rounded-lg text-base transition-colors ${
+              saving ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
+            }`}
           >
-            Submit
+            {saving ? "Saving..." : "Submit"}
           </button>
         )}
       </div>

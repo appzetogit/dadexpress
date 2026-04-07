@@ -92,7 +92,7 @@ export default function HelpCentre() {
                </div>
 
                <a
-                 href={`tel:${helpCentrePhone.trim().replace(/\s+/g, "")}`}
+                 href={`tel:${helpCentrePhone.replace(/\D/g, "").slice(-10)}`}
                  className="flex-shrink-0 p-2 bg-white hover:bg-red-100 rounded-full transition-colors border border-red-200"
                  aria-label="Call help center"
                >

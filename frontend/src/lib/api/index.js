@@ -646,12 +646,7 @@ export const restaurantAPI = {
       throw new Error("ZoneId is required");
     }
     const sanitizedParams = { ...params };
-    delete sanitizedParams.lat;
-    delete sanitizedParams.lng;
-    delete sanitizedParams.latitude;
-    delete sanitizedParams.longitude;
-    delete sanitizedParams.coords;
-    delete sanitizedParams.coordinates;
+    // We allow lat/lng to be passed for dynamic distance/sorting in the backend
     return apiClient.get(API_ENDPOINTS.RESTAURANT.LIST, {
       params: { ...sanitizedParams, zoneId },
     });

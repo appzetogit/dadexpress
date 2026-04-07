@@ -95,9 +95,20 @@ export default function HelpCentre() {
     }
   ]
 
+  const normalizePhoneNumber = (phone) => {
+    if (!phone) return ""
+    const digits = String(phone).replace(/\D/g, "")
+    // Keep emergency numbers as is (100, 108, etc)
+    if (digits.length <= 4) return digits
+    if (digits.length > 10 && digits.startsWith("91")) {
+      return digits.slice(-10)
+    }
+    return digits
+  }
+
   const handleCallSupport = () => {
     if (supportNumber) {
-      window.location.href = `tel:${supportNumber}`
+      window.location.href = `tel:${normalizePhoneNumber(supportNumber)}`
     }
   }
 
@@ -185,7 +196,7 @@ export default function HelpCentre() {
             {emergencyLinks.map((link) => (
               <button
                 key={link.id}
-                onClick={() => window.location.href = `tel:${link.phone}`}
+                onClick={() => window.location.href = `tel:${normalizePhoneNumber(link.phone)}`}
                 className="flex flex-col gap-3 bg-white p-5 rounded-xl border border-red-50 shadow-sm hover:bg-red-50/50 transition-all text-left group"
               >
                 <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center group-hover:bg-red-200 transition-colors">

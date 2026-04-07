@@ -4,6 +4,7 @@ import RestaurantWallet from '../../restaurant/models/RestaurantWallet.js';
 import DeliveryWallet from '../../delivery/models/DeliveryWallet.js';
 import { calculateOrderSettlement } from './orderSettlementService.js';
 import mongoose from 'mongoose';
+import { notifyRestaurantPayoutProcessing } from './restaurantNotificationService.js';
 
 const buildDateRange = (startDate, endDate) => {
   if (!startDate || !endDate) return null;
@@ -317,6 +318,8 @@ export const markSettlementsAsProcessed = async (settlementIds, actorType, actor
       _id: { $in: settlementIds }
     });
 
+    const restaurantPayouts = new Map();
+
     for (const settlement of settlements) {
       if (!settlement.metadata || !(settlement.metadata instanceof Map)) {
         const plain =
@@ -324,6 +327,13 @@ export const markSettlementsAsProcessed = async (settlementIds, actorType, actor
             ? { ...settlement.metadata }
             : {};
         settlement.metadata = new Map(Object.entries(plain));
+      }
+
+      // Check if already marked for restaurant payout
+      const isAlreadyMarked = settlement.metadata.get('restaurantFinanceReportMarked') === true;
+      if (!isAlreadyMarked && settlement.restaurantEarning?.netEarning > 0) {
+        const rId = settlement.restaurantId.toString();
+        restaurantPayouts.set(rId, (restaurantPayouts.get(rId) || 0) + settlement.restaurantEarning.netEarning);
       }
 
       // Mark for both reports to be safe if applicable
@@ -343,7 +353,30 @@ export const markSettlementsAsProcessed = async (settlementIds, actorType, actor
         settlement.deliveryPartnerSettled = true;
       }
       await settlement.save();
+    }
 
+    // Update restaurant wallets for the payout
+    for (const [restaurantId, totalAmount] of restaurantPayouts.entries()) {
+      try {
+        const wallet = await RestaurantWallet.findOrCreateByRestaurantId(restaurantId);
+        wallet.addTransaction({
+          amount: totalAmount,
+          type: 'withdrawal',
+          status: 'Completed',
+          description: `Payout for ${settlementIds.length} settlements processed by admin`
+        });
+        await wallet.save();
+        console.log(`[FINANCE] Updated restaurant wallet ${restaurantId} with payout of ₹${totalAmount}`);
+        
+        // Notify restaurant about the payout
+        try {
+          await notifyRestaurantPayoutProcessing(restaurantId, totalAmount, settlementIds.length);
+        } catch (notifErr) {
+          console.error(`[FINANCE] Failed to notify restaurant ${restaurantId} about payout:`, notifErr.message);
+        }
+      } catch (walletErr) {
+        console.error(`[FINANCE] Failed to update wallet for restaurant ${restaurantId}:`, walletErr.message);
+      }
     }
 
     return settlements;

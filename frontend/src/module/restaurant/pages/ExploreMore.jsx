@@ -1179,6 +1179,15 @@ export default function ExploreMore() {
                   Edit profile details
                 </button>
                 <button
+                  onClick={() => {
+                    setProfileOpen(false)
+                    navigate("/restaurant/update-bank-details")
+                  }}
+                  className="w-full border border-gray-300 hover:bg-gray-50 text-gray-900 font-semibold py-3 px-4 rounded-lg transition-colors mb-3"
+                >
+                  Update bank details
+                </button>
+                <button
                   onClick={handleLogoutAllDevices}
                   disabled={isLoggingOut}
                   className="w-full bg-red-600 hover:bg-red-700 disabled:bg-red-400 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 rounded-lg transition-colors"

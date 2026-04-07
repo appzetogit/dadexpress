@@ -184,10 +184,21 @@ const helpCategories = [
   }
 ]
 
+import { loadBusinessSettings } from "@/lib/utils/businessSettings"
+
 export default function Help() {
   const [searchQuery, setSearchQuery] = useState("")
   const [expandedCategory, setExpandedCategory] = useState(null)
   const [expandedQuestion, setExpandedQuestion] = useState(null)
+  const [settings, setSettings] = useState(null)
+
+  useState(() => {
+    const fetchSettings = async () => {
+      const data = await loadBusinessSettings()
+      if (data) setSettings(data)
+    }
+    fetchSettings()
+  }, [])
 
   const filteredCategories = helpCategories.filter(category =>
     category.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -389,10 +400,10 @@ export default function Help() {
                       Call us anytime
                     </p>
                     <a
-                      href="tel:+1-800-123-4567"
+                      href={settings?.phone?.number ? `tel:${settings.phone.countryCode}${settings.phone.number}` : "tel:+919876543210"}
                       className="text-sm text-primary hover:underline font-medium"
                     >
-                      +1 (800) 123-4567
+                      {settings?.phone?.number ? `${settings.phone.countryCode} ${settings.phone.number}` : "+91 9876543210"}
                     </a>
                   </div>
                 </div>
@@ -406,10 +417,10 @@ export default function Help() {
                       We'll respond within 24 hours
                     </p>
                     <a
-                      href="mailto:support@appzeto.com"
+                      href={settings?.email ? `mailto:${settings.email}` : "mailto:support@dadexpress.com"}
                       className="text-sm text-primary hover:underline font-medium"
                     >
-                      support@appzeto.com
+                      {settings?.email || "support@dadexpress.com"}
                     </a>
                   </div>
                 </div>

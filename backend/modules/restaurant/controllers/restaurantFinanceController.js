@@ -137,8 +137,23 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
     // Get current cycle orders (delivered orders in current week)
     // Query orders that were delivered in the current cycle
     // First try with deliveredAt, if not found, use tracking.delivered.timestamp as fallback
+    // First, find all orders that have already been settled for the restaurant
+    let settledOrderIds = [];
+    try {
+      const settledSettlements = await mongoose.model('OrderSettlement').find({
+        restaurantId: { $in: restaurantIdVariations },
+        restaurantSettled: true
+      }).select('orderId').lean();
+      settledOrderIds = settledSettlements.map(s => s.orderId.toString());
+    } catch (settleErr) {
+      console.warn('⚠️ Could not fetch settled status:', settleErr.message);
+    }
+
+    // Get current cycle orders (delivered orders in current week)
+    // Query orders that were delivered in the current cycle AND NOT yet settled
     let currentCycleOrders = await Order.find({
       status: 'delivered',
+      _id: { $nin: settledOrderIds },
       $and: [
         restaurantIdQuery,
         {
@@ -158,6 +173,7 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
       currentCycleOrders = await Order.find({
         ...restaurantIdQuery,
         status: 'delivered',
+        _id: { $nin: settledOrderIds },
         createdAt: { $gte: currentCycleStart, $lte: currentCycleEnd }
       })
       .populate('userId', 'name phone email')
@@ -519,6 +535,20 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
       withdrawals: allWithdrawals.map(w => ({ id: w._id, amount: w.amount, status: w.status }))
     });
 
+    // Get wallet info
+    const wallet = await RestaurantWallet.findOrCreateByRestaurantId(restaurant._id);
+    const recentTransactions = (wallet.transactions || [])
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .slice(0, 20)
+      .map(t => ({
+        id: t._id,
+        amount: t.amount,
+        type: t.type,
+        status: t.status,
+        description: t.description,
+        createdAt: t.createdAt
+      }));
+
     return successResponse(res, 200, 'Finance data retrieved successfully', {
       currentCycle: {
         start: currentCycleStartFormatted,
@@ -531,6 +561,12 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
         orders: currentCycleOrdersData // Include orders array in response
       },
       pastCycles: pastCyclesData,
+      wallet: {
+        totalBalance: wallet.totalBalance || 0,
+        totalEarned: wallet.totalEarned || 0,
+        totalWithdrawn: wallet.totalWithdrawn || 0,
+        transactions: recentTransactions
+      },
       restaurant: {
         name: restaurant.name || 'Restaurant',
         restaurantId: restaurant.restaurantId || restaurantId,

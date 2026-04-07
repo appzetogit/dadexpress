@@ -57,7 +57,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
     pathname.startsWith("/usermain/cart/")
   const inputRef = useRef(null)
   const [searchValue, setSearchValue] = useState("")
-  const { location } = useGeoLocation()
+  const { location, reverseGeocode } = useGeoLocation()
   const { addresses = [], addAddress, updateAddress, userProfile, setDefaultAddress } = useProfile()
   const [showAddressForm, setShowAddressForm] = useState(false)
   const [editingAddressId, setEditingAddressId] = useState(null)
@@ -764,15 +764,18 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
         return
       }
 
+      // Fetch detailed address from geocoding service
+      const geocoded = await reverseGeocode(latitude, longitude)
+
       const gpsLocationData = {
         latitude,
         longitude,
         accuracy: Number.isFinite(accuracy) ? accuracy : undefined,
-        address: "",
-        city: "",
-        state: "",
-        area: "",
-        formattedAddress: "",
+        address: geocoded.address || "",
+        city: geocoded.city || "",
+        state: geocoded.state || "",
+        area: geocoded.area || "",
+        formattedAddress: geocoded.formattedAddress || "",
       }
 
       localStorage.setItem("userLocation", JSON.stringify(gpsLocationData))
@@ -786,11 +789,11 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       await userAPI.updateLocation({
         latitude,
         longitude,
-        address: "",
-        city: "",
-        state: "",
-        area: "",
-        formattedAddress: "",
+        address: geocoded.address || "",
+        city: geocoded.city || "",
+        state: geocoded.state || "",
+        area: geocoded.area || "",
+        formattedAddress: geocoded.formattedAddress || "",
         accuracy: gpsLocationData.accuracy,
       })
 
@@ -1493,30 +1496,21 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
 
       setLoadingAddress(true)
       try {
-        // SKIP REVERSE GEOCODING - Save only lat/long to reduce Google Maps API costs
-        console.log("📍 Skipping reverse geocoding - coordinates only:", { lat: roundedLat, lng: roundedLng })
+        // Fetch detailed address from geocoding service
+        const addr = await reverseGeocode(roundedLat, roundedLng)
+        console.log("✅ Reverse geocoding success:", addr)
         
-        // Set empty address fields - only coordinates will be saved
-        let formattedAddress = ""
-        let city = ""
-        let state = ""
-        let area = ""
-        let street = ""
-        let streetNumber = ""
-        let postalCode = ""
-        let pointOfInterest = ""
-        let premise = ""
-
-        console.log("✅ Address fields cleared - coordinates only:", {
+        const {
           formattedAddress,
-          street,
           city,
           state,
           area,
+          street,
+          streetNumber,
           postalCode,
-            pointOfInterest,
-            premise
-          })
+          pointOfInterest,
+          premise
+        } = addr
 
           // Update current address display
           setCurrentAddress(formattedAddress || `${roundedLat.toFixed(6)}, ${roundedLng.toFixed(6)}`)
@@ -1573,15 +1567,18 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
         return
       }
 
+      // Fetch detailed address from geocoding service
+      const geocoded = await reverseGeocode(lat, lng)
+
       const gpsLocationData = {
         latitude: lat,
         longitude: lng,
         accuracy: Number.isFinite(accuracy) ? accuracy : undefined,
-        address: "",
-        city: "",
-        state: "",
-        area: "",
-        formattedAddress: "",
+        address: geocoded.address || "",
+        city: geocoded.city || "",
+        state: geocoded.state || "",
+        area: geocoded.area || "",
+        formattedAddress: geocoded.formattedAddress || "",
       }
       localStorage.setItem("userLocation", JSON.stringify(gpsLocationData))
       window.dispatchEvent(
@@ -1593,11 +1590,11 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       await userAPI.updateLocation({
         latitude: lat,
         longitude: lng,
-        address: "",
-        city: "",
-        state: "",
-        area: "",
-        formattedAddress: "",
+        address: geocoded.address || "",
+        city: geocoded.city || "",
+        state: geocoded.state || "",
+        area: geocoded.area || "",
+        formattedAddress: geocoded.formattedAddress || "",
         accuracy: gpsLocationData.accuracy,
       })
 

@@ -60,15 +60,18 @@ class NotificationService {
             if (notification.image) {
                 message.apns.fcm_options = { image: notification.image };
             }
-        } else if (platform === 'android') {
+        } else if (platform === 'android' || platform === 'app') {
             message.android = {
                 priority: 'high',
+                ttl: 3600000, // 1 hour TTL
                 notification: {
                     sound: 'default',
                     icon: 'ic_launcher',
                     color: '#FF5E00',
                     clickAction: data.click_action || '/',
-                    image: notification.image || logoUrl
+                    image: notification.image || logoUrl,
+                    channelId: 'high_priority_notifications',
+                    vibrateTimings: [0, 500, 200, 500] // Powerful vibration
                 },
             };
         } else if (platform === 'web') {

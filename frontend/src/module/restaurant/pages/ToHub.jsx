@@ -305,7 +305,7 @@ export default function ToHub() {
   }
 
   const quickLinks = [
-    { id: "growth-helpline", label: "Growth helpline", icon: FaPhone, route: "tel:+911111111111", isPhone: true },
+    { id: "growth-helpline", label: "Growth helpline", icon: FaPhone, route: "tel:1111111111", isPhone: true },
     { id: "order-history", label: "Order history", icon: FaHistory, route: "/restaurant/orders/all" },
     { id: "complaints", label: "Complaints", icon: FaExclamationTriangle, route: "/restaurant/feedback?tab=complaints" },
     { id: "reviews", label: "Reviews", icon: FaStar, route: "/restaurant/feedback" },

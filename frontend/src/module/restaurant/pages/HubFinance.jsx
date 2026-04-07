@@ -685,7 +685,7 @@ export default function HubFinance() {
                 : "bg-white text-gray-600 border border-gray-300"
             }`}
           >
-            Invoices & Taxes
+            Payout History
           </button>
         </div>
       </div>
@@ -696,8 +696,26 @@ export default function HubFinance() {
           <div className="space-y-6">
             {/* Current cycle */}
             <div>
-              <h2 className="text-base font-bold text-gray-900 mb-3">Current cycle</h2>
-              <div className="bg-white rounded-lg p-4">
+              <h2 className="text-base font-bold text-gray-900 mb-3">Wallet balance</h2>
+              <div className="bg-white rounded-lg p-4 border border-gray-200">
+                {loading ? (
+                  <div className="py-2 text-gray-500">Loading...</div>
+                ) : (
+                  <>
+                    <p className="text-3xl font-bold text-gray-900 mb-1">
+                      ₹{(financeData?.wallet?.totalBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      Settled amount available in your wallet
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <h2 className="text-base font-bold text-gray-900 mb-3">Current cycle (Earnings)</h2>
+              <div className="bg-white rounded-lg p-4 border border-gray-200">
                 {loading ? (
                   <div className="py-8 text-center text-gray-500">Loading...</div>
                 ) : (
@@ -706,15 +724,18 @@ export default function HubFinance() {
                       ₹{(financeData?.currentCycle?.estimatedPayout || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
                     <p className="text-sm text-gray-600 mb-4">
-                      {financeData?.currentCycle?.totalOrders || 0} {financeData?.currentCycle?.totalOrders === 1 ? 'order' : 'orders'}
+                      {financeData?.currentCycle?.totalOrders || 0} {financeData?.currentCycle?.totalOrders === 1 ? 'order' : 'orders'} (Not yet settled)
                     </p>
-                    {(financeData?.currentCycle?.estimatedPayout || 0) > 0 && (
+                    {(financeData?.wallet?.totalBalance || 0) > 0 && (
                       <button
-                        onClick={() => setShowWithdrawalModal(true)}
+                        onClick={() => {
+                          setWithdrawalAmount((financeData?.wallet?.totalBalance || 0).toString())
+                          setShowWithdrawalModal(true)
+                        }}
                         className="w-full bg-black text-white py-3 px-4 rounded-lg font-semibold flex items-center justify-center gap-2 hover:bg-gray-800 transition-colors mt-4"
                       >
                         <Wallet className="h-5 w-5" />
-                        Withdraw
+                        Withdraw from Wallet
                       </button>
                     )}
                   </>
@@ -957,10 +978,49 @@ export default function HubFinance() {
         )}
 
         {activeTab === "invoices" && (
-          <div className=" rounded-lg p-4">
-            <p className="text-sm text-gray-600 text-center py-8">
-              Invoices & Taxes content will be displayed here
-            </p>
+          <div className="space-y-4">
+            <h2 className="text-lg font-bold text-gray-900">Recent Payouts</h2>
+            {financeData?.wallet?.transactions && financeData.wallet.transactions.length > 0 ? (
+              <div className="bg-white rounded-lg p-4 space-y-3 border border-gray-200">
+                {financeData.wallet.transactions.map((tx, idx) => (
+                  <div key={tx.id || idx} className="flex justify-between items-center py-3 border-b border-gray-100 last:border-0 last:pb-0">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className={`text-sm font-bold ${tx.type === 'withdrawal' ? 'text-red-600' : 'text-green-600'}`}>
+                          {tx.type === 'withdrawal' ? '-' : '+'}₹{(tx.amount || 0).toLocaleString('en-IN')}
+                        </p>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${tx.status === 'Completed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                          {tx.status}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-600 mt-1">{tx.description || 'Payout processed'}</p>
+                      <p className="text-[10px] text-gray-400 mt-1">
+                        {new Date(tx.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                    <div className="ml-2">
+                      <div className={`p-2 rounded-lg ${tx.type === 'withdrawal' ? 'bg-red-50' : 'bg-green-50'}`}>
+                        <Wallet className={`w-4 h-4 ${tx.type === 'withdrawal' ? 'text-red-600' : 'text-green-600'}`} />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="bg-white rounded-lg p-12 text-center border border-gray-200">
+                <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Wallet className="w-8 h-8 text-gray-300" />
+                </div>
+                <p className="text-gray-500 font-medium">No payout transactions found yet.</p>
+                <p className="text-xs text-gray-400 mt-1">Transactions will appear here once processed by admin.</p>
+              </div>
+            )}
+            
+            <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+              <p className="text-xs text-blue-700 leading-relaxed">
+                <strong>Note:</strong> All settlements marked as paid in the admin panel will appear here. The wallet balance updates automatically when a payout is processed.
+              </p>
+            </div>
           </div>
         )}
       </div>

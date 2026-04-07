@@ -13,6 +13,7 @@ export default function ZoneSetup() {
   const markerRef = useRef(null)
   const autocompleteInputRef = useRef(null)
   const autocompleteRef = useRef(null)
+  const geocoderRef = useRef(null)
   
   const [googleMapsApiKey, setGoogleMapsApiKey] = useState("")
   const [mapLoading, setMapLoading] = useState(true)
@@ -218,6 +219,7 @@ export default function ZoneSetup() {
       })
 
       mapInstanceRef.current = map
+      geocoderRef.current = new google.maps.Geocoder()
       console.log("✅ Map initialized successfully")
 
       // Add click listener to place marker
@@ -225,12 +227,32 @@ export default function ZoneSetup() {
         const lat = event.latLng.lat()
         const lng = event.latLng.lng()
 
-        // Use GPS coordinates text directly (no paid reverse geocoding)
-        const address = `${lat.toFixed(6)}, ${lng.toFixed(6)}`
-        setLocationSearch(address)
-        setSelectedAddress(address)
-        setSelectedLocation({ lat, lng, address })
-        updateMarker(lat, lng, address)
+        // Perform reverse geocoding to get human-readable address
+        if (geocoderRef.current) {
+          geocoderRef.current.geocode({ location: { lat, lng } }, (results, status) => {
+            if (status === 'OK' && results[0]) {
+              const address = results[0].formatted_address
+              setLocationSearch(address)
+              setSelectedAddress(address)
+              setSelectedLocation({ lat, lng, address })
+              updateMarker(lat, lng, address)
+            } else {
+              // Fallback to coordinates if geocoding fails
+              const address = `${lat.toFixed(6)}, ${lng.toFixed(6)}`
+              setLocationSearch(address)
+              setSelectedAddress(address)
+              setSelectedLocation({ lat, lng, address })
+              updateMarker(lat, lng, address)
+            }
+          })
+        } else {
+          // Fallback if geocoder is not available
+          const address = `${lat.toFixed(6)}, ${lng.toFixed(6)}`
+          setLocationSearch(address)
+          setSelectedAddress(address)
+          setSelectedLocation({ lat, lng, address })
+          updateMarker(lat, lng, address)
+        }
       })
 
       setMapLoading(false)
@@ -278,11 +300,28 @@ export default function ZoneSetup() {
       const newLat = event.latLng.lat()
       const newLng = event.latLng.lng()
 
-      // Use GPS coordinates text directly (no paid reverse geocoding)
-      const newAddress = `${newLat.toFixed(6)}, ${newLng.toFixed(6)}`
-      setLocationSearch(newAddress)
-      setSelectedAddress(newAddress)
-      setSelectedLocation({ lat: newLat, lng: newLng, address: newAddress })
+      // Perform reverse geocoding to get human-readable address
+      if (geocoderRef.current) {
+        geocoderRef.current.geocode({ location: { lat: newLat, lng: newLng } }, (results, status) => {
+          if (status === 'OK' && results[0]) {
+            const newAddress = results[0].formatted_address
+            setLocationSearch(newAddress)
+            setSelectedAddress(newAddress)
+            setSelectedLocation({ lat: newLat, lng: newLng, address: newAddress })
+          } else {
+            // Fallback to coordinates
+            const newAddress = `${newLat.toFixed(6)}, ${newLng.toFixed(6)}`
+            setLocationSearch(newAddress)
+            setSelectedAddress(newAddress)
+            setSelectedLocation({ lat: newLat, lng: newLng, address: newAddress })
+          }
+        })
+      } else {
+        const newAddress = `${newLat.toFixed(6)}, ${newLng.toFixed(6)}`
+        setLocationSearch(newAddress)
+        setSelectedAddress(newAddress)
+        setSelectedLocation({ lat: newLat, lng: newLng, address: newAddress })
+      }
     })
 
     markerRef.current = marker

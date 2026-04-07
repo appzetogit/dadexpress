@@ -56,6 +56,14 @@ export default function OutletInfo() {
   const formatAddress = (location) => {
     if (!location) return ""
     
+    if (location.formattedAddress && location.formattedAddress.trim() !== "") {
+      return location.formattedAddress.trim()
+    }
+    
+    if (location.address && location.address.trim() !== "") {
+      return location.address.trim()
+    }
+    
     const parts = []
     if (location.addressLine1) parts.push(location.addressLine1.trim())
     if (location.addressLine2) parts.push(location.addressLine2.trim())

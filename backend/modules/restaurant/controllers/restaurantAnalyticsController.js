@@ -250,12 +250,16 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
     const previousStartDate = new Date(startDate.getTime() - rangeLengthMs);
 
     const orders = await Order.find({
-      ...getRestaurantIdQuery(restaurant._id),
       status: { $ne: 'cancelled' },
-      $or: [
-        { deliveredAt: { $gte: previousStartDate, $lte: endDate } },
-        { 'tracking.delivered.timestamp': { $gte: previousStartDate, $lte: endDate } },
-        { createdAt: { $gte: previousStartDate, $lte: endDate } }
+      $and: [
+        getRestaurantIdQuery(restaurant._id),
+        {
+          $or: [
+            { deliveredAt: { $gte: previousStartDate, $lte: endDate } },
+            { 'tracking.delivered.timestamp': { $gte: previousStartDate, $lte: endDate } },
+            { createdAt: { $gte: previousStartDate, $lte: endDate } }
+          ]
+        }
       ]
     })
       .select('userId pricing createdAt deliveredAt tracking')
@@ -291,13 +295,17 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
 
     if (allUserIds.length > 0) {
       const priorOrders = await Order.find({
-        ...getRestaurantIdQuery(restaurant._id),
         status: { $ne: 'cancelled' },
         userId: { $in: allUserIds },
-        $or: [
-          { deliveredAt: { $lt: startDate } },
-          { 'tracking.delivered.timestamp': { $lt: startDate } },
-          { createdAt: { $lt: startDate } }
+        $and: [
+          getRestaurantIdQuery(restaurant._id),
+          {
+            $or: [
+              { deliveredAt: { $lt: startDate } },
+              { 'tracking.delivered.timestamp': { $lt: startDate } },
+              { createdAt: { $lt: startDate } }
+            ]
+          }
         ]
       })
         .select('userId createdAt deliveredAt tracking')

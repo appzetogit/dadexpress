@@ -260,6 +260,17 @@ export default function FeedNavbar({ className = "", onEmergencyClick, onHelpCli
     fetchSupportNumber();
   }, []);
 
+  const normalizePhoneNumber = (phone) => {
+    if (!phone) return ""
+    const digits = String(phone).replace(/\D/g, "")
+    // Keep emergency numbers as is
+    if (digits.length <= 4) return digits
+    if (digits.length > 10 && digits.startsWith("91")) {
+      return digits.slice(-10)
+    }
+    return digits
+  }
+
   // Add dynamic Help Center option
   if (supportNumber && !helpOptions.find(o => o.id === "supportCenter")) {
     helpOptions.unshift({
@@ -268,7 +279,7 @@ export default function FeedNavbar({ className = "", onEmergencyClick, onHelpCli
       subtitle: "Call support for help",
       icon: "helpCenter",
       onClick: () => {
-        window.location.href = `tel:${supportNumber}`;
+        window.location.href = `tel:${normalizePhoneNumber(supportNumber)}`;
       }
     });
   }
@@ -328,7 +339,7 @@ export default function FeedNavbar({ className = "", onEmergencyClick, onHelpCli
       phone: emergencyNumbers.medicalEmergency,
       onClick: () => {
         if (emergencyNumbers.medicalEmergency) {
-          window.location.href = `tel:${emergencyNumbers.medicalEmergency}`;
+          window.location.href = `tel:${normalizePhoneNumber(emergencyNumbers.medicalEmergency)}`;
         } else {
           toast.error("Medical emergency number not configured");
         }
@@ -342,7 +353,7 @@ export default function FeedNavbar({ className = "", onEmergencyClick, onHelpCli
       phone: emergencyNumbers.accidentHelpline,
       onClick: () => {
         if (emergencyNumbers.accidentHelpline) {
-          window.location.href = `tel:${emergencyNumbers.accidentHelpline}`;
+          window.location.href = `tel:${normalizePhoneNumber(emergencyNumbers.accidentHelpline)}`;
         } else {
           toast.error("Accident helpline number not configured");
         }
@@ -356,7 +367,7 @@ export default function FeedNavbar({ className = "", onEmergencyClick, onHelpCli
       phone: emergencyNumbers.contactPolice,
       onClick: () => {
         if (emergencyNumbers.contactPolice) {
-          window.location.href = `tel:${emergencyNumbers.contactPolice}`;
+          window.location.href = `tel:${normalizePhoneNumber(emergencyNumbers.contactPolice)}`;
         } else {
           toast.error("Police emergency number not configured");
         }
@@ -370,7 +381,7 @@ export default function FeedNavbar({ className = "", onEmergencyClick, onHelpCli
       phone: emergencyNumbers.insurance,
       onClick: () => {
         if (emergencyNumbers.insurance) {
-          window.location.href = `tel:${emergencyNumbers.insurance}`;
+          window.location.href = `tel:${normalizePhoneNumber(emergencyNumbers.insurance)}`;
         } else {
           toast.error("Insurance helpline number not configured");
         }

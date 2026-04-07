@@ -15,9 +15,21 @@ import {
 import AnimatedPage from "../../components/AnimatedPage"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { loadBusinessSettings } from "@/lib/utils/businessSettings"
 
 export default function ContactSupport() {
   const navigate = useNavigate()
+  const [settings, setSettings] = React.useState(null)
+
+  React.useEffect(() => {
+    const fetchSettings = async () => {
+      const data = await loadBusinessSettings()
+      if (data) {
+        setSettings(data)
+      }
+    }
+    fetchSettings()
+  }, [])
 
   const supportOptions = [
     {
@@ -32,7 +44,9 @@ export default function ContactSupport() {
       title: "Call Us",
       description: "Speak directly with our support team",
       icon: Phone,
-      link: "tel:+919876543210", // Example number, should be replaced with actual
+      link: settings?.phone?.number 
+        ? `tel:${settings.phone.countryCode}${settings.phone.number}` 
+        : "tel:+919876543210", 
       color: "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400",
       external: true
     },
@@ -40,7 +54,9 @@ export default function ContactSupport() {
       title: "Email Support",
       description: "Send us your queries anytime",
       icon: Mail,
-      link: "mailto:support@dadexpress.com",
+      link: settings?.email 
+        ? `mailto:${settings.email}` 
+        : "mailto:support@dadexpress.com",
       color: "bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400",
       external: true
     }

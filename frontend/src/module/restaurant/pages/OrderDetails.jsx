@@ -69,7 +69,7 @@ export default function OrderDetails() {
             billing: {
               itemSubtotal: order.pricing?.subtotal || 0,
               taxes: order.pricing?.tax || 0,
-              total: order.pricing?.total || 0,
+              total: order.restaurantPayout ?? (order.pricing?.total || 0),
               paymentStatus: order.payment?.status === 'completed' ? 'PAID' : 'PENDING'
             },
             reason: order.cancellationReason || '',
@@ -395,11 +395,12 @@ export default function OrderDetails() {
   }
 
   const formatPhone = (phone) => {
-    if (!phone) return "";
-    let cleaned = phone.toString().trim();
-    if (cleaned.startsWith("+91")) return cleaned.slice(3).trim();
-    if (cleaned.startsWith("91") && cleaned.length > 10) return cleaned.slice(2).trim();
-    return cleaned.replace(/[-\s]/g, "");
+    if (!phone || phone === "N/A") return "";
+    let cleaned = phone.toString().replace(/\D/g, "");
+    if (cleaned.length > 10 && cleaned.startsWith("91")) {
+      return cleaned.slice(-10);
+    }
+    return cleaned;
   };
 
   const getStatusColor = (status) => {
@@ -564,7 +565,7 @@ export default function OrderDetails() {
                 {orderData.customer.phone && (
                   <p className="text-xs text-blue-600 mt-1 flex items-center gap-1 font-medium">
                     <Phone className="w-3 h-3" />
-                    <a href={`tel:${orderData.customer.phone}`} className="hover:underline">
+                    <a href={`tel:${formatPhone(orderData.customer.phone)}`} className="hover:underline">
                       {formatPhone(orderData.customer.phone)}
                     </a>
                   </p>
@@ -574,7 +575,7 @@ export default function OrderDetails() {
               <div className="flex flex-col gap-2">
                 {orderData.customer.phone && (
                   <button
-                    onClick={() => window.location.href = `tel:${orderData.customer.phone}`}
+                    onClick={() => window.location.href = `tel:${formatPhone(orderData.customer.phone)}`}
                     className="p-2 bg-blue-50 hover:bg-blue-100 rounded-full transition-colors border border-blue-100"
                     aria-label="Call customer"
                   >

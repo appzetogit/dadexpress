@@ -134,8 +134,8 @@ export function useLocation() {
   /* ===================== GOOGLE MAPS REVERSE GEOCODE ===================== */
   const reverseGeocodeWithGoogleMaps = async (latitude, longitude) => {
     try {
-      // Google paid geocoding disabled: use free direct reverse geocode only.
-      return await reverseGeocodeDirect(latitude, longitude)
+      // Try using Google Maps first for EXACT location (Zomato-style)
+      // It will automatically fallback to reverseGeocodeDirect if no key or failure
 
       // Get Google Maps API key from backend database
       const { getGoogleMapsApiKey } = await import('@/lib/utils/googleMapsApiKey.js');
@@ -1470,17 +1470,10 @@ export function useLocation() {
                 coordinates: `${latitude.toFixed(8)}, ${longitude.toFixed(8)}`
               })
 
-              // SKIP REVERSE GEOCODING - Save only lat/long to reduce Google Maps API costs
-              // Address fields will be empty - only coordinates saved
-              const addr = {
-                city: "",
-                state: "",
-                country: "",
-                area: "",
-                address: "",
-                formattedAddress: "",
-              }
-              false && console.log("📍 Skipping reverse geocoding - saving coordinates only:", { latitude, longitude })
+              // Fetch address using reverse geocoding
+              // This is necessary to show the "Exact location name" (city, area, etc.)
+              const addr = await reverseGeocodeWithGoogleMaps(latitude, longitude)
+              false && console.log("📍 Reverse geocoding result:", addr)
 
               // Ensure we don't use coordinates as address if we have area/city
               // Keep the complete formattedAddress from Google Maps (it has all details)
@@ -1763,17 +1756,10 @@ export function useLocation() {
             // Reset retry count on success
             retryCount = 0
 
-            // SKIP REVERSE GEOCODING - Save only lat/long to reduce Google Maps API costs
-            // Address fields will be empty - only coordinates saved
-            const addr = {
-              city: "",
-              state: "",
-              country: "",
-              area: "",
-              address: "",
-              formattedAddress: "",
-            }
-            false && console.log("📍 Skipping reverse geocoding - saving coordinates only:", { latitude, longitude })
+            // Fetch address using reverse geocoding
+            // This is necessary to show the "Exact location name" (city, area, etc.)
+            const addr = await reverseGeocodeWithGoogleMaps(latitude, longitude)
+            false && console.log("🔄 Live reverse geocoding result:", addr)
 
             // CRITICAL: Ensure formattedAddress is NEVER coordinates
             // Check if reverse geocoding returned proper address or just coordinates
@@ -2383,5 +2369,6 @@ export function useLocation() {
     requestLocation,
     startWatchingLocation,
     stopWatchingLocation,
+    reverseGeocode: reverseGeocodeWithGoogleMaps,
   }
 }

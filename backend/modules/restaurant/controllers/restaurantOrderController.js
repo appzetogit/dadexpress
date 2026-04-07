@@ -7,6 +7,8 @@ import { notifyRestaurantOrderUpdate } from '../../order/services/restaurantNoti
 import { assignOrderToDeliveryBoy, findNearestDeliveryBoys, findNearestDeliveryBoy } from '../../order/services/deliveryAssignmentService.js';
 import { notifyDeliveryBoyNewOrder, notifyMultipleDeliveryBoys } from '../../order/services/deliveryNotificationService.js';
 import mongoose from 'mongoose';
+import OrderSettlement from '../../order/models/OrderSettlement.js';
+import { calculateOrderSettlement } from '../../order/services/orderSettlementService.js';
 
 /**
  * Get all orders for restaurant
@@ -101,48 +103,31 @@ export const getRestaurantOrders = asyncHandler(async (req, res) => {
       return { ...o, paymentMethod };
     });
 
-    // Log detailed order info for debugging
-    console.log('✅ Found orders:', {
-      count: orders.length,
-      total,
-      restaurantId: restaurantIdString,
-      queryUsed: JSON.stringify(query),
-      orders: orders.map(o => ({ 
-        orderId: o.orderId, 
-        status: o.status, 
-        restaurantId: o.restaurantId,
-        restaurantIdType: typeof o.restaurantId,
-        createdAt: o.createdAt
-      }))
-    });
-    
-    // If no orders found, log a warning with more details
-    if (orders.length === 0 && total === 0) {
-      console.warn('⚠️ No orders found for restaurant:', {
-        restaurantId: restaurantIdString,
-        restaurant_id: restaurant._id?.toString(),
-        variationsTried: restaurantIdVariations,
-        query: JSON.stringify(query)
-      });
+    // Fetch settlements for the list of orders to determine restaurant payout
+    // Ensure settlements exist for these orders for accurate payout display
+    const ordersWithPayout = [];
+    for (const o of ordersWithPaymentMethod) {
+      let s = await OrderSettlement.findOne({ orderId: o._id }).lean();
       
-      // Try to find ANY orders in database for debugging
-      const allOrdersCount = await Order.countDocuments({});
-      console.log(`📊 Total orders in database: ${allOrdersCount}`);
-      
-      // Check if orders exist with similar restaurantId
-      const sampleOrders = await Order.find({}).limit(5).select('orderId restaurantId status').lean();
-      if (sampleOrders.length > 0) {
-        console.log('📊 Sample orders in database (first 5):', sampleOrders.map(o => ({
-          orderId: o.orderId,
-          restaurantId: o.restaurantId,
-          restaurantIdType: typeof o.restaurantId,
-          status: o.status
-        })));
+      // Auto-create if missing (Permanent Fix for data gaps)
+      if (!s && o.status !== 'cancelled') {
+        try {
+          s = await calculateOrderSettlement(o._id);
+        } catch (calcErr) {
+          console.error(`Failed to auto-create settlement for order ${o.orderId}:`, calcErr.message);
+        }
       }
+
+      // For restaurant app, we want to show their actual earning (netEarning or compensation)
+      const payout = o.status === 'cancelled' 
+        ? (s?.cancellationDetails?.restaurantCompensation || 0)
+        : (s?.restaurantEarning?.netEarning || 0);
+      
+      ordersWithPayout.push({ ...o, restaurantPayout: payout });
     }
 
     return successResponse(res, 200, 'Orders retrieved successfully', {
-      orders: ordersWithPaymentMethod,
+      orders: ordersWithPayout,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
@@ -209,8 +194,29 @@ export const getRestaurantOrderById = asyncHandler(async (req, res) => {
       return errorResponse(res, 404, 'Order not found');
     }
 
+    // Include restaurant payout for the specific order
+    let s = await OrderSettlement.findOne({ orderId: order._id }).lean();
+    
+    // Auto-create if missing
+    if (!s && order.status !== 'cancelled') {
+      try {
+        s = await calculateOrderSettlement(order._id);
+      } catch (calcErr) {
+        console.error(`Failed to auto-create settlement for order ${order.orderId}:`, calcErr.message);
+      }
+    }
+
+    const payout = order.status === 'cancelled'
+      ? (s?.cancellationDetails?.restaurantCompensation || 0)
+      : (s?.restaurantEarning?.netEarning || 0);
+      
+    const orderWithPayout = {
+      ...order,
+      restaurantPayout: payout
+    };
+
     return successResponse(res, 200, 'Order retrieved successfully', {
-      order
+      order: orderWithPayout
     });
   } catch (error) {
     console.error('Error fetching order:', error);

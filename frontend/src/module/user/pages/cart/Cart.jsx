@@ -2074,7 +2074,7 @@ export default function Cart() {
                     </p>
                     <p className="text-sm md:text-base font-medium text-gray-800 dark:text-gray-200">
                       {selectedPaymentMethod === "razorpay"
-                        ? "Razorpay"
+                        ? "(payment option)"
                         : selectedPaymentMethod === "wallet"
                           ? "Wallet"
                           : "Cash on Delivery"}
@@ -2090,7 +2090,7 @@ export default function Cart() {
                     onPointerDown={(e) => e.stopPropagation()}
                     className="relative z-[80] pointer-events-auto touch-manipulation cursor-pointer appearance-none bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200 rounded-lg px-3 py-2 pr-9 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-[#EB590E]/40"
                   >
-                    <option value="razorpay">Razorpay</option>
+                    <option value="razorpay">(payment option)</option>
                     <option value="wallet">Wallet (₹{walletBalance.toFixed(0)})</option>
                     <option value="cash">COD</option>
                   </select>
@@ -2230,7 +2230,7 @@ export default function Cart() {
                 <div>
                   <p className="text-lg font-semibold text-gray-900">
                     {selectedPaymentMethod === "razorpay"
-                      ? `Pay ₹${total.toFixed(2)} online (Razorpay)`
+                      ? `Pay ₹${total.toFixed(2)} online ((payment option))`
                       : selectedPaymentMethod === "wallet"
                         ? `Pay ₹${total.toFixed(2)} from Wallet`
                         : `Pay on delivery (COD)`}

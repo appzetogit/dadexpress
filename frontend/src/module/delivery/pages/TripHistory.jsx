@@ -139,10 +139,12 @@ export default function TripHistory() {
       if (showBonusModal) {
         setBonusLoading(true)
         try {
-          const transactions = await fetchWalletTransactions({ type: 'bonus', limit: 100 })
-          setBonusTransactions(transactions)
+          // Fetch all transactions and filter locally to include both 'bonus' and 'earning_addon'
+          const allTransactions = await fetchWalletTransactions({ limit: 200 })
+          const bonusAndAddons = allTransactions.filter(t => t.type === 'bonus' || t.type === 'earning_addon')
+          setBonusTransactions(bonusAndAddons)
           // Mark as viewed when modal opens and transactions are loaded
-          if (transactions.length > 0) {
+          if (bonusAndAddons.length > 0) {
             setHasViewedBonus(true)
           }
         } catch (error) {
@@ -161,8 +163,10 @@ export default function TripHistory() {
   useEffect(() => {
     const checkForBonuses = async () => {
       try {
-        const transactions = await fetchWalletTransactions({ type: 'bonus', limit: 100 })
-        setBonusTransactions(transactions)
+        // Fetch all transactions and filter locally to include both 'bonus' and 'earning_addon'
+        const allTransactions = await fetchWalletTransactions({ limit: 200 })
+        const bonusAndAddons = allTransactions.filter(t => t.type === 'bonus' || t.type === 'earning_addon')
+        setBonusTransactions(bonusAndAddons)
       } catch (error) {
         console.error('Error checking bonus transactions:', error)
       }
@@ -423,7 +427,7 @@ export default function TripHistory() {
                   </div>
                   <div>
                     <h2 className="text-lg font-bold text-black">Bonus History</h2>
-                    <p className="text-xs text-gray-500">Admin added bonuses</p>
+                    <p className="text-xs text-gray-500">Admin & milestone rewards</p>
                   </div>
                 </div>
                 <button

@@ -25,6 +25,15 @@ export default function EditRestaurantAddress() {
   // Format address from location object
   const formatAddress = (loc) => {
     if (!loc) return ""
+    
+    if (loc.formattedAddress && loc.formattedAddress.trim() !== "") {
+      return loc.formattedAddress.trim()
+    }
+    
+    if (loc.address && loc.address.trim() !== "") {
+      return loc.address.trim()
+    }
+    
     const parts = []
     if (loc.addressLine1) parts.push(loc.addressLine1.trim())
     if (loc.addressLine2) parts.push(loc.addressLine2.trim())

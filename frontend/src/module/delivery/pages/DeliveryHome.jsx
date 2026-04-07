@@ -664,11 +664,12 @@ export default function DeliveryHome() {
       if (!orderId) return false;
       try {
         const response = await deliveryAPI.getOrderDetails(orderId);
-        const paymentData = response?.data?.data?.payment || response?.data?.payment;
+        const orderData = response?.data?.data?.order || response?.data?.order || response?.data?.data || response?.data;
+        const paymentData = orderData?.payment || orderData;
         const paymentStatus = (paymentData?.status || "").toLowerCase();
         
-        // Accept multiple success statuses to be robust
-        if (paymentStatus === 'completed' || paymentStatus === 'paid' || paymentStatus === 'success') {
+        // Accept multiple success statuses to be robust (Razorpay 'captured' or DB 'completed'/'paid')
+        if (['completed', 'paid', 'success', 'captured'].includes(paymentStatus)) {
           setPaymentConfirmed(true);
           toast.success('✨ QR Payment verified successfully!', { duration: 5000 });
           return true;
@@ -740,6 +741,8 @@ export default function DeliveryHome() {
   const [customerRating, setCustomerRating] = useState(0)
   const [customerReviewText, setCustomerReviewText] = useState("")
   const [orderEarnings, setOrderEarnings] = useState(0) // Store earnings from completed order
+  const [finalEarningsBreakdown, setFinalEarningsBreakdown] = useState(null)
+  const [finalAddonBonus, setFinalAddonBonus] = useState(null)
   const [routePolyline, setRoutePolyline] = useState([])
   const [showRoutePath, setShowRoutePath] = useState(false) // Toggle to show/hide route path - disabled by default
   const [directionsResponse, setDirectionsResponse] = useState(null) // Directions API response for road-based routing
@@ -1473,20 +1476,22 @@ export default function DeliveryHome() {
       orderDate.setHours(0, 0, 0, 0)
       return orderDate.getTime() === today.getTime()
     }).reduce((sum, order) => {
-      const orderId = order.orderId || order.id
+      const orderIdKey = getStatsOrderKey(order)
+      if (!orderIdKey) return sum
+      
       // For the active order, use the state actualTripDistance for real-time updates
-      const activeOrderId = selectedRestaurant?.orderId || selectedRestaurant?.id || selectedRestaurant?._id
-      if (activeOrderId && (orderId === activeOrderId)) {
+      const activeOrderKey = getStatsOrderKey(selectedRestaurant)
+      if (activeOrderKey && (orderIdKey === activeOrderKey)) {
         return sum + (actualTripDistance || 0)
       }
-      const distStr = localStorage.getItem(`trip_actual_dist_${orderId}`)
+      const distStr = localStorage.getItem(`trip_actual_dist_${orderIdKey}`)
       return sum + (distStr ? Number(distStr) : 0)
     }, 0)
-
+    
     // Ensure active order is counted even if not in allOrders yet
-    const activeOrderId = selectedRestaurant?.orderId || selectedRestaurant?.id || selectedRestaurant?._id
-    const isAlreadyCounted = activeOrderId && allOrders.some(o => (o.orderId || o.id) === activeOrderId)
-    const finalMeters = (activeOrderId && !isAlreadyCounted) ? (todayMeters + (actualTripDistance || 0)) : todayMeters
+    const activeOrderKey = getStatsOrderKey(selectedRestaurant)
+    const isAlreadyCounted = activeOrderKey && allOrders.some(o => getStatsOrderKey(o) === activeOrderKey)
+    const finalMeters = (activeOrderKey && !isAlreadyCounted) ? (todayMeters + (actualTripDistance || 0)) : todayMeters
     
     return finalMeters / 1000
   })()
@@ -2790,8 +2795,9 @@ export default function DeliveryHome() {
     const deltaX = e.touches[0].clientX - newOrderAcceptButtonSwipeStartX.current
     const deltaY = e.touches[0].clientY - newOrderAcceptButtonSwipeStartY.current
 
-    // Only handle horizontal swipes
-    if (Math.abs(deltaX) > 5 && Math.abs(deltaX) > Math.abs(deltaY)) {
+    // Detect if the user is swiping horizontally
+    // Relaxed condition: horizontal must just be dominant, with a small buffer
+    if (Math.abs(deltaX) > 10 && Math.abs(deltaX) > Math.abs(deltaY) * 0.7) {
       newOrderAcceptButtonIsSwiping.current = true
 
       if (deltaX > 0) {
@@ -2812,26 +2818,32 @@ export default function DeliveryHome() {
           })
         }
       } else {
-        // LEFT swipe = Reject instantly
-        const leftProgress = Math.min(Math.abs(deltaX) / 80, 1) // 80px to trigger reject
+        // LEFT swipe = Reject
+        // Increased threshold to 120px to prevent accidental rejection
+        const leftProgress = Math.min(Math.abs(deltaX) / 120, 1) 
         if (leftProgress >= 1 && !newOrderRejectSwipeTriggeredRef.current) {
           newOrderRejectSwipeTriggeredRef.current = true
-          // Stop audio
-          if (alertAudioRef.current) {
-            alertAudioRef.current.pause()
-            alertAudioRef.current.currentTime = 0
-            alertAudioRef.current = null
-          }
-          // Instantly close popup and reject
-          setShowNewOrderPopup(false)
-          setIsNewOrderPopupMinimized(false)
-          setNewOrderDragY(0)
-          setCountdownSeconds(300)
-          clearNewOrder()
-          toast.info('Order rejected')
+          handleManualReject()
         }
       }
     }
+  }
+
+  const handleManualReject = () => {
+    // Stop audio
+    if (alertAudioRef.current) {
+      alertAudioRef.current.pause()
+      alertAudioRef.current.currentTime = 0
+      alertAudioRef.current = null
+    }
+    // Instantly close popup and trigger reject confirm
+    setShowNewOrderPopup(false)
+    setIsNewOrderPopupMinimized(false)
+    setNewOrderDragY(0)
+    setCountdownSeconds(300)
+    
+    // Check if we should show reasons or just reject
+    handleRejectConfirm()
   }
 
   const handleNewOrderAcceptTouchEnd = (e) => {
@@ -3817,8 +3829,9 @@ export default function DeliveryHome() {
     const deltaX = e.touches[0].clientX - reachedPickupSwipeStartX.current
     const deltaY = e.touches[0].clientY - reachedPickupSwipeStartY.current
 
-    // Only handle horizontal swipes (swipe right)
-    if (Math.abs(deltaX) > 5 && Math.abs(deltaX) > Math.abs(deltaY) && deltaX > 0) {
+    // Detect if the user is swiping horizontally (swipe right)
+    // Relaxed condition: horizontal must just be dominant, with a small buffer
+    if (Math.abs(deltaX) > 10 && Math.abs(deltaX) > Math.abs(deltaY) * 0.7 && deltaX > 0) {
       reachedPickupIsSwiping.current = true
       // Don't call preventDefault - CSS touch-action handles scrolling prevention
       // safePreventDefault(e) // Removed to avoid passive listener error
@@ -4046,8 +4059,9 @@ export default function DeliveryHome() {
     const deltaX = e.touches[0].clientX - reachedDropSwipeStartX.current
     const deltaY = e.touches[0].clientY - reachedDropSwipeStartY.current
 
-    // Only handle horizontal swipes (swipe right)
-    if (Math.abs(deltaX) > 5 && Math.abs(deltaX) > Math.abs(deltaY) && deltaX > 0) {
+    // Detect if the user is swiping horizontally (swipe right)
+    // Relaxed condition: horizontal must just be dominant, with a small buffer
+    if (Math.abs(deltaX) > 10 && Math.abs(deltaX) > Math.abs(deltaY) * 0.7 && deltaX > 0) {
       reachedDropIsSwiping.current = true
       // Don't call preventDefault - CSS touch-action handles scrolling prevention
       // safePreventDefault(e) // Removed to avoid passive listener error
@@ -4223,8 +4237,9 @@ export default function DeliveryHome() {
     const deltaX = e.touches[0].clientX - orderIdConfirmSwipeStartX.current
     const deltaY = e.touches[0].clientY - orderIdConfirmSwipeStartY.current
 
-    // Only handle horizontal swipes (swipe right)
-    if (Math.abs(deltaX) > 5 && Math.abs(deltaX) > Math.abs(deltaY) && deltaX > 0) {
+    // Detect if the user is swiping horizontally (swipe right)
+    // Relaxed condition: horizontal must just be dominant, with a small buffer
+    if (Math.abs(deltaX) > 10 && Math.abs(deltaX) > Math.abs(deltaY) * 0.7 && deltaX > 0) {
       orderIdConfirmIsSwiping.current = true
       // Don't call preventDefault - CSS touch-action handles scrolling prevention
       // safePreventDefault(e) // Removed to avoid passive listener error
@@ -4630,8 +4645,9 @@ export default function DeliveryHome() {
             const order = orderData.order || orderData
    
    // Track pickup time for real-time trip duration
-   if (order?._id || order?.orderId) {
-     localStorage.setItem(`pickedAt_${order._id || order.orderId}`, Date.now().toString());
+   const pickupOrderKey = getStatsOrderKey(order);
+   if (pickupOrderKey) {
+     localStorage.setItem(`pickedAt_${pickupOrderKey}`, Date.now().toString());
    }
             const routeData = orderData.route || order.deliveryState?.routeToDelivery
 
@@ -5047,8 +5063,9 @@ export default function DeliveryHome() {
     const deltaX = e.touches[0].clientX - orderDeliveredSwipeStartX.current
     const deltaY = e.touches[0].clientY - orderDeliveredSwipeStartY.current
 
-    // Only handle horizontal swipes (swipe right)
-    if (Math.abs(deltaX) > 5 && Math.abs(deltaX) > Math.abs(deltaY) && deltaX > 0) {
+    // Detect if the user is swiping horizontally (swipe right)
+    // Relaxed condition: horizontal must just be dominant, with a small buffer
+    if (Math.abs(deltaX) > 10 && Math.abs(deltaX) > Math.abs(deltaY) * 0.7 && deltaX > 0) {
       orderDeliveredIsSwiping.current = true
       // Don't call preventDefault - CSS touch-action handles scrolling prevention
       // safePreventDefault(e) // Removed to avoid passive listener error
@@ -5140,8 +5157,9 @@ export default function DeliveryHome() {
     const deltaX = e.touches[0].clientX - acceptButtonSwipeStartX.current
     const deltaY = e.touches[0].clientY - acceptButtonSwipeStartY.current
 
-    // Only handle horizontal swipes (swipe right)
-    if (Math.abs(deltaX) > 5 && Math.abs(deltaX) > Math.abs(deltaY) && deltaX > 0) {
+    // Detect if the user is swiping horizontally (swipe right)
+    // Relaxed condition: horizontal must just be dominant, with a small buffer
+    if (Math.abs(deltaX) > 10 && Math.abs(deltaX) > Math.abs(deltaY) * 0.7 && deltaX > 0) {
       acceptButtonIsSwiping.current = true
       // Don't call preventDefault - CSS touch-action handles scrolling prevention
       // safePreventDefault(e) // Removed to avoid passive listener error
@@ -10041,7 +10059,7 @@ export default function DeliveryHome() {
   // Handle emergency option click
   const handleEmergencyOptionClick = (option) => {
     if (option.phone) {
-      window.location.href = `tel:${option.phone}`
+      window.location.href = `tel:${normalizePhoneNumber(option.phone)}`
     } else if (option.id === "insurance") {
       // Navigate to insurance page or show insurance details
       navigate("/delivery/insurance")
@@ -10684,7 +10702,14 @@ export default function DeliveryHome() {
 
               {/* Text Content */}
               <div className="flex-1 text-left">
-                <h3 className="text-base font-semibold text-gray-900 mb-1">{option.title}</h3>
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <h3 className="text-base font-semibold text-gray-900">{option.title}</h3>
+                  {option.phone && (
+                    <span className="text-xs font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded border border-red-100">
+                      {option.phone}
+                    </span>
+                  )}
+                </div>
                 <p className="text-sm text-gray-600">{option.subtitle}</p>
               </div>
 
@@ -11123,8 +11148,14 @@ export default function DeliveryHome() {
                           </motion.span>
                         </div>
 
-                        {/* Right: Red circle with X (swipe left = reject instantly) */}
-                        <div className="w-14 h-14 bg-red-500 rounded-full flex items-center justify-center shrink-0 relative z-20 shadow-2xl ml-auto">
+                        {/* Right: Red circle with X (swipe left OR click to reject) */}
+                        <div 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleManualReject();
+                          }}
+                          className="w-14 h-14 bg-red-500 rounded-full flex items-center justify-center shrink-0 relative z-20 shadow-2xl ml-auto cursor-pointer active:scale-95 transition-transform"
+                        >
                           <X className="w-5 h-5 text-white" />
                         </div>
                       </div>
@@ -11362,6 +11393,34 @@ export default function DeliveryHome() {
                 : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
                 }`}>
                 {isCashPaymentMethod(selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment) ? 'COD' : 'Paid'}
+              </div>
+            </div>
+
+            {/* Added Timing & Support Info */}
+            <div className="mt-3 flex items-center justify-between gap-1 p-2 bg-gray-50 rounded-lg border border-gray-100">
+              <div className="flex flex-col gap-0.5">
+                <div className="flex items-center gap-1.5 text-gray-600">
+                  <Clock className="w-4 h-4 text-teal-600" />
+                  <span className="text-[10px] font-semibold">
+                    Placed: {selectedRestaurant?.createdAt ? new Date(selectedRestaurant.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Recently"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 text-gray-600">
+                  <Package className="w-4 h-4 text-blue-500" />
+                  <span className="text-[10px] font-semibold">
+                    Pickup by: {selectedRestaurant?.pickupBy || "Asap"}
+                  </span>
+                </div>
+              </div>
+              <div className="h-8 w-px bg-gray-200 mx-1"></div>
+              <div className="flex flex-col gap-0.5 items-end">
+                <div className="flex items-center gap-1.5 text-gray-600">
+                  <span className="text-[10px] font-bold text-red-600 uppercase tracking-tight">SOS Emergency</span>
+                  <div className="w-6 h-6 bg-red-100 rounded-full flex items-center justify-center">
+                    <Phone className="w-3.5 h-3.5 text-red-600" />
+                  </div>
+                </div>
+                <span className="text-[11px] font-black text-gray-900">1073 / 100</span>
               </div>
             </div>
             {(() => {
@@ -11920,11 +11979,31 @@ export default function DeliveryHome() {
                     </p>
                   </div>
                 </div>
-                {selectedRestaurant?.customerAddress && (
-                  <p className="text-xs text-gray-500 ml-13 truncate">
-                    {selectedRestaurant.customerAddress}
-                  </p>
-                )}
+                {(() => {
+                  const address = selectedRestaurant?.customerAddress;
+                  let resolvedAddress = address;
+
+                  if (!address || address === 'Customer Address' || address === 'Customer address') {
+                    const possibleAddress =
+                      selectedRestaurant?.address?.formattedAddress ||
+                      selectedRestaurant?.address?.location?.formattedAddress ||
+                      selectedRestaurant?.address?.location?.address ||
+                      selectedRestaurant?.location?.formattedAddress ||
+                      selectedRestaurant?.location?.address;
+                    if (possibleAddress && (possibleAddress !== 'Customer Address' && possibleAddress !== 'Customer address')) {
+                      resolvedAddress = possibleAddress;
+                    }
+                  }
+
+                  if (resolvedAddress && resolvedAddress !== 'Customer Address' && resolvedAddress !== 'Customer address') {
+                    return (
+                      <p className="text-xs text-gray-500 ml-13 truncate">
+                        {resolvedAddress}
+                      </p>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
 
               {/* Start Navigation Button */}
@@ -11971,17 +12050,75 @@ export default function DeliveryHome() {
             </span>
           </div>
 
-          {/* Customer Info */}
+          <div className="mb-6 flex justify-between items-start">
+            <div className="flex-1 mr-2">
+              <h2 className="text-2xl font-bold text-gray-900 mb-2 truncate">
+                {selectedRestaurant?.customerName || 'Customer Name'}
+              </h2>
+            </div>
+            <button
+              type="button"
+              onClick={refreshReachedDropDetails}
+              disabled={isRefreshingDropDetails}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors shrink-0 ${isRefreshingDropDetails
+                ? "bg-gray-100 text-gray-500 border-gray-200 cursor-not-allowed"
+                : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                }`}
+            >
+              {isRefreshingDropDetails ? "Updating..." : "Update"}
+            </button>
+          </div>
           <div className="mb-6">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">
-              {selectedRestaurant?.customerName || 'Customer Name'}
-            </h2>
             <p className="text-gray-600 mb-2 leading-relaxed">
-              {selectedRestaurant?.customerAddress || 'Customer Address'}
+              {(() => {
+                const address = selectedRestaurant?.customerAddress;
+                if (!address || address === 'Customer Address' || address === 'Customer address') {
+                  const possibleAddress =
+                    selectedRestaurant?.address?.formattedAddress ||
+                    selectedRestaurant?.address?.location?.formattedAddress ||
+                    selectedRestaurant?.address?.location?.address ||
+                    selectedRestaurant?.location?.formattedAddress ||
+                    selectedRestaurant?.location?.address;
+                  if (possibleAddress && possibleAddress !== 'Customer Address' && possibleAddress !== 'Customer address') {
+                    return possibleAddress;
+                  }
+                }
+                return address && address !== 'Customer Address' && address !== 'Customer address'
+                  ? address
+                  : 'Customer address will be updated...';
+              })()}
             </p>
             <p className="text-gray-500 text-sm font-medium">
               Order ID: {selectedRestaurant?.orderId || 'ORD1234567890'}
             </p>
+
+            {/* Added Timing & Support Info */}
+            <div className="mt-3 flex items-center justify-between gap-1 p-2 bg-gray-50 rounded-lg border border-gray-100">
+              <div className="flex flex-col gap-0.5">
+                <div className="flex items-center gap-1.5 text-gray-600">
+                  <PackageCheck className="w-4 h-4 text-teal-600" />
+                  <span className="text-[10px] font-semibold">
+                    Picked up: {selectedRestaurant?.deliveryState?.orderIdConfirmedAt ? new Date(selectedRestaurant.deliveryState.orderIdConfirmedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Just now"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 text-gray-600">
+                  <Clock className="w-4 h-4 text-blue-500" />
+                  <span className="text-[10px] font-semibold">
+                    Deliver by: {selectedRestaurant?.deliverBy || "Asap"}
+                  </span>
+                </div>
+              </div>
+              <div className="h-8 w-px bg-gray-200 mx-1"></div>
+              <div className="flex flex-col gap-0.5 items-end">
+                <div className="flex items-center gap-1.5 text-gray-600">
+                  <span className="text-[10px] font-bold text-red-600 uppercase tracking-tight">SOS Emergency</span>
+                  <div className="w-6 h-6 bg-red-100 rounded-full flex items-center justify-center">
+                    <Phone className="w-3.5 h-3.5 text-red-600" />
+                  </div>
+                </div>
+                <span className="text-[11px] font-black text-gray-900">1073 / 100</span>
+              </div>
+            </div>
             {/* Added Clear Payment Visibility */}
             {isCashPaymentMethod(selectedRestaurant?.paymentMethod ?? selectedRestaurant?.payment) ? (
               <div className="mt-4 bg-amber-50 border-2 border-amber-400 rounded-xl p-4 flex items-center gap-3 animate-pulse shadow-sm">
@@ -12667,6 +12804,8 @@ export default function DeliveryHome() {
                         response.data.data?.totalEarning ||
                         orderEarnings
                       setOrderEarnings(earnings)
+                      setFinalEarningsBreakdown(response.data.data?.earnings?.breakdown || null)
+                      setFinalAddonBonus(response.data.data?.addonBonus || null)
 
                       false && console.log('✅ Delivery completed and earnings added to wallet:', earnings)
                       false && console.log('✅ Wallet transaction:', response.data.data?.walletTransaction)
@@ -12726,15 +12865,15 @@ export default function DeliveryHome() {
               <p className="text-gray-600 text-sm mb-2">Earnings from this order</p>
               <p className="text-5xl font-bold text-gray-900">
                 ₹{(() => {
-                  if (orderEarnings > 0) {
-                    return orderEarnings.toFixed(2);
+                  const base = orderEarnings > 0 ? orderEarnings : 0;
+                  const bonus = finalAddonBonus?.amount || 0;
+                  const total = base + bonus;
+                  if (total === 0) {
+                    const estEarnings = selectedRestaurant?.estimatedEarnings || selectedRestaurant?.amount || 0;
+                    if (typeof estEarnings === 'object' && estEarnings.totalEarning) return estEarnings.totalEarning.toFixed(2);
+                    if (typeof estEarnings === 'number') return estEarnings.toFixed(2);
                   }
-                  // Handle estimatedEarnings - can be number or object
-                  const earnings = selectedRestaurant?.estimatedEarnings || selectedRestaurant?.amount || 0;
-                  if (typeof earnings === 'object' && earnings.totalEarning) {
-                    return earnings.totalEarning.toFixed(2);
-                  }
-                  return typeof earnings === 'number' ? earnings.toFixed(2) : '0.00';
+                  return total.toFixed(2);
                 })()}
               </p>
               <p className="text-green-600 text-sm mt-2">💰 Added to your wallet</p>
@@ -12746,28 +12885,58 @@ export default function DeliveryHome() {
                 <h3 className="text-lg font-bold text-gray-900 mb-4">Payment Details</h3>
 
                 <div className="space-y-3">
-                  <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                    <span className="text-gray-600">Trip pay</span>
-                    <span className="text-gray-900 font-semibold">₹{(() => {
-                      let earnings = 0;
-                      if (orderEarnings > 0) {
-                        earnings = orderEarnings;
-                      } else {
-                        const estEarnings = selectedRestaurant?.estimatedEarnings || selectedRestaurant?.amount || 0;
-                        if (typeof estEarnings === 'object' && estEarnings.totalEarning) {
-                          earnings = estEarnings.totalEarning;
-                        } else if (typeof estEarnings === 'number') {
-                          earnings = estEarnings;
+                  {/* Detailed Breakdown */}
+                  {finalEarningsBreakdown ? (
+                    <>
+                      <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                        <span className="text-gray-600">Base pay (Pickup)</span>
+                        <span className="text-gray-900 font-semibold">₹{finalEarningsBreakdown.basePayout?.toFixed(2)}</span>
+                      </div>
+                      
+                      {finalEarningsBreakdown.distanceCommission > 0 && (
+                        <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                          <span className="text-gray-600">Distance pay ({finalEarningsBreakdown.distance?.toFixed(1)} km × ₹{finalEarningsBreakdown.commissionPerKm?.toFixed(1)}/km)</span>
+                          <span className="text-gray-900 font-semibold">₹{finalEarningsBreakdown.distanceCommission?.toFixed(2)}</span>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                      <span className="text-gray-600">Trip pay</span>
+                      <span className="text-gray-900 font-semibold">₹{(() => {
+                        let earnings = 0;
+                        if (orderEarnings > 0) {
+                          earnings = orderEarnings;
+                        } else {
+                          const estEarnings = selectedRestaurant?.estimatedEarnings || selectedRestaurant?.amount || 0;
+                          if (typeof estEarnings === 'object' && estEarnings.totalEarning) {
+                            earnings = estEarnings.totalEarning;
+                          } else if (typeof estEarnings === 'number') {
+                            earnings = estEarnings;
+                          }
                         }
-                      }
-                      return (earnings - 5).toFixed(2);
-                    })()}</span>
-                  </div>
+                        return (earnings - 5).toFixed(2);
+                      })()}</span>
+                    </div>
+                  )}
 
-                  <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                    <span className="text-gray-600">Long distance return pay</span>
-                    <span className="text-gray-900 font-semibold">₹5.00</span>
-                  </div>
+                  {!finalEarningsBreakdown && (
+                    <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                      <span className="text-gray-600">Long distance return pay</span>
+                      <span className="text-gray-900 font-semibold">₹5.00</span>
+                    </div>
+                  )}
+
+                  {/* Addon Bonus */}
+                  {finalAddonBonus && (
+                    <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                      <div className="flex flex-col">
+                        <span className="text-gray-600">Bonus Pay 🎁</span>
+                        <span className="text-[10px] text-orange-500 font-medium">{finalAddonBonus.offerTitle}</span>
+                      </div>
+                      <span className="text-orange-600 font-bold">₹{finalAddonBonus.amount?.toFixed(2)}</span>
+                    </div>
+                  )}
 
                   {Number(selectedRestaurant?.customerTip || 0) > 0 && (
                     <div className="flex justify-between items-center py-2 border-b border-gray-100">
@@ -12779,15 +12948,19 @@ export default function DeliveryHome() {
                   <div className="flex justify-between items-center py-2">
                     <span className="text-lg font-bold text-gray-900">Total Earnings</span>
                     <span className="text-lg font-bold text-gray-900">₹{(() => {
-                      if (orderEarnings > 0) {
-                        return orderEarnings.toFixed(2);
+                      const base = orderEarnings > 0 ? orderEarnings : 0;
+                      const bonus = finalAddonBonus?.amount || 0;
+                      const total = base + bonus;
+                      
+                      if (total === 0) {
+                        // Handle estimatedEarnings - can be number or object
+                        const earnings = selectedRestaurant?.estimatedEarnings || selectedRestaurant?.amount || 0;
+                        if (typeof earnings === 'object' && earnings.totalEarning) {
+                          return earnings.totalEarning.toFixed(2);
+                        }
+                        return typeof earnings === 'number' ? earnings.toFixed(2) : '0.00';
                       }
-                      // Handle estimatedEarnings - can be number or object
-                      const earnings = selectedRestaurant?.estimatedEarnings || selectedRestaurant?.amount || 0;
-                      if (typeof earnings === 'object' && earnings.totalEarning) {
-                        return earnings.totalEarning.toFixed(2);
-                      }
-                      return typeof earnings === 'number' ? earnings.toFixed(2) : '0.00';
+                      return total.toFixed(2);
                     })()}</span>
                   </div>
                 </div>

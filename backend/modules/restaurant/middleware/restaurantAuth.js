@@ -1,5 +1,6 @@
 import jwtService from '../../auth/services/jwtService.js';
 import Restaurant from '../models/Restaurant.js';
+import StaffManagement from '../models/StaffManagement.js';
 import { errorResponse } from '../../../shared/utils/response.js';
 
 const isDev = process.env.NODE_ENV !== 'production';
@@ -28,15 +29,41 @@ export const authenticate = async (req, res, next) => {
     }
 
     // Get restaurant from database
-    const restaurant = await Restaurant.findById(decoded.userId).select('-password');
+    let restaurant = await Restaurant.findById(decoded.userId).select('-password');
+    let staffRecord = null;
+
+    if (!restaurant) {
+      // If not a restaurant owner, check if it's a staff member
+      staffRecord = await StaffManagement.findOne({
+        _id: decoded.userId,
+        status: 'active'
+      });
+
+      if (staffRecord) {
+        // Resolve the restaurant the staff member belongs to
+        restaurant = await Restaurant.findById(staffRecord.restaurantId).select('-password');
+        if (restaurant) {
+          // Verify the restaurant is still active/valid
+          if (!restaurant.isActive && !restaurant.approvedAt) {
+             // Inactive restaurant - but we continue because the middleware has special logic for onboarding routes below
+          }
+        }
+      }
+    }
     
     if (!restaurant) {
-      console.error('❌ Restaurant not found in database:', {
+      console.error('❌ User/Restaurant not found in database:', {
         userId: decoded.userId,
         role: decoded.role,
         email: decoded.email,
+        isStaff: !!staffRecord
       });
-      return errorResponse(res, 401, 'Restaurant not found');
+      return errorResponse(res, 401, staffRecord ? 'Associated restaurant not found' : 'User not found');
+    }
+
+    // Capture staff info if applicable
+    if (staffRecord) {
+      req.staff = staffRecord;
     }
 
     // Allow inactive/unapproved restaurants to access onboarding and profile routes

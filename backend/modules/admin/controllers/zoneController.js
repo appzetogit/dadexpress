@@ -401,20 +401,24 @@ export const detectUserZone = asyncHandler(async (req, res) => {
       }
     }
 
-    // If user is not in any zone, check buffer area (50-100 meters)
+    // If user is not in any zone, check buffer area (up to 1km margin for edge cases)
     if (!userZone) {
-      const BUFFER_DISTANCE = 0.1; // 100 meters in km
+      const BUFFER_DISTANCE = 1.0; // 1km buffer
       
       for (const zone of activeZones) {
         if (!zone.coordinates || zone.coordinates.length < 3) continue;
         
-        const centroid = calculateZoneCentroid(zone.coordinates);
-        const distance = calculateDistance(userLat, userLng, centroid.lat, centroid.lng);
-        
-        // Find nearest zone within buffer
-        if (distance <= BUFFER_DISTANCE && distance < minDistance) {
-          minDistance = distance;
-          userZone = zone;
+        // Find nearest vertex for buffer check
+        for (const vertex of zone.coordinates) {
+          const vLat = typeof vertex === 'object' ? (vertex.latitude || vertex.lat) : null;
+          const vLng = typeof vertex === 'object' ? (vertex.longitude || vertex.lng) : null;
+          if (vLat === null || vLng === null) continue;
+          
+          const dist = calculateDistance(userLat, userLng, vLat, vLng);
+          if (dist <= BUFFER_DISTANCE && dist < minDistance) {
+            minDistance = dist;
+            userZone = zone;
+          }
         }
       }
     }

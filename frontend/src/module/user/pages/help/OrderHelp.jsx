@@ -22,6 +22,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useOrders } from "../../context/OrdersContext"
+import { loadBusinessSettings } from "@/lib/utils/businessSettings"
 
 const commonIssues = [
   {
@@ -127,6 +128,15 @@ export default function OrderHelp() {
   const navigate = useNavigate()
   const { getOrderById } = useOrders()
   const order = getOrderById(orderId)
+  const [settings, setSettings] = useState(null)
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      const data = await loadBusinessSettings()
+      if (data) setSettings(data)
+    }
+    fetchSettings()
+  }, [])
 
   const formatDate = (dateString) => {
     if (!dateString) return "N/A"
@@ -417,10 +427,10 @@ export default function OrderHelp() {
                       Mention order {order.id}
                     </p>
                     <a
-                      href="tel:+1-800-123-4567"
+                      href={settings?.phone?.number ? `tel:${settings.phone.countryCode}${settings.phone.number}` : "tel:+919876543210"}
                       className="text-sm text-primary hover:underline font-medium"
                     >
-                      +1 (800) 123-4567
+                      {settings?.phone?.number ? `${settings.phone.countryCode} ${settings.phone.number}` : "+91 9876543210"}
                     </a>
                   </div>
                 </div>
@@ -434,10 +444,10 @@ export default function OrderHelp() {
                       Include order {order.id} in subject
                     </p>
                     <a
-                      href={`mailto:support@appzeto.com?subject=Help with Order ${order.id}`}
+                      href={settings?.email ? `mailto:${settings.email}?subject=Help with Order ${order.id}` : `mailto:support@dadexpress.com?subject=Help with Order ${order.id}`}
                       className="text-sm text-primary hover:underline font-medium"
                     >
-                      support@appzeto.com
+                      {settings?.email || "support@dadexpress.com"}
                     </a>
                   </div>
                 </div>

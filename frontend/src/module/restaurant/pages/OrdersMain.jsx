@@ -92,7 +92,7 @@ function CompletedOrders({ onSelectOrder }) {
             deliveryInstruction: order.deliveryInstruction || '',
             photoUrl: order.items?.[0]?.image || null,
             photoAlt: order.items?.[0]?.name || 'Order',
-            amount: order.pricing?.total || order.total || 0
+            amount: order.restaurantPayout ?? (order.pricing?.total || order.total || 0)
           }))
 
           transformedOrders.sort((a, b) => {
@@ -193,6 +193,7 @@ function CompletedOrders({ onSelectOrder }) {
                       timePlaced: deliveredDate,
                       itemsSummary: order.itemsSummary,
                       deliveryInstruction: order.deliveryInstruction,
+                      address: order.address,
                     })
                   }
                   className="w-full text-left flex gap-3 items-stretch"
@@ -306,7 +307,7 @@ function CancelledOrders({ onSelectOrder }) {
             deliveryInstruction: order.deliveryInstruction || '',
             photoUrl: order.items?.[0]?.image || null,
             photoAlt: order.items?.[0]?.name || 'Order',
-            amount: order.pricing?.total || order.total || 0
+            amount: order.restaurantPayout ?? (order.pricing?.total || order.total || 0)
           }))
 
           transformedOrders.sort((a, b) => {
@@ -413,6 +414,7 @@ function CancelledOrders({ onSelectOrder }) {
                       timePlaced: cancelledDate,
                       itemsSummary: order.itemsSummary,
                       deliveryInstruction: order.deliveryInstruction,
+                      address: order.address,
                     })
                   }
                   className="w-full text-left flex gap-3 items-stretch"
@@ -1736,6 +1738,25 @@ export default function OrdersMain() {
                         ? new Date((popupOrder || newOrder).createdAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
                         : 'Just now'}
                     </p>
+                    {/* Delivery Address in Popup */}
+                    {(() => {
+                      const order = popupOrder || newOrder;
+                      const addr = order?.customerAddress || order?.address;
+                      if (!addr) return null;
+                      const fullAddr = addr.formattedAddress || `${addr.street || ''} ${addr.city || ''}`.trim();
+                      if (!fullAddr) return null;
+                      return (
+                        <div className="mt-2 p-2 bg-blue-50 rounded-lg border border-blue-100 flex items-start gap-2">
+                          <svg className="w-3.5 h-3.5 text-blue-600 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                          <p className="text-xs text-blue-800 font-medium leading-tight">
+                            {fullAddr}
+                          </p>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Details Accordion */}
@@ -1835,6 +1856,10 @@ export default function OrdersMain() {
                     <span className="text-base font-bold text-gray-900">
                       ₹{(() => {
                         const order = popupOrder || newOrder
+                        if (order?.restaurantPayout !== undefined && order?.restaurantPayout !== null) {
+                          const amt = Number(order.restaurantPayout);
+                          return Number.isInteger(amt) ? String(amt) : amt.toFixed(2);
+                        }
                         const items = Array.isArray(order?.items) ? order.items : []
                         const itemTotal = items.reduce((sum, item) => {
                           const quantity = Number(item?.quantity ?? item?.qty ?? 1) || 1
@@ -2145,6 +2170,22 @@ export default function OrdersMain() {
                       ? ` • ${selectedOrder.tableOrToken}`
                       : ""}
                   </p>
+                  {/* Big Address Display in Sheet */}
+                  {(() => {
+                    const addr = selectedOrder?.address || selectedOrder?.customerAddress;
+                    if (!addr) return null;
+                    const fullAddr = addr.formattedAddress || `${addr.street || ''} ${addr.city || ''}`.trim();
+                    if (!fullAddr) return null;
+                    return (
+                      <div className="mt-2 text-[11px] text-gray-800 font-bold bg-gray-50 p-2 rounded-lg border border-gray-100 flex items-start gap-1.5">
+                        <svg className="w-3.5 h-3.5 text-gray-400 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        <span>{fullAddr}</span>
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div className="flex flex-col items-end gap-1">
                   <span
@@ -2284,6 +2325,7 @@ function OrderCard({
   photoAlt,
   deliveryPartnerId,
   paymentMethod,
+  address,
   onSelect,
   onCancel,
   onMarkReady,
@@ -2319,9 +2361,10 @@ function OrderCard({
             eta,
             itemsSummary,
             note,
-            deliveryInstruction,
+            deliveryInstruction: selectedOrder?.deliveryInstruction || selectedOrder?.address?.additionalDetails,
             deliveryPartnerId,
             paymentMethod,
+            address: address || selectedOrder?.address || selectedOrder?.customerAddress,
           })
         }
         className="w-full text-left flex gap-3 items-stretch cursor-pointer"
@@ -2486,7 +2529,8 @@ function PreparingOrders({ onSelectOrder, onCancel }) {
               photoUrl: order.items?.[0]?.image || null,
               photoAlt: order.items?.[0]?.name || 'Order',
               deliveryPartnerId: order.deliveryPartnerId || null, // Track if delivery partner is assigned
-              paymentMethod: order.paymentMethod ?? order.payment?.method // Store payment method for display
+              paymentMethod: order.paymentMethod ?? order.payment?.method, // Store payment method for display
+              address: order.address
             }
           })
 
@@ -2709,6 +2753,7 @@ function PreparingOrders({ onSelectOrder, onCancel }) {
                 photoAlt={order.photoAlt}
                 deliveryPartnerId={order.deliveryPartnerId}
                 paymentMethod={order.paymentMethod}
+                address={order.address}
                 onSelect={onSelectOrder}
                 onCancel={onCancel}
                 onMarkReady={() => handleMarkOrderReady(order)}
@@ -2762,7 +2807,8 @@ function ReadyOrders({ onSelectOrder }) {
             deliveryInstruction: order.deliveryInstruction || '',
             photoUrl: order.items?.[0]?.image || null,
             photoAlt: order.items?.[0]?.name || 'Order',
-            paymentMethod: order.paymentMethod ?? order.payment?.method
+            paymentMethod: order.paymentMethod ?? order.payment?.method,
+            address: order.address
           }))
 
           if (isMounted) {
@@ -2888,7 +2934,8 @@ const OutForDeliveryOrders = ({ onSelectOrder }) => {
             deliveryInstruction: order.deliveryInstruction || '',
             photoUrl: order.items?.[0]?.image || null,
             photoAlt: order.items?.[0]?.name || 'Order',
-            paymentMethod: order.paymentMethod ?? order.payment?.method
+            paymentMethod: order.paymentMethod ?? order.payment?.method,
+            address: order.address
           }))
 
           if (isMounted) {

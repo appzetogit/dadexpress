@@ -100,11 +100,12 @@ export default function ContactDetails() {
   }, [])
 
   const formatPhone = (phone) => {
-    if (!phone || phone === "N/A") return phone;
-    let cleaned = phone.toString().trim();
-    if (cleaned.startsWith("+91")) return cleaned.slice(3).trim();
-    if (cleaned.startsWith("91") && cleaned.length > 10) return cleaned.slice(2).trim();
-    return cleaned.replace(/[-\s]/g, "");
+    if (!phone || phone === "N/A") return "";
+    let cleaned = phone.toString().replace(/\D/g, "");
+    if (cleaned.length > 10 && cleaned.startsWith("91")) {
+      return cleaned.slice(-10);
+    }
+    return cleaned;
   };
 
 
@@ -240,7 +241,7 @@ export default function ContactDetails() {
               </p>
               <p className="text-sm text-gray-900 font-normal flex items-center gap-2">
                 <Phone className="w-3.5 h-3.5 text-blue-600" />
-                <a href={`tel:${ownerData.phone}`} className="hover:underline">
+                <a href={`tel:${formatPhone(ownerData.phone)}`} className="hover:underline">
                   {loading ? "Loading..." : (formatPhone(ownerData.phone) || "N/A")}
                 </a>
               </p>
@@ -317,7 +318,7 @@ export default function ContactDetails() {
                               {user.phone && (
                                 <span className="flex items-center gap-2">
                                   <Phone className="w-3.5 h-3.5 text-orange-600" />
-                                  <a href={`tel:${user.phone}`} className="hover:underline">
+                                  <a href={`tel:${formatPhone(user.phone)}`} className="hover:underline">
                                     {formatPhone(user.phone)}
                                   </a>
                                 </span>
@@ -397,7 +398,7 @@ export default function ContactDetails() {
                               {user.phone && (
                                 <span className="flex items-center gap-2">
                                   <Phone className="w-3.5 h-3.5 text-orange-600" />
-                                  <a href={`tel:${user.phone}`} className="hover:underline">
+                                  <a href={`tel:${formatPhone(user.phone)}`} className="hover:underline">
                                     {formatPhone(user.phone)}
                                   </a>
                                 </span>

@@ -95,9 +95,24 @@ function getRestaurantZoneId(restaurantLat, restaurantLng, activeZones) {
 
 // Get all restaurants (for user module)
 export const getRestaurants = async (req, res) => {
+  /**
+   * Calculate distance between two points (Haversine formula)
+   */
+  const calculateDistance = (lat1, lng1, lat2, lng2) => {
+    const R = 6371; // Earth's radius in km
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLng = (lng2 - lng1) * (Math.PI / 180);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
   try {
-    const { 
-      limit = 50, 
+    const {
+      limit = 50,
       offset = 0,
       sortBy,
       cuisine,
@@ -107,9 +122,16 @@ export const getRestaurants = async (req, res) => {
       maxPrice,
       hasOffers,
       dietary,
-      zoneId // User's zone ID (optional - if provided, filters by zone)
+      zoneId, // User's zone ID (optional - if provided, filters by zone)
+      latitude,
+      longitude,
+      lat,
+      lng,
     } = req.query;
-    
+
+    const userLat = parseFloat(latitude || lat);
+    const userLng = parseFloat(longitude || lng);
+
     // Optional: Zone-based filtering - if zoneId is provided, validate and filter by zone
     let userZone = null;
     if (zoneId) {
@@ -120,124 +142,133 @@ export const getRestaurants = async (req, res) => {
         userZone = null;
       }
     }
-    
+
     // Build query
     const query = { isActive: true };
-    
+
     // Dietary filter
     if (dietary) {
       const menuQuery = { isActive: true };
-      
-      if (dietary === 'veg') {
+
+      if (dietary === "veg") {
         menuQuery.$or = [
           { "sections.items.foodType": "Veg" },
-          { "sections.subsections.items.foodType": "Veg" }
+          { "sections.subsections.items.foodType": "Veg" },
         ];
-      } else if (dietary === 'non-veg') {
+      } else if (dietary === "non-veg") {
         menuQuery.$or = [
           { "sections.items.foodType": "Non-Veg" },
-          { "sections.subsections.items.foodType": "Non-Veg" }
+          { "sections.subsections.items.foodType": "Non-Veg" },
         ];
-      } else if (dietary === 'pure-veg') {
+      } else if (dietary === "pure-veg") {
         menuQuery.$and = [
           {
             $or: [
               { "sections.items.foodType": "Veg" },
-              { "sections.subsections.items.foodType": "Veg" }
-            ]
+              { "sections.subsections.items.foodType": "Veg" },
+            ],
           },
           {
             $nor: [
               { "sections.items.foodType": "Non-Veg" },
-              { "sections.subsections.items.foodType": "Non-Veg" }
-            ]
-          }
+              { "sections.subsections.items.foodType": "Non-Veg" },
+            ],
+          },
         ];
       }
 
-      if (['veg', 'non-veg', 'pure-veg'].includes(dietary)) {
-        const matchingMenus = await Menu.find(menuQuery).select('restaurant').lean();
-        const dietaryRestaurantIds = matchingMenus.map(m => m.restaurant);
+      if (["veg", "non-veg", "pure-veg"].includes(dietary)) {
+        const matchingMenus = await Menu.find(menuQuery).select("restaurant").lean();
+        const dietaryRestaurantIds = matchingMenus.map((m) => m.restaurant);
         query._id = { $in: dietaryRestaurantIds };
       }
     }
-    
+
     // Cuisine filter
     if (cuisine) {
-      query.cuisines = { $in: [new RegExp(cuisine, 'i')] };
+      query.cuisines = { $in: [new RegExp(cuisine, "i")] };
     }
-    
-      // Rating filter
-      if (minRating) {
-        query.rating = { $gte: parseFloat(minRating) };
-      }
-      
-      // Trust filters (top-rated = 4.5+, trusted = 4.0+ with high totalRatings)
-      if (req.query.topRated === 'true') {
-        query.rating = { $gte: 4.5 };
-      } else if (req.query.trusted === 'true') {
-        query.rating = { $gte: 4.0 };
-        query.totalRatings = { $gte: 100 }; // At least 100 ratings to be "trusted"
-      }
-    
-    // Delivery time filter (estimatedDeliveryTime contains time in format "25-30 mins")
+
+    // Rating filter
+    if (minRating) {
+      query.rating = { $gte: parseFloat(minRating) };
+    }
+
+    // Trust filters (top-rated = 4.5+, trusted = 4.0+ with high totalRatings)
+    if (req.query.topRated === "true") {
+      query.rating = { $gte: 4.5 };
+    } else if (req.query.trusted === "true") {
+      query.rating = { $gte: 4.0 };
+      query.totalRatings = { $gte: 100 }; // At least 100 ratings to be "trusted"
+    }
+
+    // Handle multiple $or conditions (Delivery time, distance, offers)
+    // Avoid overwriting query.$or
+    const additionalOrConditions = [];
+
     if (maxDeliveryTime) {
-      const maxTime = parseInt(maxDeliveryTime);
-      query.$or = [
-        { estimatedDeliveryTime: { $regex: new RegExp(`(\\d+)-?\\d*\\s*mins?`, 'i') } }
-      ];
-      // We'll filter this in application logic since it's a string field
+      additionalOrConditions.push({
+        estimatedDeliveryTime: {
+          $regex: new RegExp(`(\\d+)-?\\d*\\s*mins?`, "i"),
+        },
+      });
     }
-    
-    // Distance filter (distance is stored as string like "1.2 km")
+
     if (maxDistance) {
-      const maxDist = parseFloat(maxDistance);
-      query.$or = [
-        { distance: { $regex: new RegExp(`\\d+\\.?\\d*\\s*km`, 'i') } }
-      ];
-      // We'll filter this in application logic since it's a string field
+      additionalOrConditions.push({
+        distance: { $regex: new RegExp(`\\d+\\.?\\d*\\s*km`, "i") },
+      });
     }
-    
+
+    if (hasOffers === "true") {
+      additionalOrConditions.push({ offer: { $exists: true, $ne: null, $ne: "" } });
+      additionalOrConditions.push({ featuredPrice: { $exists: true } });
+    }
+
+    if (additionalOrConditions.length > 0) {
+      if (query.$or) {
+        // If query already has $or (e.g. from dietary), wrap both in $and to avoid collision
+        query.$and = query.$and || [];
+        query.$and.push({ $or: query.$or });
+        query.$and.push({ $or: additionalOrConditions });
+        delete query.$or;
+      } else {
+        query.$or = additionalOrConditions;
+      }
+    }
+
     // Price range filter
     if (maxPrice) {
-      const priceMap = { 200: ['$'], 500: ['$', '$$'] };
+      const priceMap = { 200: ["$"], 500: ["$", "$$"] };
       if (priceMap[maxPrice]) {
         query.priceRange = { $in: priceMap[maxPrice] };
       }
     }
-    
-    // Offers filter
-    if (hasOffers === 'true') {
-      query.$or = [
-        { offer: { $exists: true, $ne: null, $ne: '' } },
-        { featuredPrice: { $exists: true } }
-      ];
-    }
-    
+
     // Build sort object
     let sortObj = { createdAt: -1 }; // Default: Latest first
-    
+
     if (sortBy) {
       switch (sortBy) {
-        case 'price-low':
+        case "price-low":
           sortObj = { priceRange: 1, rating: -1 }; // $ < $$ < $$$, then by rating
           break;
-        case 'price-high':
+        case "price-high":
           sortObj = { priceRange: -1, rating: -1 }; // $$$$ > $$$ > $$ > $, then by rating
           break;
-        case 'rating-high':
+        case "rating-high":
           sortObj = { rating: -1, totalRatings: -1 }; // Highest rating first
           break;
-        case 'rating-low':
+        case "rating-low":
           sortObj = { rating: 1, totalRatings: -1 }; // Lowest rating first
           break;
-        case 'relevance':
+        case "relevance":
         default:
           sortObj = { rating: -1, totalRatings: -1, createdAt: -1 }; // Relevance: high rating + recent
           break;
       }
     }
-    
+
     const parseCoordinate = (value) => {
       const parsed = Number(value);
       return Number.isFinite(parsed) ? parsed : null;
@@ -260,83 +291,116 @@ export const getRestaurants = async (req, res) => {
       if (!zoneDoc?.coordinates || zoneDoc.coordinates.length < 3) return true;
       const coords = getRestaurantCoords(restaurantDoc);
       if (!coords) return false;
-      return isPointInZone(coords.lat, coords.lng, zoneDoc.coordinates);
+      
+      // 1. Direct polygon check
+      if (isPointInZone(coords.lat, coords.lng, zoneDoc.coordinates)) {
+        return true;
+      }
+      
+      // 2. Buffer check (1km) against vertices - handles restaurants near boundary
+      const BUFFER_DISTANCE = 1.0;
+      for (const vertex of zoneDoc.coordinates) {
+        const vLat = typeof vertex === 'object' ? (vertex.latitude || vertex.lat) : null;
+        const vLng = typeof vertex === 'object' ? (vertex.longitude || vertex.lng) : null;
+        if (vLat !== null && vLng !== null) {
+          if (calculateDistance(coords.lat, coords.lng, vLat, vLng) <= BUFFER_DISTANCE) {
+            return true;
+          }
+        }
+      }
+      
+      return false;
     };
 
     // Fetch restaurants
     let restaurants = await Restaurant.find(query)
-      .select('-owner -createdAt -updatedAt -password')
+      .select("-owner -createdAt -updatedAt -password")
       .sort(sortObj)
       .lean();
 
-    // When user zone is available, show only restaurants inside that zone.
+    // 1. Filter by user zone (polygon check)
     if (userZone) {
-      restaurants = restaurants.filter((restaurantDoc) => isRestaurantInsideZone(restaurantDoc, userZone));
+      restaurants = restaurants.filter((restaurantDoc) =>
+        isRestaurantInsideZone(restaurantDoc, userZone),
+      );
     }
 
-    // Apply pagination after all filters (including zone polygon filter).
-    const offsetValue = parseInt(offset);
-    const limitValue = parseInt(limit);
-    restaurants = restaurants.slice(offsetValue, offsetValue + limitValue);
-    
-    // Apply string-based filters that can't be done in MongoDB query
+    // 2. Calculate dynamic distances if user coordinates available
+    if (userLat && userLng) {
+      restaurants = restaurants.map((r) => {
+        const coords = getRestaurantCoords(r);
+        if (coords) {
+          const d = calculateDistance(userLat, userLng, coords.lat, coords.lng);
+          // Only override static distance if valid
+          return { ...r, dynamicDistance: d };
+        }
+        return r;
+      });
+    }
+
+    // 3. Apply string-based and numeric filters (AFTER zone filtering but BEFORE pagination)
     if (maxDeliveryTime) {
       const maxTime = parseInt(maxDeliveryTime);
-      restaurants = restaurants.filter(r => {
+      restaurants = restaurants.filter((r) => {
         if (!r.estimatedDeliveryTime) return false;
         const timeMatch = r.estimatedDeliveryTime.match(/(\d+)/);
         return timeMatch && parseInt(timeMatch[1]) <= maxTime;
       });
     }
-    
+
     if (maxDistance) {
       const maxDist = parseFloat(maxDistance);
-      restaurants = restaurants.filter(r => {
+      restaurants = restaurants.filter((r) => {
+        // Prefer dynamic distance if available
+        if (r.dynamicDistance !== undefined) {
+          return r.dynamicDistance <= maxDist;
+        }
+        // Fallback to static distance string
         if (!r.distance) return false;
         const distMatch = r.distance.match(/(\d+\.?\d*)/);
         return distMatch && parseFloat(distMatch[1]) <= maxDist;
       });
     }
 
-    // NEW: Apply automatic open/closed status check for each restaurant in the list
-    restaurants = await Promise.all(restaurants.map(async (r) => {
-      if (r.isAcceptingOrders === false) return r; // Already closed manually
-      
-      const isCurrentlyOpen = await OutletTimings.isRestaurantOpen(r._id);
-      if (!isCurrentlyOpen) {
-        return { ...r, isAcceptingOrders: false, status: 'Closed' };
-      }
-      return r;
-    }));
-    
-    // Get total count (before filtering by string fields)
-    const totalQuery = { ...query };
-    delete totalQuery.$or; // Remove $or for count
-    let total = await Restaurant.countDocuments(totalQuery);
-    if (userZone) {
-      const allCandidateRestaurants = await Restaurant.find(query)
-        .select('location')
-        .lean();
-      total = allCandidateRestaurants.filter((restaurantDoc) =>
-        isRestaurantInsideZone(restaurantDoc, userZone),
-      ).length;
-    }
-    
-    console.log(`Fetched ${restaurants.length} restaurants from database with filters:`, {
-      sortBy,
-      cuisine,
-      minRating,
-      maxDeliveryTime,
-      maxDistance,
-      maxPrice,
-      hasOffers,
-      dietary,
-      zoneId
-    });
+    // 4. Open/Closed status check (automatic status update)
+    restaurants = await Promise.all(
+      restaurants.map(async (r) => {
+        if (r.isAcceptingOrders === false) return r; // Already closed manually
 
-    return successResponse(res, 200, 'Restaurants retrieved successfully', {
+        const isCurrentlyOpen = await OutletTimings.isRestaurantOpen(r._id);
+        if (!isCurrentlyOpen) {
+          return { ...r, isAcceptingOrders: false, status: "Closed" };
+        }
+        return r;
+      }),
+    );
+
+    // 5. Final Pagination and Total Count
+    const total = restaurants.length;
+    const offsetValue = parseInt(offset);
+    const limitValue = parseInt(limit);
+    restaurants = restaurants.slice(offsetValue, offsetValue + limitValue);
+
+    console.log(
+      `Fetched ${restaurants.length} (total: ${total}) restaurants with filters:`,
+      {
+        sortBy,
+        cuisine,
+        minRating,
+        maxDeliveryTime,
+        maxDistance,
+        maxPrice,
+        hasOffers,
+        dietary,
+        zoneId,
+        userLat,
+        userLng,
+      },
+    );
+
+    return successResponse(res, 200, "Restaurants retrieved successfully", {
       restaurants,
-      total: restaurants.length,
+      total,
       filters: {
         sortBy,
         cuisine,
@@ -345,12 +409,12 @@ export const getRestaurants = async (req, res) => {
         maxDistance,
         maxPrice,
         hasOffers,
-        dietary
-      }
+        dietary,
+      },
     });
   } catch (error) {
-    console.error('Error fetching restaurants:', error);
-    return errorResponse(res, 500, 'Failed to fetch restaurants');
+    console.error("Error fetching restaurants:", error);
+    return errorResponse(res, 500, "Failed to fetch restaurants");
   }
 };
 
@@ -557,7 +621,7 @@ export const createRestaurantFromOnboarding = async (onboardingData, restaurantI
 export const updateRestaurantProfile = asyncHandler(async (req, res) => {
   try {
     const restaurantId = req.restaurant._id;
-    const { profileImage, menuImages, name, cuisines, location, ownerName, ownerEmail, ownerPhone } = req.body;
+    const { profileImage, menuImages, name, cuisines, location, ownerName, ownerEmail, ownerPhone, bank } = req.body;
 
     const restaurant = await Restaurant.findById(restaurantId);
 
@@ -652,6 +716,11 @@ export const updateRestaurantProfile = asyncHandler(async (req, res) => {
       updateData.ownerPhone = ownerPhone;
     }
 
+    // Update bank details if provided
+    if (bank !== undefined) {
+      updateData.bank = bank;
+    }
+
     // Update restaurant
     Object.assign(restaurant, updateData);
     await restaurant.save();
@@ -669,6 +738,7 @@ export const updateRestaurantProfile = asyncHandler(async (req, res) => {
         ownerName: restaurant.ownerName,
         ownerEmail: restaurant.ownerEmail,
         ownerPhone: restaurant.ownerPhone,
+        bank: restaurant.bank,
       }
     });
   } catch (error) {

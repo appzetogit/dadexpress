@@ -57,6 +57,8 @@ export default function ItemDetailsPage() {
   const [showMoreNutrition, setShowMoreNutrition] = useState(false)
   const [selectedTags, setSelectedTags] = useState([])
   const [images, setImages] = useState([])
+  const [variations, setVariations] = useState([])
+  const [hasVariations, setHasVariations] = useState(false)
   const [imageFiles, setImageFiles] = useState(new Map()) // Track File objects by preview URL
   const [uploadingImages, setUploadingImages] = useState(false)
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
@@ -135,6 +137,19 @@ export default function ItemDetailsPage() {
         // Set allergens
         if (item.allergies && Array.isArray(item.allergies) && item.allergies.length > 0) {
           setAllergens(item.allergies.join(", "))
+        }
+
+        // Initialize variations from item data
+        if (item.variations && Array.isArray(item.variations) && item.variations.length > 0) {
+          setVariations(item.variations.map((v, idx) => ({
+            id: v.id || `v-${Date.now()}-${idx}`,
+            name: v.name || "",
+            price: v.price?.toString() || ""
+          })))
+          setHasVariations(true)
+        } else {
+          setVariations([])
+          setHasVariations(false)
         }
         return
       }
@@ -228,6 +243,19 @@ export default function ItemDetailsPage() {
             // Set allergens
             if (foundItem.allergies && Array.isArray(foundItem.allergies) && foundItem.allergies.length > 0) {
               setAllergens(foundItem.allergies.join(", "))
+            }
+
+            // Initialize variations from fetched item data
+            if (foundItem.variations && Array.isArray(foundItem.variations) && foundItem.variations.length > 0) {
+              setVariations(foundItem.variations.map((v, idx) => ({
+                id: v.id || `v-${Date.now()}-${idx}`,
+                name: v.name || "",
+                price: v.price?.toString() || ""
+              })))
+              setHasVariations(true)
+            } else {
+              setVariations([])
+              setHasVariations(false)
             }
           } else {
             toast.error("Item not found")
@@ -851,7 +879,11 @@ export default function ItemDetailsPage() {
       discountAmount: 0.0,
       isAvailable: isInStock,
       isRecommended: isRecommended,
-      variations: [],
+      variations: hasVariations ? variations.map(v => ({
+        name: v.name,
+        price: parseFloat(v.price) || 0,
+        isEnabled: true
+      })) : [],
       tags: [],
       nutrition: nutritionStrings,
       allergies: [],
@@ -1276,6 +1308,121 @@ return (
               </div> */}
           </div>
 
+        </div>
+
+        {/* Multiple Sizes (Variations) section */}
+        <div className="pt-2">
+          <div className="flex items-center justify-between py-4 border-t border-gray-100">
+            <div className="flex flex-col">
+              <span className="text-sm font-bold text-gray-900">Multiple Sizes</span>
+              <span className="text-[11px] text-gray-500">Add variations like Small, Large with distinct prices</span>
+            </div>
+            <Switch
+              checked={hasVariations}
+              onCheckedChange={(val) => {
+                setHasVariations(val)
+                if (val && variations.length === 0) {
+                  setVariations([{ id: Date.now(), name: "Standard", price: basePrice || "" }])
+                }
+              }}
+              className="data-[state=checked]:bg-green-600"
+            />
+          </div>
+
+          <AnimatePresence>
+            {hasVariations && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="space-y-3 overflow-hidden pb-4"
+              >
+                {variations.map((v, index) => (
+                  <div key={v.id} className="p-4 bg-gray-50 rounded-xl border border-gray-100 flex items-center gap-4">
+                    <div className="flex-1">
+                      <label className="text-[10px] text-gray-500 font-bold uppercase mb-1.5 block">Size / Variant</label>
+                      <input
+                        type="text"
+                        value={v.name}
+                        onChange={(e) => {
+                          const newVariations = [...variations]
+                          newVariations[index].name = e.target.value
+                          setVariations(newVariations)
+                        }}
+                        placeholder="e.g. Small / Large"
+                        className="w-full bg-white border border-gray-200 px-3 py-2 rounded-lg text-sm font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
+                      />
+                    </div>
+                    <div className="w-28">
+                      <label className="text-[10px] text-gray-500 font-bold uppercase mb-1.5 block">Price</label>
+                      <div className="relative">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-500 font-bold">₹</span>
+                        <input
+                          type="text"
+                          value={v.price}
+                          onChange={(e) => {
+                            const value = e.target.value.replace(/[^0-9.]/g, '')
+                            const newVariations = [...variations]
+                            newVariations[index].price = value
+                            setVariations(newVariations)
+                          }}
+                          placeholder="0"
+                          className="w-full bg-white border border-gray-200 pl-6 pr-3 py-2 rounded-lg text-sm font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
+                        />
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setVariations(variations.filter((_, i) => i !== index))}
+                      className="mt-5 p-2 hover:bg-gray-200 rounded-full text-gray-400 hover:text-red-500 transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+                {/* Size Presets */}
+                <div className="flex gap-3 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newId = Date.now();
+                      setVariations([...variations, 
+                        { id: newId, name: "Small", price: basePrice || "" },
+                        { id: newId + 1, name: "Large", price: (Math.round(parseFloat(basePrice || 0) * 1.5)).toString() }
+                      ])
+                    }}
+                    className="flex-1 py-3 px-2 bg-blue-50 border border-blue-100 rounded-xl text-[11px] font-bold text-blue-700 hover:bg-blue-100 transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Small & Large
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newId = Date.now();
+                      setVariations([...variations, 
+                        { id: newId, name: "Regular", price: basePrice || "" },
+                        { id: newId + 1, name: "Medium", price: (Math.round(parseFloat(basePrice || 0) * 1.3)).toString() },
+                        { id: newId + 2, name: "Large", price: (Math.round(parseFloat(basePrice || 0) * 1.6)).toString() }
+                      ])
+                    }}
+                    className="flex-1 py-3 px-2 bg-purple-50 border border-purple-100 rounded-xl text-[11px] font-bold text-purple-700 hover:bg-purple-100 transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Reg/Med/Large
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setVariations([...variations, { id: Date.now(), name: "", price: "" }])}
+                  className="w-full py-3.5 flex items-center justify-center gap-2 border-2 border-dashed border-gray-200 rounded-xl text-sm font-bold text-gray-500 hover:bg-gray-50 hover:border-gray-300 transition-all active:scale-95 group"
+                >
+                  <Plus className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                  <span>Custom Size</span>
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* Recommend and In Stock */}

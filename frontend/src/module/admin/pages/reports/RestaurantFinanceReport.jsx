@@ -140,8 +140,12 @@ export default function RestaurantFinanceReport() {
 
       const pendingPayload = pendingResponse?.data?.data || {}
       const historyPayload = historyResponse?.data?.data || {}
-      const normalizedSettlements = (Array.isArray(pendingPayload.settlements) ? pendingPayload.settlements : []).map(normalizeSettlement)
-      const normalizedPaidHistory = (Array.isArray(historyPayload.settlements) ? historyPayload.settlements : []).map(normalizeSettlement)
+      const normalizedSettlements = (Array.isArray(pendingPayload.settlements) ? pendingPayload.settlements : [])
+        .map(normalizeSettlement)
+        .filter(s => !s.isMarkedAsPaid)
+      const normalizedPaidHistory = (Array.isArray(historyPayload.settlements) ? historyPayload.settlements : [])
+        .map(normalizeSettlement)
+        .filter(s => s.isMarkedAsPaid)
 
       const backendPendingTotals = pendingPayload.totals || {}
       const backendHistoryTotals = historyPayload.totals || {}

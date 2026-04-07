@@ -5,6 +5,8 @@ import mongoose from 'mongoose';
 import notificationService from '../../../shared/services/notificationService.js';
 import { notifyUserOrderUpdate } from './userNotificationService.js';
 import { buildNewOrderAvailablePayload } from './deliveryNotificationService.js';
+import OrderSettlement from '../models/OrderSettlement.js';
+import { calculateOrderSettlement } from './orderSettlementService.js';
 
 // Dynamic import to avoid circular dependency
 let getIO = null;
@@ -71,17 +73,10 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
       // Still proceed but log warning
     }
 
-    // Do not push real-time new-order notifications when restaurant is Duty Off.
-    if (restaurant?.isAcceptingOrders === false) {
-      console.log(`⏸️ Skipping new-order notification for offline restaurant ${restaurantId} (${restaurant?.name || 'unknown'})`);
-      return {
-        success: false,
-        restaurantId,
-        orderId: order.orderId,
-        skipped: true,
-        reason: 'restaurant_offline'
-      };
-    }
+    // REMOVED: Do not skip notification if restaurant is Duty Off.
+    // If an order has been successfully placed, the restaurant MUST see it and handle it,
+    // even if they toggled Duty Off a split-second after the order arrived.
+    // The strict check is already done in createOrder controller.
 
     // Resolve payment method: override > order.payment > Payment collection (COD fallback)
     let resolvedPaymentMethod = paymentMethodOverride ?? order.payment?.method ?? 'razorpay';
@@ -98,9 +93,19 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
       resolvedPaymentMethod,
     );
 
+    // Calculate restaurant payout for notification
+    let settlement = await OrderSettlement.findOne({ orderId: order._id }).lean();
+    if (!settlement && order.status !== 'cancelled') {
+      try {
+        settlement = await calculateOrderSettlement(order._id);
+      } catch (err) { /* ignore */ }
+    }
+    const restaurantPayout = (settlement?.restaurantEarning?.netEarning || 0);
+
     const orderNotification = {
       ...basePayload,
       restaurantId: restaurantId,
+      restaurantPayout,
       items: order.items.map(item => ({
         name: item.name,
         quantity: item.quantity,
@@ -284,6 +289,7 @@ export async function notifyRestaurantOrderUpdate(orderId, status) {
     // Get restaurant namespace
     const restaurantNamespace = io.of('/restaurant');
 
+    // Use colon separator to match server.js room join logic
     restaurantNamespace.to(`restaurant:${order.restaurantId}`).emit('order_status_update', {
       orderId: order.orderId,
       status,
@@ -327,4 +333,60 @@ export async function notifyRestaurantOrderUpdate(orderId, status) {
     throw error;
   }
 }
+/**
+ * Notify restaurant that a payout has been processed
+ * @param {string} restaurantId - Restaurant ID
+ * @param {number} amount - Total payout amount
+ * @param {number} settlementCount - Number of settlements processed
+ */
+export async function notifyRestaurantPayoutProcessing(restaurantId, amount, settlementCount) {
+  try {
+    const io = await getIOInstance();
+    if (!io) return;
+    
+    const restaurantNamespace = io.of('/restaurant');
+    
+    // Use colon separator and correctly emit within the /restaurant namespace
+    if (restaurantNamespace) {
+      restaurantNamespace.to(`restaurant:${restaurantId}`).emit('payout_processed', {
+        amount,
+        count: settlementCount,
+        message: `Payout of ₹${amount.toFixed(2)} processed successfully.`,
+        createdAt: new Date()
+      });
+      console.log(`📢 Emit payout_processed to room restaurant:${restaurantId}`);
+    }
 
+    // Fetch restaurant for FCM tokens
+    const restaurant = await Restaurant.findOne({
+      $or: [
+        { _id: restaurantId },
+        { restaurantId: restaurantId }
+      ]
+    }).select('fcmToken fcmTokenMobile platform name').lean();
+
+    if (!restaurant) return;
+
+    const fcmTokens = [];
+    if (restaurant.fcmToken) fcmTokens.push({ token: restaurant.fcmToken, plat: 'web' });
+    if (restaurant.fcmTokenMobile) fcmTokens.push({ token: restaurant.fcmTokenMobile, plat: 'app' });
+
+    for (const { token, plat } of fcmTokens) {
+      notificationService.sendPushNotification(
+        token,
+        {
+          title: 'Payout Processed! 💰',
+          body: `Your payout of ₹${amount.toFixed(2)} for ${settlementCount} orders has been marked as paid.`
+        },
+        {
+          type: 'payout_processed',
+          amount: String(amount),
+          click_action: `/restaurant/hub-finance`
+        },
+        restaurant.platform || plat || 'app'
+      ).catch(err => console.error(`Error sending payout push notification to restaurant (${plat}):`, err));
+    }
+  } catch (error) {
+    console.error('Error notifying restaurant about payout:', error);
+  }
+}

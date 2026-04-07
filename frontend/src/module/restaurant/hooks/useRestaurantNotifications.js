@@ -30,18 +30,29 @@ export const useRestaurantNotifications = (isOnline = null) => {
 
   // Get restaurant ID from API
   useEffect(() => {
+    let retryCount = 0;
+    const MAX_RETRIES = 5;
+    
     const fetchRestaurantId = async () => {
       try {
         const response = await restaurantAPI.getCurrentRestaurant();
         if (response.data?.success && response.data.data?.restaurant) {
           const restaurant = response.data.data.restaurant;
-          // Priority: _id (ObjectId), then restaurantId (Slug)
           const id = restaurant._id?.toString() || restaurant.restaurantId;
           console.log('✅ useRestaurantNotifications: Fetched restaurantId:', id);
           setRestaurantId(id);
+        } else if (retryCount < MAX_RETRIES) {
+          retryCount++;
+          setTimeout(fetchRestaurantId, 5000);
         }
       } catch (error) {
-        console.error('❌ useRestaurantNotifications: Error fetching restaurant:', error);
+        if (retryCount < MAX_RETRIES) {
+          retryCount++;
+          console.warn(`⚠️ useRestaurantNotifications: Retry fetching restaurant (${retryCount}/${MAX_RETRIES})...`);
+          setTimeout(fetchRestaurantId, 5000);
+        } else {
+          console.error('❌ useRestaurantNotifications: Error fetching restaurant after retries:', error);
+        }
       }
     };
     fetchRestaurantId();
@@ -204,10 +215,10 @@ export const useRestaurantNotifications = (isOnline = null) => {
     false && console.log('🔌 Is Production Deployment:', isProductionDeployment);
 
     // Initialize socket connection to restaurant namespace
-    // Use polling only to avoid repeated "WebSocket connection failed" when backend is down
+    // Allow both websocket and polling for maximum compatibility and speed
     socketRef.current = io(socketUrl, {
       path: '/socket.io/',
-      transports: ['polling'],
+      transports: ['websocket', 'polling'], // Use websocket first, fallback to polling
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
@@ -331,7 +342,7 @@ export const useRestaurantNotifications = (isOnline = null) => {
 
     // Load notification sound
     audioRef.current = new Audio(alertSound);
-    audioRef.current.volume = 0.7;
+    audioRef.current.volume = 1.0; 
 
     return () => {
       if (socketRef.current) {

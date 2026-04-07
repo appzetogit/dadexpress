@@ -172,7 +172,7 @@ export default function UserOrderDetails() {
       toast.error("Restaurant phone number not available")
       return
     }
-    window.location.href = `tel:${restaurantPhone}`
+    window.location.href = `tel:${formatPhone(restaurantPhone)}`
   }
 
   const handleDownloadSummary = async () => {

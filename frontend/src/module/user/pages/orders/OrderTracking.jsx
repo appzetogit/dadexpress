@@ -330,12 +330,21 @@ export default function OrderTracking() {
     deliveryPartnerPhone
   )
 
+  const normalizePhoneNumber = (phone) => {
+    if (!phone) return ""
+    const digits = String(phone).replace(/\D/g, "")
+    if (digits.length > 10 && digits.startsWith("91")) {
+      return digits.slice(-10)
+    }
+    return digits
+  }
+
   const handleCallDeliveryPartner = () => {
     if (!deliveryPartnerPhone) {
       toast.info('Delivery partner phone number is not available yet')
       return
     }
-    const phone = String(deliveryPartnerPhone).replace(/\s+/g, '')
+    const phone = normalizePhoneNumber(deliveryPartnerPhone)
     window.location.href = `tel:${phone}`
   }
 
@@ -349,7 +358,7 @@ export default function OrderTracking() {
 
   const handleCallRestaurant = () => {
     if (!restaurantPhone) return
-    const phone = String(restaurantPhone).replace(/\s+/g, '')
+    const phone = normalizePhoneNumber(restaurantPhone)
     window.location.href = `tel:${phone}`
   }
 
