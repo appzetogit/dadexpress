@@ -16,6 +16,8 @@ export default function DeliveryFinanceReport() {
     totalDistance: 0
   })
   
+  const [paidHistory, setPaidHistory] = useState([])
+  
   const [filters, setFilters] = useState({
     deliveryId: "All Delivery Boys",
     startDate: format(new Date().setDate(new Date().getDate() - 7), "yyyy-MM-dd"),
@@ -34,6 +36,13 @@ export default function DeliveryFinanceReport() {
 
   const normalizeSettlement = (settlement) => {
     const earning = settlement?.deliveryPartnerEarning || {}
+    const metadata = settlement?.metadata || {}
+    const readMetaValue = (key) => {
+      if (!metadata) return null
+      if (typeof metadata.get === "function") return metadata.get(key) ?? null
+      return metadata[key] ?? null
+    }
+
     return {
       ...settlement,
       deliveryId: settlement?.deliveryPartnerId?._id || settlement?.deliveryPartnerId || null,
@@ -46,6 +55,8 @@ export default function DeliveryFinanceReport() {
         surgeAmount: parseAmount(earning.surgeAmount),
         totalEarning: parseAmount(earning.totalEarning),
       },
+      paidAt: readMetaValue("deliveryFinanceReportMarkedAt") || settlement?.updatedAt || null,
+      isMarkedAsPaid: readMetaValue("deliveryFinanceReportMarked") === true,
     }
   }
 
@@ -75,37 +86,63 @@ export default function DeliveryFinanceReport() {
         endDate: filters.endDate,
       }
       
-      const response = await adminAPI.getDeliverySettlements(params)
+      const [pendingResponse, historyResponse] = await Promise.all([
+        adminAPI.getDeliverySettlements(params),
+        adminAPI.getDeliverySettlements({ ...params, view: "history" }),
+      ])
       
-      if (response?.data?.success) {
-        const payload = response?.data?.data || {}
-        const normalizedSettlements = (Array.isArray(payload.settlements) ? payload.settlements : []).map(normalizeSettlement)
+      const pendingPayload = pendingResponse?.data?.data || {}
+      const historyPayload = historyResponse?.data?.data || {}
 
-        const backendTotals = payload.totals || {}
-        const computedTotals = normalizedSettlements.reduce(
-          (acc, settlement) => {
-            acc.totalOrders += 1
-            acc.totalDistance += parseAmount(settlement.deliveryEarning?.distance)
-            acc.totalEarnings += parseAmount(settlement.deliveryEarning?.totalEarning)
-            return acc;
-          },
-          { totalOrders: 0, totalEarnings: 0, totalDistance: 0 },
-        )
+      const normalizedSettlements = (Array.isArray(pendingPayload.settlements) ? pendingPayload.settlements : [])
+        .map(normalizeSettlement)
+        .filter(s => !s.isMarkedAsPaid)
+      
+      const normalizedPaidHistory = (Array.isArray(historyPayload.settlements) ? historyPayload.settlements : [])
+        .map(normalizeSettlement)
+        .filter(s => s.isMarkedAsPaid)
 
-        setSettlements(normalizedSettlements)
-        setTotals({
-          totalOrders: Number(backendTotals.totalOrders ?? computedTotals.totalOrders) || 0,
-          totalEarnings: parseAmount(backendTotals.totalEarnings ?? computedTotals.totalEarnings),
-          totalDistance: parseAmount(backendTotals.totalDistance ?? computedTotals.totalDistance),
-        })
-      } else {
-        setSettlements([])
-        setTotals({
-          totalOrders: 0,
-          totalEarnings: 0,
-          totalDistance: 0
-        })
-      }
+      const backendPendingTotals = pendingPayload.totals || {}
+      const backendHistoryTotals = historyPayload.totals || {}
+
+      const computedPendingTotals = normalizedSettlements.reduce(
+        (acc, settlement) => {
+          acc.totalOrders += 1
+          acc.totalDistance += parseAmount(settlement.deliveryEarning?.distance)
+          acc.totalEarnings += parseAmount(settlement.deliveryEarning?.totalEarning)
+          return acc;
+        },
+        { totalOrders: 0, totalEarnings: 0, totalDistance: 0 },
+      )
+
+      const computedHistoryTotals = normalizedPaidHistory.reduce(
+        (acc, settlement) => {
+          acc.totalOrders += 1
+          acc.totalDistance += parseAmount(settlement.deliveryEarning?.distance)
+          acc.totalEarnings += parseAmount(settlement.deliveryEarning?.totalEarning)
+          return acc;
+        },
+        { totalOrders: 0, totalEarnings: 0, totalDistance: 0 },
+      )
+
+      setSettlements(normalizedSettlements)
+      setPaidHistory(normalizedPaidHistory)
+
+      // Combine totals
+      const totalOrdersCombined = (Number(backendPendingTotals.totalOrders ?? computedPendingTotals.totalOrders) || 0) + 
+                                  (Number(backendHistoryTotals.totalOrders ?? computedHistoryTotals.totalOrders) || 0)
+      
+      const totalEarningsCombined = parseAmount(backendPendingTotals.totalEarnings ?? computedPendingTotals.totalEarnings) + 
+                                    parseAmount(backendHistoryTotals.totalEarnings ?? computedHistoryTotals.totalEarnings)
+                                    
+      const totalDistanceCombined = parseAmount(backendPendingTotals.totalDistance ?? computedPendingTotals.totalDistance) + 
+                                    parseAmount(backendHistoryTotals.totalDistance ?? computedHistoryTotals.totalDistance)
+
+      setTotals({
+        totalOrders: totalOrdersCombined,
+        totalEarnings: totalEarningsCombined,
+        totalDistance: totalDistanceCombined,
+      })
     } catch (error) {
       console.error("Error fetching settlements:", error)
       toast.error("Failed to fetch settlement data")
@@ -132,7 +169,8 @@ export default function DeliveryFinanceReport() {
       const settlementIds = settlements.map(s => s._id)
       const response = await adminAPI.markSettlementsProcessed({
         settlementIds,
-        actorType: 'admin'
+        actorType: 'admin',
+        reportType: 'delivery'
       })
 
       if (response?.data?.success) {
@@ -147,41 +185,22 @@ export default function DeliveryFinanceReport() {
     }
   }
 
-  const handleExport = (format) => {
-    if (settlements.length === 0) {
-      toast.error("No data to export")
-      return
+    const formatCurrency = (value) => {
+      const amount = parseAmount(value)
+      return new Intl.NumberFormat("en-IN", {
+        style: "currency",
+        currency: "INR",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(amount)
     }
-
-    const exportData = settlements.map((s, index) => ({
-      sl: index + 1,
-      orderNumber: s.orderNumber,
-      date: format(new Date(s.createdAt), "dd MMM yyyy HH:mm"),
-      deliveryBoy: s.deliveryName,
-      distance: (s.deliveryEarning?.distance ?? 0).toFixed(2),
-      basePayout: s.deliveryEarning?.basePayout ?? 0,
-      totalEarning: s.deliveryEarning?.totalEarning ?? 0,
-      status: "Delivered"
-    }))
-
-    const headers = [
-      { key: "sl", label: "SL" },
-      { key: "orderNumber", label: "Order #" },
-      { key: "date", label: "Date" },
-      { key: "deliveryBoy", label: "Delivery Boy" },
-      { key: "distance", label: "Distance (km)" },
-      { key: "basePayout", label: "Base Payout" },
-      { key: "totalEarning", label: "Total Earning" },
-      { key: "status", label: "Status" },
-    ]
-
-    switch (format) {
-      case "csv": exportReportsToCSV(exportData, headers, "delivery_finance_report"); break
-      case "excel": exportReportsToExcel(exportData, headers, "delivery_finance_report"); break
-      case "pdf": exportReportsToPDF(exportData, headers, "delivery_finance_report", "Delivery Finance Report"); break
-      case "json": exportReportsToJSON(exportData, "delivery_finance_report"); break
+  
+    const formatDateTime = (value, formatString = "dd MMM yyyy HH:mm") => {
+      if (!value) return "N/A"
+      const date = new Date(value)
+      if (Number.isNaN(date.getTime())) return "N/A"
+      return format(date, formatString)
     }
-  }
 
   return (
     <div className="p-4 lg:p-6 bg-slate-50 min-h-screen font-sans">
@@ -322,7 +341,7 @@ export default function DeliveryFinanceReport() {
               </div>
             </div>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">TOTAL EARNINGS</p>
-            <h3 className="text-4xl font-extrabold text-white mb-2">₹{totals.totalEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
+            <h3 className="text-4xl font-extrabold text-white mb-2">{formatCurrency(totals.totalEarnings)}</h3>
             <p className="text-xs font-medium text-slate-400">Net payout for delivery boys</p>
           </div>
         </div>
@@ -330,9 +349,9 @@ export default function DeliveryFinanceReport() {
         {/* Table Section */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
           <div className="p-4 border-b border-slate-100 bg-white flex items-center justify-between">
-            <h2 className="text-lg font-bold text-slate-800 tracking-tight">Settlement Details</h2>
+            <h2 className="text-lg font-bold text-slate-800 tracking-tight">Pending Settlements</h2>
             <div className="text-[10px] font-bold px-3 py-1 bg-slate-100 text-slate-600 rounded-full">
-              {settlements.length} / {settlements.length} records
+              {settlements.length} records
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -361,7 +380,7 @@ export default function DeliveryFinanceReport() {
                     <td colSpan={8} className="px-6 py-20 text-center">
                       <div className="flex flex-col items-center gap-3">
                         <LayoutDashboard className="w-10 h-10 text-slate-200" />
-                        <p className="text-slate-500 font-bold">No records found for the selected period.</p>
+                        <p className="text-slate-500 font-bold">No pending records found.</p>
                       </div>
                     </td>
                   </tr>
@@ -391,14 +410,89 @@ export default function DeliveryFinanceReport() {
                         <span className="text-sm font-bold text-slate-600">{(s.deliveryEarning?.distance ?? 0).toFixed(2)} km</span>
                       </td>
                       <td className="px-6 py-4">
-                        <span className="text-sm font-bold text-slate-700">₹{s.deliveryEarning?.basePayout ?? 0}</span>
+                        <span className="text-sm font-bold text-slate-700">{formatCurrency(s.deliveryEarning?.basePayout ?? 0)}</span>
                       </td>
                       <td className="px-6 py-4">
-                        <span className="text-sm font-bold text-blue-600 font-mono">₹{s.deliveryEarning?.totalEarning ?? 0}</span>
+                        <span className="text-sm font-bold text-blue-600 font-mono">{formatCurrency(s.deliveryEarning?.totalEarning ?? 0)}</span>
                       </td>
                       <td className="px-6 py-4">
                         <span className="px-2.5 py-1 rounded text-[10px] font-bold bg-emerald-50 text-emerald-600 uppercase border border-emerald-100">
                           Delivered
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Marked as Paid History Section */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="p-4 border-b border-slate-100 bg-emerald-50/40 flex items-center justify-between">
+            <h2 className="text-lg font-bold text-slate-800 tracking-tight">Marked as Paid History</h2>
+            <div className="text-[10px] font-bold px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full">
+              {paidHistory.length} records
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-[#F8FAFC]">
+                <tr>
+                  {["SL", "Order #", "Date", "Delivery Boy", "Distance", "Earning", "Paid On", "Status"].map((header) => (
+                    <th key={header} className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">
+                      {header}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {loading ? (
+                  <tr>
+                    <td colSpan={8} className="px-6 py-16 text-center">
+                      <div className="flex flex-col items-center gap-4">
+                        <Loader2 className="w-7 h-7 text-slate-800 animate-spin" />
+                        <p className="text-sm font-bold text-slate-500">Loading paid history...</p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : paidHistory.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-6 py-16 text-center">
+                      <p className="text-slate-500 font-bold">No marked-as-paid history found.</p>
+                    </td>
+                  </tr>
+                ) : (
+                  paidHistory.map((s, index) => (
+                    <tr key={s._id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-6 py-4">
+                        <span className="text-sm font-medium text-slate-400">{index + 1}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="text-sm font-bold text-slate-700">#{s.orderNumber}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col">
+                          <span className="text-sm font-bold text-slate-700">{formatDateTime(s.createdAt, "dd MMM yyyy")}</span>
+                          <span className="text-[11px] font-medium text-slate-400">{formatDateTime(s.createdAt, "HH:mm")}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="text-sm font-bold text-slate-700">{s.deliveryName}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="text-sm font-bold text-slate-600">{(s.deliveryEarning?.distance ?? 0).toFixed(2)} km</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="text-sm font-bold text-blue-600 font-mono">{formatCurrency(s.deliveryEarning?.totalEarning ?? 0)}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="text-sm font-medium text-slate-700">{formatDateTime(s.paidAt)}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="px-2.5 py-1 rounded text-[10px] font-bold bg-emerald-50 text-emerald-600 uppercase border border-emerald-100">
+                          Paid
                         </span>
                       </td>
                     </tr>

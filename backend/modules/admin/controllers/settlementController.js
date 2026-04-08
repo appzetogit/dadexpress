@@ -78,12 +78,15 @@ export const getRestaurantSettlements = asyncHandler(async (req, res) => {
  */
 export const getDeliverySettlements = asyncHandler(async (req, res) => {
   try {
-    const { deliveryId, startDate, endDate } = req.query;
+    const { deliveryId, startDate, endDate, view } = req.query;
+    const allowedViews = new Set(['pending', 'history', 'all']);
+    const selectedView = allowedViews.has(view) ? view : 'pending';
     
     const settlements = await getPendingDeliverySettlements(
       deliveryId || null,
       startDate || null,
-      endDate || null
+      endDate || null,
+      selectedView
     );
 
     // Calculate totals
@@ -173,7 +176,7 @@ export const getDeliverySettlementReport = asyncHandler(async (req, res) => {
  */
 export const markSettlementsProcessed = asyncHandler(async (req, res) => {
   try {
-    const { settlementIds, actorType, actorId } = req.body;
+    const { settlementIds, actorType, actorId, reportType } = req.body;
     const adminId = req.admin?._id || actorId;
 
     if (!settlementIds || !Array.isArray(settlementIds) || settlementIds.length === 0) {
@@ -183,7 +186,8 @@ export const markSettlementsProcessed = asyncHandler(async (req, res) => {
     const settlements = await markSettlementsAsProcessed(
       settlementIds,
       actorType || 'admin',
-      adminId
+      adminId,
+      reportType
     );
 
     // Create audit log

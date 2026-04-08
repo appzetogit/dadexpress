@@ -115,7 +115,7 @@ export const getPendingRestaurantSettlements = async (restaurantId = null, start
 /**
  * Get pending settlements for delivery partners
  */
-export const getPendingDeliverySettlements = async (deliveryId = null, startDate = null, endDate = null) => {
+export const getPendingDeliverySettlements = async (deliveryId = null, startDate = null, endDate = null, view = 'pending') => {
   try {
     const dateRange = buildDateRange(startDate, endDate);
     
@@ -160,18 +160,27 @@ export const getPendingDeliverySettlements = async (deliveryId = null, startDate
         }
       }
 
-      // Check if hidden
+      // Filtering logic based on view
       const meta = settlement?.metadata;
-      let isHidden = false;
+      let isMarked = false;
       if (meta) {
         if (typeof meta.get === 'function') {
-          isHidden = meta.get('deliveryFinanceReportMarked') === true;
+          isMarked = meta.get('deliveryFinanceReportMarked') === true;
         } else {
-          isHidden = meta.deliveryFinanceReportMarked === true;
+          isMarked = meta.deliveryFinanceReportMarked === true;
         }
       }
 
-      if (!isHidden && settlement.settlementStatus !== 'cancelled') {
+      let includeRecord = false;
+      if (view === 'pending') {
+        includeRecord = !isMarked;
+      } else if (view === 'history') {
+        includeRecord = isMarked;
+      } else {
+        includeRecord = true; // 'all' view
+      }
+
+      if (includeRecord && settlement.settlementStatus !== 'cancelled') {
         settlements.push(settlement);
       }
     }
@@ -312,7 +321,7 @@ export const generateDeliverySettlementReport = async (deliveryId, startDate, en
 /**
  * Mark settlements as processed (for weekly payouts)
  */
-export const markSettlementsAsProcessed = async (settlementIds, actorType, actorId) => {
+export const markSettlementsAsProcessed = async (settlementIds, actorType, actorId, reportType = null) => {
   try {
     const settlements = await OrderSettlement.find({
       _id: { $in: settlementIds }
@@ -329,29 +338,43 @@ export const markSettlementsAsProcessed = async (settlementIds, actorType, actor
         settlement.metadata = new Map(Object.entries(plain));
       }
 
-      // Check if already marked for restaurant payout
-      const isAlreadyMarked = settlement.metadata.get('restaurantFinanceReportMarked') === true;
-      if (!isAlreadyMarked && settlement.restaurantEarning?.netEarning > 0) {
-        const rId = settlement.restaurantId.toString();
-        restaurantPayouts.set(rId, (restaurantPayouts.get(rId) || 0) + settlement.restaurantEarning.netEarning);
+      // If reportType is 'restaurant' or not specified, process restaurant payouts
+      if (!reportType || reportType === 'restaurant') {
+        // Check if already marked for restaurant payout
+        const isAlreadyMarked = settlement.metadata.get('restaurantFinanceReportMarked') === true;
+        if (!isAlreadyMarked && settlement.restaurantEarning?.netEarning > 0) {
+          const rId = settlement.restaurantId.toString();
+          restaurantPayouts.set(rId, (restaurantPayouts.get(rId) || 0) + settlement.restaurantEarning.netEarning);
+        }
+
+        settlement.metadata.set('restaurantFinanceReportMarked', true);
+        settlement.metadata.set('restaurantFinanceReportMarkedAt', new Date().toISOString());
+        settlement.metadata.set('restaurantFinanceReportMarkedByType', actorType || 'admin');
+        settlement.metadata.set('restaurantFinanceReportMarkedById', actorId ? String(actorId) : null);
+        
+        if (settlement.restaurantEarning.status !== 'cancelled' && !settlement.restaurantSettled) {
+          settlement.restaurantSettled = true;
+        }
       }
 
-      // Mark for both reports to be safe if applicable
-      settlement.metadata.set('restaurantFinanceReportMarked', true);
-      settlement.metadata.set('deliveryFinanceReportMarked', true);
-      settlement.metadata.set('restaurantFinanceReportMarkedAt', new Date().toISOString());
-      settlement.metadata.set('restaurantFinanceReportMarkedByType', actorType || 'admin');
-      settlement.metadata.set('restaurantFinanceReportMarkedById', actorId ? String(actorId) : null);
-      settlement.metadata.set('deliveryFinanceReportMarkedAt', new Date().toISOString());
-      settlement.metadata.set('deliveryFinanceReportMarkedByType', actorType || 'admin');
-      settlement.metadata.set('deliveryFinanceReportMarkedById', actorId ? String(actorId) : null);
+      // If reportType is 'delivery' or not specified, process delivery payouts
+      if (!reportType || reportType === 'delivery') {
+        settlement.metadata.set('deliveryFinanceReportMarked', true);
+        settlement.metadata.set('deliveryFinanceReportMarkedAt', new Date().toISOString());
+        settlement.metadata.set('deliveryFinanceReportMarkedByType', actorType || 'admin');
+        settlement.metadata.set('deliveryFinanceReportMarkedById', actorId ? String(actorId) : null);
 
-      if (settlement.restaurantEarning.status !== 'cancelled' && !settlement.restaurantSettled) {
-        settlement.restaurantSettled = true;
+        if (settlement.deliveryPartnerEarning.status !== 'cancelled' && !settlement.deliveryPartnerSettled) {
+          settlement.deliveryPartnerSettled = true;
+        }
       }
-      if (settlement.deliveryPartnerEarning.status !== 'cancelled' && !settlement.deliveryPartnerSettled) {
-        settlement.deliveryPartnerSettled = true;
-      }
+
+      // Update global process metadata
+      settlement.metadata.set('processedBy', actorId);
+      settlement.metadata.set('processedAt', new Date());
+      settlement.metadata.set('actorType', actorType);
+      
+      settlement.markModified('metadata');
       await settlement.save();
     }
 

@@ -668,10 +668,9 @@ export default function DeliveryHome() {
         const response = await deliveryAPI.getOrderDetails(orderId);
         const orderData = response?.data?.data?.order || response?.data?.order || response?.data?.data || response?.data;
         const paymentData = orderData?.payment || orderData;
-        const paymentStatus = (paymentData?.status || "").toLowerCase();
-        
         // Accept multiple success statuses to be robust (Razorpay 'captured' or DB 'completed'/'paid')
-        if (['completed', 'paid', 'success', 'captured'].includes(paymentStatus)) {
+        const normalizedStatus = (paymentData?.status || "").toLowerCase();
+        if (['completed', 'paid', 'success', 'captured'].includes(normalizedStatus)) {
           setPaymentConfirmed(true);
           toast.success('✨ QR Payment verified successfully!', { duration: 5000 });
           return true;
@@ -11471,7 +11470,10 @@ export default function DeliveryHome() {
                 </div>
               </div>
               <div className="h-8 w-px bg-gray-200 mx-1"></div>
-              <div className="flex flex-col gap-0.5 items-end">
+              <div 
+                onClick={() => setShowEmergencyPopup(true)} 
+                className="flex flex-col gap-0.5 items-end cursor-pointer active:scale-95 transition-transform"
+              >
                 <div className="flex items-center gap-1.5 text-gray-600">
                   <span className="text-[10px] font-bold text-red-600 uppercase tracking-tight">SOS Emergency</span>
                   <div className="w-6 h-6 bg-red-100 rounded-full flex items-center justify-center">
@@ -12167,7 +12169,10 @@ export default function DeliveryHome() {
                 </div>
               </div>
               <div className="h-8 w-px bg-gray-200 mx-1"></div>
-              <div className="flex flex-col gap-0.5 items-end">
+              <div 
+                onClick={() => setShowEmergencyPopup(true)} 
+                className="flex flex-col gap-0.5 items-end cursor-pointer active:scale-95 transition-transform"
+              >
                 <div className="flex items-center gap-1.5 text-gray-600">
                   <span className="text-[10px] font-bold text-red-600 uppercase tracking-tight">SOS Emergency</span>
                   <div className="w-6 h-6 bg-red-100 rounded-full flex items-center justify-center">
@@ -12564,10 +12569,11 @@ export default function DeliveryHome() {
                         setIsVerifyingPayment(true)
                         try {
                           const response = await deliveryAPI.getOrderDetails(orderId)
-                          const paymentData = response?.data?.data?.payment || response?.data?.payment
-                          const paymentStatus = (paymentData?.status || "").toLowerCase()
+                          const orderData = response?.data?.data?.order || response?.data?.order || response?.data?.data || response?.data;
+                          const paymentData = orderData?.payment || orderData;
+                          const paymentStatus = (paymentData?.status || "").toLowerCase();
                           
-                          if (paymentStatus === 'completed' || paymentStatus === 'paid' || paymentStatus === 'success') {
+                          if (['completed', 'paid', 'success', 'captured'].includes(paymentStatus)) {
                             setPaymentConfirmed(true)
                             toast.success('✨ Payment status updated to PAID!')
                           } else {

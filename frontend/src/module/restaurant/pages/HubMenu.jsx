@@ -842,7 +842,11 @@ export default function HubMenu() {
       // Remove section from menuData and update backend
       const updatedSections = menuData.filter(section => section.id !== selectedCategory.id)
       
-      await restaurantAPI.updateMenu({ sections: updatedSections })
+      if (adminMode && effectiveRestaurantId) {
+        await adminAPI.updateRestaurantMenu(effectiveRestaurantId, { sections: updatedSections })
+      } else {
+        await restaurantAPI.updateMenu({ sections: updatedSections })
+      }
       
       // Update local state
       setMenuData(updatedSections)

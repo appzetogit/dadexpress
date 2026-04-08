@@ -221,7 +221,8 @@ export default function RestaurantFinanceReport() {
       const settlementIds = settlements.map(s => s._id)
       const response = await adminAPI.markSettlementsProcessed({
         settlementIds,
-        actorType: 'admin'
+        actorType: 'admin',
+        reportType: 'restaurant'
       })
 
       if (response?.data?.success) {

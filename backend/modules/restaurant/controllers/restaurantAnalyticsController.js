@@ -1,4 +1,5 @@
 import Order from '../../order/models/Order.js';
+import OrderSettlement from '../../order/models/OrderSettlement.js';
 import Offer from '../models/Offer.js';
 import mongoose from 'mongoose';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
@@ -189,7 +190,7 @@ const buildChartData = (orders) => {
     else if (hour < 16) bucketKey = "12pm";
     else if (hour < 20) bucketKey = "4pm";
 
-    const saleAmount = Number(order?.pricing?.total) || 0;
+    const saleAmount = Number(order?.restaurantEarning?.netEarning) || 0;
     buckets[bucketKey].orders += 1;
     buckets[bucketKey].sales += saleAmount;
   });
@@ -249,23 +250,27 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
     const previousEndDate = new Date(startDate.getTime() - 1);
     const previousStartDate = new Date(startDate.getTime() - rangeLengthMs);
 
-    const orders = await Order.find({
-      status: { $ne: 'cancelled' },
-      $and: [
-        getRestaurantIdQuery(restaurant._id),
-        {
-          $or: [
-            { deliveredAt: { $gte: previousStartDate, $lte: endDate } },
-            { 'tracking.delivered.timestamp': { $gte: previousStartDate, $lte: endDate } },
-            { createdAt: { $gte: previousStartDate, $lte: endDate } }
-          ]
-        }
-      ]
+    const orders = await OrderSettlement.find({
+      settlementStatus: { $ne: 'cancelled' },
+      restaurantId: restaurant._id,
+      createdAt: { $gte: previousStartDate, $lte: endDate }
     })
-      .select('userId pricing createdAt deliveredAt tracking')
+      .populate('orderId', 'userId pricing createdAt deliveredAt tracking')
       .lean();
 
-    const currentOrders = orders.filter((order) => {
+    // Map to the same structure expected by the rest of the code
+    const mappedOrders = orders.map(s => ({
+      ...s.orderId,
+      _id: s.orderId?._id || s._id,
+      userId: s.userId,
+      restaurantEarning: s.restaurantEarning,
+      pricing: s.orderId?.pricing || s.userPayment,
+      createdAt: s.createdAt,
+      deliveredAt: s.orderId?.deliveredAt,
+      tracking: s.orderId?.tracking
+    }));
+
+    const currentOrders = mappedOrders.filter((order) => {
       const eventDate = getOrderEventDate(order);
       if (!eventDate) return false;
       const time = new Date(eventDate).getTime();
@@ -279,8 +284,8 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
       return time >= previousStartDate.getTime() && time <= previousEndDate.getTime();
     });
 
-    const currentNetSales = currentOrders.reduce((sum, order) => sum + (Number(order?.pricing?.total) || 0), 0);
-    const previousNetSales = previousOrders.reduce((sum, order) => sum + (Number(order?.pricing?.total) || 0), 0);
+    const currentNetSales = currentOrders.reduce((sum, order) => sum + (Number(order?.restaurantEarning?.netEarning) || 0), 0);
+    const previousNetSales = previousOrders.reduce((sum, order) => sum + (Number(order?.restaurantEarning?.netEarning) || 0), 0);
     const currentTotalOrders = currentOrders.length;
     const previousTotalOrders = previousOrders.length;
     const currentAov = currentTotalOrders > 0 ? currentNetSales / currentTotalOrders : 0;
