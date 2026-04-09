@@ -151,6 +151,7 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
 
     // Get current cycle orders (delivered orders in current week)
     // Query orders that were delivered in the current cycle AND NOT yet settled
+    // Use a robust query that checks multiple potential timestamp fields
     let currentCycleOrders = await Order.find({
       status: 'delivered',
       _id: { $nin: settledOrderIds },
@@ -159,7 +160,14 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
         {
           $or: [
             { deliveredAt: { $gte: currentCycleStart, $lte: currentCycleEnd } },
-            { 'tracking.delivered.timestamp': { $gte: currentCycleStart, $lte: currentCycleEnd } }
+            { 'tracking.delivered.timestamp': { $gte: currentCycleStart, $lte: currentCycleEnd } },
+            {
+              $and: [
+                { deliveredAt: { $exists: false } },
+                { 'tracking.delivered.timestamp': { $exists: false } },
+                { createdAt: { $gte: currentCycleStart, $lte: currentCycleEnd } }
+              ]
+            }
           ]
         }
       ]
@@ -167,19 +175,6 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
     .populate('userId', 'name phone email')
     .select('orderId userId items pricing payment status address createdAt deliveredAt tracking')
     .lean();
-
-    // If no orders found with deliveredAt/tracking, check by createdAt as last resort
-    if (currentCycleOrders.length === 0) {
-      currentCycleOrders = await Order.find({
-        ...restaurantIdQuery,
-        status: 'delivered',
-        _id: { $nin: settledOrderIds },
-        createdAt: { $gte: currentCycleStart, $lte: currentCycleEnd }
-      })
-      .populate('userId', 'name phone email')
-      .select('orderId userId items pricing payment status address createdAt deliveredAt tracking')
-      .lean();
-    }
 
     console.log(`📊 Finance API - Current cycle orders found: ${currentCycleOrders.length} for restaurant ${restaurantId}`);
     console.log(`📅 Date range: ${currentCycleStart.toISOString()} to ${currentCycleEnd.toISOString()}`);
@@ -352,7 +347,7 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
       end.setHours(23, 59, 59, 999);
 
       // Query orders that were delivered in the past cycle
-      // First try with deliveredAt, if not found, use tracking.delivered.timestamp as fallback
+      // Use the same robust query logic as current cycle
       let pastCycleOrders = await Order.find({
         status: 'delivered',
         $and: [
@@ -360,25 +355,21 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
           {
             $or: [
               { deliveredAt: { $gte: start, $lte: end } },
-              { 'tracking.delivered.timestamp': { $gte: start, $lte: end } }
+              { 'tracking.delivered.timestamp': { $gte: start, $lte: end } },
+              {
+                $and: [
+                  { deliveredAt: { $exists: false } },
+                  { 'tracking.delivered.timestamp': { $exists: false } },
+                  { createdAt: { $gte: start, $lte: end } }
+                ]
+              }
             ]
           }
         ]
       })
       .populate('userId', 'name phone email')
+      .select('orderId userId items pricing payment status address createdAt deliveredAt tracking')
       .lean();
-
-      // If no orders found with deliveredAt/tracking, check by createdAt as last resort
-      if (pastCycleOrders.length === 0) {
-        pastCycleOrders = await Order.find({
-          ...restaurantIdQuery,
-          status: 'delivered',
-          createdAt: { $gte: start, $lte: end }
-        })
-        .populate('userId', 'name phone email')
-        .select('orderId userId items pricing payment status address createdAt deliveredAt tracking')
-        .lean();
-      }
 
       console.log(`📊 Finance API - Past cycle orders found: ${pastCycleOrders.length} for date range ${startDate} to ${endDate}`);
 

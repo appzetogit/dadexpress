@@ -50,7 +50,7 @@ export default function HubFinance() {
     }
 
     fetchFinanceData()
-  }, [])
+  }, [activeTab])
 
   // Fetch restaurant data for header display
   useEffect(() => {
@@ -228,7 +228,6 @@ export default function HubFinance() {
     }
   }
 
-  // Fetch past cycles data on mount and when date range changes
   useEffect(() => {
     const dateRange = parseDateRange(selectedDateRange)
     if (dateRange && dateRange.startDate && dateRange.endDate) {
@@ -237,7 +236,7 @@ export default function HubFinance() {
       // If date range is invalid, don't fetch
       setPastCyclesData(null)
     }
-  }, [selectedDateRange])
+  }, [selectedDateRange, activeTab])
 
 
   // Prepare report data from real finance data

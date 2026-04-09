@@ -65,6 +65,8 @@ class NotificationService {
                 priority: 'high',
                 ttl: 3600000, // 1 hour TTL
                 notification: {
+                    title: notification.title,
+                    body: notification.body,
                     sound: 'default',
                     icon: 'ic_launcher',
                     color: '#FF5E00',
@@ -123,14 +125,21 @@ class NotificationService {
             android: {
                 priority: 'high',
                 notification: {
+                    title: notification.title,
+                    body: notification.body,
                     icon: 'ic_launcher',
                     sound: 'default',
-                    image: notification.image || logoUrl
+                    image: notification.image || logoUrl,
+                    clickAction: data.click_action || data.link || '/'
                 },
             },
             apns: {
                 payload: {
                     aps: {
+                        alert: {
+                            title: notification.title,
+                            body: notification.body,
+                        },
                         sound: 'default',
                         badge: 1,
                         'mutable-content': 1
@@ -139,7 +148,7 @@ class NotificationService {
             },
             webpush: {
                 fcmOptions: {
-                    link: notification.click_action || '/'
+                    link: notification.click_action || data.click_action || data.link || '/'
                 }
             }
         };

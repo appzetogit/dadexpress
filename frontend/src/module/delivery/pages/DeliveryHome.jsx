@@ -1866,12 +1866,12 @@ export default function DeliveryHome() {
 
     try {
       // Get selected alert sound preference from localStorage
-      const selectedSound = localStorage.getItem('delivery_alert_sound') || 'zomato_tone'
+      const selectedSound = localStorage.getItem('delivery_alert_sound') || 'dadexpress_tone'
       const soundFile = selectedSound === 'original' ? originalSound : alertSound
 
       false && console.log('🔊 Playing alert sound:', {
         selectedSound,
-        soundType: selectedSound === 'original' ? 'Original' : 'Zomato Tone',
+        soundType: selectedSound === 'original' ? 'Original' : 'DadExpress Tone',
         soundFile,
         originalSoundPath: originalSound,
         alertSoundPath: alertSound
@@ -2029,7 +2029,7 @@ export default function DeliveryHome() {
       const playAudio = async () => {
         try {
           // Check localStorage preference
-          const currentPreference = localStorage.getItem('delivery_alert_sound') || 'zomato_tone'
+          const currentPreference = localStorage.getItem('delivery_alert_sound') || 'dadexpress_tone'
           false && console.log('[NewOrder] 🎵 Attempting to play audio...', {
             preference: currentPreference,
             willUse: currentPreference === 'original' ? 'original.mp3' : 'alert.mp3'

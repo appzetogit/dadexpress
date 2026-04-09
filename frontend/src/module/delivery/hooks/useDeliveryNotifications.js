@@ -26,7 +26,7 @@ export const useDeliveryNotifications = () => {
   const playNotificationSound = useCallback(() => {
     try {
       // Get current selected sound preference from localStorage
-      const selectedSound = localStorage.getItem('delivery_alert_sound') || 'zomato_tone';
+      const selectedSound = localStorage.getItem('delivery_alert_sound') || 'dadexpress_tone';
       const soundFile = selectedSound === 'original' ? originalSound : alertSound;
       
       // Update audio source if preference changed or initialize if not exists
@@ -38,7 +38,7 @@ export const useDeliveryNotifications = () => {
           audioRef.current.pause();
           audioRef.current.src = newSrc;
           audioRef.current.load();
-          false && console.log('🔊 Audio source updated to:', selectedSound === 'original' ? 'Original' : 'Zomato Tone');
+          false && console.log('🔊 Audio source updated to:', selectedSound === 'original' ? 'Original' : 'DadExpress Tone');
         }
       } else {
         // Initialize audio if not exists
@@ -166,13 +166,13 @@ export const useDeliveryNotifications = () => {
   // Initialize audio on mount - use selected preference from localStorage
   useEffect(() => {
     // Get selected alert sound preference from localStorage
-    const selectedSound = localStorage.getItem('delivery_alert_sound') || 'zomato_tone';
+    const selectedSound = localStorage.getItem('delivery_alert_sound') || 'dadexpress_tone';
     const soundFile = selectedSound === 'original' ? originalSound : alertSound;
     
     if (!audioRef.current) {
       audioRef.current = new Audio(soundFile);
       audioRef.current.volume = 0.7;
-      false && console.log('🔊 Audio initialized with:', selectedSound === 'original' ? 'Original' : 'Zomato Tone');
+      false && console.log('🔊 Audio initialized with:', selectedSound === 'original' ? 'Original' : 'DadExpress Tone');
     } else {
       // Update audio source if preference changed
       const currentSrc = audioRef.current.src;
@@ -181,7 +181,7 @@ export const useDeliveryNotifications = () => {
         audioRef.current.pause();
         audioRef.current.src = newSrc;
         audioRef.current.load();
-        false && console.log('🔊 Audio updated to:', selectedSound === 'original' ? 'Original' : 'Zomato Tone');
+        false && console.log('🔊 Audio updated to:', selectedSound === 'original' ? 'Original' : 'DadExpress Tone');
       }
     }
     
