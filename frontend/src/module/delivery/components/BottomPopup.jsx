@@ -30,7 +30,8 @@ export default function BottomPopup({
   disableSwipeToClose = false,
   collapsedContent = null, // Content to show when collapsed (e.g., Reached pickup button)
   showBackdrop = true, // Show backdrop overlay
-  backdropBlocksInteraction = true // Whether backdrop blocks pointer events
+  backdropBlocksInteraction = true, // Whether backdrop blocks pointer events
+  zIndex = 110 // Custom z-index
 }) {
   const popupRef = useRef(null)
   const handleRef = useRef(null)
@@ -61,6 +62,9 @@ export default function BottomPopup({
 
   // Handle touch start for swipe detection
   const handleTouchStart = (e) => {
+    // Don't allow swipe if disabled
+    if (disableSwipeToClose) return
+
     const target = e.target
     const isHandle = handleRef.current?.contains(target)
 
@@ -241,8 +245,9 @@ export default function BottomPopup({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              onClick={handleBackdropClick}
-              className="fixed inset-0 bg-black/50 z-[100]"
+               onClick={handleBackdropClick}
+              className={`fixed inset-0 bg-black/50`}
+              style={{ zIndex: zIndex - 10 }}
             />
           )}
 
@@ -278,10 +283,11 @@ export default function BottomPopup({
               }
               handlePopupClick(e)
             }}
-            className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl z-[110] overflow-hidden flex flex-col"
+            className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl overflow-hidden flex flex-col"
             style={{
               maxHeight: isCollapsed ? (collapsedContent ? "120px" : "320px") : maxHeight,
-              touchAction: 'none'
+              touchAction: disableSwipeToClose ? 'auto' : 'none',
+              zIndex: zIndex
             }}
           >
             {/* Top Drag Handle Bar - Always visible for dragging */}
