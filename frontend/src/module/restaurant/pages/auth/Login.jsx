@@ -560,24 +560,21 @@ export default function RestaurantLogin() {
             </div>
           )}
 
-          {/* OR Separator */}
-          <div className="relative flex items-center py-4">
+          {/* OR Separator - commented out */}
+          {/* <div className="relative flex items-center py-4">
             <div className="flex-1 border-t border-gray-500"></div>
             <span className="px-4 text-sm font-medium text-gray-600">OR</span>
             <div className="flex-1 border-t border-gray-500"></div>
-          </div>
+          </div> */}
 
-          {/* Alternative Login Options */}
-          <div className="space-y-3">
-
-            {/* Login with Google Button */}
+          {/* Alternative Login Options - Google button commented out */}
+          {/* <div className="space-y-3">
             <Button
               onClick={handleGoogleLogin}
               variant="outline"
               disabled={isSending}
               className="w-full h-12 rounded-lg border border-gray- hover:border-gray-400 hover:bg-gray-50 text-gray-900 font-semibold text-base flex items-center justify-center gap-3"
             >
-              {/* Google Logo SVG */}
               <svg className="w-5 h-5 mr-auto" viewBox="0 0 24 24">
                 <path
                   fill="#4285F4"
@@ -598,7 +595,7 @@ export default function RestaurantLogin() {
               </svg>
               <span className="mr-auto text-gray-900">Login with Google</span>
             </Button>
-          </div>
+          </div> */}
         </div>
       </div>
 

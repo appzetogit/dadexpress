@@ -119,21 +119,35 @@ export const calculateDeliveryFee = async (orderValue, restaurant, deliveryAddre
   const feeSettings = await getFeeSettings();
   const freeDeliveryThreshold = Number(feeSettings?.freeDeliveryThreshold ?? 149);
 
-  // Apply global free-delivery threshold before any distance/commission logic.
+  // 1) GLOBAL FREE-DELIVERY THRESHOLD (Primary)
+  // Apply global free-delivery threshold before any other logic.
   // Threshold 0 is treated as disabled.
   if (freeDeliveryThreshold > 0 && Number(orderValue || 0) >= freeDeliveryThreshold) {
     console.log(`[PRICING] Free delivery applied by threshold: orderValue=${orderValue}, threshold=${freeDeliveryThreshold}`);
     return 0;
   }
 
-  // 1) Find Distance first to determine per-KM charges or commissions
+  // 2) RANGE-BASED DELIVERY FEE (Secondary)
+  // Check if admin has configured specific fees based on order value ranges
+  if (feeSettings.deliveryFeeRanges && Array.isArray(feeSettings.deliveryFeeRanges) && feeSettings.deliveryFeeRanges.length > 0) {
+    const sortedRanges = [...feeSettings.deliveryFeeRanges].sort((a, b) => a.min - b.min);
+    for (const range of sortedRanges) {
+      if (orderValue >= range.min && (range.max === null || range.max === undefined || orderValue <= range.max)) {
+        console.log(`[PRICING] Using Range-based delivery fee: ₹${range.fee} for subtotal ${orderValue}`);
+        return Number(range.fee);
+      }
+    }
+  }
+
+  // 3) DISTANCE-BASED DELIVERY FEE (Tertiary - Fallback if no specific ranges match)
+  // Check if distance is available for dynamic calculation
   const restaurantCoordinates = extractCoordinates(restaurant);
   const deliveryCoordinates = extractCoordinates(deliveryAddress);
   let distanceKm = null;
 
   if (restaurantCoordinates && deliveryCoordinates) {
     distanceKm = calculateDistance(restaurantCoordinates, deliveryCoordinates);
-    console.log(`[PRICING] Calculated Haversine distance: ${distanceKm} km between`, restaurantCoordinates, 'and', deliveryCoordinates);
+    console.log(`[PRICING] Calculated distance: ${distanceKm} km`);
   }
 
   // Fallback to provided distance strings if coordinates extraction fails
@@ -142,58 +156,33 @@ export const calculateDeliveryFee = async (orderValue, restaurant, deliveryAddre
     const parsedDist = parseFloat(distStr.replace(/[^\d.]/g, ''));
     if (!isNaN(parsedDist)) {
       distanceKm = parsedDist;
-      console.log(`[PRICING] Fallback distance from restaurant object: ${distanceKm} km`);
+      console.log(`[PRICING] Fallback distance from metadata: ${distanceKm} km`);
     }
   }
 
-  // 2) Use DeliveryBoyCommission settings (Admin's preferred source for dynamic fees)
-  // Even if distance is very small (e.g. 0), we should use the commission rules (e.g. 0-1km tier)
+  // If we have a valid distance, try using the DeliveryBoyCommission rules as a dynamic fee
   if (distanceKm !== null && !isNaN(distanceKm) && distanceKm >= 0) {
     try {
-      // Use the static method already defined in DeliveryBoyCommission model to find applicable rule + calculate
       const commissionInfo = await DeliveryBoyCommission.calculateCommission(distanceKm);
-      if (commissionInfo && (commissionInfo.commission > 0 || (commissionInfo.rule && commissionInfo.rule.basePayout >= 0))) {
-        console.log(`[PRICING] Using DeliveryBoyCommission for ${distanceKm.toFixed(2)}km: ₹${commissionInfo.commission}`);
-        // Return rounding to 2 decimal places to be safe
+      if (commissionInfo && commissionInfo.commission > 0) {
+        console.log(`[PRICING] Using dynamic distance fee: ₹${commissionInfo.commission}`);
         return Math.max(0, Math.round(commissionInfo.commission * 100) / 100);
       }
     } catch (err) {
-      console.warn(`[PRICING] DeliveryBoyCommission calculation error for ${distanceKm}km:`, err.message);
-    }
-  } else {
-    // Distance not available, try to at least use the default admin-configured rule's base payout instead of static fallback
-    try {
-      const firstRule = await DeliveryBoyCommission.findOne({ status: true }).sort({ minDistance: 1 }).lean();
-      if (firstRule) {
-        console.log(`[PRICING] Distance unknown, using first commission rule base payout: ₹${firstRule.basePayout}`);
-        return Number(firstRule.basePayout);
-      }
-    } catch (e) {
-      console.warn(`[PRICING] Failed to get default commission rule fallback: ${e.message}`);
+      console.warn(`[PRICING] Dynamic distance fee calculation failed:`, err.message);
     }
   }
 
-  // 3) FINAL FALLBACK: Use existing FeeSettings logic if distances/commissions above were unavailable
-  console.log('[PRICING] Distance/Commission logic failed, falling back to FeeSettings');
-  let baseFee = Number(feeSettings.deliveryFee || 25);
-
-  if (feeSettings.deliveryFeeRanges && Array.isArray(feeSettings.deliveryFeeRanges) && feeSettings.deliveryFeeRanges.length > 0) {
-    const sortedRanges = [...feeSettings.deliveryFeeRanges].sort((a, b) => a.min - b.min);
-    for (const range of sortedRanges) {
-      if (orderValue >= range.min && (range.max === null || range.max === undefined || orderValue <= range.max)) {
-        baseFee = Number(range.fee);
-        break; 
-      }
-    }
-  }
-
+  // 4) FINAL FALLBACK: Base Fee + Per-KM Charge
+  console.log('[PRICING] All specific logic failed, falling back to base fee settings');
+  const baseFee = Number(feeSettings.deliveryFee || 25);
   const perKmCharge = getPerKmDeliveryCharge(feeSettings, restaurant, deliveryAddress);
 
-  // Final calculation: Base + KM charge from FeeSettings
   const finalFallbackFee = roundCurrency(baseFee + perKmCharge);
-  console.log(`[PRICING] Fallback result: base=${baseFee}, kmCharge=${perKmCharge}, total=${finalFallbackFee}`);
+  console.log(`[PRICING] Final fallback result: base=${baseFee}, kmCharge=${perKmCharge}, total=${finalFallbackFee}`);
   return finalFallbackFee;
 };
+
 
 /**
  * Calculate platform fee
@@ -208,11 +197,15 @@ export const calculatePlatformFeeFromPercentage = (subtotal = 0, percentage = 0)
 export const calculatePlatformFee = async (subtotal = 0) => {
   const feeSettings = await getFeeSettings();
   const fixedFee = Number(feeSettings?.platformFee || 0);
-  const totalPercentage = Number(feeSettings?.platformFeePercentage || 0);
+  
+  // Combine both percentage fields to be safe, as admin labels can be confusing
+  const totalPercentage = Number(feeSettings?.platformFeePercentage || 0) + 
+                          Number(feeSettings?.platformCommissionPercent || 0);
   
   const percentageFee = calculatePlatformFeeFromPercentage(subtotal, totalPercentage);
   return roundCurrency(fixedFee + percentageFee);
 };
+
 
 /**
  * Calculate GST (Goods and Services Tax)
@@ -399,29 +392,39 @@ export const calculateOrderPricing = async ({
       }
     }
 
-    // Calculate delivery fee
-    const deliveryFee = await calculateDeliveryFee(
-      subtotal,
-      restaurant,
-      deliveryAddress,
-      deliveryFleet
-    );
+    // Fetch all settings once at the very beginning to ensure consistency across all sub-calculations
+    const feeSettings = await getFeeSettings();
+
+    // 1. Calculate Delivery Fee (Honoring threshold first)
+    const orderValue = Number(subtotal) || 0;
+    const threshold = Number(feeSettings.freeDeliveryThreshold ?? 149);
+    
+    let baseDeliveryFee = 0;
+    if (threshold > 0 && orderValue >= threshold) {
+      baseDeliveryFee = 0;
+    } else {
+      // Fallback to calculation if not free
+      baseDeliveryFee = await calculateDeliveryFee(
+        subtotal,
+        restaurant,
+        deliveryAddress,
+        deliveryFleet
+      );
+    }
 
     // Apply free delivery from coupon
-    const finalDeliveryFee = appliedCoupon?.freeDelivery ? 0 : deliveryFee;
+    const finalDeliveryFee = appliedCoupon?.freeDelivery ? 0 : baseDeliveryFee;
 
-    // Calculate platform fee based on configured settings (Fixed + Percentage).
-    const feeSettings = await getFeeSettings();
-    const fixedPlatformFee = Number(feeSettings?.platformFee || 0);
-    const platformFeePercentage = Number(feeSettings?.platformFeePercentage || 0);
-    
-    const percentagePlatformFee = calculatePlatformFeeFromPercentage(subtotal, platformFeePercentage);
-    const platformFee = roundCurrency(fixedPlatformFee + percentagePlatformFee);
+    // 2. Calculate Platform Fee (Ensure it's not zero if admin settings have a value)
+    const fixedPlatformFee = Number(feeSettings.platformFee || 0);
+    const platformPercentage = Number(feeSettings.platformFeePercentage || 0) + Number(feeSettings.platformCommissionPercent || 0);
+    const platformFee = roundCurrency(fixedPlatformFee + (subtotal * platformPercentage) / 100);
 
-    // Calculate GST on subtotal after discount
-    const gst = await calculateGST(subtotal, discount);
+    // 3. Calculate GST
+    const gstRate = Number(feeSettings.gstRate || 5) / 100;
+    const gst = roundCurrency((subtotal - discount) * gstRate);
 
-    // Calculate referral coins redemption
+    // 4. Referral coins redemption
     let referralDiscount = 0;
     if (useReferralCoins && userId) {
       const User = (await import('../../auth/models/User.js')).default;
@@ -429,10 +432,10 @@ export const calculateOrderPricing = async ({
 
       if (user && user.wallet?.balance > 0) {
         const BusinessSettings = (await import('../../admin/models/BusinessSettings.js')).default;
-        const settings = await BusinessSettings.getSettings();
+        const businessSettings = await BusinessSettings.getSettings();
 
-        if (settings?.referral?.isEnabled) {
-          const maxRedemptionPercentage = settings.referral.maxRedemptionPercentage || 20;
+        if (businessSettings?.referral?.isEnabled) {
+          const maxRedemptionPercentage = businessSettings.referral.maxRedemptionPercentage || 20;
           const currentTotalBeforeCoins = subtotal - discount + finalDeliveryFee + platformFee + gst;
           const maxCoinsAllowed = Math.floor((currentTotalBeforeCoins * maxRedemptionPercentage) / 100);
 
@@ -443,14 +446,10 @@ export const calculateOrderPricing = async ({
       }
     }
 
-    // Gross total before any discount/rewards (additive field, keeps existing total behavior intact).
+    // 5. Aggregate Totals
     const totalAmount = subtotal + finalDeliveryFee + platformFee + gst;
-
-    // Calculate total
     const total = subtotal - discount + finalDeliveryFee + platformFee + gst - referralDiscount;
-
-    // Calculate savings (discount + any delivery savings + referral coins used)
-    const savings = discount + (deliveryFee > finalDeliveryFee ? deliveryFee - finalDeliveryFee : 0) + referralDiscount;
+    const savings = discount + (baseDeliveryFee > finalDeliveryFee ? baseDeliveryFee - finalDeliveryFee : 0) + referralDiscount;
 
     return {
       subtotal: roundCurrency(subtotal),
@@ -458,8 +457,8 @@ export const calculateOrderPricing = async ({
       referralDiscount: roundCurrency(referralDiscount),
       deliveryFee: roundCurrency(finalDeliveryFee),
       platformFee: roundCurrency(platformFee),
-      platformFeePercentage,
-      tax: gst, // Already using roundCurrency in calculateGST
+      platformFeePercentage: Number(feeSettings.platformFeePercentage || 0),
+      tax: gst,
       total: Math.max(0, roundCurrency(total)),
       totalAmount: Math.max(0, roundCurrency(totalAmount)),
       savings: roundCurrency(savings),

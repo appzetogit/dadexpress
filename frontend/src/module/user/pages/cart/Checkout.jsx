@@ -40,7 +40,7 @@ export default function Checkout() {
   const [isPlacingOrder, setIsPlacingOrder] = useState(false)
   const [useRewards, setUseRewards] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
+  const [refreshing, setRefreshing] = useState(true)
 
   const [referralSettings, setReferralSettings] = useState({
     maxRedemptionPercentage: 20,
@@ -536,20 +536,34 @@ export default function Checkout() {
 
                   <div className="space-y-2 md:space-y-3 pt-4 md:pt-6 border-t dark:border-gray-700">
                     <div className="flex justify-between text-sm md:text-base">
-                      <span className="text-muted-foreground">Subtotal</span>
+                      <span className="text-muted-foreground">Item Total</span>
                       <span className="dark:text-gray-200">₹{subtotal.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-sm md:text-base">
                       <span className="text-muted-foreground">Delivery Fee</span>
-                      <span className="dark:text-gray-200">₹{deliveryFee.toFixed(2)}</span>
+                      {refreshing ? (
+                        <span className="text-muted-foreground animate-pulse">...</span>
+                      ) : (
+                        <span className={`dark:text-gray-200 ${deliveryFee === 0 ? "text-green-600 font-semibold" : ""}`}>
+                          {deliveryFee === 0 ? "FREE" : `₹${deliveryFee.toFixed(2)}`}
+                        </span>
+                      )}
                     </div>
                     <div className="flex justify-between text-xs md:text-sm">
                       <span className="text-muted-foreground">Platform Fee</span>
-                      <span className="dark:text-white">₹{platformFee.toFixed(2)}</span>
+                      {refreshing ? (
+                        <span className="text-muted-foreground animate-pulse">...</span>
+                      ) : (
+                        <span className="dark:text-white">₹{platformFee.toFixed(2)}</span>
+                      )}
                     </div>
                     <div className="flex justify-between text-xs md:text-sm">
-                      <span className="text-muted-foreground">Tax</span>
-                      <span className="dark:text-white">₹{tax.toFixed(2)}</span>
+                      <span className="text-muted-foreground">GST</span>
+                      {refreshing ? (
+                        <span className="text-muted-foreground animate-pulse">...</span>
+                      ) : (
+                        <span className="dark:text-white">₹{tax.toFixed(2)}</span>
+                      )}
                     </div>
                     {useRewards && (
                       <div className="flex justify-between text-xs md:text-sm font-bold text-green-600">
@@ -559,7 +573,11 @@ export default function Checkout() {
                     )}
                     <div className="border-t dark:border-gray-700 pt-3 md:pt-4 flex justify-between font-bold text-base md:text-lg lg:text-xl">
                       <span className="dark:text-white">Total</span>
-                      <span className="dark:text-white">₹{total.toFixed(2)}</span>
+                      {refreshing ? (
+                        <span className="text-muted-foreground animate-pulse">Calculating...</span>
+                      ) : (
+                        <span className="text-[#EB590E]">₹{total.toFixed(2)}</span>
+                      )}
                     </div>
                   </div>
 

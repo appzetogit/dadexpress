@@ -1182,6 +1182,7 @@ apiClient.interceptors.response.use(
 
       const shouldSuppressToast = (message) => {
         const msg = (message || "").toString().toLowerCase();
+        if (error.config?.__noToast) return true;
         return (
           msg.includes("outside your assigned delivery zone") ||
           msg.includes("out of zone") ||

@@ -97,8 +97,8 @@ export default function DiningRestaurantDetails() {
     }
 
     // Helper values
-    const coverImage = restaurant.coverImage || restaurant.profileImage?.url || restaurant.logo || "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&h=600&fit=crop"
-    const formattedDistance = "2.4 km away" // Placeholder or calc
+    const coverImage = restaurant.coverImage || restaurant.profileImage?.url || restaurant.image || restaurant.logo || "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&h=600&fit=crop"
+    const formattedDistance = restaurant.distance || "2.4 km away"
     const rating = restaurant.rating || restaurant.avgRating || 4.5
     const isOpen = restaurant.isAcceptingOrders !== false // simplified check
 
@@ -116,7 +116,7 @@ export default function DiningRestaurantDetails() {
     }
 
     const handleCall = () => {
-        const phoneNumber = restaurant.primaryContactNumber || restaurant.phone || restaurant.ownerPhone
+        const phoneNumber = restaurant.primaryContactNumber || restaurant.phone || restaurant.ownerPhone || restaurant.mobile
         if (phoneNumber) {
             window.location.href = `tel:${phoneNumber}`
         } else {
@@ -125,12 +125,15 @@ export default function DiningRestaurantDetails() {
     }
 
     const handleNavigation = () => {
-        const address = restaurant.location?.formattedAddress || restaurant.location?.address || restaurant.location || restaurant.address
+        const address = restaurant.location?.formattedAddress || restaurant.location?.address || (typeof restaurant.location === 'string' ? restaurant.location : null) || restaurant.address
         const coords = restaurant.location?.coordinates || restaurant.coordinates
         
         let url = ""
+        // Handle both object {latitude, longitude} and array [lng, lat]
         if (coords?.latitude && coords?.longitude) {
             url = `https://www.google.com/maps?q=${coords.latitude},${coords.longitude}`
+        } else if (Array.isArray(coords) && coords.length >= 2) {
+            url = `https://www.google.com/maps?q=${coords[1]},${coords[0]}`
         } else if (address) {
             url = `https://www.google.com/maps?q=${encodeURIComponent(address)}`
         }
@@ -141,6 +144,7 @@ export default function DiningRestaurantDetails() {
             toast.error("Location details not available")
         }
     }
+
 
     const handlePayBill = () => {
         toast.info("Pay bill feature coming soon! Please pay at the restaurant for now.")

@@ -385,7 +385,7 @@ export const restaurantAPI = {
   },
 
   getCurrentRestaurant: () => {
-    return apiClient.get(API_ENDPOINTS.RESTAURANT.AUTH.ME);
+    return apiClient.get(API_ENDPOINTS.RESTAURANT.AUTH.ME, { __noToast: true });
   },
 
   reverify: () => {
