@@ -57,11 +57,38 @@ export const getRestaurantOrders = asyncHandler(async (req, res) => {
 
     // Build query - search for orders with any matching restaurantId variation
     // Use $in for multiple variations and also try direct match as fallback
+    // Build query - search for orders with any matching restaurantId variation
+    // Use $in for multiple variations and also try direct match as fallback
     const query = {
-      $or: [
-        { restaurantId: { $in: restaurantIdVariations } },
-        // Direct match fallback
-        { restaurantId: restaurantIdString }
+      $and: [
+        {
+          $or: [
+            { restaurantId: { $in: restaurantIdVariations } },
+            // Direct match fallback
+            { restaurantId: restaurantIdString }
+          ]
+        },
+        // IMPORTANT: Only show online payments if they are completed.
+        // Cash on delivery (cash) orders are shown even if payment is pending.
+        // Orders with no payment method are treated as razorpay (prepaid) by default.
+        {
+          $or: [
+            { 'payment.method': 'cash' },
+            { 
+              $and: [
+                { 'payment.method': { $in: ['razorpay', 'wallet', 'upi', 'card', 'online'] } },
+                { 'payment.status': 'completed' }
+              ]
+            },
+            // Fallback for cases where method might be missing but status is completed
+            { 
+              $and: [
+                { 'payment.method': { $exists: false } },
+                { 'payment.status': 'completed' }
+              ]
+            }
+          ]
+        }
       ]
     };
 
@@ -161,7 +188,23 @@ export const getRestaurantOrderById = asyncHandler(async (req, res) => {
     if (mongoose.Types.ObjectId.isValid(id) && id.length === 24) {
       order = await Order.findOne({
         _id: id,
-        restaurantId
+        restaurantId,
+        // Only allow viewing if paid or cash
+        $or: [
+          { 'payment.method': 'cash' },
+          { 
+            $and: [
+              { 'payment.method': { $in: ['razorpay', 'wallet', 'upi', 'card', 'online'] } },
+              { 'payment.status': 'completed' }
+            ]
+          },
+          { 
+            $and: [
+              { 'payment.method': { $exists: false } },
+              { 'payment.status': 'completed' }
+            ]
+          }
+        ]
       })
         .populate('userId', 'name email phone')
         .lean();
@@ -184,7 +227,12 @@ export const getRestaurantOrderById = asyncHandler(async (req, res) => {
 
       order = await Order.findOne({
         orderId: { $in: [...new Set(variants)] },
-        restaurantId
+        restaurantId,
+        // Only allow viewing if paid or cash
+        $or: [
+          { 'payment.method': 'cash' },
+          { 'payment.status': 'completed' }
+        ]
       })
         .populate('userId', 'name email phone')
         .lean();
@@ -277,6 +325,11 @@ export const acceptOrder = asyncHandler(async (req, res) => {
     // If order is already in 'preparing' state (e.g. from a double-click on frontend)
     if (order.status === 'preparing') {
       return successResponse(res, 200, 'Order successfully accepted (already preparing)', { order });
+    }
+
+    // CRITICAL: Prevent accepting online orders that are not paid
+    if (order.payment?.method !== 'cash' && order.payment?.status !== 'completed') {
+      return errorResponse(res, 400, 'Order cannot be accepted because payment is not yet completed. Please wait for payment confirmation.');
     }
 
     // Allow accepting orders with status 'pending' or 'confirmed'
@@ -696,6 +749,11 @@ export const markOrderPreparing = asyncHandler(async (req, res) => {
     const allowedStatuses = ['confirmed', 'pending', 'preparing'];
     if (!allowedStatuses.includes(order.status)) {
       return errorResponse(res, 400, `Order cannot be marked as preparing. Current status: ${order.status}`);
+    }
+
+    // CRITICAL: Prevent processing online orders that are not paid
+    if (order.payment?.method !== 'cash' && order.payment?.status !== 'completed') {
+      return errorResponse(res, 400, 'Order cannot be processed because payment is not yet completed. Please wait for payment confirmation.');
     }
 
     // Only update status if it's not already preparing

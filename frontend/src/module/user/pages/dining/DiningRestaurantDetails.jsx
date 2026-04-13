@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
-import { restaurantAPI } from "@/lib/api"
+import { restaurantAPI, diningAPI } from "@/lib/api"
 import {
     ArrowLeft,
     MapPin,
@@ -15,6 +15,7 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Loader2 } from "lucide-react"
+import { toast } from "sonner"
 
 export default function DiningRestaurantDetails() {
     const { diningType, slug } = useParams() // Get params from URL
@@ -35,7 +36,8 @@ export default function DiningRestaurantDetails() {
             try {
                 setLoading(true)
                 // Try fetch by ID/Slug
-                const response = await restaurantAPI.getRestaurantById(slug)
+                // Use specialized dining API that handles both dining and regular restaurants
+                const response = await diningAPI.getRestaurantBySlug(slug)
 
                 if (response.data && response.data.success) {
                     const apiRestaurant = response.data.data
@@ -43,8 +45,6 @@ export default function DiningRestaurantDetails() {
                     const actualRestaurant = apiRestaurant?.restaurant || apiRestaurant
                     setRestaurant(actualRestaurant)
                 } else {
-                    // Fallback: search by name if slug lookup fails directly (though getRestaurantById usually handles slugs)
-                    // For now, assuming direct slug work or we might need the search logic from RestaurantDetails.jsx
                     setRestaurant(null)
                     setError("Restaurant not found")
                 }
@@ -115,6 +115,37 @@ export default function DiningRestaurantDetails() {
         )
     }
 
+    const handleCall = () => {
+        const phoneNumber = restaurant.primaryContactNumber || restaurant.phone || restaurant.ownerPhone
+        if (phoneNumber) {
+            window.location.href = `tel:${phoneNumber}`
+        } else {
+            toast.error("Contact number not available")
+        }
+    }
+
+    const handleNavigation = () => {
+        const address = restaurant.location?.formattedAddress || restaurant.location?.address || restaurant.location || restaurant.address
+        const coords = restaurant.location?.coordinates || restaurant.coordinates
+        
+        let url = ""
+        if (coords?.latitude && coords?.longitude) {
+            url = `https://www.google.com/maps?q=${coords.latitude},${coords.longitude}`
+        } else if (address) {
+            url = `https://www.google.com/maps?q=${encodeURIComponent(address)}`
+        }
+
+        if (url) {
+            window.open(url, "_blank")
+        } else {
+            toast.error("Location details not available")
+        }
+    }
+
+    const handlePayBill = () => {
+        toast.info("Pay bill feature coming soon! Please pay at the restaurant for now.")
+    }
+
     return (
         <div className="min-h-screen bg-white pb-20 relative">
             {/* Sticky Header / Back Button */}
@@ -176,7 +207,7 @@ export default function DiningRestaurantDetails() {
                             <div className="flex items-center gap-1 text-white font-bold text-lg leading-none">
                                 {rating} <Star className="w-3 h-3 fill-current" />
                             </div>
-                            <span className="text-[10px] text-white/90">780 Reviews</span>
+                            <span className="text-[10px] text-white/90">{restaurant.totalRatings || 0} Reviews</span>
                         </div>
                     </div>
                 </div>
@@ -186,6 +217,7 @@ export default function DiningRestaurantDetails() {
             <div className="flex items-center justify-between px-4 py-4 border-b border-gray-100 gap-3">
                 <Button
                     variant="outline"
+                    onClick={() => setIsBookingOpen(true)}
                     className="flex-1 border-gray-200 h-10 text-[#EB590E] hover:text-[#D94F0C] hover:bg-orange-50 font-medium rounded-full"
                 >
                     <UtensilsCrossed className="w-4 h-4 mr-2" />
@@ -193,10 +225,16 @@ export default function DiningRestaurantDetails() {
                 </Button>
 
                 <div className="flex gap-3">
-                    <button className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-[#EB590E] hover:bg-orange-50">
+                    <button 
+                        onClick={handleNavigation}
+                        className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-[#EB590E] hover:bg-orange-50"
+                    >
                         <Navigation className="w-5 h-5" />
                     </button>
-                    <button className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-[#EB590E] hover:bg-orange-50">
+                    <button 
+                        onClick={handleCall}
+                        className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-[#EB590E] hover:bg-orange-50"
+                    >
                         <Phone className="w-5 h-5" />
                     </button>
                 </div>
@@ -235,15 +273,94 @@ export default function DiningRestaurantDetails() {
                 </div>
             </div>
 
-            {/* Tab Content Placeholder */}
+            {/* Tab Content */}
             <div className="p-4 min-h-[300px]">
-                <h3 className="font-bold text-lg mb-2">{activeTab}</h3>
-                <p className="text-gray-500 text-sm">Content for {activeTab} will be displayed here.</p>
-
+                <h3 className="font-bold text-lg mb-4">{activeTab}</h3>
+                
                 {activeTab === "Menu" && (
-                    <div className="mt-4 grid grid-cols-2 gap-4">
-                        <div className="h-32 bg-gray-100 rounded-lg"></div>
-                        <div className="h-32 bg-gray-100 rounded-lg"></div>
+                    <div className="grid grid-cols-2 gap-4">
+                        {restaurant.menuImages && restaurant.menuImages.length > 0 ? (
+                            restaurant.menuImages.map((img, i) => (
+                                <div key={i} className="aspect-[3/4] bg-gray-100 rounded-xl overflow-hidden shadow-sm border border-gray-100">
+                                    <img src={img.url} alt={`Menu ${i+1}`} className="w-full h-full object-cover" />
+                                </div>
+                            ))
+                        ) : (
+                            <div className="col-span-2 text-center py-10 text-gray-400">
+                                <UtensilsCrossed className="w-12 h-12 mx-auto mb-2 opacity-20" />
+                                <p>Menu not available for this restaurant</p>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {activeTab === "Photos" && (
+                    <div className="grid grid-cols-3 gap-2">
+                        {[restaurant.profileImage?.url, restaurant.image, ...(restaurant.photos || []).map(p => p.url), ...(restaurant.menuImages || []).map(m => m.url)].filter(Boolean).map((img, i) => (
+                            <div key={i} className="aspect-square bg-gray-100 rounded-lg overflow-hidden border border-gray-100 shadow-sm transition-transform active:scale-95">
+                                <img src={img} alt={`Photo ${i+1}`} className="w-full h-full object-cover" />
+                            </div>
+                        ))}
+                        {(!restaurant.profileImage?.url && (!restaurant.menuImages || restaurant.menuImages.length === 0)) && (
+                            <div className="col-span-3 text-center py-10 text-gray-400">
+                                <p>No photos available</p>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {activeTab === "Reviews" && (
+                    <div className="space-y-6">
+                        <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl">
+                            <div className="text-4xl font-black text-slate-800">{rating}</div>
+                            <div>
+                                <div className="flex gap-0.5 mb-1">
+                                    {[1, 2, 3, 4, 5].map(s => (
+                                        <Star key={s} className={`w-4 h-4 ${s <= Math.floor(rating) ? "fill-green-600 text-green-600" : "text-gray-300"}`} />
+                                    ))}
+                                </div>
+                                <p className="text-xs text-slate-500 font-medium">{restaurant.totalRatings || 0} reviews on DadExpress</p>
+                            </div>
+                        </div>
+                        <div className="text-center py-10 text-gray-400">
+                            <p className="text-sm font-medium">Be the first to review this restaurant!</p>
+                            <Button variant="ghost" className="mt-2 text-[#EB590E] font-bold">Write a review</Button>
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === "About" && (
+                    <div className="space-y-4">
+                        <div>
+                            <h4 className="font-bold text-gray-800 text-sm mb-1">Cuisines</h4>
+                            <div className="flex flex-wrap gap-2">
+                                {restaurant.cuisines?.map(c => (
+                                    <span key={c} className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-xs font-semibold">{c}</span>
+                                )) || <span className="text-gray-500 text-sm">Not specified</span>}
+                            </div>
+                        </div>
+                        <div>
+                            <h4 className="font-bold text-gray-800 text-sm mb-1">Average Cost</h4>
+                            <p className="text-gray-600 text-sm">{restaurant.costForTwo ? `₹${restaurant.costForTwo} for two (approx.)` : "₹1400 for two (approx.)"}</p>
+                        </div>
+                        <div>
+                            <h4 className="font-bold text-gray-800 text-sm mb-1">Address</h4>
+                            <p className="text-gray-600 text-sm leading-relaxed">
+                                {restaurant.location?.addressLine1 || restaurant.location?.formattedAddress || restaurant.address || "Address not available"}
+                            </p>
+                        </div>
+                    </div>
+                )}
+
+                {(activeTab === "Pre-book offers" || activeTab === "Walk-in offers") && (
+                    <div className="space-y-4">
+                         <div className="bg-white border border-green-100 rounded-2xl p-4 flex justify-between items-center shadow-sm">
+                            <div>
+                                <p className="text-green-600 font-bold text-lg">{restaurant.offer || "10% OFF"}</p>
+                                <p className="text-gray-500 text-xs font-medium">on early bird bookings</p>
+                            </div>
+                            <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white rounded-xl px-4">Claim</Button>
+                        </div>
                     </div>
                 )}
             </div>
@@ -260,6 +377,7 @@ export default function DiningRestaurantDetails() {
                     </Button>
                     <Button
                         className="flex-1 h-12 rounded-xl bg-[#EB590E] hover:bg-[#D94F0C] text-white font-bold flex flex-col items-center justify-center leading-tight py-1"
+                        onClick={handlePayBill}
                     >
                         <span className="text-sm">Pay bill</span>
                         <span className="text-[10px] font-normal opacity-90">Tap to view offers</span>

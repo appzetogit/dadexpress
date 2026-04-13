@@ -56,7 +56,7 @@ const feedbackExperienceSchema = new mongoose.Schema(
 );
 
 // Calculate experience based on rating
-feedbackExperienceSchema.pre('save', function(next) {
+feedbackExperienceSchema.pre('save', async function() {
   if (this.rating !== undefined && !this.experience) {
     if (this.rating <= 2) {
       this.experience = 'very_bad';
@@ -74,7 +74,6 @@ feedbackExperienceSchema.pre('save', function(next) {
       this.experience = 'very_good';
     }
   }
-  next();
 });
 
 // Indexes

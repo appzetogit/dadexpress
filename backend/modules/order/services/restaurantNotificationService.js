@@ -124,9 +124,21 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
       note: order.note || '',
       sendCutlery: order.sendCutlery,
       paymentMethod: resolvedPaymentMethod,
-      payment: order.payment,
+      paymentStatus: order.payment?.status || 'pending',
+      payment: {
+        method: resolvedPaymentMethod,
+        status: order.payment?.status || 'pending',
+        razorpayOrderId: order.payment?.razorpayOrderId,
+        transactionId: order.payment?.transactionId
+      },
     };
-    console.log('📢 Restaurant notification payload paymentMethod:', orderNotification.paymentMethod, { override: paymentMethodOverride, orderPaymentMethod: order.payment?.method });
+    
+    console.log('📢 Restaurant notification payload:', {
+      orderId: orderNotification.orderId,
+      paymentMethod: orderNotification.paymentMethod,
+      paymentStatus: orderNotification.paymentStatus,
+      orderPaymentStatus: order.payment?.status
+    });
 
     // Get restaurant namespace
     const restaurantNamespace = io.of('/restaurant');

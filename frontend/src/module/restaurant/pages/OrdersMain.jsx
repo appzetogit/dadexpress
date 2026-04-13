@@ -826,6 +826,17 @@ export default function OrdersMain() {
   useEffect(() => {
     if (!isRestaurantOnline) return
     if (newOrder) {
+      // Security: Strictly exclude unpaid online orders from real-time popup
+      const pMethod = newOrder.paymentMethod ?? newOrder.payment?.method ?? 'razorpay'
+      const pStatus = newOrder.paymentStatus ?? newOrder.payment?.status
+      const isPrepaid = ['razorpay', 'wallet', 'upi', 'card', 'online'].includes(pMethod)
+
+      if (isPrepaid && pStatus !== 'completed') {
+        debugLog('🚫 Skipping new order popup - unpaid online order', { pMethod, pStatus })
+        clearNewOrder()
+        return
+      }
+
       debugLog('📦 New order received via Socket.IO:', newOrder)
       const orderId = newOrder.orderId || newOrder.orderMongoId
       if (orderId && !shownOrdersRef.current.has(orderId)) {
@@ -869,8 +880,22 @@ export default function OrdersMain() {
         if (response.data?.success && response.data.data?.orders) {
           // Find pending/confirmed orders that haven't been shown yet
           const confirmedOrders = response.data.data.orders.filter(
-            order => (order.status === 'pending' || order.status === 'confirmed') &&
-              !shownOrdersRef.current.has(order.orderId || order._id)
+            order => {
+              // Only pending/confirmed orders that haven't been shown yet
+              const isCorrectStatus = order.status === 'pending' || order.status === 'confirmed';
+              if (!isCorrectStatus) return false;
+
+              // Security: Strictly exclude unpaid online orders
+              const pMethod = order.paymentMethod ?? order.payment?.method ?? 'razorpay';
+              const pStatus = order.paymentStatus ?? order.payment?.status;
+              const isPrepaid = ['razorpay', 'wallet', 'upi', 'card', 'online'].includes(pMethod);
+              
+              if (isPrepaid && pStatus !== 'completed') {
+                return false;
+              }
+
+              return !shownOrdersRef.current.has(order.orderId || order._id);
+            }
           )
 
           // Show the most recent confirmed order in popup (double-check state)
@@ -2504,7 +2529,21 @@ function PreparingOrders({ onSelectOrder, onCancel }) {
           // 'confirmed' orders should only appear in popup notification, not in preparing list
           // After accepting, order status changes to 'preparing' and then appears here
           const preparingOrders = response.data.data.orders.filter(
-            order => getEffectiveOrderStatus(order) === 'preparing'
+            order => {
+              const status = getEffectiveOrderStatus(order);
+              if (status !== 'preparing') return false;
+
+              // Security: Strictly exclude unpaid online orders
+              const pMethod = order.paymentMethod ?? order.payment?.method ?? 'razorpay';
+              const pStatus = order.payment?.status;
+              const isPrepaid = ['razorpay', 'wallet', 'upi', 'card', 'online'].includes(pMethod);
+              
+              if (isPrepaid && pStatus !== 'completed') {
+                return false;
+              }
+
+              return true;
+            }
           )
 
           const transformedOrders = preparingOrders.map(order => {

@@ -232,15 +232,15 @@ export const useRestaurantNotifications = (isOnline = null) => {
     });
 
     socketRef.current.on('connect', () => {
-      false && console.log('✅ Restaurant Socket connected, restaurantId:', restaurantId);
-      false && console.log('✅ Socket ID:', socketRef.current.id);
-      false && console.log('✅ Socket URL:', socketUrl);
+      console.log('✅ Restaurant Socket connected, restaurantId:', restaurantId);
+      console.log('✅ Socket ID:', socketRef.current.id);
+      console.log('✅ Socket URL:', socketUrl);
       setIsConnected(true);
       
       // Join restaurant room immediately after connection with retry
       if (restaurantId) {
         const joinRoom = () => {
-          false && console.log('📢 Joining restaurant room with ID:', restaurantId);
+          console.log('📢 Joining restaurant room with ID:', restaurantId);
           socketRef.current.emit('join-restaurant', restaurantId);
           
           // Retry join after 2 seconds if no confirmation received
@@ -260,9 +260,9 @@ export const useRestaurantNotifications = (isOnline = null) => {
 
     // Listen for room join confirmation
     socketRef.current.on('restaurant-room-joined', (data) => {
-      false && console.log('✅ Restaurant room joined successfully:', data);
-      false && console.log('✅ Room:', data?.room);
-      false && console.log('✅ Restaurant ID in room:', data?.restaurantId);
+      console.log('✅ Restaurant room joined successfully:', data);
+      console.log('✅ Room:', data?.room);
+      console.log('✅ Restaurant ID in room:', data?.restaurantId);
     });
 
     // Listen for connection errors (throttle logs to avoid console spam on reconnect loops)
@@ -321,7 +321,7 @@ export const useRestaurantNotifications = (isOnline = null) => {
         console.log('⏸️ useRestaurantNotifications: Ignoring new_order socket event while restaurant is offline');
         return;
       }
-      false && console.log('📦 New order received:', orderData);
+      console.log('📦 New order received:', orderData);
       setNewOrder(orderData);
       
       // Play notification sound

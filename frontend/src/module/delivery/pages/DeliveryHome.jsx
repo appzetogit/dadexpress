@@ -448,7 +448,7 @@ export default function DeliveryHome() {
     return stored ? JSON.parse(stored) : null
   })
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(() => getUnreadDeliveryNotificationCount())
-  const [paymentCollectedBy, setPaymentCollectedBy] = useState("qr") // Forced QR payment mode for COD by default
+  const [paymentCollectedBy, setPaymentCollectedBy] = useState("cash") // Default to cash payment for COD orders
   const [paymentConfirmed, setPaymentConfirmed] = useState(false)
   const [isVerifyingPayment, setIsVerifyingPayment] = useState(false)
   const [selectedRestaurant, setSelectedRestaurant] = useState(null)
@@ -12406,117 +12406,7 @@ export default function DeliveryHome() {
             </div>
           </div>
 
-          {/* Payment QR Code Section */}
-          <div className="flex flex-col items-center gap-3 mb-6 p-5 bg-white rounded-2xl border border-gray-100 shadow-sm relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-2">
-              <div className={`text-xs font-mono font-bold px-2 py-1 rounded bg-gray-50 flex items-center gap-1.5 ${qrTimer < 30 ? 'text-red-500' : 'text-gray-500'}`}>
-                <Clock className={`w-3 h-3 ${qrTimer < 30 ? 'animate-pulse' : ''}`} />
-                {formatQrTimer(qrTimer)}
-              </div>
-            </div>
-
-            <div className="text-sm font-semibold text-gray-800 flex items-center gap-2">
-              <ScanLine className="w-4 h-4 text-green-600" />
-              Scan QR for COD Payment
-            </div>
-            
-            <div className="relative group transition-transform hover:scale-105 duration-300">
-              <div className="absolute -inset-1 bg-gradient-to-r from-green-500 to-emerald-500 rounded-xl blur opacity-10 group-hover:opacity-20 transition duration-1000"></div>
-              <div className="relative p-2 bg-white rounded-xl border border-gray-100 shadow-inner">
-                <img 
-                  src="/newbarcode.jpeg" 
-                  alt="Payment QR" 
-                  className="w-40 h-40 object-contain rounded-lg"
-                  onError={(e) => {
-                    e.target.src = "https://placehold.co/400x400/png?text=QR+Code";
-                    e.target.onerror = null;
-                  }}
-                />
-                
-                {qrTimer === 0 && (
-                  <div className="absolute inset-0 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center rounded-lg p-4 text-center">
-                    <XCircle className="w-10 h-10 text-red-500 mb-2" />
-                    <span className="text-red-600 font-bold text-sm">QR Code Expired</span>
-                    <button 
-                      onClick={() => setQrTimer(120)}
-                      className="mt-2 text-xs text-green-600 font-semibold underline"
-                    >
-                      Regenerate
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-            
-            <p className="text-[10px] text-gray-400 text-center uppercase tracking-widest font-medium">
-              Powered by Razorpay
-            </p>
-
-            {paymentCollectedBy === 'qr' && (
-              <div className="mt-2 w-full">
-                {paymentConfirmed ? (
-                  <div className="flex items-center justify-center gap-2 bg-green-50 text-green-700 py-3 rounded-xl border border-green-200">
-                    <CheckCircle className="w-5 h-5" />
-                    <span className="font-bold text-sm uppercase tracking-tight">Payment Verified</span>
-                  </div>
-                ) : (
-                   <>
-                    <button
-                      onClick={async () => {
-                        if (isVerifyingPayment) return
-                        const orderId = selectedRestaurant?.id || selectedRestaurant?.orderMongoId || activeOrder?._id || activeOrder?.id
-                        if (!orderId) {
-                          toast.error('Order ID not found')
-                          return
-                        }
-                        
-                        setIsVerifyingPayment(true)
-                        try {
-                          const response = await deliveryAPI.getOrderDetails(orderId)
-                          const orderData = response?.data?.data?.order || response?.data?.order || response?.data?.data || response?.data;
-                          const paymentData = orderData?.payment || orderData;
-                          const paymentStatus = (paymentData?.status || orderData?.paymentStatus || orderData?.payment_status || "").toLowerCase();
-                          
-                          if (['completed', 'paid', 'success', 'captured', 'succeeded'].includes(paymentStatus)) {
-                            setPaymentConfirmed(true)
-                            toast.success('✨ Payment status updated to PAID!')
-                          } else {
-                            toast.error('❌ User hasn\'t paid yet. Refresh and check again.')
-                          }
-                        } catch (err) {
-                          console.error('Manual verification failed:', err)
-                          toast.error('Failed to verify payment. Try again.')
-                        } finally {
-                          setIsVerifyingPayment(false)
-                        }
-                      }}
-                      disabled={isVerifyingPayment}
-                      className={`w-full py-3.5 rounded-xl font-bold text-sm uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 ${
-                        isVerifyingPayment 
-                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                          : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200'
-                      }`}
-                    >
-                      {isVerifyingPayment ? (
-                        <>
-                          <Loader2 className="w-5 h-5 animate-spin" />
-                          <span>Verifying...</span>
-                        </>
-                      ) : (
-                        <>
-                          <RefreshCw className="w-4 h-4" />
-                          <span>Check Payment Status</span>
-                        </>
-                      )}
-                    </button>
-                    <p className="text-[9px] text-gray-400 text-center mt-2 animate-pulse uppercase tracking-tight">
-                      Polling real-time payment status...
-                    </p>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
+          {/* Payment QR Code Section Removed */}
 
           {/* Payment info: Online = amount paid, COD = collect from customer */}
           {selectedRestaurant?.total != null && (() => {
@@ -12548,65 +12438,7 @@ export default function DeliveryHome() {
             )
           })()}
 
-          {/* Payment Method Selector Section (COD only) */}
-          {selectedRestaurant && isCashPaymentMethod(selectedRestaurant.paymentMethod || selectedRestaurant.payment) && (
-            <div className="mb-6 space-y-3">
-              <div className="flex flex-col gap-2.5 bg-gray-50 p-3 rounded-2xl border border-gray-200 shadow-sm transition-all duration-300">
-                <div className="flex items-center justify-between px-1">
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Select Payment Mode</p>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${paymentCollectedBy === 'qr' ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600'}`}>
-                    {paymentCollectedBy === 'qr' ? 'Digital' : 'Liquid Cash'}
-                  </span>
-                </div>
-                
-                <div className="flex gap-2.5">
-                  <button
-                    onClick={() => setPaymentCollectedBy("cash")}
-                    className={`flex-1 flex flex-col items-center justify-center gap-1.5 py-3 px-2 rounded-xl text-sm font-bold transition-all border-2 relative overflow-hidden ${
-                      paymentCollectedBy === "cash"
-                        ? "bg-white border-green-500 text-green-700 shadow-md ring-4 ring-green-50"
-                        : "bg-white/50 border-gray-100 text-gray-400 hover:border-gray-200 grayscale opacity-60"
-                    }`}
-                  >
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${paymentCollectedBy === 'cash' ? 'bg-green-100' : 'bg-gray-100'}`}>
-                      <IndianRupee className="w-4 h-4" />
-                    </div>
-                    <span>CASH</span>
-                    {paymentCollectedBy === 'cash' && (
-                      <motion.div layoutId="paymentSelection" className="absolute top-1.5 right-1.5 w-2 h-2 bg-green-500 rounded-full" />
-                    )}
-                  </button>
-                  
-                  <button
-                    onClick={() => setPaymentCollectedBy("qr")}
-                    className={`flex-1 flex flex-col items-center justify-center gap-1.5 py-3 px-2 rounded-xl text-sm font-bold transition-all border-2 relative overflow-hidden ${
-                      paymentCollectedBy === "qr"
-                        ? "bg-white border-blue-500 text-blue-700 shadow-md ring-4 ring-blue-50"
-                        : "bg-white/50 border-gray-100 text-gray-400 hover:border-gray-200 grayscale opacity-60"
-                    }`}
-                  >
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${paymentCollectedBy === 'qr' ? 'bg-blue-100' : 'bg-gray-100'}`}>
-                      <ScanLine className="w-4 h-4" />
-                    </div>
-                    <span>QR SCAN</span>
-                    {paymentCollectedBy === 'qr' && (
-                      <motion.div layoutId="paymentSelection" className="absolute top-1.5 right-1.5 w-2 h-2 bg-blue-500 rounded-full" />
-                    )}
-                  </button>
-                </div>
-              </div>
-              
-              {paymentCollectedBy === 'qr' && (
-                <motion.p 
-                  initial={{ opacity: 0, y: -5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="text-[11px] text-blue-600 font-bold bg-blue-50 py-2 px-3 rounded-lg text-center"
-                >
-                  ✨ Payment goes to company account (No deduction)
-                </motion.p>
-              )}
-            </div>
-          )}
+          {/* Payment Method Selector Section (COD only) Removed */}
 
           {/* Order Delivered Button with Swipe */}
           <div className="relative w-full">
@@ -12672,11 +12504,9 @@ export default function DeliveryHome() {
                       damping: 25
                     } : { duration: 0 }}
                   >
-                    {paymentCollectedBy === 'qr' && !paymentConfirmed
-                      ? 'AWAITING QR PAYMENT'
-                      : orderDeliveredButtonProgress > 0.5 
-                        ? 'Release to Confirm' 
-                        : `Delivered (${paymentCollectedBy === 'qr' ? 'QR' : 'Cash'})`
+                    {orderDeliveredButtonProgress > 0.5 
+                      ? 'Release to Confirm' 
+                      : 'Delivered (Cash Collected)'
                     }
                   </motion.span>
                 </div>

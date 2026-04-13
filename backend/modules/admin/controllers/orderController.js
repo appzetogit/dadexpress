@@ -28,7 +28,31 @@ export const getOrders = asyncHandler(async (req, res) => {
     } = req.query;
 
     // Build query
-    const query = {};
+    const query = {
+      $and: [
+        // Filter for payment success:
+        // 1. Cash (COD) is always shown.
+        // 2. Online payments (Razorpay, Wallet, etc.) are only shown if completed.
+        // 3. Fallback for missing method (treated as prepaid).
+        {
+          $or: [
+            { 'payment.method': 'cash' },
+            { 
+              $and: [
+                { 'payment.method': { $in: ['razorpay', 'wallet', 'upi', 'card', 'online'] } },
+                { 'payment.status': 'completed' }
+              ]
+            },
+            { 
+              $and: [
+                { 'payment.method': { $exists: false } },
+                { 'payment.status': 'completed' }
+              ]
+            }
+          ]
+        }
+      ]
+    };
 
     // Status filter
     if (status && status !== 'all') {
@@ -434,9 +458,28 @@ export const getOrderById = asyncHandler(async (req, res) => {
 
     let order = null;
 
+    // Base payment filter for security
+    const paymentFilter = {
+      $or: [
+        { 'payment.method': 'cash' },
+        { 
+          $and: [
+            { 'payment.method': { $in: ['razorpay', 'wallet', 'upi', 'card', 'online'] } },
+            { 'payment.status': 'completed' }
+          ]
+        },
+        { 
+          $and: [
+            { 'payment.method': { $exists: false } },
+            { 'payment.status': 'completed' }
+          ]
+        }
+      ]
+    };
+
     // Try MongoDB _id first
     if (mongoose.Types.ObjectId.isValid(id) && id.length === 24) {
-      order = await Order.findById(id)
+      order = await Order.findOne({ _id: id, ...paymentFilter })
         .populate('userId', 'name email phone')
         .populate('restaurantId', 'name slug location address phone')
         .populate('deliveryPartnerId', 'name phone availability')
@@ -445,7 +488,7 @@ export const getOrderById = asyncHandler(async (req, res) => {
 
     // If not found, try by orderId
     if (!order) {
-      order = await Order.findOne({ orderId: id })
+      order = await Order.findOne({ orderId: id, ...paymentFilter })
         .populate('userId', 'name email phone')
         .populate('restaurantId', 'name slug location address phone')
         .populate('deliveryPartnerId', 'name phone availability')
@@ -468,12 +511,31 @@ export const getOrderById = asyncHandler(async (req, res) => {
 const findOrderByIdOrOrderId = async (id) => {
   let order = null;
 
+  // Base payment filter for security
+  const paymentFilter = {
+    $or: [
+      { 'payment.method': 'cash' },
+      { 
+        $and: [
+          { 'payment.method': { $in: ['razorpay', 'wallet', 'upi', 'card', 'online'] } },
+          { 'payment.status': 'completed' }
+        ]
+      },
+      { 
+        $and: [
+          { 'payment.method': { $exists: false } },
+          { 'payment.status': 'completed' }
+        ]
+      }
+    ]
+  };
+
   if (mongoose.Types.ObjectId.isValid(id) && id.length === 24) {
-    order = await Order.findById(id);
+    order = await Order.findOne({ _id: id, ...paymentFilter });
   }
 
   if (!order) {
-    order = await Order.findOne({ orderId: id });
+    order = await Order.findOne({ orderId: id, ...paymentFilter });
   }
 
   return order;
@@ -704,6 +766,26 @@ export const getSearchingDeliverymanOrders = asyncHandler(async (req, res) => {
       $or: [
         { deliveryPartnerId: { $exists: false } },
         { deliveryPartnerId: null }
+      ],
+      // Security: Only show orders with successful payment (Online) or Cash
+      $and: [
+        {
+          $or: [
+            { 'payment.method': 'cash' },
+            { 
+              $and: [
+                { 'payment.method': { $in: ['razorpay', 'wallet', 'upi', 'card', 'online'] } },
+                { 'payment.status': 'completed' }
+              ]
+            },
+            { 
+              $and: [
+                { 'payment.method': { $exists: false } },
+                { 'payment.status': 'completed' }
+              ]
+            }
+          ]
+        }
       ]
     };
 

@@ -119,542 +119,235 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
   try {
     const { period, zone } = req.query;
     const now = new Date();
+    const zoneIdString = zone && zone !== "all" ? String(zone) : null;
 
-    // Create a robust zone filter for both string and ObjectId matches (in case type varies in DB)
-    const getZoneFilter = (z) => {
-      if (!z || z === "all") return null;
-      if (mongoose.Types.ObjectId.isValid(z)) {
-        return { $in: [z, new mongoose.Types.ObjectId(z)] };
-      }
-      return z;
-    };
-    const zoneMatcher = getZoneFilter(zone);
-
-    // Calculate date range based on period filter
+    // Calculate date ranges
     let periodStart = null;
-    if (period === "today") {
-      periodStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    } else if (period === "week") {
-      periodStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    } else if (period === "month") {
-      periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    } else if (period === "year") {
-      periodStart = new Date(now.getFullYear(), 0, 1);
-    }
-
-    // Base order match - filter by period and zone if specified
-    const baseOrderMatch = { status: "delivered", "pricing.total": { $exists: true } };
-    if (periodStart) baseOrderMatch.deliveredAt = { $gte: periodStart, $lte: now };
-    if (zoneMatcher) baseOrderMatch["assignmentInfo.zoneId"] = zoneMatcher;
+    if (period === "today") periodStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    else if (period === "week") periodStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    else if (period === "month") periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    else if (period === "year") periodStart = new Date(now.getFullYear(), 0, 1);
 
     const last30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const existingDeliveryPartnerIds = await Delivery.find({})
-      .distinct("_id")
-      .catch(() => []);
+    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
+    // Get Restaurants in the zone first to use as primary filter for orders
+    let restaurantMatch = {};
+    let activeRestIds = [];
+    let restaurantIdsInZoneForQuery = [];
+
+    if (zoneIdString) {
+      // 1. Find restaurants found in orders already marked with this zone
+      const orderRestaurantIds = await Order.find({ "assignmentInfo.zoneId": zoneIdString }).distinct("restaurantId").lean();
+
+      // 2. Find restaurant explicitly linked in Zone document
+      const ZoneModel = (await import("../models/Zone.js")).default;
+      const zoneDoc = await ZoneModel.findById(zoneIdString).select("restaurantId").lean();
+      const directRestId = zoneDoc?.restaurantId;
+
+      const combinedIds = [...new Set([...orderRestaurantIds, directRestId].filter(id => id))];
+
+      const validObjIds = combinedIds.filter(id => mongoose.Types.ObjectId.isValid(id)).map(id => new mongoose.Types.ObjectId(id));
+      const validStrIds = combinedIds.filter(id => typeof id === 'string' && !mongoose.Types.ObjectId.isValid(id));
+
+      restaurantMatch.$or = [
+        { _id: { $in: validObjIds } },
+        { restaurantId: { $in: validStrIds } }
+      ];
+
+      // Get all restaurants in zone to extract their IDs
+      const zoneRestaurants = await Restaurant.find(restaurantMatch).select("_id restaurantId isActive").lean();
+      activeRestIds = zoneRestaurants.filter(r => r.isActive).map(r => r._id);
+
+      // Convert all IDs to strings for the Order query (Aggregation requires strict type matching)
+      restaurantIdsInZoneForQuery = [
+        ...zoneRestaurants.map(r => String(r._id)),
+        ...zoneRestaurants.map(r => String(r.restaurantId)).filter(id => id && id !== "undefined")
+      ];
+    }
+
+    // Common order matcher for stats
+    const getOrderMatch = (status = null, usePeriod = true) => {
+      const match = { "pricing.total": { $exists: true } };
+      if (status) match.status = status;
+      if (usePeriod && periodStart) {
+        if (status === "delivered") match.deliveredAt = { $gte: periodStart, $lte: now };
+        else if (status === "cancelled") match.cancelledAt = { $gte: periodStart, $lte: now };
+        else match.createdAt = { $gte: periodStart, $lte: now };
+      }
+
+      // Filter by restaurants in zone OR by explicit zoneId on the order
+      if (zoneIdString) {
+        match.$or = [
+          { "assignmentInfo.zoneId": zoneIdString },
+          { restaurantId: { $in: restaurantIdsInZoneForQuery } }
+        ];
+      }
+      return match;
+    };
+
+    // Calculate Delivery Earnings (Spatially aware via orders)
     const getDeliveryEarningFromWallets = async (startDate = null, endDate = null) => {
+      let orderIdMatch = null;
+      if (zoneIdString) {
+        const ordersInZone = await Order.find(getOrderMatch(null, false)).distinct("_id").lean().catch(() => []);
+        if (ordersInZone.length === 0) return 0;
+        orderIdMatch = { $in: ordersInZone };
+      }
+
       const pipeline = [
-        {
-          $match: {
-            ...(Array.isArray(existingDeliveryPartnerIds) &&
-            existingDeliveryPartnerIds.length > 0
-              ? { deliveryId: { $in: existingDeliveryPartnerIds } }
-              : {}),
-          },
-        },
         { $unwind: "$transactions" },
         {
           $addFields: {
-            effectiveTransactionDate: {
-              $ifNull: ["$transactions.createdAt", "$transactions.processedAt"],
-            },
+            effectiveDate: { $ifNull: ["$transactions.createdAt", "$transactions.processedAt"] },
           },
         },
         {
           $match: {
             "transactions.type": "payment",
             "transactions.status": "Completed",
-            ...(startDate
-              ? {
-                  effectiveTransactionDate: {
-                    $gte: startDate,
-                    $lte: endDate || now,
-                  },
-                }
-              : {}),
+            ...(orderIdMatch ? { "transactions.orderId": orderIdMatch } : {}),
+            ...(startDate ? { effectiveDate: { $gte: startDate, $lte: endDate || now } } : {}),
           },
         },
         {
-          $group: {
-            _id: null,
-            total: { $sum: { $ifNull: ["$transactions.amount", 0] } },
-          },
+          $group: { _id: null, total: { $sum: { $ifNull: ["$transactions.amount", 0] } } },
         },
       ];
 
-      const result = await DeliveryWallet.aggregate(pipeline);
-      return Number(result?.[0]?.total || 0);
+      const walletRes = await DeliveryWallet.aggregate(pipeline);
+      return Number(walletRes?.[0]?.total || 0);
     };
 
-    // Get total revenue (sum of all completed orders filtered by period)
+    // 1. Gross Revenue Stats
     const revenueStats = await Order.aggregate([
-      {
-        $match: baseOrderMatch,
-      },
+      { $match: getOrderMatch("delivered") },
       {
         $group: {
           _id: null,
           totalRevenue: { $sum: "$pricing.total" },
           totalTax: { $sum: "$pricing.tax" },
-          last30DaysRevenue: {
-            $sum: {
-              $cond: [
-                { $gte: ["$createdAt", last30Days] },
-                "$pricing.total",
-                0,
-              ],
-            },
-          },
-          last30DaysTax: {
-            $sum: {
-              $cond: [
-                { $gte: ["$createdAt", last30Days] },
-                "$pricing.tax",
-                0,
-              ],
-            },
-          },
+          last30DaysRevenue: { $sum: { $cond: [{ $gte: ["$createdAt", last30Days] }, "$pricing.total", 0] } },
+          last30DaysTax: { $sum: { $cond: [{ $gte: ["$createdAt", last30Days] }, "$pricing.tax", 0] } },
         },
       },
     ]);
 
-    // Get revenue data from aggregation result
-    const revenueData = revenueStats[0] || {
-      totalRevenue: 0,
-      totalTax: 0,
-      last30DaysRevenue: 0,
-      last30DaysTax: 0
-    };
+    const revenueData = revenueStats[0] || { totalRevenue: 0, totalTax: 0, last30DaysRevenue: 0, last30DaysTax: 0 };
 
-    // Get all settlements for delivered orders filtered by period and zone
-    const deliveredOrderQuery = { status: "delivered" };
-    if (periodStart) deliveredOrderQuery.deliveredAt = { $gte: periodStart, $lte: now };
-    if (zoneMatcher) deliveredOrderQuery["assignmentInfo.zoneId"] = zoneMatcher;
-    
-    const deliveredOrderIds = await Order.find(deliveredOrderQuery)
-      .select("_id")
-      .lean();
-    const deliveredOrderIdArray = deliveredOrderIds.map((o) => o._id);
+    // 2. Commission & Fees from Settlements
+    const settlementOrders = await Order.find(getOrderMatch("delivered")).distinct("_id").lean();
+    const allSettlements = await OrderSettlement.find({ orderId: { $in: settlementOrders } }).lean();
 
-    // Get settlements only for delivered orders
-    const allSettlements = await OrderSettlement.find({
-      orderId: { $in: deliveredOrderIdArray },
-    }).lean();
-
-    console.log(
-      `ðŸ“Š Dashboard Stats - Total settlements found: ${allSettlements.length}`,
-    );
-
-    // Debug: Log first settlement to see actual structure
-    if (allSettlements.length > 0) {
-      const firstSettlement = allSettlements[0];
-      console.log("ðŸ” First settlement sample:", {
-        orderNumber: firstSettlement.orderNumber,
-        adminEarning: firstSettlement.adminEarning,
-        userPayment: firstSettlement.userPayment,
-      });
-    }
-
-    // Calculate totals from all settlements - use adminEarning fields
-    let totalCommission = 0;
-    let totalPlatformFee = 0;
-    let totalDeliveryFee = 0;
-    let totalGST = 0;
-    let totalDeliveryEarning = 0;
-
-    allSettlements.forEach((s, index) => {
-      const commission = s.adminEarning?.commission || 0;
-      const platformFee = s.adminEarning?.platformFee || 0;
-      const deliveryFee = s.adminEarning?.deliveryFee || 0;
-      // Some historical settlements may miss adminEarning.gst, so fallback to userPayment.gst.
-      const gst = Number(s.adminEarning?.gst ?? s.userPayment?.gst ?? 0);
-      const deliveryEarning = Number(s.deliveryPartnerEarning?.totalEarning || 0);
-
-      totalCommission += commission;
-      totalPlatformFee += platformFee;
-      totalDeliveryFee += deliveryFee;
-      totalGST += gst;
-      totalDeliveryEarning += deliveryEarning;
-
-      // Log each settlement for debugging
-      if (index < 5) {
-        // Log first 5 settlements
-        console.log(
-          `ðŸ“¦ Settlement ${index + 1} (${s.orderNumber}): Commission: â‚¹${commission}, Platform: â‚¹${platformFee}, Delivery: â‚¹${deliveryFee}, GST: â‚¹${gst}`,
-        );
-      }
+    let totalCommission = 0, totalPlatformFee = 0, totalDeliveryFee = 0;
+    allSettlements.forEach(s => {
+      totalCommission += s.adminEarning?.commission || 0;
+      totalPlatformFee += s.adminEarning?.platformFee || 0;
+      totalDeliveryFee += s.adminEarning?.deliveryFee || 0;
     });
 
-    totalCommission = Math.round(totalCommission * 100) / 100;
-    totalPlatformFee = Math.round(totalPlatformFee * 100) / 100;
-    totalDeliveryFee = Math.round(totalDeliveryFee * 100) / 100;
-    // Use tax from Order model as primary source of truth for GST to match Gross Revenue consistency
-    totalGST = Math.round((revenueData.totalTax || 0) * 100) / 100;
-    totalDeliveryEarning = Math.round(
-      (await getDeliveryEarningFromWallets(periodStart, now)) * 100,
-    ) / 100;
+    // 3. Status Map for Pie Chart
+    const flowOrders = await Order.find(getOrderMatch(null, false)).select("status createdAt deliveredAt cancelledAt tracking").lean();
+    const filteredFlowOrders = periodStart
+      ? flowOrders.filter(o => isBetweenDates(getDashboardOrderEventDate(o), periodStart, now))
+      : flowOrders;
 
-    console.log(
-      `ðŸ’° Final calculated totals - Commission: â‚¹${totalCommission}, Platform Fee: â‚¹${totalPlatformFee}, Delivery Fee: â‚¹${totalDeliveryFee}, GST: â‚¹${totalGST}`,
-    );
-
-    // Get last 30 days data from OrderSettlement
-    const last30DaysOrderQuery = {
-      status: "delivered",
-      deliveredAt: { $gte: last30Days, $lte: now }
-    };
-    if (zoneMatcher) last30DaysOrderQuery["assignmentInfo.zoneId"] = zoneMatcher;
-    
-    const last30DaysOrderIds = await Order.find(last30DaysOrderQuery).select("_id").lean();
-    const last30DaysOrderIdArray = last30DaysOrderIds.map(o => o._id);
-
-    const last30DaysSettlements = await OrderSettlement.find({
-      orderId: { $in: last30DaysOrderIdArray }
-    }).lean();
-    const last30DaysCommission = last30DaysSettlements.reduce(
-      (sum, s) => sum + (s.adminEarning?.commission || 0),
-      0,
-    );
-    const last30DaysPlatformFee = last30DaysSettlements.reduce(
-      (sum, s) => sum + (s.adminEarning?.platformFee || 0),
-      0,
-    );
-    const last30DaysDeliveryFee = last30DaysSettlements.reduce(
-      (sum, s) => sum + (s.adminEarning?.deliveryFee || 0),
-      0,
-    );
-    const last30DaysGST = last30DaysSettlements.reduce(
-      (sum, s) => sum + Number(s.adminEarning?.gst ?? s.userPayment?.gst ?? 0),
-      0,
-    );
-    const last30DaysDeliveryEarning = await getDeliveryEarningFromWallets(
-      last30Days,
-      now,
-    );
-
-    // Get order statistics aligned with the selected period using each status event timestamp.
-    const orderFlowQuery = {
-      $and: [
-        periodStart ? {
-          $or: [
-            { createdAt: { $gte: periodStart, $lte: now } },
-            { deliveredAt: { $gte: periodStart, $lte: now } },
-            { cancelledAt: { $gte: periodStart, $lte: now } },
-            { "tracking.confirmed.timestamp": { $gte: periodStart, $lte: now } },
-            { "tracking.preparing.timestamp": { $gte: periodStart, $lte: now } },
-            { "tracking.ready.timestamp": { $gte: periodStart, $lte: now } },
-            { "tracking.outForDelivery.timestamp": { $gte: periodStart, $lte: now } },
-            { "tracking.delivered.timestamp": { $gte: periodStart, $lte: now } },
-          ],
-        } : {},
-        zoneMatcher ? { "assignmentInfo.zoneId": zoneMatcher } : {}
-      ]
-    };
-
-    const orderFlowCandidates = await Order.find(orderFlowQuery)
-      .select("status createdAt deliveredAt cancelledAt tracking")
-      .lean();
-
-    const filteredOrderFlowOrders = periodStart
-      ? orderFlowCandidates.filter((order) =>
-          isBetweenDates(getDashboardOrderEventDate(order), periodStart, now),
-        )
-      : orderFlowCandidates;
-
-    const orderStatusMap = filteredOrderFlowOrders.reduce((acc, order) => {
-      const key = order?.status || "pending";
-      acc[key] = (acc[key] || 0) + 1;
+    const orderStatusMap = filteredFlowOrders.reduce((acc, o) => {
+      const k = o.status || "pending";
+      acc[k] = (acc[k] || 0) + 1;
       return acc;
     }, {});
 
-    // Get total orders processed (delivered) filtered by period
     const totalOrders = orderStatusMap.delivered || 0;
 
-    // Get active partners count
-    // Shared scope for dashboard list parity:
-    // filter by zone if specified (not possible directly on Restaurant, using orders found in zone)
-    // Get all approved restaurants for counting
-    let allRestaurantMatch = {};
-    if (zoneMatcher) {
-      // Find restaurants that have at least one order in this zone
-      const restaurantIdsInZone = await Order.distinct("restaurantId", { "assignmentInfo.zoneId": zoneMatcher });
-      const ZoneModel = (await import("../models/Zone.js")).default;
-      const zones = await ZoneModel.find({ _id: zoneMatcher }).select("restaurantId").lean();
-      const directRestaurantId = zones[0]?.restaurantId;
-      
-      const combinedRestaurantIds = [...new Set([...restaurantIdsInZone, directRestaurantId].filter(id => id))];
-      
-      const validObjectIds = combinedRestaurantIds.filter(id => mongoose.Types.ObjectId.isValid(id)).map(id => new mongoose.Types.ObjectId(id));
-      const validStringIds = combinedRestaurantIds.filter(id => typeof id === 'string' && !mongoose.Types.ObjectId.isValid(id));
-
-      allRestaurantMatch.$or = [
-        { _id: { $in: validObjectIds } },
-        { restaurantId: { $in: validStringIds } }
-      ];
-    }
-
-    // Get all restaurants for counting to match DB state as requested
-    const allRestaurantQuery = { ...allRestaurantMatch };
-    const [allRestaurants, activeRestaurantsCountInDb] = await Promise.all([
-      Restaurant.find(allRestaurantQuery).select("_id isActive").lean(),
-      Restaurant.countDocuments({ ...allRestaurantQuery, isActive: true })
+    // 4. Partner Counts
+    const User = (await import("../../auth/models/User.js")).default;
+    const [zoneRestaurants, activeInDbCount] = await Promise.all([
+      Restaurant.find(restaurantMatch).select("_id isActive").lean(),
+      Restaurant.countDocuments({ ...restaurantMatch, isActive: true })
     ]);
 
-    // Update total restaurants count and active partners count based on all restaurants
-    const totalRestaurants = allRestaurants.length;
-    const activeRestaurantsCount = activeRestaurantsCountInDb;
-    
-    // Note: Delivery partners are stored in User model
-    const User = (await import("../../auth/models/User.js")).default;
-    // For now, only filter restaurants by zone as delivery boys move across zones
-    const activeDeliveryPartners = await User.countDocuments({
-      role: "delivery",
-      isActive: true,
-    });
-    const activePartners = activeRestaurantsCount + activeDeliveryPartners;
+    const totalRestaurants = zoneRestaurants.length;
+    const activeRestaurantsCount = activeInDbCount;
 
-    // Restaurant requests pending (inactive restaurants with completed onboarding, no rejection)
-    const pendingRestaurantRequestsQuery = {
-      $and: [
-        { "onboarding.completedSteps": { $gte: 4 } },
-        {
-          $or: [{ approvedAt: { $exists: false } }, { approvedAt: null }],
-        },
-        {
-          $or: [
-            { rejectionReason: { $exists: false } },
-            { rejectionReason: null },
-            { rejectionReason: "" },
-          ],
-        },
-      ],
-    };
-    const pendingRestaurantRequests = await Restaurant.countDocuments(
-      pendingRestaurantRequestsQuery,
-    );
+    const deliveryBoyQuery = { status: { $in: ["approved", "active"] } };
+    const deliveryPartnerMatch = { role: "delivery", isActive: true };
+    if (zoneIdString) {
+      const objId = new mongoose.Types.ObjectId(zoneIdString);
+      const boysInZone = await Delivery.find({ "availability.zones": objId }).distinct("_id");
+      deliveryBoyQuery["availability.zones"] = objId;
+      deliveryPartnerMatch._id = { $in: boysInZone };
+    }
 
-    // Total delivery boys should match Deliveryman List criteria.
-    // Deliveryman List shows partners with status in ['approved', 'active'].
-    const totalDeliveryBoys = await Delivery.countDocuments({
-      status: { $in: ["approved", "active"] },
-    });
+    const [totalDeliveryBoys, activeDeliveryPartners, realPendingDeliveryBoys] = await Promise.all([
+      Delivery.countDocuments(deliveryBoyQuery),
+      User.countDocuments(deliveryPartnerMatch),
+      Delivery.countDocuments({ status: "pending", ...(zoneIdString ? { "availability.zones": new mongoose.Types.ObjectId(zoneIdString) } : {}) })
+    ]);
 
-    // Delivery boy pending requests should match join-request screen criteria.
-    // Admin join requests are sourced from Delivery model with status='pending'.
-    const pendingDeliveryBoyRequests = await Delivery.countDocuments({
-      status: "pending",
-    });
-
-    const activeRestaurantObjectIds = allRestaurants.filter(r => r.isActive).map(r => r._id);
-
-    // Total foods (Menu items) - Count all individual menu items from active restaurant menus
-    // Count ALL items (including disabled sections, unavailable items, pending/approved, excluding only rejected)
+    // 5. Foods & Addons
     const Menu = (await import("../../restaurant/models/Menu.js")).default;
-    // Get all active menus and count items in sections and subsections
-    const activeMenus = await Menu.find({
-      isActive: true,
-      restaurant: { $in: activeRestaurantObjectIds },
-    })
-      .select("sections")
-      .lean();
-    let totalFoods = 0;
-    activeMenus.forEach((menu) => {
-      if (menu.sections && Array.isArray(menu.sections)) {
-        menu.sections.forEach((section) => {
-          // Count items from ALL sections (enabled and disabled)
-
-          // Count items directly in section (same as admin food list total view)
-          if (section.items && Array.isArray(section.items)) {
-            totalFoods += section.items.filter((item) => {
-              // Must have required fields
-              if (!item || !item.id || !item.name) return false;
-              // Count all items regardless of availability/approval status for dashboard list parity
-              return true;
-            }).length;
-          }
-          // Count items in subsections (same as admin food list total view)
-          if (section.subsections && Array.isArray(section.subsections)) {
-            section.subsections.forEach((subsection) => {
-              if (subsection.items && Array.isArray(subsection.items)) {
-                totalFoods += subsection.items.filter((item) => {
-                  // Must have required fields
-                  if (!item || !item.id || !item.name) return false;
-                  // Count all items regardless of availability/approval status for dashboard list parity
-                  return true;
-                }).length;
-              }
-            });
-          }
-        });
-      }
+    const activeMenus = await Menu.find({ isActive: true, restaurant: { $in: activeRestIds } }).select("sections addons").lean();
+    let totalFoods = 0, totalAddons = 0;
+    activeMenus.forEach(m => {
+      m.sections?.forEach(s => {
+        totalFoods += (s.items?.filter(i => i.id && i.name).length || 0);
+        s.subsections?.forEach(sub => totalFoods += (sub.items?.filter(i => i.id && i.name).length || 0));
+      });
+      totalAddons += (m.addons?.filter(a => a.id && a.name && a.approvalStatus !== "rejected").length || 0);
     });
 
-    // Total addons - align with /admin/addons list scope
-    // (active restaurants only, then count addons from their active menus)
-    let totalAddons = 0;
-    const menusWithAddons = await Menu.find({
-      isActive: true,
-      restaurant: { $in: activeRestaurantObjectIds },
-    })
-      .select("addons")
-      .lean();
-    menusWithAddons.forEach((menu) => {
-      // Only process if menu has addons array and it's not empty
-      if (
-        !menu.addons ||
-        !Array.isArray(menu.addons) ||
-        menu.addons.length === 0
-      ) {
-        return;
-      }
-
-      totalAddons += menu.addons.filter((addon) => {
-        // Only count if addon exists and has required fields (id and name are mandatory)
-        if (!addon || typeof addon !== "object") return false;
-        if (!addon.id || typeof addon.id !== "string" || addon.id.trim() === "")
-          return false;
-        if (
-          !addon.name ||
-          typeof addon.name !== "string" ||
-          addon.name.trim() === ""
-        )
-          return false;
-        // Exclude only rejected addons (include all others: pending, approved, available, unavailable)
-        if (addon.approvalStatus === "rejected") return false;
-        // Count all other addons regardless of availability or approval status
-        return true;
-      }).length;
-    });
-
-    // Total customers (users with role 'user' or no role specified)
-    const totalCustomers = await User.countDocuments({
-      $or: [{ role: "user" }, { role: { $exists: false } }, { role: null }],
-    });
-
-    // Keep dashboard "Pending orders" aligned with /admin/orders/pending list.
-    // Use a global count to ensure all orders awaiting processing are visible regardless of period.
-    const pendingOrdersQuery = { status: "pending" };
-    if (zoneMatcher) pendingOrdersQuery["assignmentInfo.zoneId"] = zoneMatcher;
-    const pendingOrders = await Order.countDocuments(pendingOrdersQuery);
-
-    // Completed orders (delivered orders)
-    const completedOrders = orderStatusMap.delivered || 0;
-
-    // Get recent activity (last 24 hours)
-    const last24Hours = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    const recentOrders = await Order.countDocuments({
-      createdAt: { $gte: last24Hours },
-    });
-    const recentRestaurants = await Restaurant.countDocuments({
-      createdAt: { $gte: last24Hours },
-      isActive: true,
-    });
-
-    // Build period-aware cash-flow chart data.
-    const chartBuckets = getDashboardChartBuckets(period, now);
-    const chartRangeStart = chartBuckets[0]?.start || new Date(now.getFullYear(), now.getMonth() - 11, 1);
-    const chartRangeEnd = chartBuckets[chartBuckets.length - 1]?.end || now;
-    
-    const chartOrderQuery = {
+    // 6. Last 30 Days Settlements
+    const last30Orders = await Order.find({
       status: "delivered",
-      deliveredAt: { $gte: chartRangeStart, $lte: chartRangeEnd },
-    };
-    if (zoneMatcher) chartOrderQuery["assignmentInfo.zoneId"] = zoneMatcher;
+      deliveredAt: { $gte: last30Days, $lte: now },
+      ...(zoneIdString ? { $or: [{ "assignmentInfo.zoneId": zoneIdString }, { restaurantId: { $in: restaurantIdsInZoneForQuery } }] } : {})
+    }).distinct("_id").lean();
 
-    const chartOrders = await Order.find(chartOrderQuery)
-      .select("_id pricing deliveredAt tracking createdAt")
-      .lean();
+    const last30Settlements = await OrderSettlement.find({ orderId: { $in: last30Orders } }).lean();
+    const last30DaysCommission = last30Settlements.reduce((sum, s) => sum + (s.adminEarning?.commission || 0), 0);
+    const last30DaysPlatformFee = last30Settlements.reduce((sum, s) => sum + (s.adminEarning?.platformFee || 0), 0);
+    const last30DaysDeliveryFee = last30Settlements.reduce((sum, s) => sum + (s.adminEarning?.deliveryFee || 0), 0);
+    const last30DaysDeliveryEarning = await getDeliveryEarningFromWallets(last30Days, now);
 
-    const chartOrderIds = chartOrders.map((order) => order._id);
-    const chartSettlements = await OrderSettlement.find({
-      orderId: { $in: chartOrderIds },
-    })
-      .select("orderId adminEarning")
-      .lean();
+    // 7. Graph Data
+    const chartBuckets = getDashboardChartBuckets(period, now);
+    const chartOrders = await Order.find({
+      status: "delivered",
+      deliveredAt: { $gte: chartBuckets[0].start, $lte: chartBuckets[chartBuckets.length - 1].end },
+      ...(zoneIdString ? { $or: [{ "assignmentInfo.zoneId": zoneIdString }, { restaurantId: { $in: restaurantIdsInZoneForQuery } }] } : {})
+    }).select("_id pricing deliveredAt tracking createdAt").lean();
 
-    const chartSettlementMap = new Map();
-    chartSettlements.forEach((settlement) => {
-      chartSettlementMap.set(String(settlement.orderId), settlement);
-    });
+    const chartSettlements = await OrderSettlement.find({ orderId: { $in: chartOrders.map(o => o._id) } }).select("orderId adminEarning").lean();
+    const chartSettlementMap = new Map(chartSettlements.map(s => [String(s.orderId), s]));
 
-    const monthlyData = chartBuckets.map((bucket) => {
-      let bucketRevenue = 0;
-      let bucketCommission = 0;
-      let bucketOrders = 0;
-
-      chartOrders.forEach((order) => {
-        const deliveredDate =
-          order?.deliveredAt || order?.tracking?.delivered?.timestamp || order?.createdAt;
-        if (!isBetweenDates(deliveredDate, bucket.start, bucket.end)) {
-          return;
-        }
-
-        bucketOrders += 1;
-        bucketRevenue += Number(order?.pricing?.total) || 0;
-
-        const settlement = chartSettlementMap.get(String(order._id));
-        if (settlement?.adminEarning) {
-          bucketCommission += Number(settlement.adminEarning.commission) || 0;
+    const monthlyData = chartBuckets.map(bucket => {
+      let revenue = 0, commission = 0, count = 0;
+      chartOrders.forEach(o => {
+        if (isBetweenDates(getDashboardOrderEventDate(o), bucket.start, bucket.end)) {
+          count++;
+          revenue += Number(o.pricing?.total) || 0;
+          const s = chartSettlementMap.get(String(o._id));
+          if (s?.adminEarning) commission += Number(s.adminEarning.commission) || 0;
         }
       });
-
-      return {
-        month: bucket.label,
-        revenue: Math.round(bucketRevenue * 100) / 100,
-        commission: Math.round(bucketCommission * 100) / 100,
-        orders: bucketOrders,
-      };
+      return { month: bucket.label, revenue: Math.round(revenue * 100) / 100, commission: Math.round(commission * 100) / 100, orders: count };
     });
 
+    const totalEarning = Math.round((await getDeliveryEarningFromWallets(periodStart, now)) * 100) / 100;
+    const totalGST = Math.round((revenueData.totalTax || 0) * 100) / 100;
+
     return successResponse(res, 200, "Dashboard stats retrieved successfully", {
-      revenue: {
-        total: revenueData.totalRevenue || 0,
-        last30Days: revenueData.last30DaysRevenue || 0,
-        currency: "INR",
-      },
-      commission: {
-        total: totalCommission,
-        last30Days: last30DaysCommission,
-        currency: "INR",
-      },
-      platformFee: {
-        total: totalPlatformFee,
-        last30Days: last30DaysPlatformFee,
-        currency: "INR",
-      },
-      deliveryFee: {
-        total: totalDeliveryFee,
-        last30Days: last30DaysDeliveryFee,
-        currency: "INR",
-      },
-      deliveryEarning: {
-        total: totalDeliveryEarning,
-        last30Days: Math.round(last30DaysDeliveryEarning * 100) / 100,
-        currency: "INR",
-      },
-      gst: {
-        total: totalGST,
-        last30Days: Math.round((revenueData.last30DaysTax || 0) * 100) / 100,
-        currency: "INR",
-      },
+      revenue: { total: revenueData.totalRevenue, last30Days: revenueData.last30DaysRevenue, currency: "INR" },
+      commission: { total: Math.round(totalCommission * 100) / 100, last30Days: Math.round(last30DaysCommission * 100) / 100, currency: "INR" },
+      platformFee: { total: Math.round(totalPlatformFee * 100) / 100, last30Days: Math.round(last30DaysPlatformFee * 100) / 100, currency: "INR" },
+      deliveryFee: { total: Math.round(totalDeliveryFee * 100) / 100, last30Days: Math.round(last30DaysDeliveryFee * 100) / 100, currency: "INR" },
+      deliveryEarning: { total: totalEarning, last30Days: Math.round(last30DaysDeliveryEarning * 100) / 100, currency: "INR" },
+      gst: { total: totalGST, last30Days: Math.round((revenueData.last30DaysTax || 0) * 100) / 100, currency: "INR" },
       totalAdminEarnings: {
-        total: totalCommission + totalPlatformFee + totalDeliveryFee + totalGST,
-        last30Days:
-          last30DaysCommission +
-          last30DaysPlatformFee +
-          last30DaysDeliveryFee +
-          last30DaysGST,
-        currency: "INR",
+        total: totalCommission + totalPlatformFee + totalDeliveryFee + totalGST + totalEarning,
+        last30Days: last30DaysCommission + last30DaysPlatformFee + last30DaysDeliveryFee + (Math.round((revenueData.last30DaysTax || 0) * 100) / 100) + last30DaysDeliveryEarning,
+        currency: "INR"
       },
       orders: {
         total: totalOrders,
@@ -668,41 +361,19 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
           cancelled: orderStatusMap.cancelled || 0,
         },
       },
-      partners: {
-        total: activePartners,
-        restaurants: activeRestaurantsCount,
-        delivery: activeDeliveryPartners,
-      },
+      partners: { total: activeRestaurantsCount + activeDeliveryPartners, restaurants: activeRestaurantsCount, delivery: activeDeliveryPartners },
       recentActivity: {
-        orders: recentOrders,
-        restaurants: recentRestaurants,
-        period: "last24Hours",
+        orders: await Order.countDocuments({ createdAt: { $gte: yesterday }, ...(zoneIdString ? { $or: [{ "assignmentInfo.zoneId": zoneIdString }, { restaurantId: { $in: restaurantIdsInZoneForQuery } }] } : {}) }),
+        restaurants: await Restaurant.countDocuments({ ...restaurantMatch, createdAt: { $gte: yesterday }, isActive: true }),
+        period: "last24Hours"
       },
-      monthlyData: monthlyData, // Add monthly data for graphs
-      // Additional stats
-      restaurants: {
-        total: totalRestaurants,
-        active: activeRestaurantsCount,
-        pendingRequests: pendingRestaurantRequests,
-      },
-      deliveryBoys: {
-        total: totalDeliveryBoys,
-        active: activeDeliveryPartners,
-        pendingRequests: pendingDeliveryBoyRequests,
-      },
-      foods: {
-        total: totalFoods,
-      },
-      addons: {
-        total: totalAddons,
-      },
-      customers: {
-        total: totalCustomers,
-      },
-      orderStats: {
-        pending: pendingOrders,
-        completed: completedOrders,
-      },
+      monthlyData,
+      restaurants: { total: totalRestaurants, active: activeRestaurantsCount, pendingRequests: await Restaurant.countDocuments({ ...restaurantMatch, "onboarding.completedSteps": { $gte: 4 }, approvedAt: null, $or: [{ rejectionReason: null }, { rejectionReason: "" }] }) },
+      deliveryBoys: { total: totalDeliveryBoys, active: activeDeliveryPartners, pendingRequests: realPendingDeliveryBoys },
+      foods: { total: totalFoods },
+      addons: { total: totalAddons },
+      customers: { total: await User.countDocuments({ $or: [{ role: "user" }, { role: null }] }) },
+      orderStats: { pending: await Order.countDocuments({ status: "pending", ...(zoneIdString ? { $or: [{ "assignmentInfo.zoneId": zoneIdString }, { restaurantId: { $in: restaurantIdsInZoneForQuery } }] } : {}) }), completed: totalOrders }
     });
   } catch (error) {
     logger.error(`Error fetching dashboard stats: ${error.message}`);
@@ -2377,15 +2048,15 @@ export const updateRestaurant = asyncHandler(async (req, res) => {
 
     if (panNumber !== undefined) restaurant.onboarding.step3.pan.panNumber = panNumber;
     if (nameOnPan !== undefined) restaurant.onboarding.step3.pan.nameOnPan = nameOnPan;
-    
+
     if (gstRegistered !== undefined) restaurant.onboarding.step3.gst.isRegistered = gstRegistered;
     if (gstNumber !== undefined) restaurant.onboarding.step3.gst.gstNumber = gstNumber;
     if (gstLegalName !== undefined) restaurant.onboarding.step3.gst.legalName = gstLegalName;
     if (gstAddress !== undefined) restaurant.onboarding.step3.gst.address = gstAddress;
-    
+
     if (fssaiNumber !== undefined) restaurant.onboarding.step3.fssai.registrationNumber = fssaiNumber;
     if (fssaiExpiry !== undefined) restaurant.onboarding.step3.fssai.expiryDate = fssaiExpiry;
-    
+
     if (accountNumber !== undefined) restaurant.onboarding.step3.bank.accountNumber = accountNumber;
     if (ifscCode !== undefined) restaurant.onboarding.step3.bank.ifscCode = ifscCode;
     if (accountHolderName !== undefined) restaurant.onboarding.step3.bank.accountHolderName = accountHolderName;
@@ -3936,7 +3607,7 @@ export const updateRestaurantMenuForAdmin = asyncHandler(async (req, res) => {
           gst: item.gst ?? 0,
           preparationTime: item.preparationTime || existingItem?.preparationTime || "",
           images: Array.isArray(item.images) ? item.images : (item.image ? [item.image] : []),
-          approvalStatus: 'approved', 
+          approvalStatus: 'approved',
           approvedAt: existingItem?.approvedAt || new Date(),
           approvedBy: req.user._id,
         };
@@ -4002,11 +3673,11 @@ export const updateRestaurantMenuForAdmin = asyncHandler(async (req, res) => {
 
   const updatedMenu = await Menu.findOneAndUpdate(
     { restaurant: restaurantId },
-    { 
-      $set: { 
+    {
+      $set: {
         sections: normalizedSections,
         isActive: true
-      } 
+      }
     },
     { new: true, upsert: true }
   );
@@ -4110,12 +3781,12 @@ export const updateAddonForAdmin = asyncHandler(async (req, res) => {
   if (name) addon.name = name.trim();
   if (description !== undefined) addon.description = description || '';
   if (price !== undefined) addon.price = Number(price) || 0;
-  
+
   if (images || image) {
     const normalizedImages = Array.isArray(images) && images.length > 0
       ? images.filter(img => img && typeof img === 'string' && img.trim() !== '')
       : (image && image.trim() !== '' ? [image] : []);
-    
+
     addon.images = normalizedImages;
     addon.image = normalizedImages.length > 0 ? normalizedImages[0] : '';
   }

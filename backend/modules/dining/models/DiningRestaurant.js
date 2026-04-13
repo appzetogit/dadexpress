@@ -46,9 +46,39 @@ const diningRestaurantSchema = new mongoose.Schema({
         unique: true,
         lowercase: true
     },
+    primaryContactNumber: {
+        type: String,
+        trim: true
+    },
+    phone: {
+        type: String,
+        trim: true
+    },
+    menuImages: [{
+        url: String,
+        publicId: String
+    }],
+    profileImage: {
+        url: String,
+        publicId: String
+    },
     coordinates: {
         latitude: { type: Number },
         longitude: { type: Number }
+    },
+    diningSettings: {
+        isEnabled: {
+            type: Boolean,
+            default: true
+        },
+        maxGuests: {
+            type: Number,
+            default: 10
+        },
+        diningType: {
+            type: String,
+            default: "family-dining"
+        }
     },
     isPopular: {
         type: Boolean,

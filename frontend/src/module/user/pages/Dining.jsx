@@ -637,7 +637,7 @@ export default function Dining() {
                       }
                     }}
                   >
-                    <Link to={`/user/restaurants/${restaurantSlug}`} className="h-full flex">
+                    <Link to={`/dining/${restaurant.diningSettings?.diningType || 'family-dining'}/${restaurantSlug}`} className="h-full flex">
                       <Card className="overflow-hidden gap-0 cursor-pointer border-0 dark:border-gray-800 group bg-white dark:bg-[#1a1a1a] shadow-md transition-all duration-500 py-0 rounded-2xl h-full flex flex-col w-full relative">
                         {/* Image Section */}
                         <div className="relative h-48 sm:h-56 md:h-60 lg:h-64 xl:h-72 w-full overflow-hidden rounded-t-2xl flex-shrink-0">
@@ -856,7 +856,7 @@ export default function Dining() {
                       }
                     }}
                   >
-                    <Link to={`/user/restaurants/${restaurantSlug}`} className="h-full flex">
+                    <Link to={`/dining/${restaurant.diningSettings?.diningType || 'family-dining'}/${restaurantSlug}`} className="h-full flex">
                       <Card className="overflow-hidden cursor-pointer border-0 dark:border-gray-800 group bg-white dark:bg-[#1a1a1a] shadow-md transition-all duration-500 py-0 rounded-2xl h-full flex flex-col w-full relative">
                         {/* Image Section */}
                         <div className="relative h-48 sm:h-56 md:h-60 lg:h-64 xl:h-72 w-full overflow-hidden rounded-t-2xl flex-shrink-0">
