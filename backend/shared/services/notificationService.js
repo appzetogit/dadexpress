@@ -73,7 +73,7 @@ class NotificationService {
                     clickAction: data.click_action || '/',
                     image: notification.image || logoUrl,
                     channelId: 'high_priority_notifications',
-                    vibrateTimings: [0, 500, 200, 500] // Powerful vibration
+                    vibrateTimings: ['0s', '0.5s', '0.2s', '0.5s'] // Powerful vibration format for FCM v1 API
                 },
             };
         } else if (platform === 'web') {
