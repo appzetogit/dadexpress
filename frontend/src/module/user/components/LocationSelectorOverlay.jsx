@@ -57,7 +57,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
     pathname.startsWith("/usermain/cart/")
   const inputRef = useRef(null)
   const [searchValue, setSearchValue] = useState("")
-  const { location, reverseGeocode } = useGeoLocation()
+  const { location, reverseGeocode, geocode } = useGeoLocation()
   const { addresses = [], addAddress, updateAddress, userProfile, setDefaultAddress } = useProfile()
   const [showAddressForm, setShowAddressForm] = useState(false)
   const [editingAddressId, setEditingAddressId] = useState(null)

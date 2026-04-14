@@ -170,6 +170,7 @@ export const API_ENDPOINTS = {
   },
   // Location endpoints
   LOCATION: {
+    GEOCODE: "/location/geocode",
     REVERSE_GEOCODE: "/location/reverse",
     NEARBY: "/location/nearby",
   },

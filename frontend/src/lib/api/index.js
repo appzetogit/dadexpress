@@ -269,7 +269,7 @@ export const locationAPI = {
   },
   // Geocode address to coordinates
   geocode: (address) => {
-    return apiClient.get(API_ENDPOINTS.LOCATION.GEOCODE || '/location/geocode', {
+    return apiClient.get(API_ENDPOINTS.LOCATION.GEOCODE, {
       params: { address },
     });
   },

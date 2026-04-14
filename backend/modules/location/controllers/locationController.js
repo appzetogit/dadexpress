@@ -848,7 +848,7 @@ export const geocode = async (req, res) => {
       logger.warn('Firebase geocode cache check failed', { error: cacheError.message });
     }
 
-    // 2. Use free Nominatim (OpenStreetMap) if not in cache (Free)
+    // 2. Use free Nominatim (OpenStreetMap) as primary fallback (Free)
     try {
       logger.info('Fetching geocode from OpenStreetMap (Free)', { address });
       const response = await axios.get('https://nominatim.openstreetmap.org/search', {
@@ -894,9 +894,63 @@ export const geocode = async (req, res) => {
       logger.error('Nominatim geocoding failed', { error: nominatimError.message });
     }
 
+    // 4. Use Google Maps as secondary fallback if available (Premium)
+    try {
+      const { getGoogleMapsApiKey } = await import('../../../shared/utils/envService.js');
+      const googleApiKey = await getGoogleMapsApiKey();
+      
+      if (googleApiKey) {
+        logger.info('Fetching geocode from Google Maps (Premium Fallback)', { address });
+        const response = await axios.get('https://maps.googleapis.com/maps/api/geocode/json', {
+          params: {
+            address: address,
+            key: googleApiKey,
+            language: 'en'
+          },
+          timeout: 5000
+        });
+
+        if (response.data && response.data.status === 'OK' && response.data.results && response.data.results.length > 0) {
+          const result = response.data.results[0];
+          const transformedData = {
+            lat: result.geometry.location.lat,
+            lng: result.geometry.location.lng,
+            displayName: result.formatted_address
+          };
+
+          // Update Firebase cache
+          try {
+            const { getFirebaseRealtimeDb, isFirebaseRealtimeAvailable } = await import('../../../config/firebaseRealtime.js');
+            if (isFirebaseRealtimeAvailable()) {
+              const db = getFirebaseRealtimeDb();
+              await db.ref(`geocode_cache/${cacheKey}`).set(transformedData);
+              logger.info('✅ Geocode result (Google) cached in Firebase', { address });
+            }
+          } catch (updateError) {
+            logger.warn('Failed to update Firebase geocode cache', { error: updateError.message });
+          }
+
+          return res.json({
+            success: true,
+            data: transformedData,
+            source: 'google_maps'
+          });
+        } else if (response.data && response.data.status === 'ZERO_RESULTS') {
+          logger.warn('Google Maps geocoding returned ZERO_RESULTS', { address });
+        } else {
+          logger.warn('Google Maps geocoding failed', { 
+            status: response.data?.status,
+            error_message: response.data?.error_message 
+          });
+        }
+      }
+    } catch (googleError) {
+      logger.error('Google Maps geocoding failed', { error: googleError.message });
+    }
+
     return res.status(404).json({
       success: false,
-      message: 'Location not found'
+      message: 'Location not found. Please try a more specific address.'
     });
   } catch (error) {
     logger.error('Geocode error', {
@@ -906,7 +960,7 @@ export const geocode = async (req, res) => {
 
     res.status(500).json({
       success: false,
-      message: 'Internal server error'
+      message: 'Internal server error while searching for location'
     });
   }
 };
