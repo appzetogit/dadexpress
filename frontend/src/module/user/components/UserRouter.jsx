@@ -104,15 +104,78 @@ export default function UserRouter() {
       <Routes>
         <Route element={<UserLayout />}>
           {/* Home & Discovery */}
-          <Route path="/" element={<Home />} />
-          <Route path="/dining" element={<Dining />} />
-          <Route path="/dining/restaurants" element={<DiningRestaurants />} />
-          <Route path="/dining/:category" element={<DiningCategory />} />
-          <Route path="/dining/explore/upto50" element={<DiningExplore50 />} />
-          <Route path="/dining/explore/near-rated" element={<DiningExploreNear />} />
-          <Route path="/dining/coffee" element={<Coffee />} />
-          <Route path="/dining/:diningType/:slug" element={<DiningRestaurantDetails />} />
-          <Route path="/dining/book/:slug" element={<TableBooking />} />
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute requiredRole="user" loginPath="/auth/sign-in">
+                <Home />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dining"
+            element={
+              <ProtectedRoute requiredRole="user" loginPath="/auth/sign-in">
+                <Dining />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dining/restaurants"
+            element={
+              <ProtectedRoute requiredRole="user" loginPath="/auth/sign-in">
+                <DiningRestaurants />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dining/:category"
+            element={
+              <ProtectedRoute requiredRole="user" loginPath="/auth/sign-in">
+                <DiningCategory />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dining/explore/upto50"
+            element={
+              <ProtectedRoute requiredRole="user" loginPath="/auth/sign-in">
+                <DiningExplore50 />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dining/explore/near-rated"
+            element={
+              <ProtectedRoute requiredRole="user" loginPath="/auth/sign-in">
+                <DiningExploreNear />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dining/coffee"
+            element={
+              <ProtectedRoute requiredRole="user" loginPath="/auth/sign-in">
+                <Coffee />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dining/:diningType/:slug"
+            element={
+              <ProtectedRoute requiredRole="user" loginPath="/auth/sign-in">
+                <DiningRestaurantDetails />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dining/book/:slug"
+            element={
+              <ProtectedRoute requiredRole="user" loginPath="/auth/sign-in">
+                <TableBooking />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/dining/book-confirmation"
             element={
@@ -137,12 +200,54 @@ export default function UserRouter() {
               </ProtectedRoute>
             }
           />
-          <Route path="/under-250" element={<Under250 />} />
-          <Route path="/category/:category" element={<CategoryPage />} />
-          <Route path="/restaurants" element={<Restaurants />} />
-          <Route path="/restaurants/:slug" element={<RestaurantDetails />} />
-          <Route path="/search" element={<SearchResults />} />
-          <Route path="/product/:id" element={<ProductDetail />} />
+          <Route
+            path="/under-250"
+            element={
+              <ProtectedRoute requiredRole="user" loginPath="/auth/sign-in">
+                <Under250 />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/category/:category"
+            element={
+              <ProtectedRoute requiredRole="user" loginPath="/auth/sign-in">
+                <CategoryPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/restaurants"
+            element={
+              <ProtectedRoute requiredRole="user" loginPath="/auth/sign-in">
+                <Restaurants />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/restaurants/:slug"
+            element={
+              <ProtectedRoute requiredRole="user" loginPath="/auth/sign-in">
+                <RestaurantDetails />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/search"
+            element={
+              <ProtectedRoute requiredRole="user" loginPath="/auth/sign-in">
+                <SearchResults />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/product/:id"
+            element={
+              <ProtectedRoute requiredRole="user" loginPath="/auth/sign-in">
+                <ProductDetail />
+              </ProtectedRoute>
+            }
+          />
 
           {/* Cart - Protected */}
           <Route

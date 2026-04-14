@@ -890,6 +890,7 @@ export const getUsers = asyncHandler(async (req, res) => {
  * Get User by ID with Full Details
  * GET /api/admin/users/:id
  */
+
 export const getUserById = asyncHandler(async (req, res) => {
   try {
     const { id } = req.params;
