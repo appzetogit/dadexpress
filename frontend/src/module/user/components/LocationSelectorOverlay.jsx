@@ -156,17 +156,13 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
 
   // Current location display - Show complete formatted address (SAVED ADDRESSES FORMAT)
   // Format should match saved addresses: "B2/4, Gandhi Park Colony, Anand Nagar, Indore, Madhya Pradesh, 452001"
+  // Show ALL parts of formattedAddress (like saved addresses show all parts)
   const currentLocationText = (() => {
-    // Helper to check for coordinates
-    const isCoordinateString = (str) => {
-      if (!str || typeof str !== 'string') return false
-      return /^-?\d+\.\d+,\s*-?\d+\.\d+$/.test(str.trim())
-    }
-
-    // Priority 0: Use currentAddress from map
+    // Priority 0: Use currentAddress from map (most up-to-date when user selects location on map)
+    // This is updated when map moves or "Use current location" is clicked
     if (currentAddress &&
       currentAddress !== "Select location" &&
-      !isCoordinateString(currentAddress)) {
+      !currentAddress.match(/^-?\d+\.\d+,\s*-?\d+\.\d+$/)) {
       // Remove "India" from the end if present
       let fullAddress = currentAddress
       if (fullAddress.endsWith(', India')) {
@@ -175,54 +171,73 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       return fullAddress
     }
 
-    // Priority 1: Use addressFormData.additionalDetails
+    // Priority 1: Use addressFormData.additionalDetails (updated when map moves)
+    // This contains the full formatted address from Google Maps Places API
     if (addressFormData.additionalDetails &&
       addressFormData.additionalDetails !== "Select location" &&
-      addressFormData.additionalDetails.trim() !== "" &&
-      !isCoordinateString(addressFormData.additionalDetails)) {
+      addressFormData.additionalDetails.trim() !== "") {
       let fullAddress = addressFormData.additionalDetails
       if (fullAddress.endsWith(', India')) {
         fullAddress = fullAddress.replace(', India', '').trim()
       }
-      return fullAddress
+      // Build complete address with all components
+      const addressParts = [fullAddress]
+      if (addressFormData.city) addressParts.push(addressFormData.city)
+      if (addressFormData.state) {
+        if (addressFormData.zipCode) {
+          addressParts.push(`${addressFormData.state} ${addressFormData.zipCode}`)
+        } else {
+          addressParts.push(addressFormData.state)
+        }
+      } else if (addressFormData.zipCode) {
+        addressParts.push(addressFormData.zipCode)
+      }
+      return addressParts.join(', ')
     }
 
-    // Priority 2: Use formattedAddress from location hook
+    // Priority 2: Use formattedAddress from location hook (complete detailed address) - SAVED ADDRESSES FORMAT
+    // Show full address with all parts (street, area, city, state, pincode) - just like saved addresses
     if (location?.formattedAddress &&
       location.formattedAddress !== "Select location" &&
-      !isCoordinateString(location.formattedAddress)) {
+      !location.formattedAddress.match(/^-?\d+\.\d+,\s*-?\d+\.\d+$/)) {
+      // Remove "India" from the end if present (saved addresses don't show country)
       let fullAddress = location.formattedAddress
       if (fullAddress.endsWith(', India')) {
         fullAddress = fullAddress.replace(', India', '').trim()
       }
+
+      // Show complete address - ALL parts (like saved addresses format)
+      // Saved addresses format: "additionalDetails, street, city, state, zipCode"
+      // Current location format: "POI, Building, Floor, Area, City, State, Pincode"
       return fullAddress
     }
 
-    // Priority 3: Build address from components
+    // Priority 3: Build address from components (SAVED ADDRESSES FORMAT)
+    // Format: "street/area, city, state, pincode" (matching saved addresses)
     if (location?.address || location?.area || location?.street) {
       const addressParts = []
 
-      // Add street/address/area
-      if (location.address && location.address !== "Select location" && !isCoordinateString(location.address)) {
+      // Add street/address/area (like saved addresses' additionalDetails + street)
+      if (location.address && location.address !== "Select location") {
         addressParts.push(location.address)
-      } else if (location.area && !isCoordinateString(location.area)) {
+      } else if (location.area) {
         addressParts.push(location.area)
-      } else if (location.street && !isCoordinateString(location.street)) {
+      } else if (location.street) {
         addressParts.push(location.street)
       }
 
       // Add city
-      if (location.city && !isCoordinateString(location.city)) {
+      if (location.city) {
         addressParts.push(location.city)
       }
 
       // Add state
-      if (location.state && !isCoordinateString(location.state)) {
+      if (location.state) {
         addressParts.push(location.state)
       }
 
-      // Add pincode
-      if (location.postalCode && !isCoordinateString(location.postalCode)) {
+      // Add pincode (like saved addresses show zipCode)
+      if (location.postalCode) {
         addressParts.push(location.postalCode)
       }
 
@@ -231,13 +246,27 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       }
     }
 
-    // Final fallback
-    if (location?.city && location?.city !== "Current Location") return location.city
-    if (location?.area) return location.area
-    
-    return "Detecting address..."
-  })()
+    // Priority 3: Use area + city + state + pincode
+    if (location?.area && location?.city && location?.state) {
+      const parts = [location.area, location.city, location.state]
+      if (location.postalCode) {
+        parts.push(location.postalCode)
+      }
+      return parts.join(', ')
+    }
 
+    // Priority 4: Fallback to city + state + pincode
+    if (location?.city && location?.state) {
+      const parts = [location.city, location.state]
+      if (location.postalCode) {
+        parts.push(location.postalCode)
+      }
+      return parts.join(', ')
+    }
+
+    // Final fallback
+    return location?.city || location?.area || "Detecting location..."
+  })()
 
   // Global error suppression for Ola Maps SDK errors (runs on component mount)
   useEffect(() => {
@@ -2083,7 +2112,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
     }
 
     if (!normalizedCurrentAddress || normalizedCurrentAddress === "Select location" || isCoordinateText) {
-      return "Select location on map"
+      return normalizedCurrentAddress || "Select location on map"
     }
 
     if (zipCode && !normalizedCurrentAddress.includes(zipCode)) {

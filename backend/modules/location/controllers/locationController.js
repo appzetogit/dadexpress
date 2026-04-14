@@ -61,7 +61,7 @@ export const reverseGeocode = async (req, res) => {
       logger.warn('Firebase cache check failed', { error: cacheError.message });
     }
 
-    // 2. Use free Nominatim (OpenStreetMap) as primary fallback (Free)
+    // 2. Use free Nominatim (OpenStreetMap) if not in cache (Free, no bill)
     try {
       logger.info('Fetching from OpenStreetMap (Free)', { lat: latNum, lng: lngNum });
       const response = await axios.get('https://nominatim.openstreetmap.org/reverse', {
@@ -103,7 +103,7 @@ export const reverseGeocode = async (req, res) => {
           }]
         };
 
-        // 3. Update Firebase with new lat/long and address
+        // 3. Update Firebase with new lat/long and address (as requested)
         try {
           const { getFirebaseRealtimeDb, isFirebaseRealtimeAvailable } = await import('../../../config/firebaseRealtime.js');
           if (isFirebaseRealtimeAvailable()) {
@@ -122,77 +122,7 @@ export const reverseGeocode = async (req, res) => {
         });
       }
     } catch (nominatimError) {
-      logger.error('Nominatim reverse geocoding failed', { error: nominatimError.message });
-    }
-
-    // 4. Use Google Maps as secondary fallback if available (Premium)
-    try {
-      const { getGoogleMapsApiKey } = await import('../../../shared/utils/envService.js');
-      const googleApiKey = await getGoogleMapsApiKey();
-      
-      if (googleApiKey) {
-        logger.info('Fetching from Google Maps (Premium Fallback)', { lat: latNum, lng: lngNum });
-        const response = await axios.get('https://maps.googleapis.com/maps/api/geocode/json', {
-          params: {
-            latlng: `${latNum},${lngNum}`,
-            key: googleApiKey,
-            language: 'en'
-          },
-          timeout: 5000
-        });
-
-        if (response.data && response.data.status === 'OK' && response.data.results && response.data.results.length > 0) {
-          const result = response.data.results[0];
-          
-          // Extract address components
-          const components = {};
-          result.address_components.forEach(comp => {
-            const types = comp.types || [];
-            if (types.includes('locality')) components.city = comp.long_name;
-            else if (types.includes('administrative_area_level_1')) components.state = comp.long_name;
-            else if (types.includes('country')) components.country = comp.long_name;
-            else if (types.includes('sublocality') || types.includes('neighborhood')) components.area = comp.long_name;
-          });
-
-          const transformedData = {
-            results: [{
-              formatted_address: result.formatted_address,
-              address_components: {
-                city: components.city || '',
-                state: components.state || '',
-                country: components.country || '',
-                area: components.area || ''
-              },
-              geometry: {
-                location: {
-                  lat: latNum,
-                  lng: lngNum
-                }
-              }
-            }]
-          };
-
-          // Update Firebase cache
-          try {
-            const { getFirebaseRealtimeDb, isFirebaseRealtimeAvailable } = await import('../../../config/firebaseRealtime.js');
-            if (isFirebaseRealtimeAvailable()) {
-              const db = getFirebaseRealtimeDb();
-              await db.ref(`address_cache/${cacheKey}`).set(transformedData);
-              logger.info('✅ Address (Google) cached in Firebase', { cacheKey });
-            }
-          } catch (updateError) {
-            logger.warn('Failed to update Firebase cache', { error: updateError.message });
-          }
-
-          return res.json({
-            success: true,
-            data: transformedData,
-            source: 'google_maps'
-          });
-        }
-      }
-    } catch (googleError) {
-      logger.error('Google Maps reverse geocoding failed', { error: googleError.message });
+      logger.error('Nominatim geocoding failed', { error: nominatimError.message });
     }
 
     // Fallback: minimal data if all else fails
@@ -227,7 +157,8 @@ export const reverseGeocode = async (req, res) => {
 
     res.status(500).json({
       success: false,
-      message: 'Internal server error while fetching address'
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
