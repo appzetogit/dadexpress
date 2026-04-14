@@ -267,12 +267,6 @@ export const locationAPI = {
       params: { lat, lng },
     });
   },
-  // Geocode address to coordinates
-  geocode: (address) => {
-    return apiClient.get(API_ENDPOINTS.LOCATION.GEOCODE, {
-      params: { address },
-    });
-  },
   // Get nearby locations
   getNearbyLocations: (lat, lng, radius = 500, query = "") => {
     return apiClient.get(API_ENDPOINTS.LOCATION.NEARBY, {

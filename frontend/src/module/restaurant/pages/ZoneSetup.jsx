@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import { MapPin, Search, Save, Loader2, ArrowLeft } from "lucide-react"
 import RestaurantNavbar from "../components/RestaurantNavbar"
-import { restaurantAPI, locationAPI } from "@/lib/api"
+import { restaurantAPI } from "@/lib/api"
 import { getGoogleMapsApiKey } from "@/lib/utils/googleMapsApiKey"
 import { Loader } from "@googlemaps/js-api-loader"
 
@@ -219,27 +219,34 @@ export default function ZoneSetup() {
       })
 
       mapInstanceRef.current = map
+      geocoderRef.current = new google.maps.Geocoder()
       console.log("✅ Map initialized successfully")
 
       // Add click listener to place marker
-      map.addListener('click', async (event) => {
+      map.addListener('click', (event) => {
         const lat = event.latLng.lat()
         const lng = event.latLng.lng()
 
-        try {
-          // Use our FREE reverse geocode instead of Google Geocoder
-          const response = await locationAPI.reverseGeocode(lat, lng)
-          if (response?.data?.success && response.data.data?.results?.[0]) {
-            const address = response.data.data.results[0].formatted_address
-            setLocationSearch(address)
-            setSelectedAddress(address)
-            setSelectedLocation({ lat, lng, address })
-            updateMarker(lat, lng, address)
-          } else {
-            throw new Error('Geocode failed')
-          }
-        } catch (error) {
-          console.warn("Reverse geocoding failed, using coordinates", error)
+        // Perform reverse geocoding to get human-readable address
+        if (geocoderRef.current) {
+          geocoderRef.current.geocode({ location: { lat, lng } }, (results, status) => {
+            if (status === 'OK' && results[0]) {
+              const address = results[0].formatted_address
+              setLocationSearch(address)
+              setSelectedAddress(address)
+              setSelectedLocation({ lat, lng, address })
+              updateMarker(lat, lng, address)
+            } else {
+              // Fallback to coordinates if geocoding fails
+              const address = `${lat.toFixed(6)}, ${lng.toFixed(6)}`
+              setLocationSearch(address)
+              setSelectedAddress(address)
+              setSelectedLocation({ lat, lng, address })
+              updateMarker(lat, lng, address)
+            }
+          })
+        } else {
+          // Fallback if geocoder is not available
           const address = `${lat.toFixed(6)}, ${lng.toFixed(6)}`
           setLocationSearch(address)
           setSelectedAddress(address)
@@ -289,23 +296,27 @@ export default function ZoneSetup() {
     })
 
     // Update location when marker is dragged
-    marker.addListener('dragend', async (event) => {
+    marker.addListener('dragend', (event) => {
       const newLat = event.latLng.lat()
       const newLng = event.latLng.lng()
 
-      try {
-        // Use our FREE reverse geocode instead of Google Geocoder
-        const response = await locationAPI.reverseGeocode(newLat, newLng)
-        if (response?.data?.success && response.data.data?.results?.[0]) {
-          const newAddress = response.data.data.results[0].formatted_address
-          setLocationSearch(newAddress)
-          setSelectedAddress(newAddress)
-          setSelectedLocation({ lat: newLat, lng: newLng, address: newAddress })
-        } else {
-          throw new Error('Geocode failed')
-        }
-      } catch (error) {
-        console.warn("Reverse geocoding failed, using coordinates", error)
+      // Perform reverse geocoding to get human-readable address
+      if (geocoderRef.current) {
+        geocoderRef.current.geocode({ location: { lat: newLat, lng: newLng } }, (results, status) => {
+          if (status === 'OK' && results[0]) {
+            const newAddress = results[0].formatted_address
+            setLocationSearch(newAddress)
+            setSelectedAddress(newAddress)
+            setSelectedLocation({ lat: newLat, lng: newLng, address: newAddress })
+          } else {
+            // Fallback to coordinates
+            const newAddress = `${newLat.toFixed(6)}, ${newLng.toFixed(6)}`
+            setLocationSearch(newAddress)
+            setSelectedAddress(newAddress)
+            setSelectedLocation({ lat: newLat, lng: newLng, address: newAddress })
+          }
+        })
+      } else {
         const newAddress = `${newLat.toFixed(6)}, ${newLng.toFixed(6)}`
         setLocationSearch(newAddress)
         setSelectedAddress(newAddress)

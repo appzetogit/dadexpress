@@ -38,7 +38,7 @@ import { useSelectedDeliveryAddress } from "../hooks/useSelectedDeliveryAddress"
 import { resolveActiveLocation, resolveDeliveryAddress } from "../utils/deliveryAddress"
 import quickSpicyLogo from "@/assets/quicky-spicy-logo.png"
 import offerImage from "@/assets/offerimage.png"
-import api, { restaurantAPI, zoneAPI, locationAPI } from "@/lib/api"
+import api, { restaurantAPI, zoneAPI } from "@/lib/api"
 import { API_BASE_URL } from "@/lib/api/config"
 import OptimizedImage from "@/components/OptimizedImage"
 // Explore More Icons
@@ -159,15 +159,22 @@ const normalizeCityName = (value) =>
 const geocodeAddressCoords = async (address) => {
   const query = getAddressSearchQuery(address)
   if (!query) return null
-  try {
-    const response = await locationAPI.geocode(query)
-    if (response?.data?.success && response.data.data) {
-      return { 
-        lat: response.data.data.lat, 
-        lng: response.data.data.lng 
-      }
-    }
+  if (
+    typeof window === "undefined" ||
+    !window.google?.maps?.Geocoder
+  ) {
     return null
+  }
+
+  const geocoder = new window.google.maps.Geocoder()
+  try {
+    const geocodeResult = await geocoder.geocode({ address: query })
+    const result = geocodeResult?.results?.[0]
+    const location = result?.geometry?.location
+    const lat = typeof location?.lat === "function" ? toNumber(location.lat()) : null
+    const lng = typeof location?.lng === "function" ? toNumber(location.lng()) : null
+    if (!lat || !lng) return null
+    return { lat, lng }
   } catch (error) {
     console.error("Address geocoding failed:", error)
     return null

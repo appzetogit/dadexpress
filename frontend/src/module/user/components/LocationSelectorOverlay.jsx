@@ -57,7 +57,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
     pathname.startsWith("/usermain/cart/")
   const inputRef = useRef(null)
   const [searchValue, setSearchValue] = useState("")
-  const { location, reverseGeocode, geocode } = useGeoLocation()
+  const { location, reverseGeocode } = useGeoLocation()
   const { addresses = [], addAddress, updateAddress, userProfile, setDefaultAddress } = useProfile()
   const [showAddressForm, setShowAddressForm] = useState(false)
   const [editingAddressId, setEditingAddressId] = useState(null)
@@ -1863,73 +1863,89 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
   }
 
   const handleSearchLocation = async (query) => {
-    if (!query) return
+    if (!query || !window.google || !window.google.maps || !googleMapRef.current) return
     const trimmedQuery = query.trim()
     if (!trimmedQuery) return
 
     setMapLoading(true)
     try {
-      // Use our BACKEND geocode (Free + Caching)
-      const data = await geocode(trimmedQuery)
-      
-      const lat = data.lat
-      const lng = data.lng
-      const formattedAddress = data.displayName || data.formatted_address || trimmedQuery
-      
-      console.log("🔍 Search result from Backend (Free/Cached):", { lat, lng, address: formattedAddress })
-      
-      if (googleMapRef.current) {
-        googleMapRef.current.panTo({ lat, lng })
-        googleMapRef.current.setZoom(17)
+      const service = new window.google.maps.places.PlacesService(googleMapRef.current)
+      const request = {
+        query: trimmedQuery,
+        fields: ["geometry", "formatted_address", "name"],
       }
-      
-      if (greenMarkerRef.current) {
-        greenMarkerRef.current.setPosition({ lat, lng })
-      }
-      
-      // Extract address components for form update
-      let street = ""
-      let city = ""
-      let state = ""
-      let zip = ""
-      
-      if (formattedAddress) {
-        const parts = formattedAddress.split(",").map(p => p.trim())
-        if (parts.length >= 3) {
-          const stateInfo = parts[parts.length - 2]
-          const cityInfo = parts[parts.length - 3]
-          const zipMatch = stateInfo.match(/\d{6}/)
-          if (zipMatch) zip = zipMatch[0]
+
+      service.findPlaceFromQuery(request, (results, status) => {
+        if (status === window.google.maps.places.PlacesServiceStatus.OK && results && results[0]) {
+          const place = results[0]
+          const lat = place.geometry.location.lat()
+          const lng = place.geometry.location.lng()
           
-          state = stateInfo.replace(/\d{6}/, "").trim()
-          city = cityInfo
-          street = parts.slice(0, parts.length - 3).join(", ")
-        } else if (parts.length === 2) {
-          city = parts[0]
-          state = parts[1]
+          console.log("🔍 Search result:", { lat, lng, address: place.formatted_address })
+          
+          googleMapRef.current.panTo({ lat, lng })
+          googleMapRef.current.setZoom(17)
+          
+          if (greenMarkerRef.current) {
+            greenMarkerRef.current.setPosition({ lat, lng })
+          }
+          
+          // Extract address components for form update (from formatted_address parsing since components not avail)
+          let street = ""
+          let city = ""
+          let state = ""
+          let zip = ""
+          
+          if (place.formatted_address) {
+            const parts = place.formatted_address.split(",").map(p => p.trim())
+            // Agra, Uttar Pradesh, India
+            if (parts.length >= 3) {
+              const country = parts[parts.length - 1]
+              const stateInfo = parts[parts.length - 2] // "Uttar Pradesh" or "Madhya Pradesh 452010"
+              const cityInfo = parts[parts.length - 3]  // "Agra" or "Indore"
+              
+              // Extract pincode from state info if possible (e.g. "Madhya Pradesh 452010")
+              const zipMatch = stateInfo.match(/\d{6}/)
+              if (zipMatch) zip = zipMatch[0]
+              
+              state = stateInfo.replace(/\d{6}/, "").trim()
+              city = cityInfo
+              street = parts.slice(0, parts.length - 3).join(", ")
+            } else if (parts.length === 2) {
+              city = parts[0]
+              state = parts[1]
+            }
+          }
+
+          // Use place name/address if specific components not found
+          const finalStreet = street || place.name || (place.formatted_address ? place.formatted_address.split(',')[0] : "")
+
+          // Set active location for the map
+          setMapPosition([lat, lng])
+
+          // Update form data with search results
+          setAddressFormData(prev => ({
+            ...prev,
+            street: finalStreet || prev.street,
+            city: city || prev.city,
+            state: state || prev.state,
+            zipCode: zip || prev.zipCode,
+            additionalDetails: (place.formatted_address || prev.additionalDetails)
+          }))
+          
+          // Use setTimeout to allow map pan to finish slightly before processing updates
+          setTimeout(() => {
+            handleMapMoveEnd(lat, lng)
+            setCurrentAddress(place.formatted_address || `${lat.toFixed(6)}, ${lng.toFixed(6)}`)
+          }, 300)
+        } else {
+          console.warn("🔍 Search failed or no results:", status)
+          toast.error("Location not found")
         }
-      }
-
-      setMapPosition([lat, lng])
-
-      // Update form data with search results
-      setAddressFormData(prev => ({
-        ...prev,
-        street: street || trimmedQuery.split(',')[0],
-        city: city || prev.city,
-        state: state || prev.state,
-        zipCode: zip || prev.zipCode,
-        additionalDetails: formattedAddress
-      }))
-      
-      setTimeout(() => {
-        handleMapMoveEnd(lat, lng)
-        setCurrentAddress(formattedAddress)
-      }, 300)
+        setMapLoading(false)
+      })
     } catch (error) {
       console.error("❌ Search error:", error)
-      toast.error("Location not found")
-    } finally {
       setMapLoading(false)
     }
   }
