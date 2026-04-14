@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react"
-import { Eye, Download, ArrowUpDown, Loader2, Check, X, Trash2 } from "lucide-react"
+import { Eye, Download, ArrowUpDown, Loader2, Check, X, Trash2, RefreshCw, XCircle } from "lucide-react"
 
 const getStatusColor = (orderStatus) => {
   const colors = {
@@ -14,6 +14,7 @@ const getStatusColor = (orderStatus) => {
     "Cancelled by User": "bg-orange-100 text-orange-700",
     "Payment Failed": "bg-red-100 text-red-700",
     "Refunded": "bg-sky-100 text-sky-700",
+    "Ready": "bg-indigo-100 text-indigo-700",
     "Dine In": "bg-indigo-100 text-indigo-700",
     "Offline Payments": "bg-slate-100 text-slate-700",
   }
@@ -33,6 +34,8 @@ export default function OrdersTable({
   onPrintOrder,
   onRefund,
   onDeleteOrder,
+  onCancelOrder,
+  onResendNotification,
   onAcceptOrder,
   onRejectOrder,
   actionLoadingOrderId,
@@ -383,6 +386,36 @@ export default function OrdersTable({
                             <Loader2 className="w-4 h-4 animate-spin" />
                           ) : (
                             <Trash2 className="w-4 h-4" />
+                          )}
+                        </button>
+                      )}
+                      {/* Resend Notification Button */}
+                      {onResendNotification && (order.orderStatus === "Accepted" || order.orderStatus === "Processing" || order.orderStatus === "Ready") && (
+                        <button
+                          onClick={() => onResendNotification(order)}
+                          disabled={actionLoadingOrderId === (order.id || order.orderId)}
+                          className="p-1.5 rounded text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Resend Notification to Riders"
+                        >
+                          {actionLoadingOrderId === (order.id || order.orderId) ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <RefreshCw className="w-4 h-4" />
+                          )}
+                        </button>
+                      )}
+                      {/* Cancel Order Button */}
+                      {onCancelOrder && !["Delivered", "Canceled", "Cancelled by Restaurant", "Cancelled by User", "Refunded"].includes(order.orderStatus) && (
+                        <button
+                          onClick={() => onCancelOrder(order)}
+                          disabled={actionLoadingOrderId === (order.id || order.orderId)}
+                          className="p-1.5 rounded text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Cancel Order"
+                        >
+                          {actionLoadingOrderId === (order.id || order.orderId) ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <XCircle className="w-4 h-4" />
                           )}
                         </button>
                       )}

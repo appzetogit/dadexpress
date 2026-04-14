@@ -2519,3 +2519,123 @@ export const assignDeliveryPartner = asyncHandler(async (req, res) => {
   }
 });
 
+/**
+ * Resend delivery notification (admin)
+ * POST /api/admin/orders/:id/resend-delivery-notification
+ */
+export const resendDeliveryNotification = asyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+    const order = await findOrderByIdOrOrderId(id);
+
+    if (!order) {
+      return errorResponse(res, 404, 'Order not found');
+    }
+
+    // Check if order is in valid status (preparing or ready or confirmed)
+    if (!['preparing', 'ready', 'confirmed'].includes(order.status)) {
+       return errorResponse(res, 400, `Cannot resend notification. Order status must be 'preparing' or 'ready'. Current status: ${order.status}`);
+    }
+
+    const Restaurant = (await import('../../restaurant/models/Restaurant.js')).default;
+    let restaurantDoc = await Restaurant.findById(order.restaurantId).select('restaurantId location').lean();
+
+    if (!restaurantDoc) {
+      restaurantDoc = await Restaurant.findOne({
+        $or: [{ restaurantId: order.restaurantId }, { _id: order.restaurantId }],
+      }).select('restaurantId location').lean();
+    }
+
+    const coordinates = (() => {
+      const coords = restaurantDoc?.location?.coordinates;
+      if (Array.isArray(coords) && coords.length >= 2) {
+        return [Number(coords[0]), Number(coords[1])];
+      }
+      return [Number(restaurantDoc?.location?.longitude), Number(restaurantDoc?.location?.latitude)];
+    })();
+
+    if (!coordinates[0] || !coordinates[1]) {
+      return errorResponse(res, 400, 'Restaurant location not found');
+    }
+
+    const [lng, lat] = coordinates;
+
+    // Find nearest delivery boys
+    const deliveryBoys = await findNearestDeliveryBoys(
+      lat,
+      lng,
+      order.restaurantId,
+      50, // 50km radius
+      25, // Top 25
+      order
+    );
+
+    if (!deliveryBoys || deliveryBoys.length === 0) {
+      return errorResponse(res, 404, 'No delivery partners available');
+    }
+
+    const deliveryPartnerIds = deliveryBoys.map(db => db.deliveryPartnerId);
+    
+    // Update assignment info
+    await Order.findByIdAndUpdate(order._id, {
+      $set: {
+        'assignmentInfo.priorityDeliveryPartnerIds': deliveryPartnerIds,
+        'assignmentInfo.assignedBy': 'admin_resend',
+        'assignmentInfo.assignedAt': new Date()
+      }
+    });
+
+    const populatedOrder = await Order.findById(order._id)
+      .populate('userId', 'name phone')
+      .populate('restaurantId', 'name location address phone ownerPhone')
+      .lean();
+
+    if (populatedOrder) {
+      await notifyMultipleDeliveryBoys(populatedOrder, deliveryPartnerIds, 'priority');
+    }
+    
+    return successResponse(res, 200, `Notification resent to ${deliveryPartnerIds.length} delivery partners`);
+  } catch (error) {
+    console.error('Error resending delivery notification by admin:', error);
+    return errorResponse(res, 500, `Failed to resend notification: ${error.message}`);
+  }
+});
+
+/**
+ * Cancel order (admin)
+ * PATCH /api/admin/orders/:id/cancel
+ */
+export const cancelOrder = asyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+    const order = await findOrderByIdOrOrderId(id);
+
+    if (!order) {
+      return errorResponse(res, 400, 'Order not found');
+    }
+
+    if (order.status === 'cancelled' || order.status === 'delivered') {
+      return errorResponse(res, 400, `Order is already ${order.status}`);
+    }
+
+    order.status = 'cancelled';
+    order.cancelledBy = 'admin';
+    order.cancelledAt = new Date();
+    order.cancellationReason = reason || 'Order cancelled by admin';
+
+    await order.save();
+
+    return successResponse(res, 200, 'Order cancelled successfully', {
+      order: {
+        id: order._id.toString(),
+        orderId: order.orderId,
+        status: order.status
+      }
+    });
+  } catch (error) {
+    console.error('Error cancelling order by admin:', error);
+    return errorResponse(res, 500, 'Failed to cancel order');
+  }
+});
+

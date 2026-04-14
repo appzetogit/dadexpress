@@ -188,6 +188,10 @@ const restaurantSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    costForTwo: {
+      type: Number,
+      default: 1400,
+    },
     // Onboarding fields (merged from RestaurantOnboarding)
     onboarding: {
       step1: {

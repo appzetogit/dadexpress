@@ -374,7 +374,7 @@ export const getRestaurants = async (req, res) => {
         // we "suggest" it's open if it's within timings 
         // (the Cron job will sync the DB eventually)
         if (isCurrentlyOpen && r.isAcceptingOrders === false) {
-           return { ...r, isAcceptingOrders: true, status: "Open" };
+           return { ...r, isAcceptingOrders: false, status: "Closed" };
         }
         return r;
       }),
@@ -459,8 +459,9 @@ export const getRestaurantById = async (req, res) => {
       restaurant.isAcceptingOrders = false;
       restaurant.status = 'Closed';
     } else if (isCurrentlyOpen && restaurant.isAcceptingOrders === false) {
-      restaurant.isAcceptingOrders = true;
-      restaurant.status = 'Open';
+      // Respect manual "Closed" status even if within timings
+      restaurant.isAcceptingOrders = false;
+      restaurant.status = 'Closed';
     }
 
     return successResponse(res, 200, 'Restaurant retrieved successfully', {
@@ -576,6 +577,8 @@ export const createRestaurantFromOnboarding = async (onboardingData, restaurantI
       if (step4.featuredDish) existing.featuredDish = step4.featuredDish;
       if (step4.featuredPrice !== undefined) existing.featuredPrice = step4.featuredPrice;
       if (step4.offer) existing.offer = step4.offer;
+      if (step4.costForTwo !== undefined) existing.costForTwo = step4.costForTwo;
+      if (step4.diningSettings) existing.diningSettings = step4.diningSettings;
     }
     
     existing.isActive = true; // Ensure it's active
@@ -627,7 +630,7 @@ export const createRestaurantFromOnboarding = async (onboardingData, restaurantI
 export const updateRestaurantProfile = asyncHandler(async (req, res) => {
   try {
     const restaurantId = req.restaurant._id;
-    const { profileImage, menuImages, name, cuisines, location, ownerName, ownerEmail, ownerPhone, bank } = req.body;
+    const { profileImage, menuImages, name, cuisines, location, ownerName, ownerEmail, ownerPhone, bank, costForTwo, diningSettings } = req.body;
 
     const restaurant = await Restaurant.findById(restaurantId);
 
@@ -726,6 +729,12 @@ export const updateRestaurantProfile = asyncHandler(async (req, res) => {
     if (bank !== undefined) {
       updateData.bank = bank;
     }
+    if (costForTwo !== undefined) {
+      updateData.costForTwo = costForTwo;
+    }
+    if (diningSettings !== undefined) {
+      updateData.diningSettings = diningSettings;
+    }
 
     // Update restaurant
     Object.assign(restaurant, updateData);
@@ -745,6 +754,8 @@ export const updateRestaurantProfile = asyncHandler(async (req, res) => {
         ownerEmail: restaurant.ownerEmail,
         ownerPhone: restaurant.ownerPhone,
         bank: restaurant.bank,
+        costForTwo: restaurant.costForTwo,
+        diningSettings: restaurant.diningSettings,
       }
     });
   } catch (error) {

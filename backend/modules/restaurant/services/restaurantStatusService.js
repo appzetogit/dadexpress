@@ -24,12 +24,14 @@ export const processAutoStatusUpdates = async () => {
           return 'closed';
         } 
         
+        /* 
         // If it should be open but it's currently marked as closed -> Open it
         // This handles "Na hi open ho rhe hai" issue.
         if (shouldBeOpen && currentStatus === false) {
           await Restaurant.findByIdAndUpdate(r._id, { isAcceptingOrders: true });
           return 'opened';
         }
+        */
 
         return 'no-change';
       } catch (err) {

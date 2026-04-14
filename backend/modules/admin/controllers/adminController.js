@@ -1843,6 +1843,7 @@ export const updateRestaurant = asyncHandler(async (req, res) => {
       featuredPrice,
       offer,
       rating,
+      costForTwo,
       diningSettings,
     } = req.body;
 
@@ -2001,6 +2002,7 @@ export const updateRestaurant = asyncHandler(async (req, res) => {
     if (featuredDish !== undefined) restaurant.featuredDish = featuredDish;
     if (featuredPrice !== undefined) restaurant.featuredPrice = parseFloat(featuredPrice) || restaurant.featuredPrice;
     if (offer !== undefined) restaurant.offer = offer;
+    if (costForTwo !== undefined) restaurant.costForTwo = parseFloat(costForTwo) || restaurant.costForTwo;
     if (rating !== undefined) {
       const parsedRating = Number(rating);
       // Admin rating is constrained to 0-5. Keep it an integer for consistent star UI.
@@ -2068,6 +2070,8 @@ export const updateRestaurant = asyncHandler(async (req, res) => {
     if (featuredDish !== undefined) restaurant.onboarding.step4.featuredDish = featuredDish;
     if (featuredPrice !== undefined) restaurant.onboarding.step4.featuredPrice = parseFloat(featuredPrice) || restaurant.onboarding.step4.featuredPrice;
     if (offer !== undefined) restaurant.onboarding.step4.offer = offer;
+    if (costForTwo !== undefined) restaurant.onboarding.step4.costForTwo = parseFloat(costForTwo) || restaurant.onboarding.step4.costForTwo;
+    if (diningSettings !== undefined) restaurant.onboarding.step4.diningSettings = diningSettings;
 
     await restaurant.save();
 
@@ -2125,6 +2129,7 @@ export const createRestaurant = asyncHandler(async (req, res) => {
       featuredDish,
       featuredPrice,
       offer,
+      costForTwo,
       // Authentication
       email,
       phone,
@@ -2322,6 +2327,7 @@ export const createRestaurant = asyncHandler(async (req, res) => {
       featuredDish: featuredDish || "",
       featuredPrice: featuredPrice || 249,
       offer: offer || "",
+      costForTwo: costForTwo || 1400,
       signupMethod,
       // Admin created restaurants are active by default
       isActive: true,
@@ -2394,6 +2400,7 @@ export const createRestaurant = asyncHandler(async (req, res) => {
         featuredDish: featuredDish || "",
         featuredPrice: featuredPrice || 249,
         offer: offer || "",
+        costForTwo: costForTwo || 1400,
       },
       completedSteps: 4,
     };

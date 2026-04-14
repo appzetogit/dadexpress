@@ -267,6 +267,12 @@ export const locationAPI = {
       params: { lat, lng },
     });
   },
+  // Geocode address to coordinates
+  geocode: (address) => {
+    return apiClient.get(API_ENDPOINTS.LOCATION.GEOCODE || '/location/geocode', {
+      params: { address },
+    });
+  },
   // Get nearby locations
   getNearbyLocations: (lat, lng, radius = 500, query = "") => {
     return apiClient.get(API_ENDPOINTS.LOCATION.NEARBY, {
@@ -1548,6 +1554,18 @@ export const adminAPI = {
   // Delete order (admin - permanent delete)
   deleteOrder: (id) => {
     return apiClient.delete(`/admin/orders/${encodeURIComponent(id)}`);
+  },
+
+  // Resend delivery notification (admin)
+  resendDeliveryNotification: (id) => {
+    return apiClient.post(`/admin/orders/${encodeURIComponent(id)}/resend-delivery-notification`);
+  },
+
+  // Cancel order (admin)
+  cancelOrder: (id, reason = "") => {
+    return apiClient.patch(`/admin/orders/${encodeURIComponent(id)}/cancel`, {
+      reason,
+    });
   },
 
 

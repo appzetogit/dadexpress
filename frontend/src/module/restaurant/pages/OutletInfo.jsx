@@ -42,8 +42,11 @@ export default function OutletInfo() {
   const [mainImage, setMainImage] = useState("https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800&h=400&fit=crop")
   const [thumbnailImage, setThumbnailImage] = useState("https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=200&h=200&fit=crop")
   const [coverImages, setCoverImages] = useState([]) // Array of cover images (separate from menu images)
+  const [costForTwo, setCostForTwo] = useState(1400)
   const [showEditNameDialog, setShowEditNameDialog] = useState(false)
   const [editNameValue, setEditNameValue] = useState("")
+  const [showEditCostDialog, setShowEditCostDialog] = useState(false)
+  const [editCostValue, setEditCostValue] = useState("")
   const [restaurantId, setRestaurantId] = useState("")
   const [restaurantMongoId, setRestaurantMongoId] = useState("")
   const [uploadingImage, setUploadingImage] = useState(false)
@@ -92,6 +95,9 @@ export default function OutletInfo() {
           
           // Set restaurant name
           setRestaurantName(data.name || "")
+          
+          // Set cost for two
+          setCostForTwo(data.costForTwo || 1400)
           
           // Set restaurant ID
           setRestaurantId(data.restaurantId || data.id || "")
@@ -588,6 +594,31 @@ export default function OutletInfo() {
     }
   }
 
+  const handleOpenCostDialog = () => {
+    setEditCostValue(String(costForTwo))
+    setShowEditCostDialog(true)
+  }
+
+  const handleSaveCost = async () => {
+    const newCost = parseFloat(editCostValue)
+    if (isNaN(newCost) || newCost < 0) {
+      alert("Please enter a valid price")
+      return
+    }
+
+    try {
+      const response = await restaurantAPI.updateProfile({ costForTwo: newCost })
+      if (response?.data?.data?.restaurant || response?.data?.restaurant) {
+        setCostForTwo(newCost)
+        setShowEditCostDialog(false)
+        toast.success("Cost for two updated successfully")
+      }
+    } catch (error) {
+      console.error("Error updating cost for two:", error)
+      alert(`Failed to update cost: ${error.response?.data?.message || error.message || "Please try again."}`)
+    }
+  }
+
 
   // Prevent body scroll when dialog is open
   useEffect(() => {
@@ -830,6 +861,29 @@ export default function OutletInfo() {
           </div>
         </motion.div>
 
+        {/* Cost For Two Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.12 }}
+          className="bg-blue-100/50 rounded-lg p-4 border border-blue-300"
+        >
+          <div className="flex items-start justify-between">
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-gray-500 font-normal mb-1">Average cost for two (Dining)</p>
+              <p className="text-base font-semibold text-gray-900">
+                ₹{loading ? "..." : costForTwo}
+              </p>
+            </div>
+            <button
+              onClick={handleOpenCostDialog}
+              className="text-blue-600 text-sm font-normal hover:text-blue-700 transition-colors ml-4 shrink-0"
+            >
+              Edit
+            </button>
+          </div>
+        </motion.div>
+
         {/* Action Cards */}
         <motion.div
           initial={{ opacity: 0, y: 8 }}
@@ -890,6 +944,46 @@ export default function OutletInfo() {
             <Button
               onClick={handleSaveName}
               disabled={!editNameValue.trim()}
+              className="bg-black text-white"
+            >
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Cost For Two Dialog */}
+      <Dialog open={showEditCostDialog} onOpenChange={setShowEditCostDialog}>
+        <DialogContent className="sm:max-w-md p-4 w-[90%]">
+          <DialogHeader>
+            <DialogTitle className="text-left">Edit Average Cost for Two</DialogTitle>
+            <DialogDescription className="text-left text-xs text-gray-500">
+              This price will be shown to customers in the dining section.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₹</span>
+              <Input
+                type="number"
+                value={editCostValue}
+                onChange={(e) => setEditCostValue(e.target.value)}
+                placeholder="e.g. 1400"
+                className="w-full pl-7 focus-visible:border-black focus-visible:ring-0"
+                autoFocus
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowEditCostDialog(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveCost}
+              disabled={!editCostValue}
               className="bg-black text-white"
             >
               Save

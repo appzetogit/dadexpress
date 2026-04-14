@@ -22,6 +22,7 @@ export default function DiningRestaurantDetails() {
     const navigate = useNavigate()
 
     const [restaurant, setRestaurant] = useState(null)
+    const [menuSections, setMenuSections] = useState([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
 
@@ -44,6 +45,19 @@ export default function DiningRestaurantDetails() {
                     // Check if this is a dining restaurant with nested restaurant data
                     const actualRestaurant = apiRestaurant?.restaurant || apiRestaurant
                     setRestaurant(actualRestaurant)
+
+                    // Fetch Menu Sections
+                    const restaurantId = actualRestaurant?._id || actualRestaurant?.restaurantId
+                    if (restaurantId) {
+                        try {
+                            const menuResp = await restaurantAPI.getMenuByRestaurantId(restaurantId)
+                            if (menuResp.data?.success && menuResp.data.data?.menu?.sections) {
+                                setMenuSections(menuResp.data.data.menu.sections)
+                            }
+                        } catch (menuErr) {
+                            console.error("Failed to load menu sections", menuErr)
+                        }
+                    }
                 } else {
                     setRestaurant(null)
                     setError("Restaurant not found")
@@ -65,6 +79,19 @@ export default function DiningRestaurantDetails() {
                             const actualMatch = match?.restaurant || match
                             setRestaurant(actualMatch)
                             setError(null)
+
+                            // Fetch Menu Sections for the match
+                            const restaurantId = actualMatch?._id || actualMatch?.restaurantId
+                            if (restaurantId) {
+                                try {
+                                    const menuResp = await restaurantAPI.getMenuByRestaurantId(restaurantId)
+                                    if (menuResp.data?.success && menuResp.data.data?.menu?.sections) {
+                                        setMenuSections(menuResp.data.data.menu.sections)
+                                    }
+                                } catch (menuErr) {
+                                    console.error("Failed to load menu sections", menuErr)
+                                }
+                            }
                         } else {
                             setError("Restaurant not found")
                         }
@@ -185,7 +212,11 @@ export default function DiningRestaurantDetails() {
                 <div className="absolute bottom-0 left-0 w-full p-5 text-white">
                     <h1 className="text-3xl font-bold mb-1">{restaurant.name}</h1>
                     <p className="text-sm text-gray-300 line-clamp-2 max-w-[90%] mb-2">
-                        {restaurant.location?.addressLine1 || restaurant.address || "Location not available"}
+                        {restaurant.location?.formattedAddress || 
+                         restaurant.location?.addressLine1 || 
+                         (restaurant.location?.area ? `${restaurant.location.area}${restaurant.location.city ? ', ' + restaurant.location.city : ''}` : null) ||
+                         restaurant.address || 
+                         "Location not available"}
                     </p>
 
                     <div className="flex items-center gap-3 text-sm font-medium mb-3">
@@ -282,18 +313,105 @@ export default function DiningRestaurantDetails() {
                 <h3 className="font-bold text-lg mb-4">{activeTab}</h3>
                 
                 {activeTab === "Menu" && (
-                    <div className="grid grid-cols-2 gap-4">
-                        {restaurant.menuImages && restaurant.menuImages.length > 0 ? (
-                            restaurant.menuImages.map((img, i) => (
-                                <div key={i} className="aspect-[3/4] bg-gray-100 rounded-xl overflow-hidden shadow-sm border border-gray-100">
-                                    <img src={img.url} alt={`Menu ${i+1}`} className="w-full h-full object-cover" />
+                    <div className="space-y-8">
+                        {/* Menu Card Images */}
+                        {restaurant.menuImages && restaurant.menuImages.length > 0 && (
+                            <div>
+                                <h4 className="text-sm font-bold text-gray-800 mb-3 border-l-4 border-orange-500 pl-3 uppercase tracking-wider">Menu Cards</h4>
+                                <div className="grid grid-cols-2 gap-4">
+                                    {restaurant.menuImages.map((img, i) => (
+                                        <div key={i} className="aspect-[3/4] bg-gray-100 rounded-xl overflow-hidden shadow-sm border border-gray-100">
+                                            <img src={img.url} alt={`Menu ${i + 1}`} className="w-full h-full object-cover" />
+                                        </div>
+                                    ))}
                                 </div>
-                            ))
-                        ) : (
-                            <div className="col-span-2 text-center py-10 text-gray-400">
-                                <UtensilsCrossed className="w-12 h-12 mx-auto mb-2 opacity-20" />
-                                <p>Menu not available for this restaurant</p>
                             </div>
+                        )}
+
+                        {/* Digital Menu Sections */}
+                        {menuSections && menuSections.length > 0 ? (
+                            <div className="space-y-6">
+                                {menuSections.map((section, idx) => (
+                                    <div key={idx} className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <h4 className="text-base font-extrabold text-[#2D2D2D] border-l-4 border-orange-500 pl-3 uppercase tracking-wide">
+                                                {section.name}
+                                                <span className="ml-2 text-[10px] text-gray-400 font-normal">({section.items?.length || 0} items)</span>
+                                            </h4>
+                                        </div>
+                                        
+                                        <div className="bg-slate-50/50 rounded-2xl border border-gray-100/50 overflow-hidden divide-y divide-gray-100/50">
+                                            {section.items?.map((item, itemIdx) => (
+                                                <div key={itemIdx} className="p-4 flex gap-3 hover:bg-white transition-colors">
+                                                    <div className="flex-1 space-y-1">
+                                                        <div className="flex items-center gap-1.5">
+                                                            {item.foodType === "Veg" ? (
+                                                                <div className="w-3.5 h-3.5 border border-green-600 flex items-center justify-center rounded-sm">
+                                                                    <div className="w-1.5 h-1.5 bg-green-600 rounded-full" />
+                                                                </div>
+                                                            ) : (
+                                                                <div className="w-3.5 h-3.5 border border-red-600 flex items-center justify-center rounded-sm">
+                                                                    <div className="w-1.5 h-1.5 bg-red-600 rounded-full" />
+                                                                </div>
+                                                            )}
+                                                            <span className="font-bold text-gray-900 leading-tight">{item.name}</span>
+                                                        </div>
+                                                        <p className="text-[11px] text-gray-500 line-clamp-2 leading-relaxed">{item.description}</p>
+                                                        <div className="pt-0.5">
+                                                            <span className="text-sm font-black text-gray-900">₹{item.price}</span>
+                                                        </div>
+                                                    </div>
+                                                    {item.image && (
+                                                        <div className="w-20 h-20 rounded-xl overflow-hidden border border-gray-100 shadow-sm flex-shrink-0">
+                                                            <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+
+                                            {section.subsections?.map((sub, sIdx) => (
+                                                <div key={sIdx} className="space-y-0.5">
+                                                    <div className="bg-gray-100/50 px-4 py-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-widest">{sub.name}</div>
+                                                    <div className="divide-y divide-gray-100/50">
+                                                        {sub.items?.map((item, itemIdx) => (
+                                                            <div key={itemIdx} className="p-4 flex gap-3 hover:bg-white transition-colors">
+                                                                <div className="flex-1 space-y-1">
+                                                                    <div className="flex items-center gap-1.5">
+                                                                        {item.foodType === "Veg" ? (
+                                                                            <div className="w-3.5 h-3.5 border border-green-600 flex items-center justify-center rounded-sm">
+                                                                                <div className="w-1.5 h-1.5 bg-green-600 rounded-full" />
+                                                                            </div>
+                                                                        ) : (
+                                                                            <div className="w-3.5 h-3.5 border border-red-600 flex items-center justify-center rounded-sm">
+                                                                                <div className="w-1.5 h-1.5 bg-red-600 rounded-full" />
+                                                                            </div>
+                                                                        )}
+                                                                        <span className="font-bold text-gray-900 leading-tight">{item.name}</span>
+                                                                    </div>
+                                                                    <p className="text-[11px] text-gray-500 line-clamp-2 leading-relaxed">{item.description}</p>
+                                                                    <div className="pt-0.5 text-sm font-black text-gray-900">₹{item.price}</div>
+                                                                </div>
+                                                                {item.image && (
+                                                                    <div className="w-20 h-20 rounded-xl overflow-hidden border border-gray-100 shadow-sm flex-shrink-0">
+                                                                        <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            (!restaurant.menuImages || restaurant.menuImages.length === 0) && (
+                                <div className="text-center py-20 text-gray-400 bg-gray-50 rounded-2xl">
+                                    <UtensilsCrossed className="w-12 h-12 mx-auto mb-2 opacity-10" />
+                                    <p className="text-sm font-medium">Menu not available for this restaurant</p>
+                                </div>
+                            )
                         )}
                     </div>
                 )}
@@ -350,7 +468,11 @@ export default function DiningRestaurantDetails() {
                         <div>
                             <h4 className="font-bold text-gray-800 text-sm mb-1">Address</h4>
                             <p className="text-gray-600 text-sm leading-relaxed">
-                                {restaurant.location?.addressLine1 || restaurant.location?.formattedAddress || restaurant.address || "Address not available"}
+                                {restaurant.location?.formattedAddress || 
+                                 restaurant.location?.addressLine1 || 
+                                 (restaurant.location?.area ? `${restaurant.location.area}${restaurant.location.city ? ', ' + restaurant.location.city : ''}` : null) ||
+                                 restaurant.address || 
+                                 "Address not available"}
                             </p>
                         </div>
                     </div>

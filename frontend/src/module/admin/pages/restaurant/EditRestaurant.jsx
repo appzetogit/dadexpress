@@ -80,6 +80,7 @@ export default function EditRestaurant() {
         featuredDish: "",
         featuredPrice: "249",
         offer: "",
+        costForTwo: "1400",
         diningSettings: { isEnabled: false, maxGuests: 6, diningType: "family-dining" }
     })
 
@@ -146,6 +147,7 @@ export default function EditRestaurant() {
                     featuredDish: r.featuredDish || "",
                     featuredPrice: r.featuredPrice?.toString() || "249",
                     offer: r.offer || "",
+                    costForTwo: r.costForTwo?.toString() || "1400",
                     diningSettings: {
                         isEnabled: r.diningSettings?.isEnabled || false,
                         maxGuests: r.diningSettings?.maxGuests || 6,
@@ -411,6 +413,7 @@ export default function EditRestaurant() {
                 featuredDish: step4.featuredDish,
                 featuredPrice: parseFloat(step4.featuredPrice) || 249,
                 offer: step4.offer,
+                costForTwo: parseFloat(step4.costForTwo) || 1400,
                 diningSettings: step4.diningSettings,
             }
 
@@ -816,6 +819,10 @@ export default function EditRestaurant() {
                 <div>
                     <Label className="text-xs text-gray-700">Special Offer/Promotion</Label>
                     <Input value={step4.offer || ""} onChange={(e) => setStep4({ ...step4, offer: e.target.value })} className="mt-1 bg-white text-sm" placeholder="e.g., Flat ₹50 OFF above ₹199" />
+                </div>
+                <div>
+                    <Label className="text-xs text-gray-700">Average Cost for Two (₹)</Label>
+                    <Input type="number" value={step4.costForTwo || ""} onChange={(e) => setStep4({ ...step4, costForTwo: e.target.value })} className="mt-1 bg-white text-sm" placeholder="e.g., 1400" min="0" />
                 </div>
             </section>
 

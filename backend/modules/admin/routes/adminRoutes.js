@@ -225,6 +225,8 @@ import {
   getOngoingOrders,
   getTransactionReport,
   getRestaurantReport,
+  cancelOrder as cancelOrderAdmin,
+  resendDeliveryNotification as resendDeliveryNotificationAdmin,
 } from "../controllers/orderController.js";
 import {
   getAllReviews,
@@ -513,6 +515,8 @@ router.post("/orders/:id/assign-delivery-partner", assignDeliveryPartner);
 router.get("/orders/ongoing", getOngoingOrders);
 router.get("/orders/transaction-report", getTransactionReport);
 router.get("/orders/restaurant-report", getRestaurantReport);
+router.patch("/orders/:id/cancel", cancelOrderAdmin);
+router.post("/orders/:id/resend-delivery-notification", resendDeliveryNotificationAdmin);
 
 // Order Refund - MUST be before /orders/:id to avoid route conflicts
 // Using explicit pattern /orders/refund/:orderId

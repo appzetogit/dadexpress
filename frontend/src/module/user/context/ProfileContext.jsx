@@ -163,6 +163,26 @@ export function ProfileProvider({ children }) {
           const addressesData = addressesResponse?.data?.data?.addresses || addressesResponse?.data?.addresses || []
           setAddresses(addressesData)
           safeStorage.setItem("userAddresses", JSON.stringify(addressesData))
+
+          // Auto-select default address for immediate restaurant display upon login
+          try {
+            const currentSelected = safeStorage.getItem("selectedDeliveryAddress")
+            if (!currentSelected && addressesData.length > 0) {
+              const defaultAddr = addressesData.find((addr) => addr.isDefault) || addressesData[0]
+              if (defaultAddr) {
+                const payload = {
+                  mode: "saved",
+                  addressId: String(defaultAddr.id || defaultAddr._id || defaultAddr?.id?.toString?.()),
+                  updatedAt: Date.now(),
+                }
+                safeStorage.setItem("selectedDeliveryAddress", JSON.stringify(payload))
+                // Notify hooks like useSelectedDeliveryAddress
+                window.dispatchEvent(new CustomEvent("delivery-address-selected", { detail: payload }))
+              }
+            }
+          } catch (e) {
+            console.warn("Failed to auto-select default address:", e)
+          }
         } catch (addressError) {
           console.error("Error fetching addresses:", addressError)
           // Try to load from localStorage as fallback

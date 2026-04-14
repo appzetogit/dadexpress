@@ -16,6 +16,11 @@ const logger = winston.createLogger({
  * DISABLED: Reverse geocoding disabled to reduce Google Maps API costs
  * Returns coordinates only - no address lookup
  */
+/**
+ * Reverse geocode coordinates to address
+ * OPTIMIZED: Uses Firebase Realtime Database as cache to avoid API costs
+ * Uses Nominatim (OpenStreetMap) as a free fallback
+ */
 export const reverseGeocode = async (req, res) => {
   try {
     const { lat, lng } = req.query;
@@ -29,13 +34,101 @@ export const reverseGeocode = async (req, res) => {
 
     const latNum = parseFloat(lat);
     const lngNum = parseFloat(lng);
-
-    // SKIP REVERSE GEOCODING - Return coordinates only to reduce API costs
-    logger.info('Reverse geocoding disabled - returning coordinates only', { lat: latNum, lng: lngNum });
     
+    // Round to 4 decimal places (~11m precision) for caching
+    const cacheLat = Math.round(latNum * 10000) / 10000;
+    const cacheLng = Math.round(lngNum * 10000) / 10000;
+    const cacheKey = `${cacheLat.toString().replace('.', '_')},${cacheLng.toString().replace('.', '_')}`;
+
+    // 1. Check Firebase Cache first (0 percent credits)
+    try {
+      const { getFirebaseRealtimeDb, isFirebaseRealtimeAvailable } = await import('../../../config/firebaseRealtime.js');
+      if (isFirebaseRealtimeAvailable()) {
+        const db = getFirebaseRealtimeDb();
+        const snapshot = await db.ref(`address_cache/${cacheKey}`).once('value');
+        const cachedData = snapshot.val();
+        
+        if (cachedData) {
+          logger.info('✅ Using Firebase cached address', { cacheKey });
+          return res.json({
+            success: true,
+            data: cachedData,
+            source: 'firebase_cache'
+          });
+        }
+      }
+    } catch (cacheError) {
+      logger.warn('Firebase cache check failed', { error: cacheError.message });
+    }
+
+    // 2. Use free Nominatim (OpenStreetMap) if not in cache (Free, no bill)
+    try {
+      logger.info('Fetching from OpenStreetMap (Free)', { lat: latNum, lng: lngNum });
+      const response = await axios.get('https://nominatim.openstreetmap.org/reverse', {
+        params: {
+          lat: latNum,
+          lon: lngNum,
+          format: 'json',
+          addressdetails: 1,
+          'accept-language': 'en'
+        },
+        headers: {
+          'User-Agent': 'DadExpress/1.0'
+        },
+        timeout: 5000
+      });
+
+      if (response.data && response.data.address) {
+        const addr = response.data.address;
+        const area = addr.suburb || addr.neighbourhood || addr.residential || addr.district || '';
+        const city = addr.city || addr.town || addr.village || addr.municipality || '';
+        const state = addr.state || addr.region || '';
+        const country = addr.country || '';
+        
+        const transformedData = {
+          results: [{
+            formatted_address: response.data.display_name,
+            address_components: {
+              city,
+              state,
+              country,
+              area
+            },
+            geometry: {
+              location: {
+                lat: latNum,
+                lng: lngNum
+              }
+            }
+          }]
+        };
+
+        // 3. Update Firebase with new lat/long and address (as requested)
+        try {
+          const { getFirebaseRealtimeDb, isFirebaseRealtimeAvailable } = await import('../../../config/firebaseRealtime.js');
+          if (isFirebaseRealtimeAvailable()) {
+            const db = getFirebaseRealtimeDb();
+            await db.ref(`address_cache/${cacheKey}`).set(transformedData);
+            logger.info('✅ Address cached in Firebase', { cacheKey });
+          }
+        } catch (updateError) {
+          logger.warn('Failed to update Firebase cache', { error: updateError.message });
+        }
+
+        return res.json({
+          success: true,
+          data: transformedData,
+          source: 'nominatim'
+        });
+      }
+    } catch (nominatimError) {
+      logger.error('Nominatim geocoding failed', { error: nominatimError.message });
+    }
+
+    // Fallback: minimal data if all else fails
     const minimalData = {
       results: [{
-        formatted_address: '',
+        formatted_address: `${latNum.toFixed(6)}, ${lngNum.toFixed(6)}`,
         address_components: {
           city: '',
           state: '',
@@ -716,6 +809,109 @@ export const reverseGeocode_OLD = async (req, res) => {
 };
 
 /**
+ * Geocode address to coordinates
+ * OPTIMIZED: Uses Firebase Realtime Database as cache to avoid API costs
+ * Uses Nominatim (OpenStreetMap) as a free fallback
+ */
+export const geocode = async (req, res) => {
+  try {
+    const { address } = req.query;
+
+    if (!address) {
+      return res.status(400).json({
+        success: false,
+        message: 'Address is required'
+      });
+    }
+
+    // Create a safe cache key from address
+    const cacheKey = Buffer.from(address.toLowerCase().trim()).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+
+    // 1. Check Firebase Cache first (0 percent credits)
+    try {
+      const { getFirebaseRealtimeDb, isFirebaseRealtimeAvailable } = await import('../../../config/firebaseRealtime.js');
+      if (isFirebaseRealtimeAvailable()) {
+        const db = getFirebaseRealtimeDb();
+        const snapshot = await db.ref(`geocode_cache/${cacheKey}`).once('value');
+        const cachedData = snapshot.val();
+        
+        if (cachedData) {
+          logger.info('✅ Using Firebase cached geocode result', { address });
+          return res.json({
+            success: true,
+            data: cachedData,
+            source: 'firebase_cache'
+          });
+        }
+      }
+    } catch (cacheError) {
+      logger.warn('Firebase geocode cache check failed', { error: cacheError.message });
+    }
+
+    // 2. Use free Nominatim (OpenStreetMap) if not in cache (Free)
+    try {
+      logger.info('Fetching geocode from OpenStreetMap (Free)', { address });
+      const response = await axios.get('https://nominatim.openstreetmap.org/search', {
+        params: {
+          q: address,
+          format: 'json',
+          limit: 1,
+          'accept-language': 'en'
+        },
+        headers: {
+          'User-Agent': 'DadExpress/1.0'
+        },
+        timeout: 5000
+      });
+
+      if (response.data && response.data.length > 0) {
+        const result = response.data[0];
+        const transformedData = {
+          lat: parseFloat(result.lat),
+          lng: parseFloat(result.lon),
+          displayName: result.display_name
+        };
+
+        // 3. Update Firebase with result
+        try {
+          const { getFirebaseRealtimeDb, isFirebaseRealtimeAvailable } = await import('../../../config/firebaseRealtime.js');
+          if (isFirebaseRealtimeAvailable()) {
+            const db = getFirebaseRealtimeDb();
+            await db.ref(`geocode_cache/${cacheKey}`).set(transformedData);
+            logger.info('✅ Geocode result cached in Firebase', { address });
+          }
+        } catch (updateError) {
+          logger.warn('Failed to update Firebase geocode cache', { error: updateError.message });
+        }
+
+        return res.json({
+          success: true,
+          data: transformedData,
+          source: 'nominatim'
+        });
+      }
+    } catch (nominatimError) {
+      logger.error('Nominatim geocoding failed', { error: nominatimError.message });
+    }
+
+    return res.status(404).json({
+      success: false,
+      message: 'Location not found'
+    });
+  } catch (error) {
+    logger.error('Geocode error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+};
+
+/**
  * Get nearby locations/places using OLA Maps or Google Places API
  * GET /location/nearby?lat=...&lng=...&radius=...
  */
@@ -742,9 +938,12 @@ export const getNearbyLocations = async (req, res) => {
     }
 
     const apiKey = process.env.OLA_MAPS_API_KEY;
-    // Get Google Maps API key from database (NO FALLBACK)
+    // DISABLED: Google Places API to avoid costs
+    /*
     const { getGoogleMapsApiKey } = await import('../../../shared/utils/envService.js');
     const googleApiKey = await getGoogleMapsApiKey();
+    */
+    const googleApiKey = null; 
 
     let nearbyPlaces = [];
 

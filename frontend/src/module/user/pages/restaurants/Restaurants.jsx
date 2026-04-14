@@ -9,7 +9,7 @@ import TextReveal from "../../components/TextReveal"
 import { Card, CardTitle, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useProfile } from "../../context/ProfileContext"
-import { restaurantAPI, zoneAPI } from "@/lib/api"
+import { restaurantAPI, zoneAPI, locationAPI } from "@/lib/api"
 import { useLocation } from "../../hooks/useLocation"
 import { useZone } from "../../hooks/useZone"
 import { useSelectedDeliveryAddress } from "../../hooks/useSelectedDeliveryAddress"
@@ -66,22 +66,15 @@ const getAddressSearchQuery = (address) => {
 const geocodeAddressCoords = async (address) => {
   const query = getAddressSearchQuery(address)
   if (!query) return null
-  if (
-    typeof window === "undefined" ||
-    !window.google?.maps?.Geocoder
-  ) {
-    return null
-  }
-
-  const geocoder = new window.google.maps.Geocoder()
   try {
-    const geocodeResult = await geocoder.geocode({ address: query })
-    const result = geocodeResult?.results?.[0]
-    const location = result?.geometry?.location
-    const lat = typeof location?.lat === "function" ? toNumber(location.lat()) : null
-    const lng = typeof location?.lng === "function" ? toNumber(location.lng()) : null
-    if (!lat || !lng) return null
-    return { lat, lng }
+    const response = await locationAPI.geocode(query)
+    if (response?.data?.success && response.data.data) {
+      return { 
+        lat: response.data.data.lat, 
+        lng: response.data.data.lng 
+      }
+    }
+    return null
   } catch (error) {
     console.error("Address geocoding failed:", error)
     return null
