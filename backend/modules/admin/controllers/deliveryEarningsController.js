@@ -300,3 +300,108 @@ export const getDeliveryEarnings = asyncHandler(async (req, res) => {
   }
 });
 
+/**
+ * Delete a delivery earning transaction from wallet
+ * DELETE /api/admin/delivery-partners/earnings/:transactionId
+ */
+export const deleteDeliveryEarning = asyncHandler(async (req, res) => {
+  try {
+    const { transactionId } = req.params;
+
+    if (!transactionId || !mongoose.Types.ObjectId.isValid(transactionId)) {
+      return errorResponse(res, 400, 'Invalid transaction ID');
+    }
+
+    const wallet = await DeliveryWallet.findOne({
+      'transactions._id': new mongoose.Types.ObjectId(transactionId),
+    });
+
+    if (!wallet) {
+      return errorResponse(res, 404, 'Earning transaction not found');
+    }
+
+    const transaction = wallet.transactions.id(transactionId);
+    if (!transaction) {
+      return errorResponse(res, 404, 'Earning transaction not found');
+    }
+
+    const deletedTransaction = {
+      transactionId: transaction._id?.toString(),
+      type: transaction.type,
+      amount: Number(transaction.amount) || 0,
+      orderId: transaction.orderId?.toString() || null,
+      status: transaction.status,
+    };
+
+    transaction.deleteOne();
+
+    const completedTransactions = wallet.transactions.filter(
+      (t) => t.status === 'Completed'
+    );
+
+    let totalBalance = 0;
+    let totalEarned = 0;
+    let totalWithdrawn = 0;
+    let cashInHand = 0;
+
+    completedTransactions.forEach((t) => {
+      const amount = Number(t.amount) || 0;
+
+      if (
+        t.type === 'payment' ||
+        t.type === 'bonus' ||
+        t.type === 'refund' ||
+        t.type === 'earning_addon'
+      ) {
+        totalBalance += amount;
+        totalEarned += amount;
+        if (t.paymentCollected) {
+          cashInHand += amount;
+        }
+      } else if (t.type === 'withdrawal') {
+        totalBalance -= amount;
+        totalWithdrawn += amount;
+        if (t.paymentCollected) {
+          cashInHand = Math.max(0, cashInHand - amount);
+        }
+      } else if (t.type === 'deduction') {
+        totalBalance -= amount;
+        cashInHand = Math.max(0, cashInHand - amount);
+      } else if (t.type === 'deposit') {
+        cashInHand = Math.max(0, cashInHand - amount);
+      }
+    });
+
+    wallet.totalBalance = Math.max(0, totalBalance);
+    wallet.totalEarned = Math.max(0, totalEarned);
+    wallet.totalWithdrawn = Math.max(0, totalWithdrawn);
+    wallet.cashInHand = Math.max(0, cashInHand);
+    wallet.lastTransactionAt =
+      wallet.transactions.length > 0
+        ? new Date(
+            Math.max(
+              ...wallet.transactions.map((t) =>
+                new Date(t.createdAt || t.processedAt || Date.now()).getTime()
+              )
+            )
+          )
+        : null;
+
+    await wallet.save();
+
+    return successResponse(res, 200, 'Delivery earning deleted successfully', {
+      deletedTransaction,
+      wallet: {
+        id: wallet._id,
+        totalBalance: wallet.totalBalance,
+        totalEarned: wallet.totalEarned,
+        totalWithdrawn: wallet.totalWithdrawn,
+        cashInHand: wallet.cashInHand,
+      },
+    });
+  } catch (error) {
+    logger.error(`Error deleting delivery earning: ${error.message}`, { stack: error.stack });
+    return errorResponse(res, 500, 'Failed to delete delivery earning');
+  }
+});
+

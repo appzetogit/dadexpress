@@ -228,7 +228,9 @@ export default function PageNavbar({
     // Priority 0: Use mainTitle (ZOMATO-STYLE) - Exact building/cafe name
     // This is the most accurate - directly from Google Maps components
     // If mainTitle is available, show it with area if area is different
-    if (location?.mainTitle && location.mainTitle.trim() !== "" && location.mainTitle !== "Location Found") {
+    if (location?.mainTitle && 
+        location.mainTitle.trim() !== "" && 
+        location.mainTitle !== "Location Found") {
       mainLocation = location.mainTitle;
       // If area is available and different from mainTitle, append it
       if (location?.area && location.area.trim() !== "" &&

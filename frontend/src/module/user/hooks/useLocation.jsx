@@ -13,6 +13,10 @@ export function useLocation() {
   const watchIdRef = useRef(null)
   const updateTimerRef = useRef(null)
   const prevLocationCoordsRef = useRef({ latitude: null, longitude: null })
+  const lastReverseGeocodeCoordsRef = useRef(null)
+  const reverseGeocodeCacheRef = useRef(new Map())
+  const ENABLE_PAID_GOOGLE_GEOCODING =
+    String(import.meta.env?.VITE_ENABLE_PAID_GEOCODING || "").toLowerCase() === "true"
   const isManualAddressLocked = () => hasManualSelectedAddress()
   const enforceManualModeLock = () => {
     // Manual address is the single source of truth; clear GPS cache and stop watchers.
@@ -80,7 +84,48 @@ export function useLocation() {
         accuracy: locationPayload.accuracy
       })
 
-      await userAPI.updateLocation(locationPayload)
+      const response = await userAPI.updateLocation(locationPayload)
+      
+      // Update local state with the backend's resolved location
+      // This ensures the UI displays the exact address processed by the server
+      if (response?.data?.data?.location) {
+        const dbLocation = response.data.data.location
+        
+        // Only update if the DB returned a valid non-placeholder address
+        const hasValidDbAddress = dbLocation.formattedAddress && 
+                                 dbLocation.formattedAddress !== "Select location" &&
+                                 dbLocation.city && 
+                                 dbLocation.city !== "Current Location"
+
+        if (hasValidDbAddress && !isManualAddressLocked()) {
+          false && console.log("🔄 Syncing UI with backend-resolved address:", dbLocation.formattedAddress)
+          
+          // Use functional update to avoid stale state issues
+          setLocation(prev => {
+            const isDifferentAddress = prev?.formattedAddress !== dbLocation.formattedAddress
+            
+            return {
+              ...prev,
+              ...dbLocation,
+              // Clear stale POI titles if the address has changed significantly
+              mainTitle: isDifferentAddress ? null : (dbLocation.mainTitle || prev?.mainTitle),
+              latitude: dbLocation.latitude || prev?.latitude,
+              longitude: dbLocation.longitude || prev?.longitude
+            }
+          })
+          
+          // Update persistence layer
+          localStorage.setItem("userLocation", JSON.stringify({
+            ...(JSON.parse(localStorage.getItem("userLocation") || "{}")),
+            ...dbLocation
+          }))
+
+          // Broadcast update to all other useLocation hook instances (e.g., in PageNavbar)
+          window.dispatchEvent(
+            new CustomEvent(USER_LOCATION_UPDATED_EVENT, { detail: dbLocation })
+          )
+        }
+      }
 
       false && console.log("✅ Live location successfully stored in database")
     } catch (err) {
@@ -99,7 +144,126 @@ export function useLocation() {
 
   /* ===================== DIRECT REVERSE GEOCODE ===================== */
   const reverseGeocodeDirect = async (latitude, longitude) => {
+    const roundedLat = Number(latitude).toFixed(4)
+    const roundedLng = Number(longitude).toFixed(4)
+    const cacheKey = `${roundedLat},${roundedLng}`
+    const now = Date.now()
+    const cached = reverseGeocodeCacheRef.current.get(cacheKey)
+    const isCoordinateText = (value) =>
+      /^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/.test(String(value || "").trim())
+    const normalizeParts = (parts = []) => {
+      const normalized = parts
+        .map((part) => String(part || "").replace(/\s+/g, " ").trim())
+        .filter(Boolean)
+
+      const exactValues = new Set(normalized.map((part) => part.toLowerCase()))
+      const withoutCityDupes = normalized.filter((part) => {
+        const lower = part.toLowerCase()
+        if (!lower.endsWith(" city")) return true
+        const base = lower.replace(/\s+city$/, "").trim()
+        // Drop "X City" when "X" already exists in the same address.
+        return !exactValues.has(base)
+      })
+
+      const seen = new Set()
+      return withoutCityDupes.filter((part) => {
+        const key = part.toLowerCase()
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+    }
+    const buildSafeAddress = (data = {}) => {
+      const formatted = String(data?.formattedAddress || "").trim()
+      if (formatted && !isCoordinateText(formatted)) {
+        const normalizedFormatted = normalizeParts(formatted.split(",")).join(", ")
+        if (normalizedFormatted) {
+          return normalizedFormatted
+        }
+      }
+
+      const fallback = normalizeParts([
+        data?.locality,
+        data?.city,
+        data?.principalSubdivision,
+        data?.postcode,
+      ]).join(", ")
+
+      return fallback || "Select location"
+    }
+
+    // Reuse address for nearby/same coordinate updates to cut reverse-geocode traffic.
+    if (cached && now - cached.timestamp < 5 * 60 * 1000) {
+      return cached.value
+    }
+
     try {
+      // Free reverse geocoding (no billing/credits): OpenStreetMap Nominatim.
+      try {
+        const osmController = new AbortController()
+        const osmTimer = setTimeout(() => osmController.abort(), 9000)
+        const osmRes = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}&addressdetails=1&zoom=18`,
+          {
+            signal: osmController.signal,
+            headers: { "Accept-Language": "en" },
+          }
+        )
+        clearTimeout(osmTimer)
+
+        if (osmRes.ok) {
+          const osmData = await osmRes.json()
+          const addr = osmData?.address || {}
+          const houseRoad = [addr.house_number, addr.road].filter(Boolean).join(" ").trim()
+          const areaRaw =
+            addr.suburb ||
+            addr.neighbourhood ||
+            addr.city_district ||
+            addr.hamlet ||
+            addr.quarter ||
+            ""
+          const city =
+            addr.city ||
+            addr.town ||
+            addr.village ||
+            addr.municipality ||
+            addr.county ||
+            addr.state_district ||
+            ""
+          const areaBase = String(areaRaw || "").trim().toLowerCase().replace(/\s+city$/, "")
+          const cityBase = String(city || "").trim().toLowerCase()
+          const area = areaBase && cityBase && areaBase === cityBase ? "" : areaRaw
+          const state = addr.state || ""
+          const postalCode = addr.postcode || ""
+
+          const compactAddress = normalizeParts([houseRoad, area, city, state, postalCode]).join(", ")
+          const fallbackDisplayAddress = normalizeParts(
+            String(osmData?.display_name || "").split(","),
+          ).join(", ")
+          const resolvedAddress = compactAddress || fallbackDisplayAddress
+
+          if (resolvedAddress) {
+            const result = {
+              city: city || "Unknown City",
+              state,
+              country: addr.country || "",
+              area,
+              address: resolvedAddress,
+              formattedAddress: resolvedAddress,
+              postalCode,
+              street: houseRoad || area || "",
+            }
+
+            reverseGeocodeCacheRef.current.set(cacheKey, {
+              value: result,
+              timestamp: now,
+            })
+
+            return result
+          }
+        }
+      } catch {}
+
       const controller = new AbortController()
       setTimeout(() => controller.abort(), 3000) // Faster timeout
 
@@ -110,30 +274,45 @@ export function useLocation() {
 
       const data = await res.json()
 
-      return {
+      const safeAddress = buildSafeAddress(data)
+      const result = {
         city: data.city || data.locality || "Unknown City",
         state: data.principalSubdivision || "",
         country: data.countryName || "",
         area: data.subLocality || "",
-        address:
-          data.formattedAddress ||
-          `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
-        formattedAddress:
-          data.formattedAddress ||
-          `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+        address: safeAddress,
+        formattedAddress: safeAddress,
       }
+
+      reverseGeocodeCacheRef.current.set(cacheKey, {
+        value: result,
+        timestamp: now,
+      })
+
+      return result
     } catch {
-      return {
+      const fallback = {
         city: "Current Location",
-        address: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
-        formattedAddress: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+        address: "Select location",
+        formattedAddress: "Select location",
       }
+
+      reverseGeocodeCacheRef.current.set(cacheKey, {
+        value: fallback,
+        timestamp: now,
+      })
+
+      return fallback
     }
   }
 
   /* ===================== GOOGLE MAPS REVERSE GEOCODE ===================== */
   const reverseGeocodeWithGoogleMaps = async (latitude, longitude) => {
     try {
+      if (!ENABLE_PAID_GOOGLE_GEOCODING) {
+        return reverseGeocodeDirect(latitude, longitude)
+      }
+
       // Try using Google Maps first for EXACT location (Zomato-style)
       // It will automatically fallback to reverseGeocodeDirect if no key or failure
 
@@ -596,7 +775,9 @@ export function useLocation() {
       let mainTitle = "";
 
       // First priority: Use name from Places API (most accurate)
-      if (placeName && placeName.trim() !== "") {
+      if (placeName && 
+          placeName.trim() !== "" && 
+          formattedAddress.toLowerCase().includes(placeName.toLowerCase().split(' ')[0])) {
         mainTitle = placeName;
         false && console.log("✅✅✅ ZOMATO-STYLE: Using Places API name:", mainTitle);
       } else {
@@ -1333,14 +1514,14 @@ export function useLocation() {
       false && console.warn("⚠️ Google Maps failed, trying direct geocoding:", err.message)
       // Fallback to direct reverse geocoding (no Google Maps dependency)
       try {
-        return await reverseGeocodeWithGoogleMaps(latitude, longitude)
+        return await reverseGeocodeDirect(latitude, longitude)
       } catch (fallbackErr) {
         // If all fail, return minimal location data
         console.error("❌ All reverse geocoding failed:", fallbackErr)
         return {
           city: "Current Location",
-          address: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
-          formattedAddress: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+          address: "Select location",
+          formattedAddress: "Select location",
         }
       }
     }
@@ -1375,6 +1556,18 @@ export function useLocation() {
             address: "Select location",
             formattedAddress: "Select location",
           }
+        }
+
+        // If DB already has a valid resolved address, use it directly instead of re-geocoding
+        // This ensures the UI reflects the most recent server-processed location immediately
+        const hasResolvedAddress = loc.formattedAddress && 
+                                 loc.formattedAddress !== "Select location" &&
+                                 loc.city && 
+                                 loc.city !== "Current Location"
+
+        if (hasResolvedAddress) {
+          false && console.log("📂 Using resolved address directly from DB:", loc.formattedAddress)
+          return loc
         }
 
         try {
@@ -1756,6 +1949,41 @@ export function useLocation() {
             // Reset retry count on success
             retryCount = 0
 
+            // COST OPTIMIZATION: Check distance from last geocoded point
+            // Only re-geocode if user moves more than 100 meters
+            if (lastReverseGeocodeCoordsRef.current) {
+              const lastLat = lastReverseGeocodeCoordsRef.current.latitude
+              const lastLng = lastReverseGeocodeCoordsRef.current.longitude
+              const latDiff = latitude - lastLat
+              const lngDiff = longitude - lastLng
+              const distanceMeters = Math.sqrt(latDiff * latDiff + lngDiff * lngDiff) * 111320
+
+              if (distanceMeters < 100 && location && location.formattedAddress && location.formattedAddress !== "Select location") {
+                false && console.log(`📍 Movement too small (${distanceMeters.toFixed(1)}m), skipping geocode to save costs.`)
+                
+                // Still update coordinates but keep the SAME address
+                const loc = {
+                  ...location,
+                  latitude,
+                  longitude,
+                  accuracy: accuracy || null,
+                  lastUpdated: new Date()
+                }
+                
+                if (!isManualAddressLocked()) {
+                  setLocation(loc)
+                  localStorage.setItem("userLocation", JSON.stringify(loc))
+                  
+                  // Update DB with fresh coordinates but SAME address (de-duplicated on backend)
+                  clearTimeout(updateTimerRef.current)
+                  updateTimerRef.current = setTimeout(() => {
+                    updateLocationInDB(loc).catch(() => {})
+                  }, 5000)
+                }
+                return
+              }
+            }
+
             // Fetch address using reverse geocoding
             // This is necessary to show the "Exact location name" (city, area, etc.)
             const addr = await reverseGeocodeWithGoogleMaps(latitude, longitude)
@@ -2057,10 +2285,9 @@ export function useLocation() {
       }
     }
 
-    // If no cached location, try DB
-    if (!hasInitialLocation) {
-      fetchLocationFromDB()
-        .then((dbLoc) => {
+    // Background sync with DB: always try to get the most recent server-resolved address
+    fetchLocationFromDB()
+      .then((dbLoc) => {
           if (dbLoc && (dbLoc.latitude || dbLoc.city)) {
             setLocation(dbLoc)
             setPermissionGranted(true)
@@ -2084,10 +2311,9 @@ export function useLocation() {
           }
         })
         .catch(() => {
-          setLoading(false)
+          if (!hasInitialLocation) setLoading(false)
           shouldForceRefresh = true
         })
-    }
 
     // Always ensure loading is false after initial check
     // Safety timeout to prevent infinite loading
@@ -2369,6 +2595,7 @@ export function useLocation() {
     requestLocation,
     startWatchingLocation,
     stopWatchingLocation,
+    updateLocationInDB,
     reverseGeocode: reverseGeocodeWithGoogleMaps,
   }
 }

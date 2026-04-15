@@ -578,6 +578,7 @@ export const createRestaurantFromOnboarding = async (onboardingData, restaurantI
       if (step4.featuredPrice !== undefined) existing.featuredPrice = step4.featuredPrice;
       if (step4.offer) existing.offer = step4.offer;
       if (step4.costForTwo !== undefined) existing.costForTwo = step4.costForTwo;
+      if (step4.tableBookingPrice !== undefined) existing.tableBookingPrice = step4.tableBookingPrice;
       if (step4.diningSettings) existing.diningSettings = step4.diningSettings;
     }
     
@@ -630,7 +631,7 @@ export const createRestaurantFromOnboarding = async (onboardingData, restaurantI
 export const updateRestaurantProfile = asyncHandler(async (req, res) => {
   try {
     const restaurantId = req.restaurant._id;
-    const { profileImage, menuImages, name, cuisines, location, ownerName, ownerEmail, ownerPhone, bank, costForTwo, diningSettings } = req.body;
+    const { profileImage, menuImages, name, cuisines, location, ownerName, ownerEmail, ownerPhone, bank, costForTwo, tableBookingPrice, diningSettings } = req.body;
 
     const restaurant = await Restaurant.findById(restaurantId);
 
@@ -727,10 +728,53 @@ export const updateRestaurantProfile = asyncHandler(async (req, res) => {
 
     // Update bank details if provided
     if (bank !== undefined) {
-      updateData.bank = bank;
+      const existingBank = restaurant.bank || {};
+      const accountHolderName =
+        bank.accountHolderName ??
+        bank.beneficiaryName ??
+        bank.bankName ??
+        existingBank.accountHolderName ??
+        "";
+
+      const normalizedBank = {
+        ...existingBank,
+        ...bank,
+        accountHolderName,
+        bankName:
+          bank.bankName ??
+          bank.beneficiaryName ??
+          bank.accountHolderName ??
+          existingBank.bankName ??
+          "",
+        accountNumber:
+          typeof bank.accountNumber === "string"
+            ? bank.accountNumber.trim()
+            : (bank.accountNumber ?? existingBank.accountNumber),
+        ifscCode:
+          typeof bank.ifscCode === "string"
+            ? bank.ifscCode.trim().toUpperCase()
+            : (bank.ifscCode ?? existingBank.ifscCode),
+      };
+
+      updateData.bank = normalizedBank;
+
+      // Keep onboarding bank data synced so admin panel always shows latest values.
+      if (!restaurant.onboarding) restaurant.onboarding = {};
+      if (!restaurant.onboarding.step3) restaurant.onboarding.step3 = {};
+      if (!restaurant.onboarding.step3.bank) restaurant.onboarding.step3.bank = {};
+
+      restaurant.onboarding.step3.bank.accountNumber = normalizedBank.accountNumber;
+      restaurant.onboarding.step3.bank.ifscCode = normalizedBank.ifscCode;
+      restaurant.onboarding.step3.bank.accountHolderName = normalizedBank.accountHolderName;
+      if (normalizedBank.accountType !== undefined) {
+        restaurant.onboarding.step3.bank.accountType = normalizedBank.accountType;
+      }
     }
     if (costForTwo !== undefined) {
       updateData.costForTwo = costForTwo;
+    }
+    if (tableBookingPrice !== undefined) {
+      updateData.tableBookingPrice = tableBookingPrice;
     }
     if (diningSettings !== undefined) {
       updateData.diningSettings = diningSettings;
@@ -755,6 +799,7 @@ export const updateRestaurantProfile = asyncHandler(async (req, res) => {
         ownerPhone: restaurant.ownerPhone,
         bank: restaurant.bank,
         costForTwo: restaurant.costForTwo,
+        tableBookingPrice: restaurant.tableBookingPrice,
         diningSettings: restaurant.diningSettings,
       }
     });

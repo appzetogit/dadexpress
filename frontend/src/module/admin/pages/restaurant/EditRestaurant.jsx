@@ -81,6 +81,7 @@ export default function EditRestaurant() {
         featuredPrice: "249",
         offer: "",
         costForTwo: "1400",
+        tableBookingPrice: "",
         diningSettings: { isEnabled: false, maxGuests: 6, diningType: "family-dining" }
     })
 
@@ -148,6 +149,7 @@ export default function EditRestaurant() {
                     featuredPrice: r.featuredPrice?.toString() || "249",
                     offer: r.offer || "",
                     costForTwo: r.costForTwo?.toString() || "1400",
+                    tableBookingPrice: r.tableBookingPrice?.toString() || "",
                     diningSettings: {
                         isEnabled: r.diningSettings?.isEnabled || false,
                         maxGuests: r.diningSettings?.maxGuests || 6,
@@ -414,6 +416,9 @@ export default function EditRestaurant() {
                 featuredPrice: parseFloat(step4.featuredPrice) || 249,
                 offer: step4.offer,
                 costForTwo: parseFloat(step4.costForTwo) || 1400,
+                tableBookingPrice: step4.tableBookingPrice === ""
+                    ? null
+                    : (Number.isFinite(Number(step4.tableBookingPrice)) ? Number(step4.tableBookingPrice) : null),
                 diningSettings: step4.diningSettings,
             }
 
@@ -823,6 +828,10 @@ export default function EditRestaurant() {
                 <div>
                     <Label className="text-xs text-gray-700">Average Cost for Two (₹)</Label>
                     <Input type="number" value={step4.costForTwo || ""} onChange={(e) => setStep4({ ...step4, costForTwo: e.target.value })} className="mt-1 bg-white text-sm" placeholder="e.g., 1400" min="0" />
+                </div>
+                <div>
+                    <Label className="text-xs text-gray-700">Table Booking Price (₹)</Label>
+                    <Input type="number" value={step4.tableBookingPrice || ""} onChange={(e) => setStep4({ ...step4, tableBookingPrice: e.target.value })} className="mt-1 bg-white text-sm" placeholder="e.g., 500" min="0" />
                 </div>
             </section>
 

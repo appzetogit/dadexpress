@@ -290,5 +290,7 @@ export async function getSMSHubIndiaCredentials() {
  * @returns {Promise<string>} Google Maps API Key
  */
 export async function getGoogleMapsApiKey() {
-  return await getEnvVar("VITE_GOOGLE_MAPS_API_KEY");
+  const viteKey = await getEnvVar("VITE_GOOGLE_MAPS_API_KEY");
+  if (viteKey) return viteKey;
+  return await getEnvVar("GOOGLE_MAPS_API_KEY");
 }

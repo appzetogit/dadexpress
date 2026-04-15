@@ -192,6 +192,10 @@ const restaurantSchema = new mongoose.Schema(
       type: Number,
       default: 1400,
     },
+    tableBookingPrice: {
+      type: Number,
+      default: null,
+    },
     // Onboarding fields (merged from RestaurantOnboarding)
     onboarding: {
       step1: {
@@ -264,6 +268,7 @@ const restaurantSchema = new mongoose.Schema(
         featuredDish: String,
         featuredPrice: Number,
         offer: String,
+        tableBookingPrice: Number,
       },
       completedSteps: {
         type: Number,

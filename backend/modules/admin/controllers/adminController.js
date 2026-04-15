@@ -166,9 +166,32 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       ];
     }
 
+    const paymentSuccessFilter = {
+      $or: [
+        { 'payment.method': 'cash' },
+        {
+          $and: [
+            { 'payment.method': { $in: ['razorpay', 'wallet', 'upi', 'card', 'online'] } },
+            { 'payment.status': 'completed' }
+          ]
+        },
+        {
+          $and: [
+            { 'payment.method': { $exists: false } },
+            { 'payment.status': 'completed' }
+          ]
+        }
+      ]
+    };
+
     // Common order matcher for stats
     const getOrderMatch = (status = null, usePeriod = true) => {
-      const match = { "pricing.total": { $exists: true } };
+      const match = {
+        $and: [
+          { "pricing.total": { $exists: true } },
+          paymentSuccessFilter,
+        ]
+      };
       if (status) match.status = status;
       if (usePeriod && periodStart) {
         if (status === "delivered") match.deliveredAt = { $gte: periodStart, $lte: now };
@@ -178,10 +201,12 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
 
       // Filter by restaurants in zone OR by explicit zoneId on the order
       if (zoneIdString) {
-        match.$or = [
+        match.$and.push({
+          $or: [
           { "assignmentInfo.zoneId": zoneIdString },
           { restaurantId: { $in: restaurantIdsInZoneForQuery } }
-        ];
+          ]
+        });
       }
       return match;
     };
@@ -1844,6 +1869,7 @@ export const updateRestaurant = asyncHandler(async (req, res) => {
       offer,
       rating,
       costForTwo,
+      tableBookingPrice,
       diningSettings,
     } = req.body;
 
@@ -2003,6 +2029,10 @@ export const updateRestaurant = asyncHandler(async (req, res) => {
     if (featuredPrice !== undefined) restaurant.featuredPrice = parseFloat(featuredPrice) || restaurant.featuredPrice;
     if (offer !== undefined) restaurant.offer = offer;
     if (costForTwo !== undefined) restaurant.costForTwo = parseFloat(costForTwo) || restaurant.costForTwo;
+    if (tableBookingPrice !== undefined) {
+      const parsedTableBookingPrice = parseFloat(tableBookingPrice);
+      restaurant.tableBookingPrice = Number.isFinite(parsedTableBookingPrice) ? parsedTableBookingPrice : null;
+    }
     if (rating !== undefined) {
       const parsedRating = Number(rating);
       // Admin rating is constrained to 0-5. Keep it an integer for consistent star UI.
@@ -2071,6 +2101,10 @@ export const updateRestaurant = asyncHandler(async (req, res) => {
     if (featuredPrice !== undefined) restaurant.onboarding.step4.featuredPrice = parseFloat(featuredPrice) || restaurant.onboarding.step4.featuredPrice;
     if (offer !== undefined) restaurant.onboarding.step4.offer = offer;
     if (costForTwo !== undefined) restaurant.onboarding.step4.costForTwo = parseFloat(costForTwo) || restaurant.onboarding.step4.costForTwo;
+    if (tableBookingPrice !== undefined) {
+      const parsedTableBookingPrice = parseFloat(tableBookingPrice);
+      restaurant.onboarding.step4.tableBookingPrice = Number.isFinite(parsedTableBookingPrice) ? parsedTableBookingPrice : null;
+    }
     if (diningSettings !== undefined) restaurant.onboarding.step4.diningSettings = diningSettings;
 
     await restaurant.save();
@@ -2130,6 +2164,7 @@ export const createRestaurant = asyncHandler(async (req, res) => {
       featuredPrice,
       offer,
       costForTwo,
+      tableBookingPrice,
       // Authentication
       email,
       phone,
@@ -2328,6 +2363,11 @@ export const createRestaurant = asyncHandler(async (req, res) => {
       featuredPrice: featuredPrice || 249,
       offer: offer || "",
       costForTwo: costForTwo || 1400,
+      tableBookingPrice: (() => {
+        if (tableBookingPrice === undefined || tableBookingPrice === null || tableBookingPrice === "") return null;
+        const parsed = Number(tableBookingPrice);
+        return Number.isFinite(parsed) ? parsed : null;
+      })(),
       signupMethod,
       // Admin created restaurants are active by default
       isActive: true,
@@ -2401,6 +2441,11 @@ export const createRestaurant = asyncHandler(async (req, res) => {
         featuredPrice: featuredPrice || 249,
         offer: offer || "",
         costForTwo: costForTwo || 1400,
+        tableBookingPrice: (() => {
+          if (tableBookingPrice === undefined || tableBookingPrice === null || tableBookingPrice === "") return null;
+          const parsed = Number(tableBookingPrice);
+          return Number.isFinite(parsed) ? parsed : null;
+        })(),
       },
       completedSteps: 4,
     };

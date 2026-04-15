@@ -223,7 +223,7 @@ export default function DiningRestaurantDetails() {
                         <span>{formattedDistance}</span>
                         <span className="w-1 h-1 rounded-full bg-gray-400"></span>
                         {/* Cost For Two */}
-                        <span>{restaurant.costForTwo ? `₹${restaurant.costForTwo} for two` : "₹1400 for two"}</span>
+                        <span>{(restaurant.tableBookingPrice !== null && restaurant.tableBookingPrice !== undefined) ? `₹${restaurant.tableBookingPrice} for two` : (restaurant.costForTwo ? `₹${restaurant.costForTwo} for two` : "₹1400 for two")}</span>
                     </div>
 
                     <div className="flex items-center justify-between">
@@ -463,7 +463,7 @@ export default function DiningRestaurantDetails() {
                         </div>
                         <div>
                             <h4 className="font-bold text-gray-800 text-sm mb-1">Average Cost</h4>
-                            <p className="text-gray-600 text-sm">{restaurant.costForTwo ? `₹${restaurant.costForTwo} for two (approx.)` : "₹1400 for two (approx.)"}</p>
+                            <p className="text-gray-600 text-sm">{(restaurant.tableBookingPrice !== null && restaurant.tableBookingPrice !== undefined) ? `₹${restaurant.tableBookingPrice} for two (approx.)` : (restaurant.costForTwo ? `₹${restaurant.costForTwo} for two (approx.)` : "₹1400 for two (approx.)")}</p>
                         </div>
                         <div>
                             <h4 className="font-bold text-gray-800 text-sm mb-1">Address</h4>

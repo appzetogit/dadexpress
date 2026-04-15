@@ -5,6 +5,8 @@ import { uploadToCloudinary } from '../../../shared/utils/cloudinaryService.js';
 import axios from 'axios';
 import winston from 'winston';
 import { syncUserRealtime } from '../../delivery/services/firebaseTrackingService.js';
+import { getGoogleMapsApiKey } from '../../../shared/utils/envService.js';
+
 
 const logger = winston.createLogger({
   level: 'info',
@@ -15,6 +17,285 @@ const logger = winston.createLogger({
     })
   ]
 });
+
+const GEO_CACHE_TTL_MS = 10 * 60 * 1000;
+const reverseGeocodeCache = new Map();
+
+const getGeoCacheKey = (latitude, longitude) => {
+  const lat = Number(latitude).toFixed(4);
+  const lng = Number(longitude).toFixed(4);
+  return `${lat},${lng}`;
+};
+
+const getCachedGeoAddress = (latitude, longitude) => {
+  const key = getGeoCacheKey(latitude, longitude);
+  const cached = reverseGeocodeCache.get(key);
+  if (!cached) return null;
+  if (Date.now() - cached.timestamp > GEO_CACHE_TTL_MS) {
+    reverseGeocodeCache.delete(key);
+    return null;
+  }
+  return cached.value;
+};
+
+const setCachedGeoAddress = (latitude, longitude, value) => {
+  const key = getGeoCacheKey(latitude, longitude);
+  reverseGeocodeCache.set(key, {
+    value,
+    timestamp: Date.now()
+  });
+};
+
+const normalizeAddressParts = (parts = []) => {
+  const cleaned = parts
+    .map((part) => String(part || '').replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+
+  const exactValues = new Set(cleaned.map((part) => part.toLowerCase()));
+  const withoutCityDupes = cleaned.filter((part) => {
+    const lower = part.toLowerCase();
+    if (!lower.endsWith(' city')) return true;
+    const base = lower.replace(/\s+city$/, '').trim();
+    return !exactValues.has(base);
+  });
+
+  const seen = new Set();
+  return withoutCityDupes.filter((part) => {
+    const key = part.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
+const resolveLocationFromNominatim = async (latitude, longitude) => {
+  try {
+    const cached = getCachedGeoAddress(latitude, longitude);
+    if (cached) return cached;
+
+    const response = await axios.get(
+      'https://nominatim.openstreetmap.org/reverse',
+      {
+        params: {
+          format: 'jsonv2',
+          lat: latitude,
+          lon: longitude,
+          addressdetails: 1,
+          zoom: 18
+        },
+        headers: {
+          'Accept-Language': 'en',
+          // Required by Nominatim usage policy; helps avoid anonymous throttling.
+          'User-Agent': 'dadexpress-location-service/1.0'
+        },
+        timeout: 9000
+      }
+    );
+
+    const data = response?.data || {};
+    const addr = data?.address || {};
+
+    const streetNumber = String(addr.house_number || '').trim();
+    const road = String(addr.road || '').trim();
+    const street = [streetNumber, road].filter(Boolean).join(' ').trim();
+    const areaRaw =
+      addr.suburb ||
+      addr.neighbourhood ||
+      addr.city_district ||
+      addr.hamlet ||
+      addr.quarter ||
+      '';
+    const city =
+      addr.city ||
+      addr.town ||
+      addr.village ||
+      addr.municipality ||
+      addr.county ||
+      addr.state_district ||
+      '';
+    const state = String(addr.state || '').trim();
+    const postalCode = String(addr.postcode || '').trim();
+
+    const areaBase = String(areaRaw || '').trim().toLowerCase().replace(/\s+city$/, '');
+    const cityBase = String(city || '').trim().toLowerCase();
+    const area = areaBase && cityBase && areaBase === cityBase ? '' : String(areaRaw || '').trim();
+
+    const compactAddress = normalizeAddressParts([street, area, city, state, postalCode]).join(', ');
+    const displayAddress = normalizeAddressParts(String(data.display_name || '').split(',')).join(', ');
+    const formattedAddress = compactAddress || displayAddress || '';
+
+    const resolved = {
+      street,
+      streetNumber,
+      area,
+      city: String(city || '').trim(),
+      state,
+      postalCode,
+      formattedAddress,
+      address: formattedAddress
+    };
+    setCachedGeoAddress(latitude, longitude, resolved);
+    return resolved;
+  } catch (error) {
+    logger.warn(`Nominatim reverse geocode failed: ${error.message}`);
+    return null;
+  }
+};
+
+const resolveLocationFromBigDataCloud = async (latitude, longitude) => {
+  try {
+    const cached = getCachedGeoAddress(latitude, longitude);
+    if (cached) return cached;
+
+    const response = await axios.get(
+      'https://api.bigdatacloud.net/data/reverse-geocode-client',
+      {
+        params: {
+          latitude,
+          longitude,
+          localityLanguage: 'en'
+        },
+        timeout: 7000
+      }
+    );
+
+    const data = response?.data || {};
+    const localityInfo = Array.isArray(data?.localityInfo?.administrative)
+      ? data.localityInfo.administrative
+      : [];
+    const areaFromHierarchy = localityInfo.find((level) => {
+      const order = Number(level?.order);
+      return Number.isFinite(order) && order >= 8 && order <= 10 && level?.name;
+    })?.name || '';
+
+    const city = String(data.city || data.locality || '').trim();
+    const state = String(data.principalSubdivision || '').trim();
+    const postalCode = String(data.postcode || '').trim();
+    const areaRaw = String(data.locality || data.subLocality || areaFromHierarchy || '').trim();
+
+    const areaBase = areaRaw.toLowerCase().replace(/\s+city$/, '');
+    const cityBase = city.toLowerCase();
+    const area = areaBase && cityBase && areaBase === cityBase ? '' : areaRaw;
+
+    const formattedAddress = normalizeAddressParts(
+      String(data.formattedAddress || '').split(',')
+    ).join(', ') || normalizeAddressParts([area, city, state, postalCode]).join(', ');
+
+    if (!formattedAddress) return null;
+
+    const resolved = {
+      street: '',
+      streetNumber: '',
+      area,
+      city,
+      state,
+      postalCode,
+      formattedAddress,
+      address: formattedAddress
+    };
+    setCachedGeoAddress(latitude, longitude, resolved);
+    return resolved;
+  } catch (error) {
+    logger.warn(`BigDataCloud reverse geocode failed: ${error.message}`);
+    return null;
+  }
+};
+
+const resolveLocationFromGoogleMaps = async (latitude, longitude) => {
+  try {
+    const cached = getCachedGeoAddress(latitude, longitude);
+    if (cached) return cached;
+
+    const apiKey = await getGoogleMapsApiKey();
+    if (!apiKey) return null;
+
+    const response = await axios.get(
+      'https://maps.googleapis.com/maps/api/geocode/json',
+      {
+        params: {
+          latlng: `${latitude},${longitude}`,
+          key: apiKey,
+          language: 'en'
+        },
+        timeout: 7000
+      }
+    );
+
+    const data = response?.data || {};
+    if (data.status !== 'OK' || !data.results || data.results.length === 0) {
+      return null;
+    }
+
+    const result = data.results[0];
+    const addressComponents = result.address_components || [];
+    
+    let city = "";
+    let state = "";
+    let area = "";
+    let postalCode = "";
+    let streetNumber = "";
+    let route = "";
+
+    addressComponents.forEach(comp => {
+      const types = comp.types || [];
+      if (types.includes('locality')) city = comp.long_name;
+      if (types.includes('administrative_area_level_1')) state = comp.long_name;
+      if (types.includes('postal_code')) postalCode = comp.long_name;
+      if (types.includes('sublocality_level_1') || types.includes('sublocality') || types.includes('neighborhood')) {
+        area = comp.long_name;
+      }
+      if (types.includes('street_number')) streetNumber = comp.long_name;
+      if (types.includes('route')) route = comp.long_name;
+    });
+
+    const street = [streetNumber, route].filter(Boolean).join(' ').trim();
+    const formattedAddress = result.formatted_address || '';
+
+    const resolved = {
+      street,
+      streetNumber,
+      area,
+      city,
+      state,
+      postalCode,
+      formattedAddress,
+      address: formattedAddress
+    };
+
+    setCachedGeoAddress(latitude, longitude, resolved);
+    return resolved;
+  } catch (error) {
+    logger.warn(`Google Maps reverse geocode failed: ${error.message}`);
+    return null;
+  }
+};
+
+const resolveLocationFromFreeGeocode = async (latitude, longitude) => {
+  // Try Google Maps first (if API key is available)
+  const googleRes = await resolveLocationFromGoogleMaps(latitude, longitude);
+  if (googleRes) return googleRes;
+
+  const nominatim = await resolveLocationFromNominatim(latitude, longitude);
+  if (nominatim) return nominatim;
+
+  return resolveLocationFromBigDataCloud(latitude, longitude);
+};
+
+
+const sanitizeAreaCandidate = (value) => {
+  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  if (!text) return '';
+  // Area should be a locality-like label, not a full multi-part address blob.
+  if (text.includes(',') || text.length > 80) return '';
+  return text;
+};
+
+const sanitizeAddressCandidate = (value) => {
+  const text = normalizeAddressParts(String(value || '').split(',')).join(', ');
+  if (!text) return '';
+  if (/^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/.test(text)) return '';
+  return text;
+};
 
 /**
  * Get user profile
@@ -218,15 +499,41 @@ export const updateUserLocation = asyncHandler(async (req, res) => {
       return errorResponse(res, 404, 'User not found');
     }
 
-    // Build complete location object with all available data
+    const liveResolved = await resolveLocationFromFreeGeocode(latNum, lngNum);
+
+    const resolvedAddress = liveResolved?.address || '';
+    const resolvedCity = liveResolved?.city || '';
+    const resolvedState = liveResolved?.state || '';
+    const resolvedArea = liveResolved?.area || '';
+    const resolvedFormattedAddress = liveResolved?.formattedAddress || '';
+    const resolvedPostalCode = liveResolved?.postalCode || '';
+    const resolvedStreet = liveResolved?.street || '';
+    const resolvedStreetNumber = liveResolved?.streetNumber || '';
+
+    const safeAreaFallback = sanitizeAreaCandidate(area);
+    const safeAddressFallback = sanitizeAddressCandidate(address);
+    const safeFormattedFallback = sanitizeAddressCandidate(formattedAddress);
+
+    // Build complete location object.
+    // PRIORITIZE frontend data if it looks specific (not a placeholder).
+    // Placeholder addresses usually contain coordinates or generic "Current Location" / "Select location"
+    const isPlaceholder = (text) => {
+      if (!text) return true;
+      const t = text.trim();
+      return /^-?\d+\.\d+,\s*-?\d+\.\d+$/.test(t) || 
+             t.toLowerCase() === 'current location' || 
+             t.toLowerCase() === 'select location';
+    };
+
     const locationUpdate = {
       latitude: latNum,
       longitude: lngNum,
-      address: address || user.currentLocation?.address || '',
-      city: city || user.currentLocation?.city || '',
-      state: state || user.currentLocation?.state || '',
-      area: area || user.currentLocation?.area || '',
-      formattedAddress: formattedAddress || user.currentLocation?.formattedAddress || '',
+      // If frontend sent a real address, use it. Otherwise use geocoded.
+      address: (!isPlaceholder(address) ? address : resolvedAddress) || '',
+      city: city || resolvedCity || '',
+      state: state || resolvedState || '',
+      area: (!isPlaceholder(area) ? area : resolvedArea) || '',
+      formattedAddress: (!isPlaceholder(formattedAddress) ? formattedAddress : (resolvedFormattedAddress || resolvedAddress || address)) || '',
       lastUpdated: new Date(),
       location: {
         type: 'Point',
@@ -238,14 +545,14 @@ export const updateUserLocation = asyncHandler(async (req, res) => {
     if (accuracy !== undefined && accuracy !== null) {
       locationUpdate.accuracy = parseFloat(accuracy);
     }
-    if (postalCode) {
-      locationUpdate.postalCode = postalCode;
+    if (resolvedPostalCode || postalCode) {
+      locationUpdate.postalCode = resolvedPostalCode || postalCode;
     }
-    if (street) {
-      locationUpdate.street = street;
+    if (resolvedStreet || street) {
+      locationUpdate.street = resolvedStreet || street;
     }
-    if (streetNumber) {
-      locationUpdate.streetNumber = streetNumber;
+    if (resolvedStreetNumber || streetNumber) {
+      locationUpdate.streetNumber = resolvedStreetNumber || streetNumber;
     }
 
     // Update current location

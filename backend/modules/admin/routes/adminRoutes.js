@@ -72,7 +72,10 @@ import {
   deleteDeliveryPartner,
   reverifyDeliveryPartner,
 } from "../controllers/deliveryPartnerController.js";
-import { getDeliveryEarnings } from "../controllers/deliveryEarningsController.js";
+import {
+  getDeliveryEarnings,
+  deleteDeliveryEarning,
+} from "../controllers/deliveryEarningsController.js";
 import {
   addBonus,
   getBonusTransactions,
@@ -365,6 +368,7 @@ router.get("/fee-settings/history", getFeeSettingsHistory);
 router.get("/delivery-partners/requests", getJoinRequests);
 router.get("/delivery-partners", getDeliveryPartners);
 router.get("/delivery-partners/earnings", getDeliveryEarnings);
+router.delete("/delivery-partners/earnings/:transactionId", deleteDeliveryEarning);
 router.get("/delivery-partners/reviews", getDeliverymanReviews); // Must be before /:id route
 router.get("/delivery-partners/:id", getDeliveryPartnerById);
 router.post("/delivery-partners/:id/approve", approveDeliveryPartner);

@@ -43,10 +43,13 @@ export default function OutletInfo() {
   const [thumbnailImage, setThumbnailImage] = useState("https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=200&h=200&fit=crop")
   const [coverImages, setCoverImages] = useState([]) // Array of cover images (separate from menu images)
   const [costForTwo, setCostForTwo] = useState(1400)
+  const [tableBookingPrice, setTableBookingPrice] = useState("")
   const [showEditNameDialog, setShowEditNameDialog] = useState(false)
   const [editNameValue, setEditNameValue] = useState("")
   const [showEditCostDialog, setShowEditCostDialog] = useState(false)
   const [editCostValue, setEditCostValue] = useState("")
+  const [showEditTablePriceDialog, setShowEditTablePriceDialog] = useState(false)
+  const [editTablePriceValue, setEditTablePriceValue] = useState("")
   const [restaurantId, setRestaurantId] = useState("")
   const [restaurantMongoId, setRestaurantMongoId] = useState("")
   const [uploadingImage, setUploadingImage] = useState(false)
@@ -98,6 +101,7 @@ export default function OutletInfo() {
           
           // Set cost for two
           setCostForTwo(data.costForTwo || 1400)
+          setTableBookingPrice(data.tableBookingPrice === null || data.tableBookingPrice === undefined ? "" : String(data.tableBookingPrice))
           
           // Set restaurant ID
           setRestaurantId(data.restaurantId || data.id || "")
@@ -619,6 +623,46 @@ export default function OutletInfo() {
     }
   }
 
+  const handleOpenTablePriceDialog = () => {
+    setEditTablePriceValue(tableBookingPrice)
+    setShowEditTablePriceDialog(true)
+  }
+
+  const handleSaveTablePrice = async () => {
+    if (editTablePriceValue === "") {
+      try {
+        const response = await restaurantAPI.updateProfile({ tableBookingPrice: null })
+        if (response?.data?.data?.restaurant || response?.data?.restaurant) {
+          setTableBookingPrice("")
+          setShowEditTablePriceDialog(false)
+          toast.success("Table booking price updated successfully")
+        }
+      } catch (error) {
+        console.error("Error updating table booking price:", error)
+        alert(`Failed to update table booking price: ${error.response?.data?.message || error.message || "Please try again."}`)
+      }
+      return
+    }
+
+    const newPrice = parseFloat(editTablePriceValue)
+    if (isNaN(newPrice) || newPrice < 0) {
+      alert("Please enter a valid price")
+      return
+    }
+
+    try {
+      const response = await restaurantAPI.updateProfile({ tableBookingPrice: newPrice })
+      if (response?.data?.data?.restaurant || response?.data?.restaurant) {
+        setTableBookingPrice(String(newPrice))
+        setShowEditTablePriceDialog(false)
+        toast.success("Table booking price updated successfully")
+      }
+    } catch (error) {
+      console.error("Error updating table booking price:", error)
+      alert(`Failed to update table booking price: ${error.response?.data?.message || error.message || "Please try again."}`)
+    }
+  }
+
 
   // Prevent body scroll when dialog is open
   useEffect(() => {
@@ -884,6 +928,28 @@ export default function OutletInfo() {
           </div>
         </motion.div>
 
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.13 }}
+          className="bg-blue-100/50 rounded-lg p-4 border border-blue-300"
+        >
+          <div className="flex items-start justify-between">
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-gray-500 font-normal mb-1">Table booking price (Dining)</p>
+              <p className="text-base font-semibold text-gray-900">
+                {loading ? "..." : (tableBookingPrice === "" ? "Not set" : `₹${tableBookingPrice}`)}
+              </p>
+            </div>
+            <button
+              onClick={handleOpenTablePriceDialog}
+              className="text-blue-600 text-sm font-normal hover:text-blue-700 transition-colors ml-4 shrink-0"
+            >
+              Edit
+            </button>
+          </div>
+        </motion.div>
+
         {/* Action Cards */}
         <motion.div
           initial={{ opacity: 0, y: 8 }}
@@ -984,6 +1050,46 @@ export default function OutletInfo() {
             <Button
               onClick={handleSaveCost}
               disabled={!editCostValue}
+              className="bg-black text-white"
+            >
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showEditTablePriceDialog} onOpenChange={setShowEditTablePriceDialog}>
+        <DialogContent className="sm:max-w-md p-4 w-[90%]">
+          <DialogHeader>
+            <DialogTitle className="text-left">Edit Table Booking Price</DialogTitle>
+            <DialogDescription className="text-left text-xs text-gray-500">
+              This price is shown to customers on the dining booking screen.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₹</span>
+              <Input
+                type="number"
+                value={editTablePriceValue}
+                onChange={(e) => setEditTablePriceValue(e.target.value)}
+                placeholder="e.g. 500"
+                className="w-full pl-7 focus-visible:border-black focus-visible:ring-0"
+                autoFocus
+                min="0"
+              />
+            </div>
+            <p className="text-xs text-gray-500 mt-2">Leave empty to clear this value.</p>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowEditTablePriceDialog(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveTablePrice}
               className="bg-black text-white"
             >
               Save

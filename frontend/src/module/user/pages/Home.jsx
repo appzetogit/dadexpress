@@ -1435,10 +1435,10 @@ export default function Home() {
 
   const emptyRestaurantsMessage = useMemo(() => {
     if (selectedAddressOutOfService) {
-      return "Service not available at this address"
+      return "Please select your location to explore nearby restaurants & menus 🍽️"
     }
     if (!resolvedZoneId && !zoneResolveLoading && !zoneLoading) {
-      return "Service not available at this address"
+      return "Please select your location to explore nearby restaurants & menus 🍽️"
     }
     return "No restaurants available in this area"
   }, [selectedAddressOutOfService, resolvedZoneId, zoneResolveLoading, zoneLoading])

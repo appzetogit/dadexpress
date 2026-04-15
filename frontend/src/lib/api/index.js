@@ -1462,6 +1462,12 @@ export const adminAPI = {
     return apiClient.get("/admin/delivery-partners/earnings", { params });
   },
 
+  deleteDeliveryEarning: (transactionId) => {
+    return apiClient.delete(
+      `/admin/delivery-partners/earnings/${encodeURIComponent(transactionId)}`,
+    );
+  },
+
   getDeliveryPartners: (params = {}) => {
     return apiClient.get(API_ENDPOINTS.ADMIN.DELIVERY_PARTNERS, { params });
   },

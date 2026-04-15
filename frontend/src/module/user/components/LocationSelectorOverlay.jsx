@@ -57,7 +57,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
     pathname.startsWith("/usermain/cart/")
   const inputRef = useRef(null)
   const [searchValue, setSearchValue] = useState("")
-  const { location, reverseGeocode } = useGeoLocation()
+  const { location, reverseGeocode, updateLocationInDB } = useGeoLocation()
   const { addresses = [], addAddress, updateAddress, userProfile, setDefaultAddress } = useProfile()
   const [showAddressForm, setShowAddressForm] = useState(false)
   const [editingAddressId, setEditingAddressId] = useState(null)
@@ -98,6 +98,30 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
   const reverseGeocodeTimeoutRef = useRef(null) // Debounce timeout for reverse geocoding
   const lastReverseGeocodeCoordsRef = useRef(null) // Track last coordinates to avoid duplicate calls
   const ltrInputStyle = { direction: "ltr", unicodeBidi: "plaintext", textAlign: "left" }
+  const sanitizeAddressText = (value) => {
+    const rawParts = String(value || "")
+      .split(",")
+      .map((part) => part.replace(/\s+/g, " ").trim())
+      .filter(Boolean)
+
+    const exactValues = new Set(rawParts.map((part) => part.toLowerCase()))
+    const filteredCityDupes = rawParts.filter((part) => {
+      const lower = part.toLowerCase()
+      if (!lower.endsWith(" city")) return true
+      const base = lower.replace(/\s+city$/, "").trim()
+      return !exactValues.has(base)
+    })
+
+    const seen = new Set()
+    return filteredCityDupes
+      .filter((part) => {
+        const key = part.toLowerCase()
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+      .join(", ")
+  }
 
   const getCurrentGpsCoordinates = (options = {}) =>
     new Promise((resolve, reject) => {
@@ -118,16 +142,110 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       )
     })
 
-  const getCurrentGpsCoordinatesWithRetry = async () => {
+  const getBestGpsCoordinates = ({
+    sampleWindowMs = 12000,
+    requiredAccuracy = 80,
+  } = {}) =>
+    new Promise((resolve, reject) => {
+      if (!navigator?.geolocation) {
+        reject(new Error("Location services are not supported"))
+        return
+      }
+
+      let watchId = null
+      let sampleTimer = null
+      let bestPosition = null
+
+      const finalize = (position, error) => {
+        if (watchId !== null) {
+          navigator.geolocation.clearWatch(watchId)
+          watchId = null
+        }
+        if (sampleTimer) {
+          clearTimeout(sampleTimer)
+          sampleTimer = null
+        }
+
+        if (position) {
+          resolve(position)
+          return
+        }
+
+        reject(error || new Error("Unable to get GPS fix"))
+      }
+
+      sampleTimer = setTimeout(() => {
+        if (bestPosition) {
+          finalize(bestPosition)
+          return
+        }
+        finalize(null, new Error("GPS timeout"))
+      }, sampleWindowMs)
+
+      watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          const nextAccuracy = Number(position?.coords?.accuracy || Infinity)
+          const bestAccuracy = Number(bestPosition?.coords?.accuracy || Infinity)
+
+          if (!bestPosition || nextAccuracy < bestAccuracy) {
+            bestPosition = position
+          }
+
+          if (Number.isFinite(nextAccuracy) && nextAccuracy <= requiredAccuracy) {
+            finalize(position)
+          }
+        },
+        (error) => {
+          if (error?.code === 1) {
+            finalize(null, error)
+            return
+          }
+
+          if (bestPosition) {
+            finalize(bestPosition)
+            return
+          }
+
+          finalize(null, error)
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: sampleWindowMs,
+          maximumAge: 0,
+        },
+      )
+    })
+
+  const getCurrentGpsCoordinatesWithRetry = async ({ forceLive = true } = {}) => {
     try {
       // Try strict GPS first.
-      return await getCurrentGpsCoordinates({
+      const strictPosition = await getCurrentGpsCoordinates({
         enableHighAccuracy: true,
         timeout: 20000,
         maximumAge: 0,
       })
+
+      const strictAccuracy = Number(strictPosition?.coords?.accuracy || Infinity)
+      if (Number.isFinite(strictAccuracy) && strictAccuracy <= 100) {
+        return strictPosition
+      }
+
+      // If strict fix is coarse, sample a short watch window and pick best accuracy.
+      try {
+        const bestPosition = await getBestGpsCoordinates({
+          sampleWindowMs: 12000,
+          requiredAccuracy: 80,
+        })
+
+        const bestAccuracy = Number(bestPosition?.coords?.accuracy || Infinity)
+        if (bestAccuracy < strictAccuracy) {
+          return bestPosition
+        }
+      } catch {}
+
+      return strictPosition
     } catch (firstError) {
-      // On timeout/unavailable, retry with relaxed settings to avoid frequent false failures.
+      // On timeout/unavailable, retry with strict live GPS settings.
       const shouldRetry =
         firstError?.code === 2 ||
         firstError?.code === 3 ||
@@ -137,10 +255,27 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
         throw firstError
       }
 
+      // Try short GPS sampling before final strict retry.
+      try {
+        return await getBestGpsCoordinates({
+          sampleWindowMs: 18000,
+          requiredAccuracy: 80,
+        })
+      } catch {}
+
+      // Keep live request strict when user taps current location.
+      if (forceLive) {
+        return await getCurrentGpsCoordinates({
+          enableHighAccuracy: true,
+          timeout: 25000,
+          maximumAge: 0,
+        })
+      }
+
       return await getCurrentGpsCoordinates({
-        enableHighAccuracy: false,
-        timeout: 30000,
-        maximumAge: 180000, // allow recent cached fix from device GPS provider
+        enableHighAccuracy: true,
+        timeout: 20000,
+        maximumAge: 0,
       })
     }
   }
@@ -754,7 +889,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       toast.loading("Fetching your current location...", {
         id: "location-request",
       })
-      const position = await getCurrentGpsCoordinatesWithRetry()
+      const position = await getCurrentGpsCoordinatesWithRetry({ forceLive: true })
       const latitude = Number(position?.coords?.latitude)
       const longitude = Number(position?.coords?.longitude)
       const accuracy = Number(position?.coords?.accuracy || 0)
@@ -786,7 +921,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       )
 
       // Save GPS coordinates to backend (Firebase sync happens on backend).
-      await userAPI.updateLocation({
+      await updateLocationInDB({
         latitude,
         longitude,
         address: geocoded.address || "",
@@ -1469,7 +1604,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
     console.log("✅ watchPosition started, ID:", watchPositionIdRef.current)
   }
 
-  const handleMapMoveEnd = async (lat, lng) => {
+  const handleMapMoveEnd = async (lat, lng, knownAddress = null) => {
     // Round coordinates to 6 decimal places (about 10cm precision) to avoid duplicate calls
     const roundedLat = parseFloat(lat.toFixed(6))
     const roundedLng = parseFloat(lng.toFixed(6))
@@ -1497,6 +1632,17 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       setLoadingAddress(true)
       try {
         // Fetch detailed address from geocoding service
+        // If we already have a known address (e.g. from search), use it directly
+        if (knownAddress) {
+          setCurrentAddress(knownAddress)
+          setAddressFormData(prev => ({
+            ...prev,
+            additionalDetails: knownAddress
+          }))
+          setLoadingAddress(false)
+          return
+        }
+
         const addr = await reverseGeocode(roundedLat, roundedLng)
         console.log("✅ Reverse geocoding success:", addr)
         
@@ -1511,14 +1657,21 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
           pointOfInterest,
           premise
         } = addr
+        const isCoordinateText = (value) =>
+          /^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/.test(String(value || "").trim())
+        const normalizedFormattedAddress = sanitizeAddressText(formattedAddress)
+        const safeFormattedAddress =
+          normalizedFormattedAddress && !isCoordinateText(normalizedFormattedAddress)
+            ? normalizedFormattedAddress
+            : ""
 
           // Update current address display
-          setCurrentAddress(formattedAddress || `${roundedLat.toFixed(6)}, ${roundedLng.toFixed(6)}`)
+          setCurrentAddress(safeFormattedAddress || "Select location")
 
           // Update form data
           // Store FULL formatted address in additionalDetails (Address details field) - this is what user sees
           // This should be the complete address with all parts: POI, Building, Floor, Area, City, State, Pincode
-          const fullAddressForField = formattedAddress ||
+          const fullAddressForField = safeFormattedAddress ||
             (pointOfInterest && city && state ? `${pointOfInterest}, ${city}, ${state}` : '') ||
             (premise && city && state ? `${premise}, ${city}, ${state}` : '') ||
             (street && city && state ? `${street}, ${city}, ${state}` : '') ||
@@ -1532,7 +1685,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
             city: city || prev.city,
             state: state || prev.state,
             zipCode: postalCode || prev.zipCode,
-            additionalDetails: fullAddressForField || prev.additionalDetails, // Store FULL address in Address details field
+            additionalDetails: sanitizeAddressText(fullAddressForField) || prev.additionalDetails, // Store FULL address in Address details field
           }))
       } catch (error) {
         console.error("❌ Error reverse geocoding:", error)
@@ -1541,7 +1694,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
           response: error.response?.data,
           status: error.response?.status
         })
-        setCurrentAddress(`${roundedLat.toFixed(6)}, ${roundedLng.toFixed(6)}`)
+        setCurrentAddress("Select location")
         // Don't show error toast, just use coordinates
       } finally {
         setLoadingAddress(false)
@@ -1557,7 +1710,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       }
 
       toast.loading("Getting your fresh location...", { id: "current-location" })
-      const position = await getCurrentGpsCoordinatesWithRetry()
+      const position = await getCurrentGpsCoordinatesWithRetry({ forceLive: true })
       const lat = Number(position?.coords?.latitude)
       const lng = Number(position?.coords?.longitude)
       const accuracy = Number(position?.coords?.accuracy || 0)
@@ -1924,19 +2077,20 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
           setMapPosition([lat, lng])
 
           // Update form data with search results
+          const normalizedSearchAddress = sanitizeAddressText(place.formatted_address || "")
           setAddressFormData(prev => ({
             ...prev,
             street: finalStreet || prev.street,
             city: city || prev.city,
             state: state || prev.state,
             zipCode: zip || prev.zipCode,
-            additionalDetails: (place.formatted_address || prev.additionalDetails)
+            additionalDetails: (normalizedSearchAddress || prev.additionalDetails)
           }))
           
           // Use setTimeout to allow map pan to finish slightly before processing updates
           setTimeout(() => {
-            handleMapMoveEnd(lat, lng)
-            setCurrentAddress(place.formatted_address || `${lat.toFixed(6)}, ${lng.toFixed(6)}`)
+            handleMapMoveEnd(lat, lng, normalizedSearchAddress)
+            setCurrentAddress(normalizedSearchAddress || "Select location")
           }, 300)
         } else {
           console.warn("🔍 Search failed or no results:", status)

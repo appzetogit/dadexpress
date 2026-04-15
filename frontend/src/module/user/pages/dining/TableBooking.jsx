@@ -4,7 +4,7 @@ import { ArrowLeft, ChevronDown, Calendar, Clock, Ticket } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import AnimatedPage from "../../components/AnimatedPage"
 import { useEffect } from "react"
-import { diningAPI } from "@/lib/api"
+import { diningAPI, restaurantAPI } from "@/lib/api"
 import Loader from "@/components/Loader"
 
 export default function TableBooking() {
@@ -21,15 +21,44 @@ export default function TableBooking() {
 
     useEffect(() => {
         const fetchRestaurant = async () => {
+            const normalizeSlug = (value = "") =>
+                value
+                    .toString()
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, "-")
+                    .replace(/(^-|-$)+/g, "")
+
             try {
                 const response = await diningAPI.getRestaurantBySlug(slug)
                 if (response.data && response.data.success) {
                     const apiRestaurant = response.data.data
                     const actualRestaurant = apiRestaurant?.restaurant || apiRestaurant
                     setRestaurant(actualRestaurant)
+                    return
                 }
             } catch (error) {
                 console.error("Error fetching restaurant:", error)
+            }
+
+            try {
+                const listResp = await restaurantAPI.getRestaurants()
+                const restaurants = listResp?.data?.data?.restaurants || listResp?.data?.data || []
+                const requestedSlug = normalizeSlug(slug)
+                const match = restaurants.find((r) => {
+                    const dbSlug = normalizeSlug(r?.slug || "")
+                    const nameSlug = normalizeSlug(r?.name || "")
+                    return dbSlug === requestedSlug || nameSlug === requestedSlug
+                })
+
+                if (match) {
+                    const actualRestaurant = match?.restaurant || match
+                    setRestaurant(actualRestaurant)
+                } else {
+                    setRestaurant(null)
+                }
+            } catch (fallbackError) {
+                console.error("Fallback restaurant lookup failed:", fallbackError)
+                setRestaurant(null)
             } finally {
                 setLoading(false)
             }

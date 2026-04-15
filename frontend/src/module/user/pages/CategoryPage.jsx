@@ -32,7 +32,7 @@ export default function CategoryPage() {
   const navigate = useNavigate()
   const { vegMode } = useProfile()
   const { location } = useLocation()
-  const { zoneId, isOutOfService } = useZone(location)
+  const { zoneId, isOutOfService, zoneStatus } = useZone(location)
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState(category?.toLowerCase() || 'all')
   const [activeFilters, setActiveFilters] = useState(new Set())
@@ -46,6 +46,7 @@ export default function CategoryPage() {
   const filterSectionRefs = useRef({})
   const rightContentRef = useRef(null)
   const categoryScrollRef = useRef(null)
+  const restaurantsRequestRef = useRef(0)
 
   // State for categories from admin
   const [categories, setCategories] = useState([])
@@ -251,17 +252,84 @@ export default function CategoryPage() {
     return allDishes.length > 0 ? allDishes[0] : null
   }
 
+  // Helper function to get ALL menu dishes from a restaurant menu
+  const getAllMenuDishesFromMenu = (menu) => {
+    if (!menu || !menu.sections || !Array.isArray(menu.sections)) {
+      return []
+    }
+
+    const dishes = []
+
+    for (const section of menu.sections) {
+      if (section.items && Array.isArray(section.items)) {
+        for (const item of section.items) {
+          const originalPrice = item.originalPrice || item.price || 0
+          const discountPercent = item.discountPercent || 0
+          const finalPrice = discountPercent > 0
+            ? Math.round(originalPrice * (1 - discountPercent / 100))
+            : originalPrice
+          const dishImage = item.image?.url || item.image || (Array.isArray(item.images) ? item.images[0] : null) || null
+
+          dishes.push({
+            name: item.name,
+            price: finalPrice,
+            image: dishImage,
+            originalPrice,
+            itemId: item._id || item.id || `${item.name}-${finalPrice}`,
+            foodType: item.foodType,
+          })
+        }
+      }
+
+      if (section.subsections && Array.isArray(section.subsections)) {
+        for (const subsection of section.subsections) {
+          if (subsection.items && Array.isArray(subsection.items)) {
+            for (const item of subsection.items) {
+              const originalPrice = item.originalPrice || item.price || 0
+              const discountPercent = item.discountPercent || 0
+              const finalPrice = discountPercent > 0
+                ? Math.round(originalPrice * (1 - discountPercent / 100))
+                : originalPrice
+              const dishImage = item.image?.url || item.image || (Array.isArray(item.images) ? item.images[0] : null) || null
+
+              dishes.push({
+                name: item.name,
+                price: finalPrice,
+                image: dishImage,
+                originalPrice,
+                itemId: item._id || item.id || `${item.name}-${finalPrice}`,
+                foodType: item.foodType,
+              })
+            }
+          }
+        }
+      }
+    }
+
+    return dishes
+  }
+
   // Fetch restaurants from API
   useEffect(() => {
     const fetchRestaurants = async () => {
+      // Wait until zone detection settles to avoid initial stale/non-zone fetch flash.
+      if (zoneStatus === 'loading') {
+        setLoadingRestaurants(true)
+        return
+      }
+
+      const requestId = ++restaurantsRequestRef.current
       try {
         setLoadingRestaurants(true)
+        setRestaurantsData([])
         // Optional: Add zoneId if available (for sorting/filtering, but show all restaurants)
         const params = {}
         if (zoneId) {
           params.zoneId = zoneId
         }
         const response = await restaurantAPI.getRestaurants(params)
+
+        if (requestId !== restaurantsRequestRef.current) return
 
         if (response.data && response.data.success && response.data.data && response.data.data.restaurants) {
           const restaurantsArray = response.data.data.restaurants
@@ -385,20 +453,24 @@ export default function CategoryPage() {
               }
             })
           )
+          if (requestId !== restaurantsRequestRef.current) return
           setRestaurantsData(restaurantsWithMenus)
         } else {
+          if (requestId !== restaurantsRequestRef.current) return
           setRestaurantsData([])
         }
       } catch (error) {
         console.error('Error fetching restaurants:', error)
+        if (requestId !== restaurantsRequestRef.current) return
         setRestaurantsData([])
       } finally {
+        if (requestId !== restaurantsRequestRef.current) return
         setLoadingRestaurants(false)
       }
     }
 
     fetchRestaurants()
-  }, [zoneId, isOutOfService])
+  }, [zoneId, isOutOfService, zoneStatus])
 
   // Update selected category when URL changes
   useEffect(() => {
@@ -573,9 +645,51 @@ export default function CategoryPage() {
     const sourceData = restaurantsData.length > 0 ? restaurantsData : []
     let filtered = [...sourceData]
 
-    // Filter by category - Dynamic filtering based on menu items
-    // If category is selected, expand restaurants into dish cards (one card per matching dish)
-    if (selectedCategory && selectedCategory !== 'all') {
+    // For "All" category, show menu dishes only (one card per dish)
+    if (selectedCategory === 'all') {
+      const expandedDishes = []
+      const normalizeImageUrl = (value) => {
+        if (typeof value !== 'string') return ''
+        return value
+          .trim()
+          .toLowerCase()
+          .replace(/^https?:\/\/[^/]+/i, '')
+          .split('?')[0]
+          .split('#')[0]
+      }
+
+      filtered.forEach(r => {
+        const allMenuDishes = r.menu ? getAllMenuDishesFromMenu(r.menu) : []
+
+        if (allMenuDishes.length > 0) {
+          allMenuDishes.forEach((dish, index) => {
+            if (vegMode && dish.foodType !== "Veg") return
+            const dishImageUrl = normalizeImageUrl(dish.image)
+            const restaurantImageUrl = normalizeImageUrl(r.image)
+            const safeDishImage =
+              dishImageUrl && restaurantImageUrl && dishImageUrl === restaurantImageUrl
+                ? null
+                : (dish.image || null)
+
+            expandedDishes.push({
+              ...r,
+              id: `${r.id}-dish-${dish.itemId || index}`,
+              dishId: dish.itemId || `${r.id}-dish-${index}`,
+              categoryDish: dish,
+              categoryDishName: dish.name,
+              categoryDishPrice: dish.price,
+              categoryDishImage: safeDishImage,
+            })
+          })
+          return
+        }
+
+      })
+
+      filtered = expandedDishes
+    } else if (selectedCategory) {
+      // Filter by category - Dynamic filtering based on menu items
+      // If category is selected, expand restaurants into dish cards (one card per matching dish)
       const expandedDishes = []
 
       filtered.forEach(r => {
@@ -669,7 +783,10 @@ export default function CategoryPage() {
       });
     }
     if (activeFilters.has('under-250')) {
-      filtered = filtered.filter(r => r.featuredPrice && r.featuredPrice <= 250)
+      filtered = filtered.filter(r => {
+        const price = r.categoryDishPrice ?? r.featuredPrice
+        return price && price <= 250
+      })
     }
     if (activeFilters.has('flat-50-off')) {
       filtered = filtered.filter(r => r.offer && r.offer.includes('50%'))
@@ -681,8 +798,14 @@ export default function CategoryPage() {
       filtered = filtered.filter(r =>
         r.name?.toLowerCase().includes(query) ||
         r.cuisine?.toLowerCase().includes(query) ||
-        r.featuredDish?.toLowerCase().includes(query)
+        r.featuredDish?.toLowerCase().includes(query) ||
+        r.categoryDishName?.toLowerCase().includes(query)
       )
+    }
+
+    // Hard guard: in "All", render only menu-item cards (never restaurant-only cards)
+    if (selectedCategory === 'all') {
+      filtered = filtered.filter(r => r.categoryDishName)
     }
 
     return filtered
@@ -690,6 +813,10 @@ export default function CategoryPage() {
 
   const handleCategorySelect = (category) => {
     const categorySlug = category.slug || category.id
+    if (selectedCategory === categorySlug) {
+      return
+    }
+
     setSelectedCategory(categorySlug)
     // Update URL to reflect category change
     if (categorySlug === 'all') {
@@ -901,17 +1028,25 @@ export default function CategoryPage() {
                               alt={restaurant.categoryDishName || restaurant.name}
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                               onError={(e) => {
-                                // Fallback to restaurant image if dish image fails
-                                if (restaurant.image) {
-                                  e.target.src = restaurant.image
-                                } else {
-                                  // Show emoji placeholder
+                                // In "all" mode we must never fallback to restaurant image.
+                                if (selectedCategory === 'all') {
                                   e.target.style.display = 'none'
                                   const placeholder = document.createElement('div')
                                   placeholder.className = 'w-full h-full flex items-center justify-center bg-gray-100 dark:bg-gray-800 text-6xl'
                                   placeholder.textContent = '🍽️'
                                   e.target.parentElement.appendChild(placeholder)
+                                  return
                                 }
+                                // Fallback to restaurant image for non-all categories
+                                if (restaurant.image) {
+                                  e.target.src = restaurant.image
+                                  return
+                                }
+                                e.target.style.display = 'none'
+                                const placeholder = document.createElement('div')
+                                placeholder.className = 'w-full h-full flex items-center justify-center bg-gray-100 dark:bg-gray-800 text-6xl'
+                                placeholder.textContent = '🍽️'
+                                e.target.parentElement.appendChild(placeholder)
                               }}
                             />
                           ) : restaurant.image ? (
@@ -1001,19 +1136,31 @@ export default function CategoryPage() {
                             alt={restaurant.categoryDishName || restaurant.name}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                             onError={(e) => {
-                              // Fallback to restaurant image if dish image fails
-                              if (restaurant.image) {
-                                e.target.src = restaurant.image
-                              } else {
-                                // Show emoji placeholder
+                              // In "all" mode we must never fallback to restaurant image.
+                              if (selectedCategory === 'all') {
                                 e.target.style.display = 'none'
                                 const placeholder = document.createElement('div')
                                 placeholder.className = 'w-full h-full flex items-center justify-center bg-gray-100 dark:bg-gray-800 text-6xl'
                                 placeholder.textContent = '🍽️'
                                 e.target.parentElement.appendChild(placeholder)
+                                return
                               }
+                              // Fallback to restaurant image for non-all categories
+                              if (restaurant.image) {
+                                e.target.src = restaurant.image
+                                return
+                              }
+                              e.target.style.display = 'none'
+                              const placeholder = document.createElement('div')
+                              placeholder.className = 'w-full h-full flex items-center justify-center bg-gray-100 dark:bg-gray-800 text-6xl'
+                              placeholder.textContent = '🍽️'
+                              e.target.parentElement.appendChild(placeholder)
                             }}
                           />
+                        ) : selectedCategory === 'all' ? (
+                          <div className="w-full h-full flex items-center justify-center bg-gray-100 dark:bg-gray-800 text-6xl">
+                            🍽️
+                          </div>
                         ) : restaurant.image ? (
                           <img
                             src={restaurant.image}
@@ -1063,7 +1210,7 @@ export default function CategoryPage() {
                         <div className="flex items-start justify-between gap-2 mb-2 lg:mb-3">
                           <div className="flex-1 min-w-0">
                             <h3 className="text-md md:text-xl lg:text-2xl font-bold text-gray-900 dark:text-white line-clamp-1 lg:line-clamp-2">
-                              {restaurant.name}
+                              {restaurant.categoryDishName || restaurant.name}
                             </h3>
                           </div>
                           <div className="flex-shrink-0 bg-green-600 text-white px-2 md:px-3 lg:px-4 py-1 lg:py-1.5 rounded-lg flex items-center gap-1">
@@ -1103,7 +1250,7 @@ export default function CategoryPage() {
             </div>
 
             {/* Empty State */}
-            {filteredAllRestaurants.length === 0 && (
+            {!loadingRestaurants && filteredAllRestaurants.length === 0 && (
               <div className="text-center py-12 md:py-16">
                 <p className="text-gray-500 dark:text-gray-400 text-sm md:text-base">
                   {searchQuery

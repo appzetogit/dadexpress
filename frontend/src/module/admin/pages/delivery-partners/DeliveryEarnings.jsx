@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from "react"
-import { Search, Download, ChevronDown, DollarSign, Calendar, Filter, Loader2, FileText, FileSpreadsheet, Code } from "lucide-react"
+import { Search, Download, ChevronDown, DollarSign, Calendar, Filter, Loader2, FileText, FileSpreadsheet, Code, Trash2 } from "lucide-react"
 import { adminAPI } from "@/lib/api"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { toast } from "sonner"
@@ -38,6 +38,7 @@ export default function DeliveryEarnings() {
     toDate: ''
   })
   const [deliveryPartners, setDeliveryPartners] = useState([])
+  const [deletingTransactionId, setDeletingTransactionId] = useState("")
 
   // Fetch delivery partners for filter dropdown
   const fetchDeliveryPartners = useCallback(async () => {
@@ -103,6 +104,33 @@ export default function DeliveryEarnings() {
 
   const handlePageChange = (newPage) => {
     setPagination(prev => ({ ...prev, page: newPage }))
+  }
+
+  const handleDeleteEarning = async (earning) => {
+    const transactionId = earning?.transactionId
+    if (!transactionId || transactionId === "N/A") {
+      toast.error("Unable to delete this entry")
+      return
+    }
+
+    const confirmed = window.confirm("Are you sure you want to delete this earning entry?")
+    if (!confirmed) return
+
+    try {
+      setDeletingTransactionId(transactionId)
+      const response = await adminAPI.deleteDeliveryEarning(transactionId)
+      if (response?.data?.success) {
+        toast.success(response?.data?.message || "Deleted successfully")
+        await fetchEarnings()
+      } else {
+        toast.error(response?.data?.message || "Failed to delete earning entry")
+      }
+    } catch (err) {
+      console.error("Error deleting earning entry:", err)
+      toast.error(err?.response?.data?.message || "Failed to delete earning entry")
+    } finally {
+      setDeletingTransactionId("")
+    }
   }
 
   const handleExport = (format) => {
@@ -351,12 +379,13 @@ export default function DeliveryEarnings() {
                   <th className="px-4 py-3 text-left text-xs font-bold text-slate-700 uppercase">Order Total</th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-slate-700 uppercase">Status</th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-slate-700 uppercase">Date</th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-slate-700 uppercase"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {earnings.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-12 text-center">
+                    <td colSpan={10} className="px-4 py-12 text-center">
                       <div className="flex flex-col items-center justify-center">
                         <p className="text-lg font-semibold text-slate-700 mb-1">No Earnings Found</p>
                         <p className="text-sm text-slate-500">No earnings match your filters</p>
@@ -398,6 +427,17 @@ export default function DeliveryEarnings() {
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-700">
                         {formatDate(earning.createdAt)}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-700">
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteEarning(earning)}
+                          disabled={deletingTransactionId === earning.transactionId}
+                          className="inline-flex items-center justify-center rounded-md p-1.5 text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </td>
                     </tr>
                   ))
