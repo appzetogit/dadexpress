@@ -1005,7 +1005,7 @@ export default function PageNavbar({
             ) : (
               <div className="flex flex-col items-center min-w-0">
                 <div className="flex items-center justify-center gap-1">
-                  <MapPin className={`h-4 w-4 sm:h-5 sm:w-5 ${textColorClass} flex-shrink-0`} strokeWidth={2.5} />
+                  <MapPin className="h-[18px] w-[18px] sm:h-5 sm:w-5 text-orange-600 flex-shrink-0" strokeWidth={3} />
                   <span className={`text-sm sm:text-base md:text-lg font-bold ${textColorClass} truncate max-w-[140px] sm:max-w-[200px]`}>
                     {mainLocationName}
                   </span>
