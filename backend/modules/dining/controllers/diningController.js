@@ -8,6 +8,7 @@ import DiningStory from "../models/DiningStory.js";
 import TableBooking from "../models/TableBooking.js";
 import DiningReview from "../models/DiningReview.js";
 import Restaurant from "../../restaurant/models/Restaurant.js";
+import Menu from "../../restaurant/models/Menu.js";
 import emailService from "../../auth/services/emailService.js";
 
 // Get all dining restaurants (with filtering)
@@ -22,10 +23,67 @@ export const getRestaurants = async (req, res) => {
     }
 
     const restaurants = await DiningRestaurant.find(query);
+
+    // Fetch menuItems for each dining restaurant by matching slug in main Restaurant+Menu
+    const restaurantsWithMenu = await Promise.all(
+      restaurants.map(async (r) => {
+        const rObj = r.toObject();
+        const menuItems = [];
+
+        // Try to find corresponding main Restaurant by slug
+        if (r.slug) {
+          const mainRestaurant = await Restaurant.findOne({ slug: r.slug, isActive: true }).lean();
+          if (mainRestaurant) {
+            const menu = await Menu.findOne({ restaurant: mainRestaurant._id, isActive: true }).lean();
+            if (menu && menu.sections) {
+              menu.sections.forEach((section) => {
+                if (section.isEnabled !== false) {
+                  (section.items || []).forEach((item) => {
+                    if (item.isAvailable !== false && menuItems.length < 10) {
+                      menuItems.push({
+                        id: item.id,
+                        name: item.name,
+                        price: item.price,
+                        originalPrice: item.originalPrice || item.price,
+                        image: item.image || (item.images && item.images.length > 0 ? item.images[0] : ""),
+                        isVeg: item.foodType === "Veg",
+                        bestPrice: item.discountAmount > 0 || (item.originalPrice && item.originalPrice > item.price),
+                        description: item.description || "",
+                        category: section.name,
+                      });
+                    }
+                  });
+                  (section.subsections || []).forEach((subsection) => {
+                    (subsection.items || []).forEach((item) => {
+                      if (item.isAvailable !== false && menuItems.length < 10) {
+                        menuItems.push({
+                          id: item.id,
+                          name: item.name,
+                          price: item.price,
+                          originalPrice: item.originalPrice || item.price,
+                          image: item.image || (item.images && item.images.length > 0 ? item.images[0] : ""),
+                          isVeg: item.foodType === "Veg",
+                          bestPrice: item.discountAmount > 0 || (item.originalPrice && item.originalPrice > item.price),
+                          description: item.description || "",
+                          category: subsection.name || section.name,
+                        });
+                      }
+                    });
+                  });
+                }
+              });
+            }
+          }
+        }
+
+        return { ...rObj, menuItems };
+      })
+    );
+
     res.status(200).json({
       success: true,
-      count: restaurants.length,
-      data: restaurants,
+      count: restaurantsWithMenu.length,
+      data: restaurantsWithMenu,
     });
   } catch (error) {
     res.status(500).json({

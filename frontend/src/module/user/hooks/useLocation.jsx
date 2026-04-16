@@ -485,12 +485,7 @@ export function useLocation() {
       const addressComponents = exactResult.address_components || [];
       const formattedAddress = exactResult.formatted_address || "";
 
-      // Validate address is not foreign (additional check)
-      const foreignPattern = /\b(USA|United States|Los Angeles|California|CA \d{5}|New York|NY|UK|United Kingdom|London|Canada|Australia|Singapore|Dubai)\b/i
-      if (foreignPattern.test(formattedAddress)) {
-        console.error("❌ REJECTED: Address is from foreign country:", formattedAddress)
-        throw new Error("Foreign address detected")
-      }
+
 
       // Log detailed information about the selected result
       false && console.log(`📦 Using results[${bestResultIndex}] (Most Precise - Zomato Style):`, {

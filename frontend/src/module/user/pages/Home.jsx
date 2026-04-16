@@ -948,12 +948,7 @@ export default function Home() {
 
       // Health endpoint can be intermittently blocked/slow on some networks.
       // Do not hard-stop restaurant listing on health-check failure.
-      try {
-        const backendUrl = getSafeBackendBaseUrl()
-        await fetch(`${backendUrl}/health`)
-      } catch (_healthError) {
-        // Ignore and continue with real restaurants API call below.
-      }
+
 
       // Build query parameters from filters
       const params = {}
@@ -1024,7 +1019,11 @@ export default function Home() {
         setLoadingRestaurants(false)
         return
       }
-      if (zoneResolveLoading || zoneLoading) return
+      // Zone is still resolving — don't clear data or show spinner; just wait silently
+      if (zoneResolveLoading || zoneLoading) {
+        setLoadingRestaurants(false)
+        return
+      }
 
       if (false) {
         console.log("[Home][RestaurantsFetch:skipped]", {
@@ -1254,8 +1253,6 @@ export default function Home() {
     vegModeOption, 
     resolvedZoneId, 
     resolvedZoneSource, 
-    zoneResolveLoading, 
-    zoneLoading, 
     Number(selectedCoords?.lat || 0).toFixed(3), 
     Number(selectedCoords?.lng || 0).toFixed(3), 
     Number(resolvedSelectedCoords?.lat || 0).toFixed(3), 
@@ -1278,8 +1275,6 @@ export default function Home() {
     appliedFilters,
     fetchRestaurants,
     resolvedZoneId,
-    zoneResolveLoading,
-    zoneLoading,
     selectedAddress?.id,
     selectedAddress?.formattedAddress,
     // Use stable coordinate references (rounded to 3 decimal places) to prevent jitter re-renders
@@ -1288,10 +1283,6 @@ export default function Home() {
     Number(currentLocation?.latitude || 0).toFixed(3),
     Number(currentLocation?.longitude || 0).toFixed(3)
   ])
-
-  useEffect(() => {
-    setRestaurantsData([])
-  }, [resolvedZoneId, isSavedSelectionLocked])
 
   // Recalculate distances when selected delivery address location updates
   useEffect(() => {
@@ -2282,7 +2273,7 @@ export default function Home() {
                           <Bookmark className={`h-5 w-5 md:h-6 md:w-6 ${favorite ? "fill-red-500 text-red-500" : ""}`} />
                         </Button>
                         <Link to={`/user/restaurants/${restaurantSlug}`}>
-                          <Button variant="outline" size="sm" className="hidden md:flex rounded-xl font-black text-sm border-2 border-gray-900 dark:border-white hover:bg-[#EB590E] hover:text-white hover:border-[#EB590E] transition-all px-6 py-5">
+                          <Button variant="outline" size="sm" className="flex rounded-xl font-black text-xs md:text-sm border-2 border-gray-900 dark:border-white hover:bg-[#EB590E] hover:text-white hover:border-[#EB590E] transition-all px-4 py-3 md:px-6 md:py-5">
                             VIEW MENU
                           </Button>
                         </Link>

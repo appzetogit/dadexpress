@@ -37,7 +37,8 @@ export default function Under250() {
   const lastScrollY = useRef(0)
   const [categories, setCategories] = useState([])
   const [loadingCategories, setLoadingCategories] = useState(true)
-  const [bannerImage, setBannerImage] = useState(null)
+  const [bannerImages, setBannerImages] = useState([])
+  const [currentBannerIndex, setCurrentBannerIndex] = useState(0)
   const [loadingBanner, setLoadingBanner] = useState(true)
   const [under250Restaurants, setUnder250Restaurants] = useState([])
   const [loadingRestaurants, setLoadingRestaurants] = useState(true)
@@ -140,14 +141,13 @@ export default function Under250() {
         setLoadingBanner(true)
         const response = await api.get('/hero-banners/under-250/public')
         if (response.data.success && response.data.data.banners && response.data.data.banners.length > 0) {
-          // Use the first banner
-          setBannerImage(response.data.data.banners[0])
+          setBannerImages(response.data.data.banners)
         } else {
-          setBannerImage(null)
+          setBannerImages([])
         }
       } catch (error) {
         console.error('Error fetching under 250 banners:', error)
-        setBannerImage(null)
+        setBannerImages([])
       } finally {
         setLoadingBanner(false)
       }
@@ -155,6 +155,16 @@ export default function Under250() {
 
     fetchBanners()
   }, [])
+
+  // Auto-slide banners
+  useEffect(() => {
+    if (bannerImages.length > 1) {
+      const interval = setInterval(() => {
+        setCurrentBannerIndex((prev) => (prev + 1) % bannerImages.length)
+      }, 4000)
+      return () => clearInterval(interval)
+    }
+  }, [bannerImages])
 
   // Fetch restaurants with dishes under ₹250 from backend
   useEffect(() => {
@@ -391,20 +401,48 @@ export default function Under250() {
 
       {/* Banner Section */}
       <div className="relative w-full overflow-hidden min-h-[30vh] sm:min-h-[39vh] lg:min-h-[50vh] mt-2 md:mt-4">
-        {/* Banner Image */}
-        {bannerImage && (
+        {/* Banner Images */}
+        {bannerImages.length > 0 && (
           <div className="absolute top-0 left-0 right-0 bottom-0 z-0 mx-3 sm:mx-4 lg:mx-8 rounded-xl sm:rounded-2xl overflow-hidden">
-            <OptimizedImage
-              src={bannerImage}
-              alt="Under 250 Banner"
-              className="w-full h-full"
-              objectFit="cover"
-              priority={true}
-              sizes="100vw"
-            />
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={currentBannerIndex}
+                initial={{ opacity: 0.5 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0.5 }}
+                transition={{ duration: 0.8 }}
+                className="w-full h-full absolute inset-0"
+              >
+                <OptimizedImage
+                  src={bannerImages[currentBannerIndex]}
+                  alt={`Under 250 Banner ${currentBannerIndex + 1}`}
+                  className="w-full h-full"
+                  objectFit="cover"
+                  priority={true}
+                  sizes="100vw"
+                />
+              </motion.div>
+            </AnimatePresence>
+            
+            {/* Pagination Indicators */}
+            {bannerImages.length > 1 && (
+              <div className="absolute bottom-2 md:bottom-4 left-1/2 -translate-x-1/2 flex space-x-2 z-10 bg-black/30 px-3 py-1.5 rounded-full backdrop-blur-sm">
+                {bannerImages.map((_, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setCurrentBannerIndex(index)}
+                    className={`h-1.5 md:h-2 rounded-full transition-all duration-300 ${
+                      index === currentBannerIndex
+                        ? 'w-4 md:w-6 bg-white'
+                        : 'w-1.5 md:w-2 bg-white/50 hover:bg-white/75'
+                    }`}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
-        {!bannerImage && !loadingBanner && (
+        {bannerImages.length === 0 && !loadingBanner && (
           <div className="absolute top-0 left-0 right-0 bottom-0 z-0 bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950 dark:to-amber-950 mx-3 sm:mx-4 lg:mx-8 rounded-xl sm:rounded-2xl overflow-hidden" />
         )}
       </div>
