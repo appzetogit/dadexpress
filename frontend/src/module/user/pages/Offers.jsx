@@ -13,6 +13,7 @@ export default function Offers() {
   const navigate = useNavigate()
   const [offers, setOffers] = useState([])
   const [groupedOffers, setGroupedOffers] = useState({})
+  const [groupedByRestaurant, setGroupedByRestaurant] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -28,10 +29,10 @@ export default function Offers() {
         if (data) {
           setOffers(data.allOffers || [])
           setGroupedOffers(data.groupedByOffer || {})
+          setGroupedByRestaurant(data.groupedByRestaurant || [])
         }
       } catch (err) {
         console.error('Error fetching offers:', err)
-        console.error('Error details:', err?.response?.data || err?.message)
         const errorMessage = err?.response?.data?.message || err?.message || 'Failed to load offers'
         setError(errorMessage)
         toast.error(errorMessage)
@@ -67,7 +68,13 @@ export default function Offers() {
 
       {/* Content */}
       <div className="px-4 sm:px-6 md:px-8 lg:px-10 py-6 md:py-8 lg:py-10 space-y-6 md:space-y-8">
-        <div className="max-w-7xl mx-auto space-y-6 md:space-y-8">
+        <div className="max-w-7xl mx-auto space-y-8 md:space-y-12">
+        {/* Header */}
+        <div className="mb-2">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">Best Offers Near You</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Savor more for less with these amazing deals</p>
+        </div>
+
         {/* Loading State */}
         {loading && (
           <div className="flex flex-col items-center justify-center py-20">
@@ -84,72 +91,89 @@ export default function Offers() {
           </div>
         )}
 
-        {/* Offers Sections */}
+        {/* Restaurant Sections */}
         {!loading && !error && (
-          <>
-            {/* Grouped Offers Sections */}
-            {Object.keys(groupedOffers).length > 0 && Object.entries(groupedOffers).map(([offerText, dishes]) => (
-              <section key={offerText}>
-                <h2 className="text-2xl sm:text-3xl font-black text-red-500 dark:text-red-400 text-center mb-4 tracking-wide">
-                  {offerText}
-                </h2>
-                
-                {/* Restaurant Cards - Grid Layout */}
-                <div 
-                  className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5 lg:gap-6"
-                >
-                  {dishes.slice(0, 8).map((dish) => (
-                    <Link 
-                      key={dish.id} 
-                      to={`/user/restaurants/${dish.restaurantSlug}`}
-                      className="w-full"
-                    >
-                      <div className="group">
-                        {/* Image Container */}
-                        <div className="relative h-32 sm:h-36 rounded-xl overflow-hidden mb-2">
-                          <img 
-                            src={dish.dishImage || dish.restaurantImage || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&h=300&fit=crop"} 
-                            alt={dish.dishName}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          />
-                          {/* Offer Badge */}
-                          <div className="absolute top-2 left-2 bg-blue-600 text-white text-[10px] sm:text-xs font-semibold px-2 py-1 rounded">
-                            {dish.offer}
+          <div className="space-y-8 md:space-y-12">
+            {groupedByRestaurant.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-gray-500 dark:text-gray-400">No active offers available at the moment</p>
+              </div>
+            ) : (
+              groupedByRestaurant.map((restaurant) => (
+                <div key={restaurant.id} className="space-y-4">
+                  {/* Restaurant Header */}
+                  <Link to={`/user/restaurants/${restaurant.slug}`} className="block group">
+                    <div className="flex items-start justify-between">
+                      <div className="space-y-1">
+                        <h2 className="text-xl md:text-2xl font-black text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                          {restaurant.name}
+                          <div className="bg-green-600 text-white text-[10px] md:text-sm font-bold px-1.5 py-0.5 rounded-lg flex items-center gap-1">
+                            {restaurant.rating?.toFixed(1) || '0.0'}
+                            <Star className="h-2.5 w-2.5 md:h-3 md:w-3 fill-white" />
                           </div>
-                        </div>
-                        
-                        {/* Rating Badge */}
-                        <div className="flex items-center gap-1 mb-1">
-                          <div className="bg-green-600 text-white text-xs font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5">
-                            {dish.restaurantRating?.toFixed(1) || '0.0'}
-                            <Star className="h-2.5 w-2.5 fill-white" />
-                          </div>
-                        </div>
-                        
-                        {/* Restaurant Info */}
-                        <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm line-clamp-1">
-                          {dish.restaurantName}
-                        </h3>
-                        <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-1 mb-1">
-                          {dish.dishName} - ₹{dish.discountedPrice}
-                        </p>
-                        <div className="flex items-center gap-1 text-gray-500 dark:text-gray-400 text-xs">
-                          <Clock className="h-3 w-3" />
-                          <span>{dish.deliveryTime}</span>
+                        </h2>
+                        <div className="flex items-center gap-2 text-xs md:text-sm text-gray-500 dark:text-gray-400 font-medium">
+                          <span className="flex items-center gap-1">
+                            <Clock className="h-3 w-3 md:h-4 md:w-4" />
+                            {restaurant.deliveryTime || '25-30 mins'}
+                          </span>
+                          <span>•</span>
+                          <span>{restaurant.distance || '1.2 km'}</span>
                         </div>
                       </div>
-                    </Link>
-                  ))}
+                      <Button variant="outline" size="sm" className="rounded-xl font-bold text-xs md:text-sm border-2 hover:bg-[#EB590E] hover:text-white hover:border-[#EB590E] transition-all">
+                        View Deals
+                      </Button>
+                    </div>
+                  </Link>
+
+                  {/* Horizontal Menu Scroll */}
+                  <div className="relative">
+                    <div className="flex overflow-x-auto pb-4 gap-3 scrollbar-hide scroll-smooth">
+                      {restaurant.menuItems.map((item) => (
+                        <div 
+                          key={item.id} 
+                          className="flex-shrink-0 w-36 md:w-48 bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+                          onClick={() => navigate(`/user/restaurants/${restaurant.slug}`)}
+                        >
+                          <div className="relative h-28 md:h-36 overflow-hidden">
+                            <img 
+                              src={item.image || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&h=300&fit=crop"} 
+                              alt={item.name}
+                              className="w-full h-full object-cover"
+                            />
+                            <div className="absolute top-2 left-2 bg-blue-600 text-white text-[10px] md:text-xs font-bold px-2 py-1 rounded-lg">
+                              {item.offer}
+                            </div>
+                            {item.isVeg !== undefined && (
+                              <div className="absolute bottom-2 left-2 w-4 h-4 md:w-5 md:h-5 bg-white rounded-md flex items-center justify-center border border-gray-100">
+                                <div className={`w-2 h-2 md:w-2.5 md:h-2.5 rounded-full ${item.isVeg ? 'bg-green-600' : 'bg-red-600'}`} />
+                              </div>
+                            )}
+                          </div>
+                          <div className="p-2 md:p-3">
+                            <h4 className="font-bold text-gray-900 dark:text-gray-100 text-xs md:text-sm line-clamp-1 mb-1">
+                              {item.name}
+                            </h4>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[#EB590E] font-bold text-xs md:text-sm">
+                                ₹{item.price}
+                              </span>
+                              {item.originalPrice > item.price && (
+                                <span className="text-gray-400 dark:text-gray-600 text-[10px] md:text-xs line-through">
+                                  ₹{item.originalPrice}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-              </section>
-            ))}
-          
-            {offers.length === 0 && !loading && (
-              <div className="text-center py-12">
-                <p className="text-gray-500 dark:text-gray-400">No offers available at the moment</p>
-              </div>
+              ))
             )}
-          </>
+          </div>
         )}
         </div>
       </div>

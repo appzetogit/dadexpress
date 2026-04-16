@@ -1,5 +1,5 @@
-import { Link } from "react-router-dom"
-import { useState } from "react"
+import { Link, useNavigate } from "react-router-dom"
+import { useState, useEffect } from "react"
 
 import { Heart, Star, Clock, MapPin, ArrowRight, ArrowLeft, Bookmark } from "lucide-react"
 import AnimatedPage from "../../components/AnimatedPage"
@@ -7,13 +7,51 @@ import ScrollReveal from "../../components/ScrollReveal"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useProfile } from "../../context/ProfileContext"
+import { restaurantAPI } from "@/lib/api"
 import { toast } from "sonner"
 
 export default function Favorites() {
+  const navigate = useNavigate()
   const { getFavorites, removeFavorite, getDishFavorites, removeDishFavorite } = useProfile()
   const restaurantFavorites = getFavorites()
   const dishFavorites = getDishFavorites()
   const [activeTab, setActiveTab] = useState("restaurants")
+  const [restaurantMenus, setRestaurantMenus] = useState({})
+
+  // Fetch menus for favorited restaurants
+  useEffect(() => {
+    if (activeTab === "restaurants") {
+      restaurantFavorites.forEach(async (restaurant) => {
+        const resId = restaurant._id || restaurant.restaurantId || restaurant.id
+        if (resId && !restaurantMenus[resId]) {
+          try {
+            const response = await restaurantAPI.getMenuByRestaurantId(resId)
+            const sections = response?.data?.data?.sections || []
+            const items = []
+            sections.forEach(section => {
+              if (section.isEnabled !== false) {
+                (section.items || []).forEach(item => {
+                  if (item.isAvailable !== false && items.length < 15) {
+                    items.push({
+                      id: item.id || item._id,
+                      name: item.name,
+                      price: item.price,
+                      originalPrice: item.originalPrice || item.price,
+                      image: item.image || (item.images && item.images.length > 0 ? item.images[0] : ""),
+                      isVeg: item.foodType === 'Veg'
+                    })
+                  }
+                })
+              }
+            })
+            setRestaurantMenus(prev => ({ ...prev, [resId]: items }))
+          } catch (err) {
+            console.warn(`Failed to fetch menu for restaurant ${resId}`)
+          }
+        }
+      })
+    }
+  }, [activeTab, restaurantFavorites])
 
   const handleRemoveFavorite = (e, slug) => {
     e.preventDefault()
@@ -112,9 +150,9 @@ export default function Favorites() {
 
         {/* Restaurants Tab */}
         {activeTab === "restaurants" && (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          <div className="space-y-8 md:space-y-12">
             {restaurantFavorites.length === 0 ? (
-              <div className="col-span-full text-center py-12">
+              <div className="text-center py-12">
                 <Heart className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
                 <p className="text-muted-foreground text-lg mb-4">No restaurants saved yet</p>
                 <Link to="/user">
@@ -124,66 +162,101 @@ export default function Favorites() {
                 </Link>
               </div>
             ) : (
-              restaurantFavorites.map((restaurant, index) => (
-            <ScrollReveal key={restaurant.slug} delay={index * 0.1}>
-              <Link to={`/user/restaurants/${restaurant.slug}`}>
-                <Card className="overflow-hidden h-full">
-                  <div className="h-32 w-full relative overflow-hidden">
-                    <img
-                      src={restaurant.image}
-                      alt={restaurant.name}
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                      onError={(e) => {
-                        e.target.src = `https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&h=600&fit=crop&q=80`
-                      }}
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                    <div className="absolute top-2 right-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 rounded-full bg-white/90 backdrop-blur-sm hover:bg-white text-red-500"
-                        onClick={(e) => handleRemoveFavorite(e, restaurant.slug)}
-                      >
-                        <Heart className="h-4 w-4 fill-red-500" />
-                      </Button>
+              restaurantFavorites.map((restaurant, index) => {
+                const restaurantId = restaurant._id || restaurant.restaurantId || restaurant.id
+                const menuItems = restaurantMenus[restaurantId] || []
+                
+                return (
+                  <div key={restaurant.slug} className="space-y-4">
+                    {/* Restaurant Header */}
+                    <div className="flex items-start justify-between">
+                      <Link to={`/user/restaurants/${restaurant.slug}`} className="space-y-1">
+                        <h2 className="text-xl md:text-2xl font-black text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                          {restaurant.name}
+                          <div className="bg-green-600 text-white text-[10px] md:text-sm font-bold px-1.5 py-0.5 rounded-lg flex items-center gap-1">
+                            {restaurant.rating || '4.5'}
+                            <Star className="h-2.5 w-2.5 md:h-3 md:w-3 fill-white" />
+                          </div>
+                        </h2>
+                        <div className="flex items-center gap-2 text-xs md:text-sm text-gray-500 dark:text-gray-400 font-medium">
+                          <span className="flex items-center gap-1">
+                            <Clock className="h-3 w-3 md:h-4 md:w-4" />
+                            {restaurant.deliveryTime || '25-30 mins'}
+                          </span>
+                          <span>•</span>
+                          <span>{restaurant.distance || '2.5 km'}</span>
+                          <span>•</span>
+                          <span className="line-clamp-1">{restaurant.cuisine || 'Multi-cuisine'}</span>
+                        </div>
+                      </Link>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-9 w-9 rounded-full bg-white shadow-sm hover:bg-white text-red-500"
+                          onClick={(e) => handleRemoveFavorite(e, restaurant.slug)}
+                        >
+                          <Heart className="h-5 w-5 fill-red-500" />
+                        </Button>
+                        <Link to={`/user/restaurants/${restaurant.slug}`}>
+                          <Button variant="outline" size="sm" className="rounded-xl font-bold text-xs md:text-sm border-2">
+                            View Menu
+                          </Button>
+                        </Link>
+                      </div>
                     </div>
-                    <div className="absolute bottom-2 left-2">
-                      <div className="flex items-center gap-1 bg-white/90 backdrop-blur-sm px-1.5 py-0.5 rounded-full">
-                        <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                        <span className="font-bold text-xs">{restaurant.rating}</span>
+
+                    {/* Horizontal Menu Scroll */}
+                    <div className="relative">
+                      <div className="flex overflow-x-auto pb-4 gap-3 scrollbar-hide scroll-smooth">
+                        {menuItems.length > 0 ? (
+                          menuItems.map((item) => (
+                            <div 
+                              key={item.id} 
+                              className="flex-shrink-0 w-36 md:w-48 bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+                              onClick={() => navigate(`/user/restaurants/${restaurant.slug}`)}
+                            >
+                              <div className="relative h-28 md:h-36 overflow-hidden">
+                                <img 
+                                  src={item.image || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&h=300&fit=crop"} 
+                                  alt={item.name}
+                                  className="w-full h-full object-cover"
+                                />
+                                {item.isVeg !== undefined && (
+                                  <div className="absolute top-2 left-2 w-4 h-4 md:w-5 md:h-5 bg-white rounded-md flex items-center justify-center border border-gray-100">
+                                    <div className={`w-2 h-2 md:w-2.5 md:h-2.5 rounded-full ${item.isVeg ? 'bg-green-600' : 'bg-red-600'}`} />
+                                  </div>
+                                )}
+                              </div>
+                              <div className="p-2 md:p-3">
+                                <h4 className="font-bold text-gray-900 dark:text-gray-100 text-xs md:text-sm line-clamp-1 mb-1">
+                                  {item.name}
+                                </h4>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-gray-900 dark:text-gray-100 font-bold text-xs md:text-sm">
+                                    ₹{item.price}
+                                  </span>
+                                  {item.originalPrice > item.price && (
+                                    <span className="text-gray-400 dark:text-gray-600 text-[10px] md:text-xs line-through">
+                                      ₹{item.originalPrice}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="flex gap-3">
+                            {[1, 2, 3, 4].map(i => (
+                              <div key={i} className="flex-shrink-0 w-36 md:w-48 h-44 bg-gray-50 dark:bg-gray-800/50 animate-pulse rounded-2xl" />
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
-                  <CardContent className="p-3 space-y-2">
-                    <div>
-                      <CardTitle className="text-sm font-bold mb-0.5 line-clamp-1">
-                        {restaurant.name}
-                      </CardTitle>
-                      <p className="text-xs text-muted-foreground font-medium line-clamp-1">
-                        {restaurant.cuisine}
-                      </p>
-                    </div>
-                    <div className="flex items-center justify-between text-xs pt-2 border-t">
-                      <div className="flex items-center gap-1 text-muted-foreground">
-                        <Clock className="h-3 w-3" />
-                        <span className="font-medium">{restaurant.deliveryTime}</span>
-                      </div>
-                      <div className="flex items-center gap-1 text-muted-foreground">
-                        <MapPin className="h-3 w-3" />
-                        <span className="font-medium">{restaurant.distance}</span>
-                      </div>
-                    </div>
-                    <Button className="w-full bg-gradient-to-r bg-primary-orange hover:opacity-90 text-white text-xs py-1.5 h-8">
-                      View Restaurant
-                      <ArrowRight className="h-3 w-3 ml-1" />
-                    </Button>
-                  </CardContent>
-                </Card>
-              </Link>
-            </ScrollReveal>
-              ))
+                )
+              })
             )}
           </div>
         )}

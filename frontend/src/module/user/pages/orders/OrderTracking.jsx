@@ -1606,30 +1606,6 @@ export default function OrderTracking() {
           </p>
         </motion.div>
 
-        {/* Payment QR Code */}
-        {['pickup', 'delivered'].includes(orderStatus) && (
-          <motion.div
-            className="bg-white rounded-xl shadow-sm overflow-hidden p-4 border border-gray-100 flex flex-col items-center justify-center gap-3"
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.68 }}
-          >
-            <p className="text-sm font-bold text-gray-900 uppercase tracking-widest text-center w-full pb-2 border-b border-gray-100 border-dashed">
-              Scan to Pay Rider
-            </p>
-            <div className="w-48 h-48 sm:w-56 sm:h-56 rounded-xl overflow-hidden border-2 border-orange-100 shadow-sm p-2">
-              <img 
-                src="/newbarcode.jpeg" 
-                alt="Payment QR Code" 
-                className="w-full h-full object-contain"
-                onError={(e) => e.target.style.display = 'none'}
-              />
-            </div>
-            <p className="text-xs text-gray-500 font-medium text-center">
-              Please verify payment with the delivery partner
-            </p>
-          </motion.div>
-        )}
 
         {/* Contact & Address Section */}
         <motion.div

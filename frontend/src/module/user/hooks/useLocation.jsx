@@ -1971,7 +1971,8 @@ export function useLocation() {
                 }
                 
                 if (!isManualAddressLocked()) {
-                  setLocation(loc)
+                  // Skip setLocation to prevent jitter-induced re-renders
+                  // coordinates will only update when significant (>100m) or geocoded
                   localStorage.setItem("userLocation", JSON.stringify(loc))
                   
                   // Update DB with fresh coordinates but SAME address (de-duplicated on backend)

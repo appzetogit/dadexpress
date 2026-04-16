@@ -108,97 +108,95 @@ export default function Gourmet() {
             </div>
           )}
 
-          {/* Restaurant Cards */}
+          {/* Restaurant Sections */}
           {!loading && !error && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+            <div className="space-y-8 md:space-y-12">
               {gourmetRestaurants.length === 0 ? (
-                <div className="col-span-full text-center py-12">
+                <div className="text-center py-12">
                   <p className="text-gray-500 dark:text-gray-400">No Gourmet restaurants available at the moment</p>
                 </div>
               ) : (
-                gourmetRestaurants.map((restaurant) => {
+                gourmetRestaurants.map((restaurant, index) => {
                   const restaurantSlug = restaurant.slug || restaurant.name?.toLowerCase().replace(/\s+/g, "-") || ""
                   const restaurantId = restaurant._id || restaurant.restaurantId || restaurant.id
-                  const isFavorite = favorites.has(restaurantId)
-
-                  // Get restaurant cover image with priority: coverImages > menuImages > profileImage
-                  const coverImages = restaurant.coverImages && restaurant.coverImages.length > 0
-                    ? restaurant.coverImages.map(img => img.url || img).filter(Boolean)
-                    : []
-
-                  const menuImages = restaurant.menuImages && restaurant.menuImages.length > 0
-                    ? restaurant.menuImages.map(img => img.url || img).filter(Boolean)
-                    : []
-
-                  const restaurantImage = coverImages.length > 0
-                    ? coverImages[0]
-                    : (menuImages.length > 0
-                      ? menuImages[0]
-                      : (restaurant.profileImage?.url || restaurant.image || "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&h=600&fit=crop"))
 
                   return (
-                    <Link key={restaurantId} to={`/user/restaurants/${restaurantSlug}`}>
-                      <Card className="overflow-hidden cursor-pointer border-0 group bg-white dark:bg-[#1a1a1a] shadow-md hover:shadow-xl transition-all duration-300 py-0 rounded-2xl mb-4">
-                        {/* Image Section */}
-                        <div className="relative h-44 sm:h-52 md:h-56 w-full overflow-hidden rounded-t-2xl">
-                          <img
-                            src={restaurantImage}
-                            alt={restaurant.name}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                            onError={(e) => {
-                              // Fallback to placeholder if image fails
-                              e.target.src = "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&h=600&fit=crop"
-                            }}
-                          />
-
-                          {/* Bookmark Icon - Top Right */}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="absolute top-3 right-3 h-9 w-9 bg-white/90 backdrop-blur-sm rounded-lg hover:bg-white transition-colors"
-                            onClick={(e) => {
-                              e.preventDefault()
-                              e.stopPropagation()
-                              toggleFavorite(restaurantId)
-                            }}
-                          >
-                            <Bookmark className={`h-5 w-5 ${isFavorite ? "fill-gray-800 dark:fill-gray-200 text-gray-800 dark:text-gray-200" : "text-gray-600 dark:text-gray-400"}`} strokeWidth={2} />
+                    <div key={restaurantId} className="space-y-4">
+                      {/* Restaurant Header */}
+                      <Link to={`/user/restaurants/${restaurantSlug}`} className="block group">
+                        <div className="flex items-start justify-between">
+                          <div className="space-y-1">
+                            <h2 className="text-xl md:text-2xl font-black text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                              {restaurant.name}
+                              <div className="bg-green-600 text-white text-[10px] md:text-sm font-bold px-1.5 py-0.5 rounded-lg flex items-center gap-1">
+                                {restaurant.rating?.toFixed(1) || '0.0'}
+                                <Star className="h-2.5 w-2.5 md:h-3 md:w-3 fill-white" />
+                              </div>
+                            </h2>
+                            <div className="flex items-center gap-2 text-xs md:text-sm text-gray-500 dark:text-gray-400 font-medium">
+                              <span className="flex items-center gap-1">
+                                <Clock className="h-3 w-3 md:h-4 md:w-4" />
+                                {restaurant.estimatedDeliveryTime || '25-30 mins'}
+                              </span>
+                              <span>•</span>
+                              <span>{restaurant.distance || '1.2 km'}</span>
+                              <span>•</span>
+                              <span className="line-clamp-1">{restaurant.cuisine || 'Multi-cuisine'}</span>
+                            </div>
+                          </div>
+                          <Button variant="outline" size="sm" className="rounded-xl font-bold text-xs md:text-sm border-2 hover:bg-[#EB590E] hover:text-white hover:border-[#EB590E] transition-all">
+                            View Menu
                           </Button>
                         </div>
+                      </Link>
 
-                        {/* Content Section */}
-                        <CardContent className="p-3 sm:p-4">
-                          {/* Restaurant Name & Rating */}
-                          <div className="flex items-start justify-between gap-2 mb-2">
-                            <div className="flex-1 min-w-0">
-                              <h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100 line-clamp-1">
-                                {restaurant.name}
-                              </h3>
-                            </div>
-                            <div className="flex-shrink-0 bg-green-600 text-white px-2 py-1 rounded-lg flex items-center gap-1">
-                              <span className="text-sm font-bold">{restaurant.rating?.toFixed(1) || '0.0'}</span>
-                              <Star className="h-3 w-3 fill-white text-white" />
-                            </div>
-                          </div>
-
-                          {/* Delivery Time & Distance */}
-                          <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400 mb-2">
-                            <Clock className="h-4 w-4" strokeWidth={1.5} />
-                            <span className="font-medium">{restaurant.estimatedDeliveryTime || restaurant.deliveryTime || '25-30 mins'}</span>
-                            <span className="mx-1">|</span>
-                            <span className="font-medium">{restaurant.distance || '1.2 km'}</span>
-                          </div>
-
-                          {/* Offer Badge */}
-                          {restaurant.offer && (
-                            <div className="flex items-center gap-2 text-sm">
-                              <BadgePercent className="h-4 w-4 text-[#EB590E] dark:text-[#F97316]" strokeWidth={2} />
-                              <span className="text-gray-700 dark:text-gray-300 font-medium">{restaurant.offer}</span>
+                      {/* Horizontal Menu Scroll */}
+                      <div className="relative">
+                        <div className="flex overflow-x-auto pb-4 gap-3 scrollbar-hide scroll-smooth">
+                          {restaurant.menuItems && restaurant.menuItems.length > 0 ? (
+                            restaurant.menuItems.map((item) => (
+                              <div 
+                                key={item.id} 
+                                className="flex-shrink-0 w-36 md:w-48 bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+                                onClick={() => navigate(`/user/restaurants/${restaurantSlug}`)}
+                              >
+                                <div className="relative h-28 md:h-36 overflow-hidden">
+                                  <img 
+                                    src={item.image || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&h=300&fit=crop"} 
+                                    alt={item.name}
+                                    className="w-full h-full object-cover"
+                                  />
+                                  {item.isVeg !== undefined && (
+                                    <div className="absolute top-2 left-2 w-4 h-4 md:w-5 md:h-5 bg-white rounded-md flex items-center justify-center border border-gray-100">
+                                      <div className={`w-2 h-2 md:w-2.5 md:h-2.5 rounded-full ${item.isVeg ? 'bg-green-600' : 'bg-red-600'}`} />
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="p-2 md:p-3">
+                                  <h4 className="font-bold text-gray-900 dark:text-gray-100 text-xs md:text-sm line-clamp-1 mb-1">
+                                    {item.name}
+                                  </h4>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-gray-900 dark:text-gray-100 font-bold text-xs md:text-sm">
+                                      ₹{item.price}
+                                    </span>
+                                    {item.originalPrice > item.price && (
+                                      <span className="text-gray-400 dark:text-gray-600 text-[10px] md:text-xs line-through">
+                                        ₹{item.originalPrice}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="py-8 px-4 text-center text-gray-400 text-sm italic w-full">
+                              Looking for special dishes in this restaurant...
                             </div>
                           )}
-                        </CardContent>
-                      </Card>
-                    </Link>
+                        </div>
+                      </div>
+                    </div>
                   )
                 })
               )}

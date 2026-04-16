@@ -479,9 +479,7 @@ export default function LandingPageManagement() {
         formData.append('label', item.label.trim())
 
         try {
-          const response = await api.post('/hero-banners/landing/categories', formData, getAuthConfig({
-            headers: { 'Content-Type': 'multipart/form-data' },
-          }))
+          const response = await api.post('/hero-banners/landing/categories', formData, getAuthConfig())
           if (response.data.success) {
             successCount++
           } else {
@@ -629,9 +627,7 @@ export default function LandingPageManagement() {
       formData.append('image', file)
       formData.append('label', exploreMoreLabel.trim())
       formData.append('link', exploreMoreLink.trim())
-      const response = await api.post('/hero-banners/landing/explore-more', formData, getAuthConfig({
-        headers: { 'Content-Type': 'multipart/form-data' },
-      }))
+      const response = await api.post('/hero-banners/landing/explore-more', formData, getAuthConfig())
       if (response.data.success) {
         setSuccess('Explore more item created successfully!')
         setExploreMoreLabel("")
@@ -699,16 +695,12 @@ export default function LandingPageManagement() {
 
       if (existingItem) {
         // Update existing
-        res = await api.patch(`/hero-banners/landing/explore-more/${existingItem._id}`, formData, getAuthConfig({
-          headers: { 'Content-Type': 'multipart/form-data' }
-        }))
+        res = await api.patch(`/hero-banners/landing/explore-more/${existingItem._id}`, formData, getAuthConfig())
       } else {
         // Create new
         formData.append('label', label)
         formData.append('link', link)
-        res = await api.post('/hero-banners/landing/explore-more', formData, getAuthConfig({
-          headers: { 'Content-Type': 'multipart/form-data' }
-        }))
+        res = await api.post('/hero-banners/landing/explore-more', formData, getAuthConfig())
       }
 
       if (res.data?.success) {
@@ -797,9 +789,7 @@ export default function LandingPageManagement() {
         formData.append('images', file)
       })
 
-      const response = await api.post('/hero-banners/under-250/multiple', formData, getAuthConfig({
-        headers: { 'Content-Type': 'multipart/form-data' },
-      }))
+      const response = await api.post('/hero-banners/under-250/multiple', formData, getAuthConfig())
 
       if (response.data.success) {
         setSuccess(`${response.data.data.banners?.length || files.length} under 250 banner(s) uploaded successfully!`)
@@ -921,9 +911,7 @@ export default function LandingPageManagement() {
         formData.append('images', file)
       })
 
-      const response = await api.post('/hero-banners/dining/multiple', formData, getAuthConfig({
-        headers: { 'Content-Type': 'multipart/form-data' },
-      }))
+      const response = await api.post('/hero-banners/dining/multiple', formData, getAuthConfig())
 
       if (response.data.success) {
         setSuccess(`${response.data.data.banners?.length || files.length} dining banner(s) uploaded successfully!`)

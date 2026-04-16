@@ -2,6 +2,7 @@ import StaffManagement from '../models/StaffManagement.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import asyncHandler from '../../../shared/middleware/asyncHandler.js';
 import { uploadToCloudinary } from '../../../shared/utils/cloudinaryService.js';
+import { normalizePhoneNumber, buildPhoneInQuery } from '../../../shared/utils/phoneUtils.js';
 
 /**
  * Add a new staff/manager
@@ -11,6 +12,9 @@ export const addStaff = asyncHandler(async (req, res) => {
   try {
     const restaurantId = req.restaurant._id;
     const { name, phone, email, role } = req.body;
+
+    // Normalize phone number if provided
+    const normalizedPhone = phone ? normalizePhoneNumber(phone) : null;
 
     // Validation
     if (!name || !name.trim()) {
@@ -26,14 +30,26 @@ export const addStaff = asyncHandler(async (req, res) => {
     }
 
     // Check if user already exists for this restaurant
-    const existingStaff = await StaffManagement.findOne({
+    // Use flexible phone query to handle different formats (+91, 10-digit, etc)
+    const phoneQuery = normalizedPhone ? buildPhoneInQuery(normalizedPhone, 'phone') : null;
+    
+    const findQuery = {
       restaurantId,
-      $or: [
-        ...(phone ? [{ phone }] : []),
-        ...(email ? [{ email: email.toLowerCase() }] : [])
-      ],
       status: { $ne: 'removed' }
-    });
+    };
+
+    if (phoneQuery && email) {
+      findQuery.$or = [
+        phoneQuery,
+        { email: email.toLowerCase().trim() }
+      ];
+    } else if (phoneQuery) {
+      Object.assign(findQuery, phoneQuery);
+    } else if (email) {
+      findQuery.email = email.toLowerCase().trim();
+    }
+
+    const existingStaff = await StaffManagement.findOne(findQuery);
 
     if (existingStaff) {
       return errorResponse(res, 409, 'A staff member with this phone or email already exists');
@@ -65,7 +81,7 @@ export const addStaff = asyncHandler(async (req, res) => {
     const staff = new StaffManagement({
       restaurantId,
       name: name.trim(),
-      phone: phone || null,
+      phone: normalizedPhone || null,
       email: email ? email.toLowerCase().trim() : null,
       role,
       addedBy: restaurantId,
@@ -184,7 +200,7 @@ export const updateStaff = asyncHandler(async (req, res) => {
       staff.name = name.trim();
     }
     if (phone !== undefined) {
-      staff.phone = phone || null;
+      staff.phone = phone ? normalizePhoneNumber(phone) : null;
     }
     if (email !== undefined) {
       staff.email = email ? email.toLowerCase().trim() : null;

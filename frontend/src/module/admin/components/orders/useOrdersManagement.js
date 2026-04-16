@@ -264,8 +264,8 @@ export function useOrdersManagement(orders, statusKey, title) {
         const tableData = order.items.map((item) => [
           item.quantity || 1,
           item.name || item.itemName || item.title || 'Unknown Item',
-          `₹${(item.price || 0).toFixed(2)}`,
-          `₹${((item.quantity || 1) * (item.price || 0)).toFixed(2)}`
+          `Rs. ${(item.price || 0).toFixed(2)}`,
+          `Rs. ${((item.quantity || 1) * (item.price || 0)).toFixed(2)}`
         ])
 
         autoTable(doc, {
@@ -309,7 +309,7 @@ export function useOrdersManagement(orders, statusKey, title) {
         doc.setTextColor(30, 30, 30)
         doc.setFont(undefined, 'bold')
         const totalAmount = typeof order.totalAmount === 'number' ? order.totalAmount.toFixed(2) : order.totalAmount
-        doc.text(`Total Amount: ₹${totalAmount}`, 14, startY)
+        doc.text(`Total Amount: Rs. ${totalAmount}`, 14, startY)
         startY += 8
       }
 

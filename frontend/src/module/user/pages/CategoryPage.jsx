@@ -393,6 +393,8 @@ export default function CategoryPage() {
                 offer: offer,
                 slug: restaurant.slug || restaurant.name?.toLowerCase().replace(/\s+/g, '-'),
                 restaurantId: restaurantId,
+                isActive: restaurant.isActive !== false,
+                isAcceptingOrders: restaurant.isAcceptingOrders !== false,
                 hasPaneer: false,
                 category: 'all',
               }
@@ -1015,7 +1017,7 @@ export default function CategoryPage() {
                   return (
                     <Link
                       key={restaurant.id}
-                      to={`/user/restaurants/${restaurant.name.toLowerCase().replace(/\s+/g, '-')}`}
+                      to={`/restaurants/${restaurant.slug || restaurant.name.toLowerCase().replace(/\s+/g, '-')}`}
                       className="block"
                     >
                       <div className={`group ${shouldShowGrayscale ? 'grayscale opacity-75' : ''}`}>
@@ -1124,7 +1126,7 @@ export default function CategoryPage() {
                 const isFavorite = favorites.has(restaurant.id)
 
                 return (
-                  <Link key={restaurant.id} to={`/user/restaurants/${restaurantSlug}`} className="h-full flex">
+                  <Link key={restaurant.id} to={`/restaurants/${restaurant.slug || restaurant.name.toLowerCase().replace(/\s+/g, "-")}`} className="h-full flex">
                     <Card className={`overflow-hidden cursor-pointer gap-0 border-0 dark:border-gray-800 group bg-white dark:bg-[#1a1a1a] shadow-md hover:shadow-xl transition-all duration-300 py-0 rounded-md h-full flex flex-col w-full ${shouldShowGrayscale ? 'grayscale opacity-75' : ''
                       }`}>
                       {/* Image Section */}

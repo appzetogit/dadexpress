@@ -108,13 +108,14 @@ export default function RestaurantDetails() {
         }
       }
 
+      let apiRestaurant = null
+      let isWaitingForFallback = false
       try {
         setLoadingRestaurant(true)
         setRestaurantError(null)
 
         console.log('Fetching restaurant with slug:', slug)
         let response = null
-        let apiRestaurant = null
 
         // Try dining API first
         try {
@@ -581,9 +582,15 @@ export default function RestaurantDetails() {
             }
           }
         } else {
-          console.error('❌ No restaurant data found in API response')
-          console.error('❌ Response:', response)
-          console.error('❌ apiRestaurant:', apiRestaurant)
+          // If we haven't found the restaurant yet, check if we should wait for zoneId
+          // This prevents "Restaurant not found" flicker while searching
+          if (!zoneId && userLocation && !isOutOfService) {
+            console.log('⏳ Restaurant not found by slug/ID yet, waiting for zone detection to try search by name...')
+            isWaitingForFallback = true
+            return
+          }
+
+          console.error('❌ No restaurant data found in API response after all attempts')
           setRestaurantError('Restaurant not found')
           setRestaurant(null)
         }
@@ -596,12 +603,16 @@ export default function RestaurantDetails() {
 
         if (isNetworkError) {
           // Network error - backend is not running
-          // Don't show "Restaurant not found" for network errors
-          // The axios interceptor will show a toast notification
           console.error('Network error fetching restaurant (backend may not be running):', error)
           setRestaurantError('Backend server is not connected. Please make sure the backend is running.')
           setRestaurant(null)
         } else if (is404Error) {
+          // If we haven't found the restaurant yet, check if we should wait for zoneId
+          if (!zoneId && userLocation && !isOutOfService) {
+            console.log('⏳ 404 received but waiting for zoneId to try final search fallback...')
+            isWaitingForFallback = true
+            return
+          }
           // 404 error - restaurant doesn't exist in database
           console.log(`Restaurant "${slug}" not found in database`)
           setRestaurantError('Restaurant not found')
@@ -613,7 +624,10 @@ export default function RestaurantDetails() {
           setRestaurant(null)
         }
       } finally {
-        setLoadingRestaurant(false)
+        // Only stop loading if we actually finished or gave up decisively
+        if (!isWaitingForFallback) {
+           setLoadingRestaurant(false)
+        }
       }
     }
 

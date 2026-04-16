@@ -517,11 +517,42 @@ export const getPublicOffers = asyncHandler(async (req, res) => {
 
     // Group by offer text for the "FLAT 50% OFF" section
     const groupedByOffer = {};
+    const groupedByRestaurant = {};
+
     offerDishes.forEach((dish) => {
+      // Group by Offer
       if (!groupedByOffer[dish.offer]) {
         groupedByOffer[dish.offer] = [];
       }
       groupedByOffer[dish.offer].push(dish);
+
+      // Group by Restaurant for the new UI structure
+      if (!groupedByRestaurant[dish.restaurantId]) {
+        groupedByRestaurant[dish.restaurantId] = {
+          id: dish.restaurantId,
+          name: dish.restaurantName,
+          slug: dish.restaurantSlug,
+          image: dish.restaurantImage,
+          rating: dish.restaurantRating,
+          deliveryTime: dish.deliveryTime,
+          distance: dish.distance,
+          menuItems: []
+        };
+      }
+      
+      // Add dish to restaurant's menu items if not already added
+      if (groupedByRestaurant[dish.restaurantId].menuItems.length < 15) {
+        groupedByRestaurant[dish.restaurantId].menuItems.push({
+          id: dish.dishId,
+          name: dish.dishName,
+          price: dish.discountedPrice,
+          originalPrice: dish.originalPrice,
+          image: dish.dishImage,
+          isVeg: dish.isVeg,
+          offer: dish.offer,
+          couponCode: dish.couponCode
+        });
+      }
     });
 
     console.log(`[PUBLIC-OFFERS] Returning ${offerDishes.length} offer dishes`);
@@ -529,6 +560,7 @@ export const getPublicOffers = asyncHandler(async (req, res) => {
     return successResponse(res, 200, 'Offers retrieved successfully', {
       allOffers: offerDishes,
       groupedByOffer,
+      groupedByRestaurant: Object.values(groupedByRestaurant),
       total: offerDishes.length,
     });
   } catch (error) {

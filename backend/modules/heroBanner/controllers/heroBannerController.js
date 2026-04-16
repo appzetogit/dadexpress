@@ -7,6 +7,7 @@ import DiningBanner from '../models/DiningBanner.js';
 import Top10Restaurant from '../models/Top10Restaurant.js';
 import GourmetRestaurant from '../models/GourmetRestaurant.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
+import Menu from '../../restaurant/models/Menu.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import { uploadToCloudinary } from '../../../shared/utils/cloudinaryService.js';
 import { cloudinary } from '../../../config/cloudinary.js';
@@ -1305,16 +1306,54 @@ export const getAllTop10Restaurants = async (req, res) => {
 export const getTop10Restaurants = async (req, res) => {
   try {
     const restaurants = await Top10Restaurant.find({ isActive: true })
-      .populate('restaurant', 'name restaurantId slug profileImage coverImages menuImages rating estimatedDeliveryTime distance offer featuredDish featuredPrice')
+      .populate('restaurant', 'name restaurantId slug profileImage coverImages menuImages rating estimatedDeliveryTime distance offer featuredDish featuredPrice cuisines priceRange')
       .sort({ rank: 1, order: 1 })
       .lean();
 
-    return successResponse(res, 200, 'Top 10 restaurants retrieved successfully', {
-      restaurants: restaurants.map(r => ({
-        ...r.restaurant,
+    // Fetch menu items for each restaurant
+    const restaurantsWithMenu = await Promise.all(restaurants.map(async (r) => {
+      const restaurantData = r.restaurant;
+      if (!restaurantData) return null;
+
+      const menu = await Menu.findOne({ restaurant: restaurantData._id, isActive: true }).lean();
+      const menuItems = [];
+
+      if (menu && menu.sections) {
+        menu.sections.forEach(section => {
+          if (section.isEnabled !== false) {
+            (section.items || []).forEach(item => {
+              if (item.isAvailable !== false && menuItems.length < 15) {
+                menuItems.push({
+                  id: item.id,
+                  name: item.name,
+                  price: item.price,
+                  originalPrice: item.originalPrice || item.price,
+                  image: item.image || (item.images && item.images.length > 0 ? item.images[0] : ""),
+                  isVeg: item.foodType === 'Veg',
+                  bestPrice: item.discountAmount > 0 || (item.originalPrice && item.originalPrice > item.price),
+                  description: item.description || "",
+                  category: section.name,
+                });
+              }
+            });
+          }
+        });
+      }
+
+      return {
+        ...restaurantData,
+        id: restaurantData._id.toString(),
+        cuisine: restaurantData.cuisines?.join(' • ') || "Multi-cuisine",
+        price: restaurantData.priceRange || "$$",
+        image: restaurantData.profileImage?.url || restaurantData.menuImages?.[0]?.url || "",
+        menuItems,
         rank: r.rank,
         _id: r._id
-      }))
+      };
+    }));
+
+    return successResponse(res, 200, 'Top 10 restaurants retrieved successfully', {
+      restaurants: restaurantsWithMenu.filter(r => r !== null)
     });
   } catch (error) {
     console.error('Error fetching Top 10 restaurants:', error);
@@ -1540,15 +1579,53 @@ export const getAllGourmetRestaurants = async (req, res) => {
 export const getGourmetRestaurants = async (req, res) => {
   try {
     const restaurants = await GourmetRestaurant.find({ isActive: true })
-      .populate('restaurant', 'name restaurantId slug profileImage coverImages menuImages rating estimatedDeliveryTime distance offer featuredDish featuredPrice')
+      .populate('restaurant', 'name restaurantId slug profileImage coverImages menuImages rating estimatedDeliveryTime distance offer featuredDish featuredPrice cuisines priceRange')
       .sort({ order: 1, createdAt: -1 })
       .lean();
 
-    return successResponse(res, 200, 'Gourmet restaurants retrieved successfully', {
-      restaurants: restaurants.map(r => ({
-        ...r.restaurant,
+    // Fetch menu items for each restaurant
+    const restaurantsWithMenu = await Promise.all(restaurants.map(async (r) => {
+      const restaurantData = r.restaurant;
+      if (!restaurantData) return null;
+
+      const menu = await Menu.findOne({ restaurant: restaurantData._id, isActive: true }).lean();
+      const menuItems = [];
+
+      if (menu && menu.sections) {
+        menu.sections.forEach(section => {
+          if (section.isEnabled !== false) {
+            (section.items || []).forEach(item => {
+              if (item.isAvailable !== false && menuItems.length < 15) {
+                menuItems.push({
+                  id: item.id,
+                  name: item.name,
+                  price: item.price,
+                  originalPrice: item.originalPrice || item.price,
+                  image: item.image || (item.images && item.images.length > 0 ? item.images[0] : ""),
+                  isVeg: item.foodType === 'Veg',
+                  bestPrice: item.discountAmount > 0 || (item.originalPrice && item.originalPrice > item.price),
+                  description: item.description || "",
+                  category: section.name,
+                });
+              }
+            });
+          }
+        });
+      }
+
+      return {
+        ...restaurantData,
+        id: restaurantData._id.toString(),
+        cuisine: restaurantData.cuisines?.join(' • ') || "Multi-cuisine",
+        price: restaurantData.priceRange || "$$",
+        image: restaurantData.profileImage?.url || restaurantData.menuImages?.[0]?.url || "",
+        menuItems,
         _id: r._id
-      }))
+      };
+    }));
+
+    return successResponse(res, 200, 'Gourmet restaurants retrieved successfully', {
+      restaurants: restaurantsWithMenu.filter(r => r !== null)
     });
   } catch (error) {
     console.error('Error fetching Gourmet restaurants:', error);

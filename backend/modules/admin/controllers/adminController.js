@@ -1760,20 +1760,11 @@ export const reverifyRestaurant = asyncHandler(async (req, res) => {
       return errorResponse(res, 404, "Restaurant not found");
     }
 
-    // Check if restaurant was rejected
-    if (!restaurant.rejectionReason) {
-      return errorResponse(
-        res,
-        400,
-        "Restaurant is not rejected. Only rejected restaurants can be reverified.",
-      );
-    }
-
-    // Clear rejection details and mark as pending again
+    // Clear all rejection details and mark as pending again
     restaurant.rejectionReason = null;
     restaurant.rejectedAt = undefined;
     restaurant.rejectedBy = undefined;
-    restaurant.isActive = false; // Keep inactive until approved
+    restaurant.isActive = false;
 
     await restaurant.save();
 
@@ -1823,7 +1814,7 @@ export const getRestaurantById = asyncHandler(async (req, res) => {
 
 /**
  * Update Restaurant by Admin
- * PUT /api/admin/restaurants/:id
+ * GET /api/admin/restaurants/:id
  */
 export const updateRestaurant = asyncHandler(async (req, res) => {
   try {

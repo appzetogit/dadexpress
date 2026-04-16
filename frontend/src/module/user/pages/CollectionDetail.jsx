@@ -1,11 +1,10 @@
 import { useState, useEffect } from "react"
 import { Link, useParams, useNavigate } from "react-router-dom"
-import { ArrowLeft, Share2, Trash2, Heart, Star, Clock, MapPin } from "lucide-react"
+import { ArrowLeft, Trash2, Heart, Star, Clock, MapPin } from "lucide-react"
 import AnimatedPage from "../components/AnimatedPage"
 import ScrollReveal from "../components/ScrollReveal"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { useProfile } from "../context/ProfileContext"
 
 export default function CollectionDetail() {
@@ -13,7 +12,6 @@ export default function CollectionDetail() {
   const navigate = useNavigate()
   const { getFavorites, removeFavorite } = useProfile()
   
-  // Mock collection data - in real app, fetch from API based on id
   const [collection, setCollection] = useState({
     id: id,
     name: "My Collection",
@@ -22,13 +20,10 @@ export default function CollectionDetail() {
     items: []
   })
 
-  // For now, use favorites as collection items
-  // In real app, fetch collection items from API
   const favorites = getFavorites()
+  const [restaurantMenus, setRestaurantMenus] = useState({})
   
   useEffect(() => {
-    // In real app, fetch collection data from API
-    // For now, use favorites as placeholder
     setCollection(prev => ({
       ...prev,
       name: `Collection ${id}`,
@@ -38,12 +33,45 @@ export default function CollectionDetail() {
     }))
   }, [id, favorites])
 
+  // Fetch menus for restaurants in collection
+  useEffect(() => {
+    collection.items.forEach(async (restaurant) => {
+      const resId = restaurant._id || restaurant.restaurantId || restaurant.id
+      if (resId && !restaurantMenus[resId]) {
+        try {
+          const { restaurantAPI } = await import("@/lib/api")
+          const response = await restaurantAPI.getMenuByRestaurantId(resId)
+          const sections = response?.data?.data?.sections || []
+          const items = []
+          sections.forEach(section => {
+            if (section.isEnabled !== false) {
+              (section.items || []).forEach(item => {
+                if (item.isAvailable !== false && items.length < 15) {
+                  items.push({
+                    id: item.id || item._id,
+                    name: item.name,
+                    price: item.price,
+                    originalPrice: item.originalPrice || item.price,
+                    image: item.image || (item.images && item.images.length > 0 ? item.images[0] : ""),
+                    isVeg: item.foodType === 'Veg'
+                  })
+                }
+              })
+            }
+          })
+          setRestaurantMenus(prev => ({ ...prev, [resId]: items }))
+        } catch (err) {
+          console.warn(`Failed to fetch menu for restaurant ${resId}`)
+        }
+      }
+    })
+  }, [collection.items])
+
   const handleRemoveItem = (e, slug) => {
     e.preventDefault()
     e.stopPropagation()
     if (window.confirm("Remove this restaurant from collection?")) {
       removeFavorite(slug)
-      // Update collection state
       setCollection(prev => ({
         ...prev,
         items: prev.items.filter(item => item.slug !== slug),
@@ -109,60 +137,102 @@ export default function CollectionDetail() {
           </div>
         </ScrollReveal>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-4">
-          {collection.items.map((restaurant, index) => (
-            <ScrollReveal key={restaurant.slug} delay={index * 0.1}>
-              <Link to={`/user/restaurants/${restaurant.slug}`}>
-                <Card className="overflow-hidden h-full p-0 gap-0">
-                  <div className="h-48 w-full relative overflow-hidden">
-                    <img
-                      src={restaurant.image}
-                      alt={restaurant.name}
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                      onError={(e) => {
-                        e.target.src = `https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&h=600&fit=crop&q=80`
-                      }}
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                    <div className="absolute top-4 right-4 flex items-center gap-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="rounded-full bg-white/90 backdrop-blur-sm hover:bg-white text-red-500"
-                        onClick={(e) => handleRemoveItem(e, restaurant.slug)}
-                      >
-                        <Trash2 className="h-5 w-5" />
-                      </Button>
-                    </div>
-                  </div>
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between mb-2">
-                      <h3 className="text-lg font-bold line-clamp-1 flex-1">{restaurant.name}</h3>
-                      <div className="flex items-center gap-1 bg-green-600 text-white px-2 py-1 rounded-lg ml-2">
-                        <Star className="h-3 w-3 fill-white" />
-                        <span className="text-sm font-bold">{restaurant.rating || "4.5"}</span>
+        <div className="space-y-8 md:space-y-12 mt-4">
+          {collection.items.map((restaurant, index) => {
+            const resId = restaurant._id || restaurant.restaurantId || restaurant.id
+            const menuItems = restaurantMenus[resId] || []
+
+            return (
+              <div key={restaurant.slug} className="space-y-4">
+                {/* Restaurant Header */}
+                <div className="flex items-start justify-between">
+                  <Link to={`/user/restaurants/${restaurant.slug}`} className="space-y-1">
+                    <h2 className="text-xl md:text-2xl font-black text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                      {restaurant.name}
+                      <div className="bg-green-600 text-white text-[10px] md:text-sm font-bold px-1.5 py-0.5 rounded-lg flex items-center gap-1">
+                        {restaurant.rating || '4.5'}
+                        <Star className="h-2.5 w-2.5 md:h-3 md:w-3 fill-white" />
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-                      <Clock className="h-4 w-4" />
-                      <span>{restaurant.deliveryTime || "25-30 mins"}</span>
+                    </h2>
+                    <div className="flex items-center gap-2 text-xs md:text-sm text-gray-500 dark:text-gray-400 font-medium">
+                      <span className="flex items-center gap-1">
+                        <Clock className="h-3 w-3 md:h-4 md:w-4" />
+                        {restaurant.deliveryTime || '25-30 mins'}
+                      </span>
                       <span>•</span>
-                      <MapPin className="h-4 w-4" />
-                      <span>{restaurant.distance || "2.5 km"}</span>
+                      <span>{restaurant.distance || '2.5 km'}</span>
                     </div>
-                    {restaurant.cuisine && (
-                      <p className="text-sm text-muted-foreground line-clamp-1">{restaurant.cuisine}</p>
+                  </Link>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="rounded-full bg-white/90 backdrop-blur-sm hover:bg-white text-red-500"
+                      onClick={(e) => handleRemoveItem(e, restaurant.slug)}
+                    >
+                      <Trash2 className="h-5 w-5" />
+                    </Button>
+                    <Link to={`/user/restaurants/${restaurant.slug}`}>
+                      <Button variant="outline" size="sm" className="rounded-xl font-bold text-xs md:text-sm border-2">
+                        View Menu
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
+
+                {/* Horizontal Menu Scroll */}
+                <div className="relative">
+                  <div className="flex overflow-x-auto pb-4 gap-3 scrollbar-hide scroll-smooth">
+                    {menuItems.length > 0 ? (
+                      menuItems.map((item) => (
+                        <div 
+                          key={item.id} 
+                          className="flex-shrink-0 w-36 md:w-48 bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+                          onClick={() => navigate(`/user/restaurants/${restaurant.slug}`)}
+                        >
+                          <div className="relative h-28 md:h-36 overflow-hidden">
+                            <img 
+                              src={item.image || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&h=300&fit=crop"} 
+                              alt={item.name}
+                              className="w-full h-full object-cover"
+                            />
+                            {item.isVeg !== undefined && (
+                              <div className="absolute top-2 left-2 w-4 h-4 md:w-5 md:h-5 bg-white rounded-md flex items-center justify-center border border-gray-100">
+                                <div className={`w-2 h-2 md:w-2.5 md:h-2.5 rounded-full ${item.isVeg ? 'bg-green-600' : 'bg-red-600'}`} />
+                              </div>
+                            )}
+                          </div>
+                          <div className="p-2 md:p-3">
+                            <h4 className="font-bold text-gray-900 dark:text-gray-100 text-xs md:text-sm line-clamp-1 mb-1">
+                              {item.name}
+                            </h4>
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-900 dark:text-gray-100 font-bold text-xs md:text-sm">
+                                ₹{item.price}
+                              </span>
+                              {item.originalPrice > item.price && (
+                                <span className="text-gray-400 dark:text-gray-600 text-[10px] md:text-xs line-through">
+                                  ₹{item.originalPrice}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="flex gap-3">
+                        {[1, 2, 3, 4].map(i => (
+                          <div key={i} className="flex-shrink-0 w-36 md:w-48 h-44 bg-gray-50 dark:bg-gray-800/50 animate-pulse rounded-2xl" />
+                        ))}
+                      </div>
                     )}
-                  </CardContent>
-                </Card>
-              </Link>
-            </ScrollReveal>
-          ))}
+                  </div>
+                </div>
+              </div>
+            )
+          })}
         </div>
       </div>
     </AnimatedPage>
   )
 }
-
-

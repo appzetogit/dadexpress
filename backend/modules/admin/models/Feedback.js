@@ -14,7 +14,6 @@ const feedbackSchema = new mongoose.Schema(
     },
     userEmail: {
       type: String,
-      required: true,
       trim: true
     },
     message: {

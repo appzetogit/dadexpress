@@ -211,7 +211,9 @@ export default function InviteUser() {
       formData.append('name', name.trim())
       formData.append('role', selectedRole)
       if (addMethod === "phone") {
-        formData.append('phone', phoneNumber)
+        // Combine country code and phone number for the backend
+        const fullPhone = countryCode + phoneNumber
+        formData.append('phone', fullPhone)
       } else {
         formData.append('email', email.trim())
       }

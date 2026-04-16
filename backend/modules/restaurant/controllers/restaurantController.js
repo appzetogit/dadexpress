@@ -297,13 +297,24 @@ export const getRestaurants = async (req, res) => {
         return true;
       }
       
-      // 2. Buffer check (1km) against vertices - handles restaurants near boundary
-      const BUFFER_DISTANCE = 1.0;
+      // 2. Buffer check (0.5km) against vertices - handles restaurants near boundary
+      const BUFFER_KM = 0.5;
+      const calculateDistance = (lat1, lng1, lat2, lng2) => {
+        const R = 6371;
+        const dLat = (lat2 - lat1) * (Math.PI / 180);
+        const dLng = (lng2 - lng1) * (Math.PI / 180);
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                  Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+                  Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+      };
+
       for (const vertex of zoneDoc.coordinates) {
         const vLat = typeof vertex === 'object' ? (vertex.latitude || vertex.lat) : null;
         const vLng = typeof vertex === 'object' ? (vertex.longitude || vertex.lng) : null;
         if (vLat !== null && vLng !== null) {
-          if (calculateDistance(coords.lat, coords.lng, vLat, vLng) <= BUFFER_DISTANCE) {
+          if (calculateDistance(coords.lat, coords.lng, vLat, vLng) <= BUFFER_KM) {
             return true;
           }
         }
@@ -386,8 +397,67 @@ export const getRestaurants = async (req, res) => {
     const limitValue = parseInt(limit);
     restaurants = restaurants.slice(offsetValue, offsetValue + limitValue);
 
+    // 6. Fetch menu items for each restaurant (for the standardized UI layout)
+    const restaurantsWithMenu = await Promise.all(restaurants.map(async (r) => {
+      const menu = await Menu.findOne({ restaurant: r._id, isActive: true }).lean();
+      const menuItems = [];
+
+      if (menu && menu.sections) {
+        menu.sections.forEach(section => {
+          if (section.isEnabled !== false) {
+            (section.items || []).forEach(item => {
+              if (item.isAvailable !== false && menuItems.length < 15) {
+                menuItems.push({
+                  id: item.id,
+                  name: item.name,
+                  price: item.price,
+                  originalPrice: item.originalPrice || item.price,
+                  image: item.image || (item.images && item.images.length > 0 ? item.images[0] : ""),
+                  isVeg: item.foodType === 'Veg',
+                  bestPrice: item.discountAmount > 0 || (item.originalPrice && item.originalPrice > item.price),
+                  description: item.description || "",
+                  category: section.name,
+                });
+              }
+            });
+
+            // Also check subsections
+            (section.subsections || []).forEach(subsection => {
+              (subsection.items || []).forEach(item => {
+                if (item.isAvailable !== false && menuItems.length < 15) {
+                  menuItems.push({
+                    id: item.id,
+                    name: item.name,
+                    price: item.price,
+                    originalPrice: item.originalPrice || item.price,
+                    image: item.image || (item.images && item.images.length > 0 ? item.images[0] : ""),
+                    isVeg: item.foodType === 'Veg',
+                    bestPrice: item.discountAmount > 0 || (item.originalPrice && item.originalPrice > item.price),
+                    description: item.description || "",
+                    category: subsection.name || section.name,
+                  });
+                }
+              });
+            });
+          }
+        });
+      }
+
+      return {
+        ...r,
+        id: r._id.toString(),
+        cuisine: r.cuisines && r.cuisines.length > 0 
+          ? r.cuisines.join(' • ') 
+          : "Multi-cuisine",
+        price: r.priceRange || "$$",
+        image: r.profileImage?.url || r.menuImages?.[0]?.url || "",
+        menuItems,
+        deliveryTime: r.estimatedDeliveryTime || "25-30 mins",
+      };
+    }));
+
     console.log(
-      `Fetched ${restaurants.length} (total: ${total}) restaurants with filters:`,
+      `Fetched ${restaurantsWithMenu.length} (total: ${total}) restaurants with filters:`,
       {
         sortBy,
         cuisine,
@@ -404,7 +474,7 @@ export const getRestaurants = async (req, res) => {
     );
 
     return successResponse(res, 200, "Restaurants retrieved successfully", {
-      restaurants,
+      restaurants: restaurantsWithMenu,
       total,
       filters: {
         sortBy,
@@ -1198,18 +1268,47 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
       if (!zoneDoc?.coordinates || zoneDoc.coordinates.length < 3) return true;
       const coords = getRestaurantCoords(restaurantDoc);
       if (!coords) return false;
-      return isPointInZone(coords.lat, coords.lng, zoneDoc.coordinates);
+      
+      // 1. Direct polygon check
+      if (isPointInZone(coords.lat, coords.lng, zoneDoc.coordinates)) {
+        return true;
+      }
+      
+      // 2. Buffer check (0.5km) against vertices - handles restaurants near boundary
+      const BUFFER_KM = 0.5;
+      const calculateDistance = (lat1, lng1, lat2, lng2) => {
+        const R = 6371;
+        const dLat = (lat2 - lat1) * (Math.PI / 180);
+        const dLng = (lng2 - lng1) * (Math.PI / 180);
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                  Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+                  Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+      };
+
+      for (const vertex of zoneDoc.coordinates) {
+        const vLat = typeof vertex === 'object' ? (vertex.latitude || vertex.lat) : null;
+        const vLng = typeof vertex === 'object' ? (vertex.longitude || vertex.lng) : null;
+        if (vLat !== null && vLng !== null) {
+          if (calculateDistance(coords.lat, coords.lng, vLat, vLng) <= BUFFER_KM) {
+            return true;
+          }
+        }
+      }
+      return false;
     };
 
     // Get all active restaurants
     let restaurants = await Restaurant.find({ isActive: true })
-      .select('-owner -createdAt -updatedAt')
-      .lean()
-      .limit(100); // Limit to first 100 restaurants for performance
+      .select("-owner -createdAt -updatedAt -password")
+      .lean();
 
     // When zone is detected, restrict to restaurants inside the same zone.
     if (userZone) {
-      restaurants = restaurants.filter((restaurantDoc) => isRestaurantInsideZone(restaurantDoc, userZone));
+      restaurants = restaurants.filter((restaurantDoc) =>
+        isRestaurantInsideZone(restaurantDoc, userZone),
+      );
     }
 
     // Process restaurants in parallel (batch processing for better performance)

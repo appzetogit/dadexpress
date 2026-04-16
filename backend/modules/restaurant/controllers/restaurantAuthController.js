@@ -448,9 +448,16 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       staffMember = null;
       if (!restaurant) {
         // If no restaurant found, check if this is a staff member
-        const staffQuery = normalizedPhone
-          ? { phone: normalizedPhone, status: 'active' }
-          : { email: email?.toLowerCase().trim(), status: 'active' };
+        // Use flexible phone query to handle different formats (+91, 10-digit, etc)
+        const phoneSubQuery = normalizedPhone ? buildPhoneInQuery(normalizedPhone, 'phone') : null;
+        let staffQuery;
+
+        if (phoneSubQuery) {
+          staffQuery = { ...phoneSubQuery, status: 'active' };
+        } else {
+          staffQuery = { email: email?.toLowerCase().trim(), status: 'active' };
+        }
+
         staffMember = await StaffManagement.findOne(staffQuery);
       }
 
