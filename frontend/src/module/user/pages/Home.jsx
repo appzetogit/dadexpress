@@ -748,7 +748,14 @@ export default function Home() {
           }
           : null,
       }),
-    [selectedAddress, currentLocation, zoneId, isManualMode],
+    [
+      selectedAddress, 
+      Number(currentLocation?.latitude || 0).toFixed(3), 
+      Number(currentLocation?.longitude || 0).toFixed(3), 
+      currentLocation?.city, 
+      zoneId, 
+      isManualMode
+    ],
   )
 
   const [placeholderIndex, setPlaceholderIndex] = useState(0)
@@ -917,14 +924,19 @@ export default function Home() {
       cancelled = true
     }
   }, [
-    selectedDeliveryAddress,
+    selectedDeliveryAddress?.id,
+    selectedDeliveryAddress?.address,
     isSavedSelectionLocked,
-    selectedAddress,
-    selectedCoords?.lat,
-    selectedCoords?.lng,
+    selectedAddress?.id,
+    selectedAddress?.formattedAddress,
+    Number(selectedCoords?.lat || 0).toFixed(3),
+    Number(selectedCoords?.lng || 0).toFixed(3),
     zoneId,
-    currentLocation,
-    activeLocation,
+    Number(currentLocation?.latitude || 0).toFixed(3),
+    Number(currentLocation?.longitude || 0).toFixed(3),
+    currentLocation?.city,
+    Number(activeLocation?.latitude || 0).toFixed(3),
+    Number(activeLocation?.longitude || 0).toFixed(3),
     isManualMode,
   ])
 
@@ -1237,7 +1249,27 @@ export default function Home() {
         aborted: requestId !== restaurantsRequestRef.current,
       })
     }
-  }, [vegMode, vegModeOption, resolvedZoneId, resolvedZoneSource, zoneResolveLoading, zoneLoading, selectedCoords?.lat, selectedCoords?.lng, resolvedSelectedCoords?.lat, resolvedSelectedCoords?.lng, currentLocation, activeLocation, selectedDeliveryAddress, selectedAddress, isManualMode])
+  }, [
+    vegMode, 
+    vegModeOption, 
+    resolvedZoneId, 
+    resolvedZoneSource, 
+    zoneResolveLoading, 
+    zoneLoading, 
+    Number(selectedCoords?.lat || 0).toFixed(3), 
+    Number(selectedCoords?.lng || 0).toFixed(3), 
+    Number(resolvedSelectedCoords?.lat || 0).toFixed(3), 
+    Number(resolvedSelectedCoords?.lng || 0).toFixed(3), 
+    Number(currentLocation?.latitude || 0).toFixed(3), 
+    Number(currentLocation?.longitude || 0).toFixed(3), 
+    currentLocation?.city, 
+    Number(activeLocation?.latitude || 0).toFixed(3), 
+    Number(activeLocation?.longitude || 0).toFixed(3), 
+    selectedDeliveryAddress?.id, 
+    selectedAddress?.id, 
+    selectedAddress?.formattedAddress, 
+    isManualMode
+  ])
 
   // Refetch restaurants when filters or GPS zone changes
   useEffect(() => {
@@ -1248,7 +1280,8 @@ export default function Home() {
     resolvedZoneId,
     zoneResolveLoading,
     zoneLoading,
-    selectedAddress,
+    selectedAddress?.id,
+    selectedAddress?.formattedAddress,
     // Use stable coordinate references (rounded to 3 decimal places) to prevent jitter re-renders
     Number(selectedCoords?.lat || 0).toFixed(3),
     Number(selectedCoords?.lng || 0).toFixed(3),
@@ -1318,7 +1351,20 @@ export default function Home() {
       : updatedRestaurants
 
     setRestaurantsData(nearbyZoneRestaurants)
-  }, [selectedAddress, selectedCoords?.lat, selectedCoords?.lng, resolvedSelectedCoords?.lat, resolvedSelectedCoords?.lng, currentLocation?.latitude, currentLocation?.longitude, currentLocation?.city, activeLocation?.city, location?.city, resolvedZoneId])
+  }, [
+    selectedAddress?.id, 
+    selectedAddress?.formattedAddress, 
+    Number(selectedCoords?.lat || 0).toFixed(3), 
+    Number(selectedCoords?.lng || 0).toFixed(3), 
+    Number(resolvedSelectedCoords?.lat || 0).toFixed(3), 
+    Number(resolvedSelectedCoords?.lng || 0).toFixed(3), 
+    Number(currentLocation?.latitude || 0).toFixed(3), 
+    Number(currentLocation?.longitude || 0).toFixed(3), 
+    currentLocation?.city, 
+    activeLocation?.city, 
+    location?.city, 
+    resolvedZoneId
+  ])
 
   // Filter restaurants and foods based on active filters
   const filteredRestaurants = useMemo(() => {

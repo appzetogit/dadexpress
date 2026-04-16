@@ -2502,14 +2502,23 @@ export function useLocation() {
 
       if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return
 
-      const nextLocation = {
-        ...payload,
-        latitude,
-        longitude,
-      }
+      // Use functional update to compare with current state and avoid redundant updates
+      setLocation(prev => {
+        if (prev && 
+            prev.latitude === latitude && 
+            prev.longitude === longitude && 
+            prev.formattedAddress === payload.formattedAddress &&
+            prev.city === payload.city) {
+          return prev; // No change, return same object to prevent re-render
+        }
 
-      prevLocationCoordsRef.current = { latitude, longitude }
-      setLocation(nextLocation)
+        return {
+          ...payload,
+          latitude,
+          longitude,
+        };
+      });
+      
       setPermissionGranted(true)
       setLoading(false)
       setError(null)
