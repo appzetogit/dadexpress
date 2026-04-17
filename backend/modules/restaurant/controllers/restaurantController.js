@@ -346,49 +346,109 @@ export const getRestaurants = async (req, res) => {
       });
     }
 
-    // 4. Open/Closed status check (automatic status update)
-    restaurants = await Promise.all(
-      restaurants.map(async (r) => {
-        // Automatic check based on outlet timings/delivery timings
-        const isCurrentlyOpen = await OutletTimings.isRestaurantOpen(r._id);
-        
-        // STATUS DIAGNOSTICS: If a restaurant is closed, we log why (for debugging "Closed" complaints)
-        if (!isCurrentlyOpen || r.isAcceptingOrders === false) {
-          const reason = !isCurrentlyOpen ? "Timings" : "Manual Closure";
-          false && console.log(`[StatusDiag] Restaurant ${r.name} (${r._id}) is CLOSED. Reason: ${reason}`);
+    // 4. Bulk fetch all relevant data in ONE go to solve N+1 performance bottleneck
+    const restaurantIds = restaurants.map(r => r._id);
+    
+    // Fetch all menus and outlet timings for these restaurants in parallel
+    const [allMenus, allTimings] = await Promise.all([
+      Menu.find({ restaurant: { $in: restaurantIds }, isActive: true }).lean(),
+      OutletTimings.find({ restaurantId: { $in: restaurantIds }, isActive: true }).lean()
+    ]);
+
+    // Create fast lookup maps
+    const menuLookup = new Map();
+    allMenus.forEach(m => menuLookup.set(m.restaurant.toString(), m));
+
+    const timingLookup = new Map();
+    allTimings.forEach(t => timingLookup.set(t.restaurantId.toString(), t));
+
+    // Helper functions for synchronous processing
+    const isRestaurantOpenSync = (restaurant, outletTimings) => {
+      // Get current date/time in IST
+      const now = new Date();
+      const istOffset = 5.5 * 60 * 60 * 1000;
+      const istDate = new Date(now.getTime() + istOffset);
+      const currentMinutes = istDate.getUTCHours() * 60 + istDate.getUTCMinutes();
+      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const currentDay = days[istDate.getUTCDay()];
+      const previousDay = days[(istDate.getUTCDay() + 6) % 7];
+
+      const timeToMinutesLocal = (timeStr) => {
+        if (!timeStr) return null;
+        const match = timeStr.match(/^(\d{1,2}):(\d{2})\s?(AM|PM|am|pm)?$/i);
+        if (!match) return null;
+        let h = parseInt(match[1], 10);
+        const m = parseInt(match[2], 10);
+        const ampm = match[3] ? match[3].toUpperCase() : null;
+        if (ampm === 'PM' && h < 12) h += 12;
+        if (ampm === 'AM' && h === 12) h = 0;
+        return h * 60 + m;
+      };
+
+      const isOvernightWindow = (openMin, closeMin) => openMin !== null && closeMin !== null && closeMin < openMin;
+
+      // Logic from OutletTimings.isRestaurantOpen
+      if (!outletTimings || !outletTimings.timings || outletTimings.timings.length === 0) {
+        const openDays = Array.isArray(restaurant.openDays) ? restaurant.openDays : [];
+        const isDayMarkedOpen = (dayName) => {
+          const norm = dayName.toLowerCase().substring(0, 3);
+          return openDays.some(d => d?.toString().toLowerCase().substring(0, 3) === norm);
+        };
+
+        if (openDays.length > 0 && !isDayMarkedOpen(currentDay)) {
+          const openMin = timeToMinutesLocal(restaurant.deliveryTimings?.openingTime);
+          const closeMin = timeToMinutesLocal(restaurant.deliveryTimings?.closingTime);
+          if (!(isDayMarkedOpen(previousDay) && isOvernightWindow(openMin, closeMin) && currentMinutes <= closeMin)) {
+            return false;
+          }
+        } else if (openDays.length > 0 && !isDayMarkedOpen(currentDay)) {
+           return false;
         }
 
-        if (!isCurrentlyOpen) {
-          return { ...r, isAcceptingOrders: false, status: "Closed" };
-        }
-        // If it should be open but is marked closed in DB, 
-        // we "suggest" it's open if it's within timings 
-        // (the Cron job will sync the DB eventually)
-        if (isCurrentlyOpen && r.isAcceptingOrders === false) {
-           return { ...r, isAcceptingOrders: false, status: "Closed" };
-        }
-        return { ...r, status: "Open" };
-      }),
-    );
+        const openMin = timeToMinutesLocal(restaurant.deliveryTimings?.openingTime);
+        const closeMin = timeToMinutesLocal(restaurant.deliveryTimings?.closingTime);
+        if (openMin === null || closeMin === null) return true;
+        if (closeMin < openMin) return currentMinutes >= openMin || currentMinutes <= closeMin;
+        return currentMinutes >= openMin && currentMinutes <= closeMin;
+      }
 
-    // 5. Final Pagination and Total Count
-    const total = restaurants.length;
-    const offsetValue = parseInt(offset);
-    const limitValue = parseInt(limit);
-    restaurants = restaurants.slice(offsetValue, offsetValue + limitValue);
+      const todayTiming = outletTimings.timings.find(t => t.day === currentDay);
+      if (todayTiming?.isOpen) {
+        const o = timeToMinutesLocal(todayTiming.openingTime);
+        const c = timeToMinutesLocal(todayTiming.closingTime);
+        if (c < o) return currentMinutes >= o || currentMinutes <= c;
+        return currentMinutes >= o && currentMinutes <= c;
+      }
 
-    // 6. Fetch menu items for each restaurant (for the standardized UI layout)
-    const restaurantsWithMenu = await Promise.all(restaurants.map(async (r) => {
-      const menu = await Menu.findOne({ restaurant: r._id, isActive: true }).lean();
+      const yesterdayTiming = outletTimings.timings.find(t => t.day === previousDay);
+      if (yesterdayTiming?.isOpen) {
+        const o = timeToMinutesLocal(yesterdayTiming.openingTime);
+        const c = timeToMinutesLocal(yesterdayTiming.closingTime);
+        if (isOvernightWindow(o, c) && currentMinutes <= c) return true;
+      }
+
+      return false;
+    };
+
+    // 5. Final processing of restaurants
+    const restaurantsWithMenu = restaurants.map((r) => {
+      // Status check
+      const isOpen = isRestaurantOpenSync(r, timingLookup.get(r._id.toString()));
+      const status = (!isOpen || r.isAcceptingOrders === false) ? "Closed" : "Open";
+      const acceptingOrders = isOpen && r.isAcceptingOrders !== false;
+
+      // Menu processing
+      const menu = menuLookup.get(r._id.toString());
       const menuItems = [];
+      const MAX_ITEMS = req.query.includeFullMenu === 'true' ? 1000 : 15;
 
       if (menu && menu.sections) {
         menu.sections.forEach(section => {
           if (section.isEnabled !== false) {
             (section.items || []).forEach(item => {
-              if (item.isAvailable !== false && menuItems.length < 15) {
+              if (item.isAvailable !== false && menuItems.length < MAX_ITEMS) {
                 menuItems.push({
-                  id: item.id,
+                  id: item.id || item._id,
                   name: item.name,
                   price: item.price,
                   originalPrice: item.originalPrice || item.price,
@@ -401,12 +461,11 @@ export const getRestaurants = async (req, res) => {
               }
             });
 
-            // Also check subsections
             (section.subsections || []).forEach(subsection => {
               (subsection.items || []).forEach(item => {
-                if (item.isAvailable !== false && menuItems.length < 15) {
+                if (item.isAvailable !== false && menuItems.length < MAX_ITEMS) {
                   menuItems.push({
-                    id: item.id,
+                    id: item.id || item._id,
                     name: item.name,
                     price: item.price,
                     originalPrice: item.originalPrice || item.price,
@@ -433,8 +492,12 @@ export const getRestaurants = async (req, res) => {
         image: r.profileImage?.url || r.menuImages?.[0]?.url || "",
         menuItems,
         deliveryTime: r.estimatedDeliveryTime || "25-30 mins",
+        isAcceptingOrders: acceptingOrders,
+        status: status,
+        // Also provide raw menu structure if requested for complex frontend processing
+        fullMenu: req.query.includeFullMenu === 'true' ? menu : undefined
       };
-    }));
+    });
 
     console.log(
       `Fetched ${restaurantsWithMenu.length} (total: ${total}) restaurants with filters:`,
@@ -1259,7 +1322,7 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
 
     // Get all active restaurants
     let restaurants = await Restaurant.find({ isActive: true })
-      .select("-owner -createdAt -updatedAt -password")
+      .select("restaurantId name slug rating totalRatings estimatedDeliveryTime distance cuisines priceRange profileImage menuImages location isActive isAcceptingOrders openDays deliveryTimings")
       .lean();
 
     // When zone is detected, restrict to restaurants inside the same zone.
@@ -1269,26 +1332,89 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
       );
     }
 
-    // Bulk fetch all relevant menus in ONE query to solve N+1 performance bottleneck
+    // Bulk fetch all relevant metadata in ONE go to solve N+1 performance bottleneck
     const restaurantIds = restaurants.map(r => r._id);
-    const allMenus = await Menu.find({ 
-      restaurant: { $in: restaurantIds },
-      isActive: true 
-    }).lean();
+    
+    // Fetch all menus and outlet timings for these restaurants in parallel
+    // OPTIMIZATION: Only fetch 'sections' to avoid heavy payload
+    const [allMenus, allTimings] = await Promise.all([
+      Menu.find({ restaurant: { $in: restaurantIds }, isActive: true })
+          .select("restaurant sections isActive")
+          .lean(),
+      OutletTimings.find({ restaurantId: { $in: restaurantIds }, isActive: true }).lean()
+    ]);
 
-    // Create a fast lookup map for menus
+    // Create fast lookup maps
     const menuLookup = new Map();
-    allMenus.forEach(menu => {
-      if (menu.restaurant) {
-        menuLookup.set(menu.restaurant.toString(), menu);
-      }
-    });
+    allMenus.forEach(m => menuLookup.set(m.restaurant?.toString(), m));
 
-    // Process restaurants synchronously (super fast as data is already in memory)
-    const restaurantsWithDishes = restaurants
-      .map(r => processRestaurantSync(r, menuLookup.get(r._id.toString())))
-      .filter(Boolean)
-      .slice(0, 40); // Limit to top 40 restaurants to ensure mobile performance and fast load
+    const timingLookup = new Map();
+    allTimings.forEach(t => timingLookup.set(t.restaurantId?.toString(), t));
+
+    // Common sync helper for open/closed check (Internal to controller)
+    const isRestaurantOpenSyncLocal = (restaurant, outletTimings) => {
+      const now = new Date();
+      const istDate = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
+      const currentMinutes = istDate.getUTCHours() * 60 + istDate.getUTCMinutes();
+      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const currentDay = days[istDate.getUTCDay()];
+      const previousDay = days[(istDate.getUTCDay() + 6) % 7];
+
+      const timeToMinutesLocal = (timeStr) => {
+        if (!timeStr) return null;
+        const match = timeStr.match(/^(\d{1,2}):(\d{2})\s?(AM|PM|am|pm)?$/i);
+        if (!match) return null;
+        let h = parseInt(match[1], 10);
+        const m = parseInt(match[2], 10);
+        const ampm = match[3] ? match[3].toUpperCase() : null;
+        if (ampm === 'PM' && h < 12) h += 12;
+        if (ampm === 'AM' && h === 12) h = 0;
+        return h * 60 + m;
+      };
+
+      if (!outletTimings || !outletTimings.timings || outletTimings.timings.length === 0) {
+        const openDays = Array.isArray(restaurant.openDays) ? restaurant.openDays : [];
+        const isDayMarkedOpen = (dayName) => {
+          const norm = dayName.toLowerCase().substring(0, 3);
+          return openDays.some(d => d?.toString().toLowerCase().substring(0, 3) === norm);
+        };
+        const openMin = timeToMinutesLocal(restaurant.deliveryTimings?.openingTime);
+        const closeMin = timeToMinutesLocal(restaurant.deliveryTimings?.closingTime);
+        if (openDays.length > 0 && !isDayMarkedOpen(currentDay)) return false;
+        if (openMin === null || closeMin === null) return true;
+        if (closeMin < openMin) return currentMinutes >= openMin || currentMinutes <= closeMin;
+        return currentMinutes >= openMin && currentMinutes <= closeMin;
+      }
+
+      const today = outletTimings.timings.find(t => t.day === currentDay);
+      if (today?.isOpen) {
+        const o = timeToMinutesLocal(today.openingTime), c = timeToMinutesLocal(today.closingTime);
+        if (c < o) return currentMinutes >= o || currentMinutes <= c;
+        return currentMinutes >= o && currentMinutes <= c;
+      }
+      return false;
+    };
+
+    // Process restaurants synchronously and STOP once we have enough results (40)
+    const restaurantsWithDishes = [];
+    for (const r of restaurants) {
+      if (restaurantsWithDishes.length >= 40) break;
+
+      const menu = menuLookup.get(r._id.toString());
+      if (!menu) continue;
+      
+      const openStatus = isRestaurantOpenSyncLocal(r, timingLookup.get(r._id.toString()));
+      const isAcceptingOrders = openStatus && r.isAcceptingOrders !== false;
+
+      const processed = processRestaurantSync(r, menu);
+      if (processed) {
+        restaurantsWithDishes.push({ 
+          ...processed, 
+          isAcceptingOrders, 
+          status: openStatus ? "Open" : "Closed" 
+        });
+      }
+    }
 
     // Sort by rating (highest first) or by number of dishes
     restaurantsWithDishes.sort((a, b) => {

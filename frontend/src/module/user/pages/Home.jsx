@@ -1034,6 +1034,13 @@ export default function Home() {
         return
       }
 
+      // Critical: Don't fetch until zone resolution is complete
+      // This prevents the "Service not available" flash when navigating back to Home
+      if (!resolvedZoneId && (zoneResolveLoading || zoneLoading)) {
+        setLoadingRestaurants(false)
+        return
+      }
+
       if (false) {
         console.log("[Home][RestaurantsFetch:skipped]", {
           requestId,
@@ -1279,6 +1286,7 @@ export default function Home() {
   ])
 
   // Refetch restaurants when filters or GPS zone changes
+  // NOTE: Only depend on resolvedZoneId and appliedFilters to avoid re-fetching on minor GPS jitter
   useEffect(() => {
     fetchRestaurants(appliedFilters)
   }, [
@@ -1286,12 +1294,6 @@ export default function Home() {
     fetchRestaurants,
     resolvedZoneId,
     selectedAddress?.id,
-    selectedAddress?.formattedAddress,
-    // Use stable coordinate references (rounded to 3 decimal places) to prevent jitter re-renders
-    Number(selectedCoords?.lat || 0).toFixed(3),
-    Number(selectedCoords?.lng || 0).toFixed(3),
-    Number(currentLocation?.latitude || 0).toFixed(3),
-    Number(currentLocation?.longitude || 0).toFixed(3)
   ])
 
   // Recalculate distances when selected delivery address location updates

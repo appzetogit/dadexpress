@@ -322,13 +322,12 @@ export default function CategoryPage() {
       try {
         setLoadingRestaurants(true)
         setRestaurantsData([])
-        // Optional: Add zoneId if available (for sorting/filtering, but show all restaurants)
-        const params = {}
+        // Use includeFullMenu=true to fetch all menus in a single bulk request
+        const params = { includeFullMenu: true }
         if (zoneId) {
           params.zoneId = zoneId
         }
         const response = await restaurantAPI.getRestaurants(params)
-
         if (requestId !== restaurantsRequestRef.current) return
 
         if (response.data && response.data.success && response.data.data && response.data.data.restaurants) {
@@ -400,61 +399,43 @@ export default function CategoryPage() {
               }
             })
 
-          // Fetch menus for all restaurants
-          const restaurantsWithMenus = await Promise.all(
-            transformedRestaurants.map(async (restaurant) => {
-              try {
-                const menuResponse = await restaurantAPI.getMenuByRestaurantId(restaurant.restaurantId)
-                if (menuResponse.data && menuResponse.data.success && menuResponse.data.data && menuResponse.data.data.menu) {
-                  const menu = menuResponse.data.data.menu
-                  const hasPaneer = checkCategoryInMenu(menu, 'paneer-tikka')
+          // Use the full menu already provided by the bulk API response
+          const restaurantsWithMenus = transformedRestaurants.map((restaurant) => {
+            const originalData = restaurantsArray.find(r => (r.restaurantId || r._id) === restaurant.restaurantId)
+            const menu = originalData?.fullMenu || null
+            
+            const hasPaneer = menu ? checkCategoryInMenu(menu, 'paneer-tikka') : false
 
-                  let featuredDish = restaurant.featuredDish
-                  let featuredPrice = restaurant.featuredPrice
+            let featuredDish = restaurant.featuredDish
+            let featuredPrice = restaurant.featuredPrice
 
-                  if (!featuredDish || !featuredPrice) {
-                    for (const section of (menu.sections || [])) {
-                      if (section.items && section.items.length > 0) {
-                        const firstItem = section.items[0]
-                        if (!featuredDish) featuredDish = firstItem.name
-                        if (!featuredPrice) {
-                          const originalPrice = firstItem.originalPrice || firstItem.price || 0
-                          const discountPercent = firstItem.discountPercent || 0
-                          featuredPrice = discountPercent > 0
-                            ? Math.round(originalPrice * (1 - discountPercent / 100))
-                            : originalPrice
-                        }
-                        break
-                      }
-                    }
+            if (menu && (!featuredDish || !featuredPrice)) {
+              for (const section of (menu.sections || [])) {
+                if (section.items && section.items.length > 0) {
+                  const firstItem = section.items[0]
+                  if (!featuredDish) featuredDish = firstItem.name
+                  if (!featuredPrice) {
+                    const originalPrice = firstItem.originalPrice || firstItem.price || 0
+                    const discountPercent = firstItem.discountPercent || 0
+                    featuredPrice = discountPercent > 0
+                      ? Math.round(originalPrice * (1 - discountPercent / 100))
+                      : originalPrice
                   }
-
-                  return {
-                    ...restaurant,
-                    menu: menu,
-                    hasPaneer: hasPaneer,
-                    featuredDish: featuredDish || null,
-                    featuredPrice: featuredPrice || null,
-                    categoryMatches: {},
-                  }
-                }
-                return {
-                  ...restaurant,
-                  menu: null,
-                  hasPaneer: false,
-                  categoryMatches: {},
-                }
-              } catch (error) {
-                console.warn(`Failed to fetch menu for restaurant ${restaurant.restaurantId}:`, error)
-                return {
-                  ...restaurant,
-                  menu: null,
-                  hasPaneer: false,
-                  categoryMatches: {},
+                  break
                 }
               }
-            })
-          )
+            }
+
+            return {
+              ...restaurant,
+              menu: menu,
+              hasPaneer: hasPaneer,
+              featuredDish: featuredDish || null,
+              featuredPrice: featuredPrice || null,
+              categoryMatches: {},
+            }
+          })
+
           if (requestId !== restaurantsRequestRef.current) return
           setRestaurantsData(restaurantsWithMenus)
         } else {
