@@ -133,13 +133,13 @@ outletTimingsSchema.statics.isRestaurantOpen = async function(restaurantId) {
     // Date.getTime() is always UTC, so we add the IST offset to get IST-shifted time.
     const istDate = new Date(now.getTime() + istOffset);
 
+    const isOvernightWindow = (openMin, closeMin) =>
+      openMin !== null && closeMin !== null && closeMin < openMin;
+
+    const currentMinutes = istDate.getUTCHours() * 60 + istDate.getUTCMinutes();
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const currentDay = days[istDate.getUTCDay()];
     const previousDay = days[(istDate.getUTCDay() + 6) % 7];
-    const currentMinutes = istDate.getUTCHours() * 60 + istDate.getUTCMinutes();
-
-    const isOvernightWindow = (openMin, closeMin) =>
-      openMin !== null && closeMin !== null && closeMin < openMin;
 
     // If no outlet timings are set, fall back to Restaurant.deliveryTimings/openDays (legacy/onboarding flow).
     if (!outletTimings || !outletTimings.timings || outletTimings.timings.length === 0) {
@@ -178,11 +178,14 @@ outletTimingsSchema.statics.isRestaurantOpen = async function(restaurantId) {
       const openMin = timeToMinutes(restaurant.deliveryTimings?.openingTime);
       const closeMin = timeToMinutes(restaurant.deliveryTimings?.closingTime);
 
+      // If no delivery timings are set, we assume it's open (backward compatible).
       if (openMin === null || closeMin === null) {
         return true;
       }
 
+      // Handle simple timing based on currentMinutes
       if (closeMin < openMin) {
+        // Overnight window
         return currentMinutes >= openMin || currentMinutes <= closeMin;
       }
 

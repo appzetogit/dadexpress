@@ -292,35 +292,8 @@ export const getRestaurants = async (req, res) => {
       const coords = getRestaurantCoords(restaurantDoc);
       if (!coords) return false;
       
-      // 1. Direct polygon check
-      if (isPointInZone(coords.lat, coords.lng, zoneDoc.coordinates)) {
-        return true;
-      }
-      
-      // 2. Buffer check (0.5km) against vertices - handles restaurants near boundary
-      const BUFFER_KM = 0.5;
-      const calculateDistance = (lat1, lng1, lat2, lng2) => {
-        const R = 6371;
-        const dLat = (lat2 - lat1) * (Math.PI / 180);
-        const dLng = (lng2 - lng1) * (Math.PI / 180);
-        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                  Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
-                  Math.sin(dLng / 2) * Math.sin(dLng / 2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return R * c;
-      };
-
-      for (const vertex of zoneDoc.coordinates) {
-        const vLat = typeof vertex === 'object' ? (vertex.latitude || vertex.lat) : null;
-        const vLng = typeof vertex === 'object' ? (vertex.longitude || vertex.lng) : null;
-        if (vLat !== null && vLng !== null) {
-          if (calculateDistance(coords.lat, coords.lng, vLat, vLng) <= BUFFER_KM) {
-            return true;
-          }
-        }
-      }
-      
-      return false;
+      // Strict polygon check (removed 0.5km buffer which caused leaks)
+      return isPointInZone(coords.lat, coords.lng, zoneDoc.coordinates);
     };
 
     // Fetch restaurants
@@ -378,6 +351,13 @@ export const getRestaurants = async (req, res) => {
       restaurants.map(async (r) => {
         // Automatic check based on outlet timings/delivery timings
         const isCurrentlyOpen = await OutletTimings.isRestaurantOpen(r._id);
+        
+        // STATUS DIAGNOSTICS: If a restaurant is closed, we log why (for debugging "Closed" complaints)
+        if (!isCurrentlyOpen || r.isAcceptingOrders === false) {
+          const reason = !isCurrentlyOpen ? "Timings" : "Manual Closure";
+          false && console.log(`[StatusDiag] Restaurant ${r.name} (${r._id}) is CLOSED. Reason: ${reason}`);
+        }
+
         if (!isCurrentlyOpen) {
           return { ...r, isAcceptingOrders: false, status: "Closed" };
         }
@@ -387,7 +367,7 @@ export const getRestaurants = async (req, res) => {
         if (isCurrentlyOpen && r.isAcceptingOrders === false) {
            return { ...r, isAcceptingOrders: false, status: "Closed" };
         }
-        return r;
+        return { ...r, status: "Open" };
       }),
     );
 
@@ -525,13 +505,21 @@ export const getRestaurantById = async (req, res) => {
 
     // NEW: Check if restaurant is currently open based on outlet timings (Automatic Open/Close)
     const isCurrentlyOpen = await OutletTimings.isRestaurantOpen(restaurant._id);
+    
+    // Status Diagnostics - consistent with list view
+    if (!isCurrentlyOpen || restaurant.isAcceptingOrders === false) {
+      const reason = !isCurrentlyOpen ? "Timings" : "Manual Closure";
+      false && console.log(`[StatusDiag][Details] Restaurant ${restaurant.name} is CLOSED. Reason: ${reason}`);
+    }
+
     if (!isCurrentlyOpen) {
       restaurant.isAcceptingOrders = false;
       restaurant.status = 'Closed';
     } else if (isCurrentlyOpen && restaurant.isAcceptingOrders === false) {
       // Respect manual "Closed" status even if within timings
-      restaurant.isAcceptingOrders = false;
       restaurant.status = 'Closed';
+    } else {
+      restaurant.status = 'Open';
     }
 
     return successResponse(res, 200, 'Restaurant retrieved successfully', {
@@ -1133,15 +1121,22 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
   try {
     const { zoneId } = req.query; // User's zone ID (optional - if provided, filters by zone)
     
-    // Optional: Zone-based filtering - if zoneId is provided, validate and filter by zone
-    let userZone = null;
-    if (zoneId) {
-      // Validate zone exists and is active
-      userZone = await Zone.findById(zoneId).lean();
-      if (!userZone || !userZone.isActive) {
-        console.warn(`⚠️ Ignoring invalid/inactive zoneId on under-250 list: ${zoneId}`);
-        userZone = null;
-      }
+    // CRITICAL: Require zoneId for Under-250 list to prevent showing all restaurants
+    if (!zoneId) {
+      return successResponse(res, 200, 'Please select a location within a service zone', {
+        restaurants: [],
+        total: 0
+      });
+    }
+
+    // Validate zone exists and is active
+    let userZone = await Zone.findById(zoneId).lean();
+    if (!userZone || !userZone.isActive) {
+      console.warn(`⚠️ Invalid/inactive zoneId on under-250 list: ${zoneId}`);
+      return successResponse(res, 200, 'Location outside service area', {
+        restaurants: [],
+        total: 0
+      });
     }
 
     const MAX_PRICE = 250;
@@ -1173,18 +1168,11 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
       });
     };
 
-    // Helper function to process a single restaurant
-    const processRestaurant = async (restaurant) => {
-      try {
-        // Get menu for this restaurant
-        const menu = await Menu.findOne({ 
-          restaurant: restaurant._id,
-          isActive: true 
-        }).lean();
-
-        if (!menu || !menu.sections || menu.sections.length === 0) {
-          return null; // Skip restaurants without menus
-        }
+    // Helper function to process a single restaurant with its menu
+    const processRestaurantSync = (restaurant, menu) => {
+      if (!menu || !menu.sections || menu.sections.length === 0) {
+        return null; // Skip restaurants without menus
+      }
 
         // Collect all dishes under ₹250 from all sections
         const dishesUnder250 = [];
@@ -1226,7 +1214,7 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
               : "Multi-cuisine",
             price: restaurant.priceRange || "$$",
             image: restaurant.profileImage?.url || restaurant.menuImages?.[0]?.url || "",
-            menuItems: dishesUnder250.map(item => ({
+            menuItems: dishesUnder250.slice(0, 12).map(item => ({
               id: item.id,
               name: item.name,
               price: getFinalPrice(item),
@@ -1240,10 +1228,6 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
           };
         }
         return null;
-      } catch (error) {
-        console.error(`Error processing restaurant ${restaurant._id}:`, error);
-        return null;
-      }
     };
 
     const parseCoordinate = (value) => {
@@ -1269,34 +1253,8 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
       const coords = getRestaurantCoords(restaurantDoc);
       if (!coords) return false;
       
-      // 1. Direct polygon check
-      if (isPointInZone(coords.lat, coords.lng, zoneDoc.coordinates)) {
-        return true;
-      }
-      
-      // 2. Buffer check (0.5km) against vertices - handles restaurants near boundary
-      const BUFFER_KM = 0.5;
-      const calculateDistance = (lat1, lng1, lat2, lng2) => {
-        const R = 6371;
-        const dLat = (lat2 - lat1) * (Math.PI / 180);
-        const dLng = (lng2 - lng1) * (Math.PI / 180);
-        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                  Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
-                  Math.sin(dLng / 2) * Math.sin(dLng / 2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return R * c;
-      };
-
-      for (const vertex of zoneDoc.coordinates) {
-        const vLat = typeof vertex === 'object' ? (vertex.latitude || vertex.lat) : null;
-        const vLng = typeof vertex === 'object' ? (vertex.longitude || vertex.lng) : null;
-        if (vLat !== null && vLng !== null) {
-          if (calculateDistance(coords.lat, coords.lng, vLat, vLng) <= BUFFER_KM) {
-            return true;
-          }
-        }
-      }
-      return false;
+      // Strict polygon check (removed 0.5km buffer which caused leaks)
+      return isPointInZone(coords.lat, coords.lng, zoneDoc.coordinates);
     };
 
     // Get all active restaurants
@@ -1311,15 +1269,26 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
       );
     }
 
-    // Process restaurants in parallel (batch processing for better performance)
-    const batchSize = 10; // Process 10 restaurants at a time
-    const restaurantsWithDishes = [];
+    // Bulk fetch all relevant menus in ONE query to solve N+1 performance bottleneck
+    const restaurantIds = restaurants.map(r => r._id);
+    const allMenus = await Menu.find({ 
+      restaurant: { $in: restaurantIds },
+      isActive: true 
+    }).lean();
 
-    for (let i = 0; i < restaurants.length; i += batchSize) {
-      const batch = restaurants.slice(i, i + batchSize);
-      const results = await Promise.all(batch.map(processRestaurant));
-      restaurantsWithDishes.push(...results.filter(r => r !== null));
-    }
+    // Create a fast lookup map for menus
+    const menuLookup = new Map();
+    allMenus.forEach(menu => {
+      if (menu.restaurant) {
+        menuLookup.set(menu.restaurant.toString(), menu);
+      }
+    });
+
+    // Process restaurants synchronously (super fast as data is already in memory)
+    const restaurantsWithDishes = restaurants
+      .map(r => processRestaurantSync(r, menuLookup.get(r._id.toString())))
+      .filter(Boolean)
+      .slice(0, 40); // Limit to top 40 restaurants to ensure mobile performance and fast load
 
     // Sort by rating (highest first) or by number of dishes
     restaurantsWithDishes.sort((a, b) => {

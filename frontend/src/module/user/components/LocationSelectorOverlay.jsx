@@ -98,6 +98,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
   const reverseGeocodeTimeoutRef = useRef(null) // Debounce timeout for reverse geocoding
   const lastReverseGeocodeCoordsRef = useRef(null) // Track last coordinates to avoid duplicate calls
   const ltrInputStyle = { direction: "ltr", unicodeBidi: "plaintext", textAlign: "left" }
+  const isGettingLocationRef = useRef(false)
   const sanitizeAddressText = (value) => {
     const rawParts = String(value || "")
       .split(",")
@@ -217,66 +218,56 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
     })
 
   const getCurrentGpsCoordinatesWithRetry = async ({ forceLive = true } = {}) => {
+    if (isGettingLocationRef.current) {
+      console.log("📍 Location request already in progress, skipping...")
+      return null
+    }
+
     try {
-      // Try strict GPS first.
-      const strictPosition = await getCurrentGpsCoordinates({
-        enableHighAccuracy: true,
-        timeout: 20000,
-        maximumAge: 0,
-      })
+      isGettingLocationRef.current = true
+      // Try strict GPS first with a shorter, more reasonable timeout for a web app.
+      const initialTimeout = forceLive ? 12000 : 10000;
 
-      const strictAccuracy = Number(strictPosition?.coords?.accuracy || Infinity)
-      if (Number.isFinite(strictAccuracy) && strictAccuracy <= 100) {
-        return strictPosition
-      }
-
-      // If strict fix is coarse, sample a short watch window and pick best accuracy.
+      console.log(`📍 Requesting GPS (forceLive: ${forceLive}, timeout: ${initialTimeout}ms)`)
+      
       try {
-        const bestPosition = await getBestGpsCoordinates({
-          sampleWindowMs: 12000,
-          requiredAccuracy: 80,
-        })
-
-        const bestAccuracy = Number(bestPosition?.coords?.accuracy || Infinity)
-        if (bestAccuracy < strictAccuracy) {
-          return bestPosition
-        }
-      } catch {}
-
-      return strictPosition
-    } catch (firstError) {
-      // On timeout/unavailable, retry with strict live GPS settings.
-      const shouldRetry =
-        firstError?.code === 2 ||
-        firstError?.code === 3 ||
-        String(firstError?.message || "").toLowerCase().includes("timeout")
-
-      if (!shouldRetry) {
-        throw firstError
-      }
-
-      // Try short GPS sampling before final strict retry.
-      try {
-        return await getBestGpsCoordinates({
-          sampleWindowMs: 18000,
-          requiredAccuracy: 80,
-        })
-      } catch {}
-
-      // Keep live request strict when user taps current location.
-      if (forceLive) {
-        return await getCurrentGpsCoordinates({
+        const strictPosition = await getCurrentGpsCoordinates({
           enableHighAccuracy: true,
-          timeout: 25000,
-          maximumAge: 0,
+          timeout: initialTimeout,
+          maximumAge: forceLive ? 0 : 30000,
+        })
+
+        const strictAccuracy = Number(strictPosition?.coords?.accuracy || Infinity)
+        // If accuracy is good enough, return immediately
+        if (Number.isFinite(strictAccuracy) && strictAccuracy <= 100) {
+          return strictPosition
+        }
+
+        // If accuracy is poor, try to refine for a few more seconds
+        toast.loading("Refining your location for accuracy...", { id: "current-location" })
+        const refinedPosition = await getBestGpsCoordinates({
+          sampleWindowMs: 8000,
+          requiredAccuracy: 50,
+        })
+        return refinedPosition || strictPosition
+      } catch (err) {
+        // Fallback to low accuracy (network-based) if high accuracy fails
+        console.warn("📍 High accuracy GPS failed, falling back to network location:", err.message)
+        
+        if (err.code === 1) throw err; // Permission denied - don't retry
+
+        toast.loading("Getting approximate location...", { id: "current-location" })
+        return await getCurrentGpsCoordinates({
+          enableHighAccuracy: false, // Network based - much faster
+          timeout: 8000,
+          maximumAge: 60000,
         })
       }
-
-      return await getCurrentGpsCoordinates({
-        enableHighAccuracy: true,
-        timeout: 20000,
-        maximumAge: 0,
-      })
+    } catch (error) {
+      console.error("❌ All GPS attempts failed:", error)
+      throw error
+    } finally {
+      isGettingLocationRef.current = false
     }
   }
 

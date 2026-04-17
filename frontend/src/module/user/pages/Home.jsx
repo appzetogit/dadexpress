@@ -2,7 +2,7 @@ import { useSearchParams, Link, useNavigate } from "react-router-dom"
 import React, { useRef, useEffect, useState, useMemo, useCallback } from "react"
 import { createPortal } from "react-dom"
 import Lenis from "lenis"
-import { Star, Clock, MapPin, Heart, Search, Tag, Flame, ShoppingBag, ShoppingCart, SlidersHorizontal, CheckCircle2, Bookmark, BadgePercent, X, ArrowDownUp, Timer, CalendarClock, ShieldCheck, IndianRupee, UtensilsCrossed, Leaf, AlertCircle, Loader2, Plus, Check, Share2 } from "lucide-react"
+import { Star, Clock, MapPin, Heart, Search, Tag, Flame, ShoppingBag, ShoppingCart, SlidersHorizontal, CheckCircle2, Bookmark, BadgePercent, X, ArrowDownUp, Timer, CalendarClock, ShieldCheck, IndianRupee, UtensilsCrossed, Leaf, AlertCircle, Loader2, Plus, Check, Share2, ArrowRight } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import Footer from "../components/Footer"
 import AddToCartButton from "../components/AddToCartButton"
@@ -778,6 +778,15 @@ export default function Home() {
   const [activeScrollSection, setActiveScrollSection] = useState('sort')
   const rightContentRef = useRef(null)
 
+  // Sync quantities from cart for menu items
+  const quantities = useMemo(() => {
+    const q = {}
+    cart.forEach(item => {
+      q[item.id] = item.quantity || 0
+    })
+    return q
+  }, [cart])
+
   // Scroll tracking effect
   useEffect(() => {
     if (!isFilterOpen || !rightContentRef.current) return
@@ -1193,6 +1202,7 @@ export default function Home() {
             location: restaurant.location, // Store location for distance recalculation
             isActive: restaurant.isActive !== false, // Default to true if not specified
             isAcceptingOrders: restaurant.isAcceptingOrders !== false, // Default to true if not specified
+            menuItems: restaurant.menuItems || [], // Map menu items from API to the transformed object
           }
         })
 
@@ -2283,55 +2293,97 @@ export default function Home() {
                     {/* Horizontal Menu Scroll */}
                     <div className="relative group/scroll">
                       <div
-                        className="flex overflow-x-auto pb-6 gap-4 sm:gap-6 scrollbar-hide scroll-smooth"
+                        className="flex overflow-x-auto pb-4 gap-4 sm:gap-6 scrollbar-hide scroll-smooth px-1"
                         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
                       >
                         {restaurant.menuItems && restaurant.menuItems.length > 0 ? (
-                          restaurant.menuItems.map((item) => (
-                            <div
-                              key={item.id}
-                              className="flex-shrink-0 w-36 md:w-60 bg-white dark:bg-[#1a1a1a] rounded-[24px] border border-gray-100 dark:border-gray-800 overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer transform hover:-translate-y-2 group"
+                          <>
+                            {restaurant.menuItems.map((item, itemIndex) => {
+                              const quantity = quantities[item.id] || 0
+                              return (
+                                <div
+                                  key={item.id}
+                                  className="flex-shrink-0 w-40 md:w-64 bg-white dark:bg-[#1a1a1a] rounded-[24px] border border-gray-100 dark:border-gray-800 overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer transform hover:-translate-y-2 group"
+                                  onClick={() => navigate(`/user/restaurants/${restaurantSlug}`)}
+                                >
+                                  <div className="relative h-28 md:h-44 overflow-hidden">
+                                    <OptimizedImage
+                                      src={item.image || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&h=300&fit=crop"}
+                                      alt={item.name}
+                                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                                    />
+                                    {/* Veg/Non-veg Indicator */}
+                                    <div className={`absolute top-2 left-2 md:top-3 md:left-3 h-4 w-4 md:h-5 md:w-5 lg:h-6 lg:w-6 rounded border-2 ${item.isVeg || item.foodType === 'Veg' ? 'border-green-600' : 'border-red-600'} bg-white flex items-center justify-center z-10 shadow-sm`}>
+                                      <div className={`h-2 w-2 md:h-2.5 md:w-2.5 lg:h-3 lg:w-3 rounded-full ${item.isVeg || item.foodType === 'Veg' ? 'bg-green-600' : 'bg-red-600'}`} />
+                                    </div>
+                                    
+                                    {item.bestPrice && (
+                                      <div className="absolute top-2 right-2 md:top-3 md:right-3 bg-[#EB590E] text-white text-[8px] md:text-[10px] font-black px-2 py-0.5 rounded-full shadow-sm">
+                                        BEST PRICE
+                                      </div>
+                                    )}
+                                  </div>
+                                  
+                                  <div className="p-3 md:p-5">
+                                    <h4 className="font-black text-gray-900 dark:text-gray-100 text-xs md:text-lg line-clamp-1 mb-1 md:mb-2 group-hover:text-[#EB590E] transition-colors">
+                                      {item.name}
+                                    </h4>
+                                    
+                                    <div className="flex items-center justify-between">
+                                      <div>
+                                        <p className="text-gray-900 dark:text-gray-100 font-black text-xs md:text-xl">
+                                          ₹{Math.round(item.price)}
+                                        </p>
+                                        {item.originalPrice > item.price && (
+                                          <p className="text-[10px] md:text-xs text-gray-400 line-through">₹{item.originalPrice}</p>
+                                        )}
+                                      </div>
+
+                                      {quantity > 0 ? (
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="bg-[#FFF2EB] text-[#EB590E] border-[#EB590E] hover:bg-[#EB590E] hover:text-white h-7 md:h-9 px-3 md:px-4 text-[10px] md:text-sm font-black rounded-lg"
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            navigate('/user/cart')
+                                          }}
+                                        >
+                                          VIEW CART
+                                        </Button>
+                                      ) : (
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="bg-[#FFF2EB] text-[#EB590E] border-[#EB590E] hover:bg-[#EB590E] hover:text-white h-7 md:h-9 px-4 md:px-6 text-[10px] md:text-sm font-black rounded-lg"
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            navigate(`/user/restaurants/${restaurantSlug}`)
+                                          }}
+                                        >
+                                          ADD
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                            {/* See More Card */}
+                            <div 
+                              className="flex-shrink-0 w-32 md:w-48 bg-gray-50 dark:bg-[#1a1a1a]/50 rounded-[24px] border-2 border-dashed border-gray-200 dark:border-gray-800 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-[#EB590E] hover:bg-[#FFF2EB] transition-all group"
                               onClick={() => navigate(`/user/restaurants/${restaurantSlug}`)}
                             >
-                              <div className="relative h-28 md:h-44 overflow-hidden">
-                                <OptimizedImage
-                                  src={item.image || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&h=300&fit=crop"}
-                                  alt={item.name}
-                                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                                />
-                                {item.isVeg !== undefined && (
-                                  <div className="absolute top-3 left-3 w-5 h-5 md:w-6 md:h-6 bg-white rounded-lg flex items-center justify-center border border-gray-100 shadow-md">
-                                    <div className={`w-2.5 h-2.5 md:w-3 md:h-3 rounded-full ${item.isVeg ? 'bg-green-600' : 'bg-red-600'}`} />
-                                  </div>
-                                )}
-                                {item.bestPrice && (
-                                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2 md:p-3 translate-y-full group-hover:translate-y-0 transition-transform duration-300">
-                                    <span className="text-white text-[10px] md:text-xs font-black uppercase tracking-widest">
-                                      Best Price
-                                    </span>
-                                  </div>
-                                )}
+                              <div className="w-10 h-10 md:w-14 md:h-14 bg-white dark:bg-[#1a1a1a] rounded-full flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                                <ArrowRight className="h-5 w-5 md:h-7 md:w-7 text-[#EB590E]" />
                               </div>
-                              <div className="p-3 md:p-5">
-                                <h4 className="font-black text-gray-900 dark:text-gray-100 text-xs md:text-lg line-clamp-1 mb-1 md:mb-2 group-hover:text-[#EB590E] transition-colors">
-                                  {item.name}
-                                </h4>
-                                <div className="flex items-center gap-3">
-                                  <span className="text-gray-900 dark:text-gray-100 font-black text-xs md:text-xl">
-                                    ₹{item.price}
-                                  </span>
-                                  {item.originalPrice > item.price && (
-                                    <span className="text-gray-400 dark:text-gray-600 text-[10px] md:text-sm line-through font-bold">
-                                      ₹{item.originalPrice}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
+                              <span className="text-[10px] md:text-sm font-black text-gray-500 group-hover:text-[#EB590E]">VIEW FULL MENU</span>
                             </div>
-                          ))
+                          </>
                         ) : (
-                          <div className="py-12 px-4 text-center text-gray-400 text-base italic w-full bg-gray-50 dark:bg-gray-900/50 rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-800">
-                            Looking for special dishes in this restaurant...
+                          <div className="w-full py-10 flex flex-col items-center justify-center text-gray-400">
+                             <UtensilsCrossed className="h-8 w-8 mb-2 opacity-20" />
+                             <p className="text-xs md:text-sm font-medium">Menu loading...</p>
                           </div>
                         )}
                       </div>

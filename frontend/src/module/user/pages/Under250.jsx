@@ -169,9 +169,15 @@ export default function Under250() {
   // Fetch restaurants with dishes under ₹250 from backend
   useEffect(() => {
     const fetchRestaurantsUnder250 = async () => {
+      // Don't fetch if zoneId is not yet available
+      if (!zoneId) {
+        setUnder250Restaurants([])
+        setLoadingRestaurants(false)
+        return
+      }
+
       try {
         setLoadingRestaurants(true)
-        // Optional: Add zoneId if available (for sorting/filtering, but show all restaurants)
         const response = await restaurantAPI.getRestaurantsUnder250(zoneId)
         if (response.data.success && response.data.data.restaurants) {
           setUnder250Restaurants(response.data.data.restaurants)
@@ -187,7 +193,7 @@ export default function Under250() {
     }
 
     fetchRestaurantsUnder250()
-  }, [zoneId, isOutOfService])
+  }, [zoneId]) // Removed isOutOfService as zoneId is null when out of service anyway
 
   // Fetch categories from admin API
   useEffect(() => {
@@ -551,11 +557,13 @@ export default function Under250() {
             <div className="text-gray-500 dark:text-gray-400">Loading restaurants...</div>
           </div>
         ) : sortedAndFilteredRestaurants.length === 0 ? (
-          <div className="flex justify-center items-center py-12">
+          <div className="flex justify-center items-center py-12 px-6 text-center">
             <div className="text-gray-500 dark:text-gray-400">
-              {under250Restaurants.length === 0
-                ? "No restaurants with dishes under ₹250 found."
-                : "No restaurants match the selected filters."}
+              {!zoneId 
+                ? "Please select a location to see restaurants in your area." 
+                : under250Restaurants.length === 0
+                  ? "No restaurants with dishes under ₹250 found in your zone."
+                  : "No restaurants match the selected filters."}
             </div>
           </div>
         ) : (
