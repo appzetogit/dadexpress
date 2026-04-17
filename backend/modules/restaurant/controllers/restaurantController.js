@@ -431,6 +431,7 @@ export const getRestaurants = async (req, res) => {
     };
 
     // 5. Final processing of restaurants
+    const total = restaurants.length;
     const restaurantsWithMenu = restaurants.map((r) => {
       // Status check
       const isOpen = isRestaurantOpenSync(r, timingLookup.get(r._id.toString()));
