@@ -1024,20 +1024,27 @@ export default function Home() {
 
       if (!resolvedZoneId) {
         if (requestId !== restaurantsRequestRef.current) return
+        
+        // If zone is still resolving or loading, keep the loader active
+        if (zoneResolveLoading || zoneLoading) {
+          // Stay in loading state
+          return
+        }
+
         setRestaurantsData([])
         setLoadingRestaurants(false)
         return
       }
       // Zone is still resolving — don't clear data or show spinner; just wait silently
       if (zoneResolveLoading || zoneLoading) {
-        setLoadingRestaurants(false)
+        // Stay in loading state
         return
       }
 
       // Critical: Don't fetch until zone resolution is complete
       // This prevents the "Service not available" flash when navigating back to Home
       if (!resolvedZoneId && (zoneResolveLoading || zoneLoading)) {
-        setLoadingRestaurants(false)
+        // Keep loading state true
         return
       }
 
@@ -2385,7 +2392,7 @@ export default function Home() {
                 )
               })}
             </div>
-            {!isLoadingFilterResults && !loadingRestaurants && filteredRestaurants.length === 0 && (
+            {!isLoadingFilterResults && !loadingRestaurants && !zoneLoading && !zoneResolveLoading && filteredRestaurants.length === 0 && (
               <div className="mt-4 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-[#1a1a1a] p-4 text-sm text-gray-700 dark:text-gray-300">
                 {emptyRestaurantsMessage}
               </div>
