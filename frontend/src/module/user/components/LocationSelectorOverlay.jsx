@@ -14,6 +14,8 @@ import { setSelectedDeliveryAddress } from "../utils/deliveryAddress"
 
 const USER_LOCATION_UPDATED_EVENT = "user-location-updated"
 
+const searchCache = new Map()
+
 // Google Maps implementation - Leaflet components removed
 
 // Google Maps implementation - removed Leaflet components
@@ -2011,6 +2013,16 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
     const trimmedQuery = query.trim()
     if (!trimmedQuery) return
 
+    if (searchCache.has(trimmedQuery)) {
+      const cached = searchCache.get(trimmedQuery)
+      if (Date.now() - cached.timestamp < 30 * 60 * 1000) { // 30 min cache
+        console.log("⏭️ Using cached search result for:", trimmedQuery)
+        const { lat, lng, place } = cached.data
+        applySearchResult(lat, lng, place)
+        return
+      }
+    }
+
     setMapLoading(true)
     try {
       const service = new window.google.maps.places.PlacesService(googleMapRef.current)
@@ -2025,14 +2037,33 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
           const lat = place.geometry.location.lat()
           const lng = place.geometry.location.lng()
           
-          console.log("🔍 Search result:", { lat, lng, address: place.formatted_address })
-          
-          googleMapRef.current.panTo({ lat, lng })
-          googleMapRef.current.setZoom(17)
-          
-          if (greenMarkerRef.current) {
-            greenMarkerRef.current.setPosition({ lat, lng })
-          }
+          // Cache the result
+          searchCache.set(trimmedQuery, {
+            data: { lat, lng, place },
+            timestamp: Date.now()
+          })
+
+          applySearchResult(lat, lng, place)
+        } else {
+          setMapLoading(false)
+        }
+      })
+    } catch (err) {
+      console.error("Search error:", err)
+      setMapLoading(false)
+    }
+  }
+
+  const applySearchResult = (lat, lng, place) => {
+    console.log("🔍 Search result:", { lat, lng, address: place.formatted_address })
+    
+    googleMapRef.current.panTo({ lat, lng })
+    googleMapRef.current.setZoom(17)
+    
+    if (greenMarkerRef.current) {
+      greenMarkerRef.current.setPosition({ lat, lng })
+    }
+
           
           // Extract address components for form update (from formatted_address parsing since components not avail)
           let street = ""

@@ -22,7 +22,7 @@ export function useLocation() {
     // Manual address is the single source of truth; clear GPS cache and stop watchers.
     try {
       localStorage.removeItem("userLocation")
-    } catch {}
+    } catch { }
     stopWatchingLocation()
     prevLocationCoordsRef.current = { latitude: null, longitude: null }
     setLocation(null)
@@ -85,25 +85,25 @@ export function useLocation() {
       })
 
       const response = await userAPI.updateLocation(locationPayload)
-      
+
       // Update local state with the backend's resolved location
       // This ensures the UI displays the exact address processed by the server
       if (response?.data?.data?.location) {
         const dbLocation = response.data.data.location
-        
+
         // Only update if the DB returned a valid non-placeholder address
-        const hasValidDbAddress = dbLocation.formattedAddress && 
-                                 dbLocation.formattedAddress !== "Select location" &&
-                                 dbLocation.city && 
-                                 dbLocation.city !== "Current Location"
+        const hasValidDbAddress = dbLocation.formattedAddress &&
+          dbLocation.formattedAddress !== "Select location" &&
+          dbLocation.city &&
+          dbLocation.city !== "Current Location"
 
         if (hasValidDbAddress && !isManualAddressLocked()) {
           false && console.log("🔄 Syncing UI with backend-resolved address:", dbLocation.formattedAddress)
-          
+
           // Use functional update to avoid stale state issues
           setLocation(prev => {
             const isDifferentAddress = prev?.formattedAddress !== dbLocation.formattedAddress
-            
+
             return {
               ...prev,
               ...dbLocation,
@@ -113,7 +113,7 @@ export function useLocation() {
               longitude: dbLocation.longitude || prev?.longitude
             }
           })
-          
+
           // Update persistence layer
           localStorage.setItem("userLocation", JSON.stringify({
             ...(JSON.parse(localStorage.getItem("userLocation") || "{}")),
@@ -201,7 +201,7 @@ export function useLocation() {
       // Free reverse geocoding (no billing/credits): OpenStreetMap Nominatim.
       try {
         const osmController = new AbortController()
-        const osmTimer = setTimeout(() => osmController.abort(), 9000)
+        const osmTimer = setTimeout(() => osmController.abort(), 5000)
         const osmRes = await fetch(
           `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}&addressdetails=1&zoom=18`,
           {
@@ -262,7 +262,7 @@ export function useLocation() {
             return result
           }
         }
-      } catch {}
+      } catch { }
 
       const controller = new AbortController()
       setTimeout(() => controller.abort(), 3000) // Faster timeout
@@ -348,7 +348,7 @@ export function useLocation() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => {
         controller.abort();
-      }, 20000); // 20 seconds timeout (increased from 15)
+      }, 8000); // 8 seconds timeout (Zomato-style fast response)
 
       let data;
       try {
@@ -484,8 +484,6 @@ export function useLocation() {
 
       const addressComponents = exactResult.address_components || [];
       const formattedAddress = exactResult.formatted_address || "";
-
-
 
       // Log detailed information about the selected result
       false && console.log(`📦 Using results[${bestResultIndex}] (Most Precise - Zomato Style):`, {
@@ -770,9 +768,9 @@ export function useLocation() {
       let mainTitle = "";
 
       // First priority: Use name from Places API (most accurate)
-      if (placeName && 
-          placeName.trim() !== "" && 
-          formattedAddress.toLowerCase().includes(placeName.toLowerCase().split(' ')[0])) {
+      if (placeName &&
+        placeName.trim() !== "" &&
+        formattedAddress.toLowerCase().includes(placeName.toLowerCase().split(' ')[0])) {
         mainTitle = placeName;
         false && console.log("✅✅✅ ZOMATO-STYLE: Using Places API name:", mainTitle);
       } else {
@@ -1555,10 +1553,10 @@ export function useLocation() {
 
         // If DB already has a valid resolved address, use it directly instead of re-geocoding
         // This ensures the UI reflects the most recent server-processed location immediately
-        const hasResolvedAddress = loc.formattedAddress && 
-                                 loc.formattedAddress !== "Select location" &&
-                                 loc.city && 
-                                 loc.city !== "Current Location"
+        const hasResolvedAddress = loc.formattedAddress &&
+          loc.formattedAddress !== "Select location" &&
+          loc.city &&
+          loc.city !== "Current Location"
 
         if (hasResolvedAddress) {
           false && console.log("📂 Using resolved address directly from DB:", loc.formattedAddress)
@@ -1903,7 +1901,7 @@ export function useLocation() {
     // Otherwise, allow cached location for faster response
     return getPositionWithRetry({
       enableHighAccuracy: true,  // Use GPS for exact location (highest accuracy)
-      timeout: 15000,            // 15 seconds timeout (gives GPS more time to get accurate fix)
+      timeout: 8000,            // 8 seconds timeout (fast GPS lock or fallback)
       maximumAge: forceFresh ? 0 : 60000  // If forceFresh, get fresh location. Otherwise allow 1 minute cache
     })
   }
@@ -1955,7 +1953,7 @@ export function useLocation() {
 
               if (distanceMeters < 100 && location && location.formattedAddress && location.formattedAddress !== "Select location") {
                 false && console.log(`📍 Movement too small (${distanceMeters.toFixed(1)}m), skipping geocode to save costs.`)
-                
+
                 // Still update coordinates but keep the SAME address
                 const loc = {
                   ...location,
@@ -1964,16 +1962,16 @@ export function useLocation() {
                   accuracy: accuracy || null,
                   lastUpdated: new Date()
                 }
-                
+
                 if (!isManualAddressLocked()) {
                   // Skip setLocation to prevent jitter-induced re-renders
                   // coordinates will only update when significant (>100m) or geocoded
                   localStorage.setItem("userLocation", JSON.stringify(loc))
-                  
+
                   // Update DB with fresh coordinates but SAME address (de-duplicated on backend)
                   clearTimeout(updateTimerRef.current)
                   updateTimerRef.current = setTimeout(() => {
-                    updateLocationInDB(loc).catch(() => {})
+                    updateLocationInDB(loc).catch(() => { })
                   }, 5000)
                 }
                 return
@@ -2086,9 +2084,9 @@ export function useLocation() {
               false && console.warn("⚠️ Live update has placeholder address, syncing coordinates-only")
               const stableAddress =
                 location &&
-                location.formattedAddress &&
-                location.formattedAddress !== "Select location" &&
-                location.city !== "Current Location"
+                  location.formattedAddress &&
+                  location.formattedAddress !== "Select location" &&
+                  location.city !== "Current Location"
                   ? location
                   : null
               loc = {
@@ -2284,32 +2282,32 @@ export function useLocation() {
     // Background sync with DB: always try to get the most recent server-resolved address
     fetchLocationFromDB()
       .then((dbLoc) => {
-          if (dbLoc && (dbLoc.latitude || dbLoc.city)) {
-            setLocation(dbLoc)
-            setPermissionGranted(true)
-            setLoading(false)
-            hasInitialLocation = true
-            false && console.log("📂 Loaded location from DB:", dbLoc)
+        if (dbLoc && (dbLoc.latitude || dbLoc.city)) {
+          setLocation(dbLoc)
+          setPermissionGranted(true)
+          setLoading(false)
+          hasInitialLocation = true
+          false && console.log("📂 Loaded location from DB:", dbLoc)
 
-            // Check if we should refresh for better address
-            const hasCompleteAddress = dbLoc?.formattedAddress &&
-              dbLoc.formattedAddress !== "Select location" &&
-              !dbLoc.formattedAddress.match(/^-?\d+\.\d+,\s*-?\d+\.\d+$/) &&
-              dbLoc.formattedAddress.split(',').length >= 4
+          // Check if we should refresh for better address
+          const hasCompleteAddress = dbLoc?.formattedAddress &&
+            dbLoc.formattedAddress !== "Select location" &&
+            !dbLoc.formattedAddress.match(/^-?\d+\.\d+,\s*-?\d+\.\d+$/) &&
+            dbLoc.formattedAddress.split(',').length >= 4
 
-            if (!hasCompleteAddress) {
-              shouldForceRefresh = true
-            }
-          } else {
-            // No location found - set loading to false and show fallback
-            setLoading(false)
+          if (!hasCompleteAddress) {
             shouldForceRefresh = true
           }
-        })
-        .catch(() => {
-          if (!hasInitialLocation) setLoading(false)
+        } else {
+          // No location found - set loading to false and show fallback
+          setLoading(false)
           shouldForceRefresh = true
-        })
+        }
+      })
+      .catch(() => {
+        if (!hasInitialLocation) setLoading(false)
+        shouldForceRefresh = true
+      })
 
     // Always ensure loading is false after initial check
     // Safety timeout to prevent infinite loading
@@ -2499,11 +2497,11 @@ export function useLocation() {
 
       // Use functional update to compare with current state and avoid redundant updates
       setLocation(prev => {
-        if (prev && 
-            prev.latitude === latitude && 
-            prev.longitude === longitude && 
-            prev.formattedAddress === payload.formattedAddress &&
-            prev.city === payload.city) {
+        if (prev &&
+          prev.latitude === latitude &&
+          prev.longitude === longitude &&
+          prev.formattedAddress === payload.formattedAddress &&
+          prev.city === payload.city) {
           return prev; // No change, return same object to prevent re-render
         }
 
@@ -2513,7 +2511,7 @@ export function useLocation() {
           longitude,
         };
       });
-      
+
       setPermissionGranted(true)
       setLoading(false)
       setError(null)

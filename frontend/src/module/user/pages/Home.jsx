@@ -1494,14 +1494,26 @@ export default function Home() {
   }, [restaurantsData, activeFilters, selectedCuisine, sortBy])
 
   const emptyRestaurantsMessage = useMemo(() => {
+    // Distinguish between a truly new user (no location selection at all) 
+    // and a returning user whose location is being resolved.
+    const hasAnyLocationSelection = Boolean(selectedAddress || currentLocation);
+
     if (selectedAddressOutOfService) {
+      if (hasAnyLocationSelection) {
+        return "No restaurants available in this area"
+      }
       return "Please select your location to explore nearby restaurants & menus 🍽️"
     }
+
     if (!resolvedZoneId && !zoneResolveLoading && !zoneLoading) {
+      if (hasAnyLocationSelection) {
+        return "No restaurants available in this area"
+      }
       return "Please select your location to explore nearby restaurants & menus 🍽️"
     }
+
     return "No restaurants available in this area"
-  }, [selectedAddressOutOfService, resolvedZoneId, zoneResolveLoading, zoneLoading])
+  }, [selectedAddressOutOfService, resolvedZoneId, zoneResolveLoading, zoneLoading, selectedAddress, currentLocation])
 
   // Featured foods removed - will be handled by restaurants data from API
   const filteredFeaturedFoods = useMemo(() => {
