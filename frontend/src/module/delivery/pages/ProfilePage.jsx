@@ -19,7 +19,8 @@ import {
   IndianRupee,
   Sparkles,
   LogOut,
-  X
+  X,
+  Trash2
 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { deliveryAPI } from "@/lib/api"
@@ -254,6 +255,31 @@ export default function ProfilePage() {
     }, 100)
   }
 
+  const handleDeleteAccount = () => {
+    // Clear delivery module authentication data
+    clearModuleAuth("delivery")
+    localStorage.removeItem("delivery_gig_storage")
+    localStorage.removeItem("delivery_module_storage")
+    localStorage.removeItem("app:isOnline")
+    sessionStorage.removeItem("deliveryAuthData")
+    
+    // Clear any other delivery-related data
+    const keysToRemove = []
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key && key.startsWith("delivery_")) {
+        keysToRemove.push(key)
+      }
+    }
+    keysToRemove.forEach(key => localStorage.removeItem(key))
+
+    window.dispatchEvent(new Event('deliveryAuthChanged'))
+    window.dispatchEvent(new Event('onlineStatusChanged'))
+    
+    // Navigate to sign in page
+    navigate("/delivery/sign-in", { replace: true })
+  }
+
   const playPreviewSound = (soundFile) => {
     try {
       // Stop any currently playing audio
@@ -415,7 +441,7 @@ export default function ProfilePage() {
           </div>
 
           {/* Logout Section */}
-          <div className="pt-4">
+          <div className="pt-4 space-y-2">
             <Card
               onClick={handleLogout}
               className="bg-white py-0 border-0 shadow-none rounded-lg cursor-pointer hover:bg-gray-200 transition-colors"
@@ -426,6 +452,19 @@ export default function ProfilePage() {
                   <span className="text-sm font-medium text-red-600">Log out</span>
                 </div>
                 <ArrowRight className="w-5 h-5 text-gray-400" />
+              </CardContent>
+            </Card>
+
+            <Card
+              onClick={handleDeleteAccount}
+              className="bg-white py-0 border border-red-100 shadow-none rounded-lg cursor-pointer hover:bg-red-50 transition-colors"
+            >
+              <CardContent className="p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Trash2 className="w-5 h-5 text-red-500" />
+                  <span className="text-sm font-medium text-red-500">Delete Account</span>
+                </div>
+                <ArrowRight className="w-5 h-5 text-red-300" />
               </CardContent>
             </Card>
           </div>

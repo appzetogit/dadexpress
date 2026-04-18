@@ -587,6 +587,22 @@ export default function ExploreMore() {
     }
   }
 
+  const handleDeleteAccount = () => {
+    // Clear restaurant module authentication data
+    clearModuleAuth("restaurant")
+    localStorage.removeItem("restaurant_onboarding")
+    localStorage.removeItem("restaurant_accessToken")
+    localStorage.removeItem("restaurant_authenticated")
+    localStorage.removeItem("restaurant_user")
+    sessionStorage.removeItem("restaurantAuthData")
+    
+    // Dispatch auth change event
+    window.dispatchEvent(new Event("restaurantAuthChanged"))
+    
+    // Navigate to login page
+    navigate("/restaurant/login", { replace: true })
+  }
+
   const scheduleOffReasons = [
     "renovation or relocation of restaurant",
     "closed dur to festival",
@@ -1190,9 +1206,15 @@ export default function ExploreMore() {
                 <button
                   onClick={handleLogoutAllDevices}
                   disabled={isLoggingOut}
-                  className="w-full bg-red-600 hover:bg-red-700 disabled:bg-red-400 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 rounded-lg transition-colors"
+                  className="w-full bg-red-600 hover:bg-red-700 disabled:bg-red-400 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 rounded-lg transition-colors mb-3"
                 >
                   {isLoggingOut ? "Logging out..." : "Logout"}
+                </button>
+                <button
+                  onClick={handleDeleteAccount}
+                  className="w-full bg-white border border-red-600 text-red-600 hover:bg-red-50 font-semibold py-3 px-4 rounded-lg transition-colors"
+                >
+                  Delete Account
                 </button>
               </div>
 

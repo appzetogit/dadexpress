@@ -749,11 +749,11 @@ export default function Home() {
           : null,
       }),
     [
-      selectedAddress, 
-      Number(currentLocation?.latitude || 0).toFixed(3), 
-      Number(currentLocation?.longitude || 0).toFixed(3), 
-      currentLocation?.city, 
-      zoneId, 
+      selectedAddress,
+      Number(currentLocation?.latitude || 0).toFixed(3),
+      Number(currentLocation?.longitude || 0).toFixed(3),
+      currentLocation?.city,
+      zoneId,
       isManualMode
     ],
   )
@@ -1086,6 +1086,7 @@ export default function Home() {
         activeLocation,
         zoneIdUsed: params.zoneId,
       })
+
       const response = await restaurantAPI.getRestaurantsByZone(params.zoneId, params)
       if (requestId !== restaurantsRequestRef.current) {
         console.log("[Home][RestaurantsFetch:stale-response]", {
@@ -1167,17 +1168,17 @@ export default function Home() {
             : "Multi-cuisine"
 
           // Get cover images (separate from menu images) for carousel
-                  const coverImages = restaurant.coverImages && restaurant.coverImages.length > 0
-                    ? restaurant.coverImages
-                      .map(img => normalizeImageUrl(img?.url || img))
-                      .filter(Boolean)
+          const coverImages = restaurant.coverImages && restaurant.coverImages.length > 0
+            ? restaurant.coverImages
+              .map(img => normalizeImageUrl(img?.url || img))
+              .filter(Boolean)
             : []
 
           // Fallback to menuImages only if coverImages don't exist (for backward compatibility)
           const fallbackImages = restaurant.menuImages && restaurant.menuImages.length > 0
-                    ? restaurant.menuImages
-                      .map(img => normalizeImageUrl(img?.url || img))
-                      .filter(Boolean)
+            ? restaurant.menuImages
+              .map(img => normalizeImageUrl(img?.url || img))
+              .filter(Boolean)
             : []
 
           // Use cover images first, then fallback to menu images, then profile image
@@ -1185,9 +1186,9 @@ export default function Home() {
             ? coverImages
             : (fallbackImages.length > 0
               ? fallbackImages
-                      : (normalizeImageUrl(restaurant.profileImage?.url)
-                        ? [normalizeImageUrl(restaurant.profileImage?.url)]
-                        : [FALLBACK_RESTAURANT_IMAGE]))
+              : (normalizeImageUrl(restaurant.profileImage?.url)
+                ? [normalizeImageUrl(restaurant.profileImage?.url)]
+                : [FALLBACK_RESTAURANT_IMAGE]))
 
           // Keep single image for backward compatibility
           const image = allImages[0]
@@ -1216,9 +1217,9 @@ export default function Home() {
         // Keep only practically nearby restaurants for the resolved zone when precise location is available.
         const nearbyZoneRestaurants = (resolvedZoneId && userLat && userLng)
           ? transformedRestaurants.filter((restaurant) => {
-              if (restaurant.distanceInKm === null || restaurant.distanceInKm === undefined) return true
-              return restaurant.distanceInKm <= 30
-            })
+            if (restaurant.distanceInKm === null || restaurant.distanceInKm === undefined) return true
+            return restaurant.distanceInKm <= 30
+          })
           : transformedRestaurants
 
         // Sort restaurants by distance (nearby first) - only if user location is available
@@ -1266,22 +1267,22 @@ export default function Home() {
       })
     }
   }, [
-    vegMode, 
-    vegModeOption, 
-    resolvedZoneId, 
-    resolvedZoneSource, 
-    Number(selectedCoords?.lat || 0).toFixed(3), 
-    Number(selectedCoords?.lng || 0).toFixed(3), 
-    Number(resolvedSelectedCoords?.lat || 0).toFixed(3), 
-    Number(resolvedSelectedCoords?.lng || 0).toFixed(3), 
-    Number(currentLocation?.latitude || 0).toFixed(3), 
-    Number(currentLocation?.longitude || 0).toFixed(3), 
-    currentLocation?.city, 
-    Number(activeLocation?.latitude || 0).toFixed(3), 
-    Number(activeLocation?.longitude || 0).toFixed(3), 
-    selectedDeliveryAddress?.id, 
-    selectedAddress?.id, 
-    selectedAddress?.formattedAddress, 
+    vegMode,
+    vegModeOption,
+    resolvedZoneId,
+    resolvedZoneSource,
+    Number(selectedCoords?.lat || 0).toFixed(3),
+    Number(selectedCoords?.lng || 0).toFixed(3),
+    Number(resolvedSelectedCoords?.lat || 0).toFixed(3),
+    Number(resolvedSelectedCoords?.lng || 0).toFixed(3),
+    Number(currentLocation?.latitude || 0).toFixed(3),
+    Number(currentLocation?.longitude || 0).toFixed(3),
+    currentLocation?.city,
+    Number(activeLocation?.latitude || 0).toFixed(3),
+    Number(activeLocation?.longitude || 0).toFixed(3),
+    selectedDeliveryAddress?.id,
+    selectedAddress?.id,
+    selectedAddress?.formattedAddress,
     isManualMode
   ])
 
@@ -1348,24 +1349,24 @@ export default function Home() {
     })
     const nearbyZoneRestaurants = (resolvedZoneId && userLat && userLng)
       ? updatedRestaurants.filter((restaurant) => {
-          if (restaurant.distanceInKm === null || restaurant.distanceInKm === undefined) return true
-          return restaurant.distanceInKm <= 30
-        })
+        if (restaurant.distanceInKm === null || restaurant.distanceInKm === undefined) return true
+        return restaurant.distanceInKm <= 30
+      })
       : updatedRestaurants
 
     setRestaurantsData(nearbyZoneRestaurants)
   }, [
-    selectedAddress?.id, 
-    selectedAddress?.formattedAddress, 
-    Number(selectedCoords?.lat || 0).toFixed(3), 
-    Number(selectedCoords?.lng || 0).toFixed(3), 
-    Number(resolvedSelectedCoords?.lat || 0).toFixed(3), 
-    Number(resolvedSelectedCoords?.lng || 0).toFixed(3), 
-    Number(currentLocation?.latitude || 0).toFixed(3), 
-    Number(currentLocation?.longitude || 0).toFixed(3), 
-    currentLocation?.city, 
-    activeLocation?.city, 
-    location?.city, 
+    selectedAddress?.id,
+    selectedAddress?.formattedAddress,
+    Number(selectedCoords?.lat || 0).toFixed(3),
+    Number(selectedCoords?.lng || 0).toFixed(3),
+    Number(resolvedSelectedCoords?.lat || 0).toFixed(3),
+    Number(resolvedSelectedCoords?.lng || 0).toFixed(3),
+    Number(currentLocation?.latitude || 0).toFixed(3),
+    Number(currentLocation?.longitude || 0).toFixed(3),
+    currentLocation?.city,
+    activeLocation?.city,
+    location?.city,
     resolvedZoneId
   ])
 
@@ -2318,19 +2319,19 @@ export default function Home() {
                                     <div className={`absolute top-2 left-2 md:top-3 md:left-3 h-4 w-4 md:h-5 md:w-5 lg:h-6 lg:w-6 rounded border-2 ${item.isVeg || item.foodType === 'Veg' ? 'border-green-600' : 'border-red-600'} bg-white flex items-center justify-center z-10 shadow-sm`}>
                                       <div className={`h-2 w-2 md:h-2.5 md:w-2.5 lg:h-3 lg:w-3 rounded-full ${item.isVeg || item.foodType === 'Veg' ? 'bg-green-600' : 'bg-red-600'}`} />
                                     </div>
-                                    
+
                                     {item.bestPrice && (
                                       <div className="absolute top-2 right-2 md:top-3 md:right-3 bg-[#EB590E] text-white text-[8px] md:text-[10px] font-black px-2 py-0.5 rounded-full shadow-sm">
                                         BEST PRICE
                                       </div>
                                     )}
                                   </div>
-                                  
+
                                   <div className="p-3 md:p-5">
                                     <h4 className="font-black text-gray-900 dark:text-gray-100 text-xs md:text-lg line-clamp-1 mb-1 md:mb-2 group-hover:text-[#EB590E] transition-colors">
                                       {item.name}
                                     </h4>
-                                    
+
                                     <div className="flex items-center justify-between">
                                       <div>
                                         <p className="text-gray-900 dark:text-gray-100 font-black text-xs md:text-xl">
@@ -2372,7 +2373,7 @@ export default function Home() {
                               )
                             })}
                             {/* See More Card */}
-                            <div 
+                            <div
                               className="flex-shrink-0 w-32 md:w-48 bg-gray-50 dark:bg-[#1a1a1a]/50 rounded-[24px] border-2 border-dashed border-gray-200 dark:border-gray-800 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-[#EB590E] hover:bg-[#FFF2EB] transition-all group"
                               onClick={() => navigate(`/user/restaurants/${restaurantSlug}`)}
                             >
@@ -2384,8 +2385,8 @@ export default function Home() {
                           </>
                         ) : (
                           <div className="w-full py-10 flex flex-col items-center justify-center text-gray-400">
-                             <UtensilsCrossed className="h-8 w-8 mb-2 opacity-20" />
-                             <p className="text-xs md:text-sm font-medium">Menu loading...</p>
+                            <UtensilsCrossed className="h-8 w-8 mb-2 opacity-20" />
+                            <p className="text-xs md:text-sm font-medium">Menu loading...</p>
                           </div>
                         )}
                       </div>
@@ -3237,7 +3238,7 @@ export default function Home() {
                   damping: 15,
                   delay: 0.1,
                 }}
-                
+
                 className="absolute z-10 w-28 h-28 rounded-full border-2 border-green-600 dark:border-green-500 bg-white dark:bg-[#1a1a1a] flex flex-col items-center justify-center shadow-sm"
                 style={{
                   // left: "50%",
@@ -3407,14 +3408,14 @@ export default function Home() {
                   {/* Collections List */}
                   <div className="px-4 py-4 space-y-2 max-h-[60vh] overflow-y-auto">
                     {/* Bookmarks Collection */}
-                  <div
-                    className="w-full flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer"
-                    onClick={(e) => {
-                      e.stopPropagation()
+                    <div
+                      className="w-full flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer"
+                      onClick={(e) => {
+                        e.stopPropagation()
                         setShowManageCollections(false)
                         navigate("/user/profile/favorites")
-                    }}
-                  >
+                      }}
+                    >
                       <div className="h-12 w-12 rounded-lg bg-pink-100 flex items-center justify-center flex-shrink-0">
                         <Bookmark className="h-6 w-6 text-red-500 fill-red-500" />
                       </div>
@@ -3441,7 +3442,7 @@ export default function Home() {
                               <Check className="h-3 w-3 text-white" />
                             </div>
                           )}
-                          
+
                         </div>
                         <p className="text-sm text-gray-500 mt-1">
                           {getFavorites().length} restaurant{getFavorites().length !== 1 ? 's' : ''}

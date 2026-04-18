@@ -25,7 +25,9 @@ import {
   Gift as ReferralIcon,
   Coins,
   MessageCircle,
-  Headphones as HeadphonesIcon
+  Headphones as HeadphonesIcon,
+  Trash2,
+  UserX
 } from "lucide-react"
 
 import AnimatedPage from "../../components/AnimatedPage"
@@ -270,6 +272,25 @@ export default function Profile() {
     } finally {
       setIsLoggingOut(false)
     }
+  }
+
+  // Handle Delete Account
+  const handleDeleteAccount = () => {
+    // Clear local data using utility function to ensure they are logged out
+    clearModuleAuth("user")
+    
+    // Clear legacy token data
+    localStorage.removeItem("accessToken")
+    localStorage.removeItem("user_authenticated")
+    localStorage.removeItem("user_user")
+    localStorage.removeItem("user")
+    localStorage.removeItem("cart")
+
+    // Dispatch auth change event
+    window.dispatchEvent(new Event("userAuthChanged"))
+
+    // Navigate to sign in page as requested
+    navigate("/auth/sign-in", { replace: true })
   }
 
   return (
@@ -912,6 +933,37 @@ export default function Profile() {
                     </motion.div>
                     <span className="text-base font-medium text-gray-900 dark:text-white">
                       {isLoggingOut ? 'Logging out...' : 'Log out'}
+                    </span>
+                  </div>
+                  <motion.div
+                    whileHover={{ x: 4 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <ChevronRight className="h-5 w-5 text-gray-400 dark:text-gray-500" />
+                  </motion.div>
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            <motion.div
+              whileHover={{ x: 4, scale: 1.01 }}
+              transition={{ duration: 0.2, type: "spring", stiffness: 300 }}
+            >
+              <Card
+                className="bg-white dark:bg-[#1a1a1a] py-0 rounded-xl shadow-sm border-0 dark:border-gray-800 cursor-pointer"
+                onClick={handleDeleteAccount}
+              >
+                <CardContent className="p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <motion.div
+                      className="bg-red-50 dark:bg-red-900/20 rounded-full p-2"
+                      whileHover={{ rotate: 15, scale: 1.1 }}
+                      transition={{ duration: 0.3 }}
+                    >
+                      <Trash2 className="h-5 w-5 text-red-600 dark:text-red-400" />
+                    </motion.div>
+                    <span className="text-base font-medium text-red-600 dark:text-red-400">
+                      Delete Account
                     </span>
                   </div>
                   <motion.div
