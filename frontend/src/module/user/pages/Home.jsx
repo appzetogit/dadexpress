@@ -1271,16 +1271,6 @@ export default function Home() {
     vegModeOption,
     resolvedZoneId,
     resolvedZoneSource,
-    Number(selectedCoords?.lat || 0).toFixed(3),
-    Number(selectedCoords?.lng || 0).toFixed(3),
-    Number(resolvedSelectedCoords?.lat || 0).toFixed(3),
-    Number(resolvedSelectedCoords?.lng || 0).toFixed(3),
-    Number(currentLocation?.latitude || 0).toFixed(3),
-    Number(currentLocation?.longitude || 0).toFixed(3),
-    currentLocation?.city,
-    Number(activeLocation?.latitude || 0).toFixed(3),
-    Number(activeLocation?.longitude || 0).toFixed(3),
-    selectedDeliveryAddress?.id,
     selectedAddress?.id,
     selectedAddress?.formattedAddress,
     isManualMode
@@ -1494,26 +1484,14 @@ export default function Home() {
   }, [restaurantsData, activeFilters, selectedCuisine, sortBy])
 
   const emptyRestaurantsMessage = useMemo(() => {
-    // Distinguish between a truly new user (no location selection at all) 
-    // and a returning user whose location is being resolved.
-    const hasAnyLocationSelection = Boolean(selectedAddress || currentLocation);
-
     if (selectedAddressOutOfService) {
-      if (hasAnyLocationSelection) {
-        return "No restaurants available in this area"
-      }
       return "Please select your location to explore nearby restaurants & menus 🍽️"
     }
-
     if (!resolvedZoneId && !zoneResolveLoading && !zoneLoading) {
-      if (hasAnyLocationSelection) {
-        return "No restaurants available in this area"
-      }
       return "Please select your location to explore nearby restaurants & menus 🍽️"
     }
-
     return "No restaurants available in this area"
-  }, [selectedAddressOutOfService, resolvedZoneId, zoneResolveLoading, zoneLoading, selectedAddress, currentLocation])
+  }, [selectedAddressOutOfService, resolvedZoneId, zoneResolveLoading, zoneLoading])
 
   // Featured foods removed - will be handled by restaurants data from API
   const filteredFeaturedFoods = useMemo(() => {

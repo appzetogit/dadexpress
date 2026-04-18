@@ -201,7 +201,7 @@ export function useLocation() {
       // Free reverse geocoding (no billing/credits): OpenStreetMap Nominatim.
       try {
         const osmController = new AbortController()
-        const osmTimer = setTimeout(() => osmController.abort(), 5000)
+        const osmTimer = setTimeout(() => osmController.abort(), 9000)
         const osmRes = await fetch(
           `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}&addressdetails=1&zoom=18`,
           {
@@ -348,7 +348,7 @@ export function useLocation() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => {
         controller.abort();
-      }, 8000); // 8 seconds timeout (Zomato-style fast response)
+      }, 7000); // 7 seconds timeout (reduced from 20s for faster snappy behavior)
 
       let data;
       try {
@@ -484,6 +484,8 @@ export function useLocation() {
 
       const addressComponents = exactResult.address_components || [];
       const formattedAddress = exactResult.formatted_address || "";
+
+
 
       // Log detailed information about the selected result
       false && console.log(`📦 Using results[${bestResultIndex}] (Most Precise - Zomato Style):`, {
@@ -1901,7 +1903,7 @@ export function useLocation() {
     // Otherwise, allow cached location for faster response
     return getPositionWithRetry({
       enableHighAccuracy: true,  // Use GPS for exact location (highest accuracy)
-      timeout: 8000,            // 8 seconds timeout (fast GPS lock or fallback)
+      timeout: 8000,             // Reduced from 15s to 8s for faster initial response
       maximumAge: forceFresh ? 0 : 60000  // If forceFresh, get fresh location. Otherwise allow 1 minute cache
     })
   }
