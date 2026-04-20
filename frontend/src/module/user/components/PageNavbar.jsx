@@ -60,7 +60,12 @@ export default function PageNavbar({
     return {
       ...geoLocation,
       ...address,
-      area: address.area || address.additionalDetails || geoLocation?.area || "",
+      area: address.area || 
+           ((address.additionalDetails && 
+             address.additionalDetails.length < 50 && 
+             (address.additionalDetails.split(',').length - 1) < 2) 
+             ? address.additionalDetails : "") || 
+           geoLocation?.area || "",
       address: address.address || address.street || geoLocation?.address || "",
       formattedAddress:
         address.formattedAddress ||
