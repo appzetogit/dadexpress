@@ -67,7 +67,7 @@ export default function Dining() {
   const rightContentRef = useRef(null)
   const { openSearch, closeSearch, setSearchValue } = useSearchOverlay()
   const { openLocationSelector } = useLocationSelector()
-  const { location } = useLocationHook()
+  const { location, loading: locationLoading, isManualMode } = useLocationHook()
   const { addFavorite, removeFavorite, isFavorite } = useProfile()
 
   const [categories, setCategories] = useState([])
@@ -106,6 +106,12 @@ export default function Dining() {
   }, [diningHeroBanners])
 
   useEffect(() => {
+    // Wait for initial location detection to finish before fetching data
+    if (locationLoading && !isManualMode) {
+      setLoading(true)
+      return
+    }
+
     const fetchDiningData = async () => {
       try {
         const [cats, limes, tries, rests, offers] = await Promise.all([

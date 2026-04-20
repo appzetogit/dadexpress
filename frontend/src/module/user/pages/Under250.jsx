@@ -21,8 +21,10 @@ import { restaurantAPI } from "@/lib/api"
 import { isModuleAuthenticated } from "@/lib/utils/auth"
 
 export default function Under250() {
-  const { location } = useLocation()
-  const { zoneId, zoneStatus, isInService, isOutOfService } = useZone(location)
+  const { location, loading, isManualMode } = useLocation()
+  const { zoneId, zoneStatus, isInService, isOutOfService } = useZone(
+    loading && !isManualMode ? null : location
+  )
   const navigate = useNavigate()
   const { addToCart, updateQuantity, removeFromCart, getCartItem, cart } = useCart()
   const [activeCategory, setActiveCategory] = useState(null)

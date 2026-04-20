@@ -6,10 +6,7 @@ import { ArrowLeft, Star, Clock, Search, SlidersHorizontal, ChevronDown, Bookmar
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-
-// Import shared food images - prevents duplication
 import { foodImages } from "@/constants/images"
-import api from "@/lib/api"
 import { restaurantAPI, adminAPI } from "@/lib/api"
 import allCategoriesV3 from "@/assets/all-categories-v3.png"
 import { useProfile } from "../context/ProfileContext"
@@ -25,14 +22,14 @@ const filterOptions = [
   { id: 'rating-4-plus', label: 'Rating 4.0+' },
 ]
 
-// Mock data removed - using backend data only
-
 export default function CategoryPage() {
   const { category } = useParams()
   const navigate = useNavigate()
   const { vegMode } = useProfile()
-  const { location } = useLocation()
-  const { zoneId, isOutOfService, zoneStatus } = useZone(location)
+  const { location, loading, isManualMode } = useLocation()
+  const { zoneId, isOutOfService, zoneStatus } = useZone(
+    loading && !isManualMode ? null : location
+  )
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState(category?.toLowerCase() || 'all')
   const [activeFilters, setActiveFilters] = useState(new Set())
@@ -47,7 +44,6 @@ export default function CategoryPage() {
   const rightContentRef = useRef(null)
   const categoryScrollRef = useRef(null)
   const restaurantsRequestRef = useRef(0)
-
   // State for categories from admin
   const [categories, setCategories] = useState([])
   const [loadingCategories, setLoadingCategories] = useState(true)

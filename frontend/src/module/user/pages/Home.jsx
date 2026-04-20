@@ -880,6 +880,11 @@ export default function Home() {
       // This prevents the UI from temporarily snapping to GPS location (snapping back issue)
       if (isAddressLoading && isManualMode) return null
 
+      // During initial boot in GPS mode, wait for the loading state to finish (fresh GPS)
+      // to avoid fetching restaurants twice (first for stale DB loc, then for fresh GPS).
+      // If in Manual Mode, we trust the cached address and can proceed immediately.
+      if (loading && !isManualMode) return null
+
       return resolveActiveLocation({
         selectedAddress,
         currentLocation: !isManualMode && currentLocation
@@ -893,6 +898,7 @@ export default function Home() {
     [
       selectedAddress,
       isAddressLoading,
+      loading,
       Number(currentLocation?.latitude || 0).toFixed(4), // Increased precision but still memoized
       Number(currentLocation?.longitude || 0).toFixed(4),
       currentLocation?.city,

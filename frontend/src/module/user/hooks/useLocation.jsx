@@ -9,6 +9,7 @@ export function useLocation() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [permissionGranted, setPermissionGranted] = useState(false)
+  const SESSION_RESOLVED_KEY = "__location_session_resolved"
 
   const watchIdRef = useRef(null)
   const updateTimerRef = useRef(null)
@@ -1727,6 +1728,11 @@ export function useLocation() {
               false && console.log("💾 Saving location:", finalLoc)
               if (!isManualAddressLocked()) {
                 localStorage.setItem("userLocation", JSON.stringify(finalLoc))
+                // Mark session as resolved now that we have a fresh live location
+                try {
+                  sessionStorage.setItem(SESSION_RESOLVED_KEY, "true")
+                } catch { }
+                
                 setLocation(finalLoc)
                 setPermissionGranted(true)
                 if (showLoading) setLoading(false)
@@ -1762,6 +1768,12 @@ export function useLocation() {
                   }
                   false && console.log("✅ Last resort geocoding succeeded:", lastResortLoc)
                   localStorage.setItem("userLocation", JSON.stringify(lastResortLoc))
+                  
+                  // Mark session as resolved
+                  try {
+                    sessionStorage.setItem(SESSION_RESOLVED_KEY, "true")
+                  } catch { }
+
                   setLocation(lastResortLoc)
                   setPermissionGranted(true)
                   if (showLoading) setLoading(false)
@@ -2243,8 +2255,14 @@ export function useLocation() {
     if (isManualAddressLocked()) {
       enforceManualModeLock()
       setLoading(false)
+      // Manual selection counts as a resolved state for the session
+      try {
+        sessionStorage.setItem(SESSION_RESOLVED_KEY, "true")
+      } catch { }
       return
     }
+
+    const isSessionResolved = typeof sessionStorage !== "undefined" && sessionStorage.getItem(SESSION_RESOLVED_KEY) === "true"
 
     // Load stored location first for IMMEDIATE display (no loading state)
     const stored = localStorage.getItem("userLocation")
@@ -2264,7 +2282,14 @@ export function useLocation() {
           parsedLocation.city !== "Current Location") {
           setLocation(parsedLocation)
           setPermissionGranted(true)
-          setLoading(false) // Set loading to false immediately
+          
+          // Only set loading false immediately if the session is already resolved
+          // or if it's a manual selection. This prevents the "flash" of the stale 
+          // location (e.g. "Dr. BS Tomar") during the first boot of the app.
+          if (isSessionResolved || isManualAddressLocked()) {
+            setLoading(false) 
+          }
+          
           hasInitialLocation = true
           false && console.log("📂 Loaded stored location instantly:", parsedLocation)
 
@@ -2292,9 +2317,27 @@ export function useLocation() {
     fetchLocationFromDB()
       .then((dbLoc) => {
         if (dbLoc && (dbLoc.latitude || dbLoc.city)) {
+          // Race condition protection: Do not overwrite a fresh GPS location 
+          // that might have been resolved in the background by checkPermissionAndStart
+          const currentSessionResolved = typeof sessionStorage !== "undefined" && 
+                                       sessionStorage.getItem(SESSION_RESOLVED_KEY) === "true"
+          
+          if (currentSessionResolved && !isManualAddressLocked()) {
+            false && console.log("⏭️ Skipping DB location: fresh session location already exists")
+            return
+          }
+
           setLocation(dbLoc)
           setPermissionGranted(true)
-          setLoading(false)
+          
+          // If we are trusting DB as the session resolver (e.g. returning user)
+          // we can set loading false, but usually we wait for GPS for "live" mode.
+          // For now, let DB resolve loading ONLY if it's not a fresh boot or if 
+          // it is a manual selection.
+          if (isSessionResolved || isManualAddressLocked()) {
+            setLoading(false)
+          }
+          
           hasInitialLocation = true
           false && console.log("📂 Loaded location from DB:", dbLoc)
 
@@ -2429,6 +2472,10 @@ export function useLocation() {
                 // CRITICAL: Update state with fresh location so PageNavbar displays it
                 setLocation(location)
                 setPermissionGranted(true)
+                setLoading(false)
+                try {
+                  sessionStorage.setItem(SESSION_RESOLVED_KEY, "true")
+                } catch { }
                 // Start watching for live updates
                 startWatchingLocation()
               } else {
@@ -2442,10 +2489,18 @@ export function useLocation() {
                         retryLocation.city !== "Current Location") {
                         setLocation(retryLocation)
                         setPermissionGranted(true)
+                        setLoading(false)
+                        try {
+                          sessionStorage.setItem(SESSION_RESOLVED_KEY, "true")
+                        } catch { }
+                        startWatchingLocation()
+                      } else {
+                        setLoading(false)
                         startWatchingLocation()
                       }
                     })
                     .catch(() => {
+                      setLoading(false)
                       startWatchingLocation()
                     })
                 }, 2000)
@@ -2453,6 +2508,7 @@ export function useLocation() {
             })
             .catch((err) => {
               false && console.warn("⚠️ Background location fetch failed (using cached):", err.message)
+              setLoading(false)
               // Still start watching in case permission is granted later
               startWatchingLocation()
             })
@@ -2605,6 +2661,7 @@ export function useLocation() {
     loading,
     error,
     permissionGranted,
+    isManualMode: isManualAddressLocked(),
     requestLocation,
     startWatchingLocation,
     stopWatchingLocation,

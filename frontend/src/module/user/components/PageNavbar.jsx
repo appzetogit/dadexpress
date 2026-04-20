@@ -17,7 +17,7 @@ export default function PageNavbar({
   showProfile = false,
   onNavClick
 }) {
-  const { location: geoLocation, loading, requestLocation } = useLocation()
+  const { location: geoLocation, loading, isManualMode, requestLocation } = useLocation()
   const { getCartCount } = useCart()
   const { addresses, getDefaultAddress } = useProfile()
   const { selectedDeliveryAddress } = useSelectedDeliveryAddress()
@@ -628,7 +628,7 @@ export default function PageNavbar({
     }
     // Final fallback: Show "Select location" instead of coordinates
     else if (!mainLocation) {
-      mainLocation = "Select location"
+      mainLocation = loading && !isManualMode ? "Detecting location..." : "Select location"
       false && console.log("⚠️ No valid location found, showing placeholder")
     }
 
@@ -1003,7 +1003,7 @@ export default function PageNavbar({
           >
             {loading ? (
               <span className={`text-sm font-bold ${textColorClass}`}>
-                Loading...
+                Detecting location...
               </span>
             ) : (
               <div className="flex flex-col items-center min-w-0">
