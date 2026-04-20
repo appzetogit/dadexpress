@@ -223,89 +223,34 @@ export default function AddZone() {
 
       drawingManager.setMap(map)
       drawingManagerRef.current = drawingManager
-    } else {
-      console.error("❌ Google Maps drawing library is not available")
-    }
 
-    // Track polygon path changes to show markers
-    let currentPolygonPath = null
-    let pathMarkers = []
-    pathMarkersRef.current = pathMarkers
+      // Track polygon path changes to show markers
+      let currentPolygonPath = null
+      let pathMarkers = []
+      pathMarkersRef.current = pathMarkers
 
-    // Handle overlay complete (when user finishes drawing)
-    google.maps.event.addListener(drawingManager, 'overlaycomplete', (event) => {
-      if (event.type === google.maps.drawing.OverlayType.POLYGON) {
-        const polygon = event.overlay
-        
-        // Remove previous polygon if exists
-        if (polygonRef.current) {
-          polygonRef.current.setMap(null)
-        }
-
-        // Clear previous markers
-        pathMarkers.forEach(marker => marker.setMap(null))
-        pathMarkers = []
-
-        polygonRef.current = polygon
-        currentPolygonPath = polygon.getPath()
-        
-        // Get coordinates and add markers
-        const coords = []
-        const pathLength = currentPolygonPath.getLength()
-        
-        // Get all points except the last one if it's a duplicate of the first (polygon closing point)
-        for (let i = 0; i < pathLength; i++) {
-          const latLng = currentPolygonPath.getAt(i)
+      // Handle overlay complete (when user finishes drawing)
+      google.maps.event.addListener(drawingManager, 'overlaycomplete', (event) => {
+        if (event.type === google.maps.drawing.OverlayType.POLYGON) {
+          const polygon = event.overlay
           
-          // Skip the last point if it's the same as the first (polygon closing point)
-          if (i === pathLength - 1) {
-            const firstPoint = currentPolygonPath.getAt(0)
-            if (latLng.lat() === firstPoint.lat() && latLng.lng() === firstPoint.lng()) {
-              break // Skip duplicate closing point
-            }
+          // Remove previous polygon if exists
+          if (polygonRef.current) {
+            polygonRef.current.setMap(null)
           }
-          
-          coords.push({
-            latitude: parseFloat(latLng.lat().toFixed(6)),
-            longitude: parseFloat(latLng.lng().toFixed(6))
-          })
-          
-          // Add marker for each point
-          const marker = new google.maps.Marker({
-            position: latLng,
-            map: map,
-            icon: {
-              path: google.maps.SymbolPath.CIRCLE,
-              scale: 8,
-              fillColor: "#9333ea",
-              fillOpacity: 1,
-              strokeColor: "#ffffff",
-              strokeWeight: 2
-            },
-            zIndex: 1000,
-            title: `Point ${i + 1}`
-          })
-          pathMarkers.push(marker)
-          pathMarkersRef.current = pathMarkers
-        }
-        
-        console.log("Coordinates set:", coords)
-        setCoordinates(coords)
-        
-        // Make polygon editable
-        polygon.setEditable(true)
-        polygon.setDraggable(false)
-        
-        // Update coordinates and markers when polygon is edited
-        const updateMarkers = () => {
-          // Clear existing markers
+
+          // Clear previous markers
           pathMarkers.forEach(marker => marker.setMap(null))
           pathMarkers = []
+
+          polygonRef.current = polygon
+          currentPolygonPath = polygon.getPath()
           
-          // Update coordinates
-          const newCoords = []
+          // Get coordinates and add markers
+          const coords = []
           const pathLength = currentPolygonPath.getLength()
           
+          // Get all points except the last one if it's a duplicate of the first (polygon closing point)
           for (let i = 0; i < pathLength; i++) {
             const latLng = currentPolygonPath.getAt(i)
             
@@ -317,12 +262,12 @@ export default function AddZone() {
               }
             }
             
-            newCoords.push({
+            coords.push({
               latitude: parseFloat(latLng.lat().toFixed(6)),
               longitude: parseFloat(latLng.lng().toFixed(6))
             })
             
-            // Add new marker
+            // Add marker for each point
             const marker = new google.maps.Marker({
               position: latLng,
               map: map,
@@ -341,14 +286,69 @@ export default function AddZone() {
             pathMarkersRef.current = pathMarkers
           }
           
-          setCoordinates(newCoords)
+          console.log("Coordinates set:", coords)
+          setCoordinates(coords)
+          
+          // Make polygon editable
+          polygon.setEditable(true)
+          polygon.setDraggable(false)
+          
+          // Update coordinates and markers when polygon is edited
+          const updateMarkers = () => {
+            // Clear existing markers
+            pathMarkers.forEach(marker => marker.setMap(null))
+            pathMarkers = []
+            
+            // Update coordinates
+            const newCoords = []
+            const pathLength = currentPolygonPath.getLength()
+            
+            for (let i = 0; i < pathLength; i++) {
+              const latLng = currentPolygonPath.getAt(i)
+              
+              // Skip the last point if it's the same as the first (polygon closing point)
+              if (i === pathLength - 1) {
+                const firstPoint = currentPolygonPath.getAt(0)
+                if (latLng.lat() === firstPoint.lat() && latLng.lng() === firstPoint.lng()) {
+                  break // Skip duplicate closing point
+                }
+              }
+              
+              newCoords.push({
+                latitude: parseFloat(latLng.lat().toFixed(6)),
+                longitude: parseFloat(latLng.lng().toFixed(6))
+              })
+              
+              // Add new marker
+              const marker = new google.maps.Marker({
+                position: latLng,
+                map: map,
+                icon: {
+                  path: google.maps.SymbolPath.CIRCLE,
+                  scale: 8,
+                  fillColor: "#9333ea",
+                  fillOpacity: 1,
+                  strokeColor: "#ffffff",
+                  strokeWeight: 2
+                },
+                zIndex: 1000,
+                title: `Point ${i + 1}`
+              })
+              pathMarkers.push(marker)
+              pathMarkersRef.current = pathMarkers
+            }
+            
+            setCoordinates(newCoords)
+          }
+          
+          google.maps.event.addListener(currentPolygonPath, 'set_at', updateMarkers)
+          google.maps.event.addListener(currentPolygonPath, 'insert_at', updateMarkers)
+          google.maps.event.addListener(currentPolygonPath, 'remove_at', updateMarkers)
         }
-        
-        google.maps.event.addListener(currentPolygonPath, 'set_at', updateMarkers)
-        google.maps.event.addListener(currentPolygonPath, 'insert_at', updateMarkers)
-        google.maps.event.addListener(currentPolygonPath, 'remove_at', updateMarkers)
-      }
-    })
+      })
+    } else {
+      console.error("❌ Google Maps drawing library is not available")
+    }
 
     setMapLoading(false)
 

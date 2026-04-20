@@ -114,16 +114,29 @@ export const resolveDeliveryAddress = ({
   const normalizedFallback = normalizeSavedAddress(fallbackAddress);
 
   if (selectedMode === "saved" && selectedId) {
+    if (addresses.length === 0) {
+      // We have a selection but no addresses list yet (likely loading)
+      return {
+        address: null,
+        coords: null,
+        source: "saved",
+        loading: true,
+        error: "Loading addresses...",
+      };
+    }
+
     const matched = addresses.find((addr) => String(getAddressId(addr)) === selectedId);
     const normalized = normalizeSavedAddress(matched);
     const coords = normalized?.location?.coordinates || null;
     const latitude = toNumber(coords?.[1]);
     const longitude = toNumber(coords?.[0]);
+
     if (!normalized) {
       return {
         address: null,
         coords: null,
         source: "saved",
+        loading: false, // Explicitly false since we checked addresses.length > 0
         error: "Selected address not found",
       };
     }

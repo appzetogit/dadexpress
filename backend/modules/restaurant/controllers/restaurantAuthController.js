@@ -445,20 +445,28 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       const candidateRestaurants = await Restaurant.find(findQuery);
       restaurant = pickBestRestaurantForOtpLogin(candidateRestaurants);
       
-      staffMember = null;
-      if (!restaurant) {
-        // If no restaurant found, check if this is a staff member
-        // Use flexible phone query to handle different formats (+91, 10-digit, etc)
-        const phoneSubQuery = normalizedPhone ? buildPhoneInQuery(normalizedPhone, 'phone') : null;
-        let staffQuery;
+      // Check if this is a staff member (always check, regardless of restaurant search)
+      // Use flexible phone query to handle different formats (+91, 10-digit, etc)
+      const phoneSubQuery = normalizedPhone ? buildPhoneInQuery(normalizedPhone, 'phone') : null;
+      let staffQuery;
 
-        if (phoneSubQuery) {
-          staffQuery = { ...phoneSubQuery, status: 'active' };
+      if (phoneSubQuery) {
+        staffQuery = { ...phoneSubQuery, status: 'active' };
+      } else {
+        staffQuery = { email: email?.toLowerCase().trim(), status: 'active' };
+      }
+
+      staffMember = await StaffManagement.findOne(staffQuery);
+
+      // Prioritize logic: If both found, decide which role to login with.
+      // If the owner account is not approved or inactive, but they are an active staff member elsewhere,
+      // we should probably let them login as staff.
+      if (restaurant && staffMember) {
+        if (!restaurant.isActive && !restaurant.approvedAt) {
+          restaurant = null; // Prefer staff login if restaurant is unapproved/inactive
         } else {
-          staffQuery = { email: email?.toLowerCase().trim(), status: 'active' };
+          staffMember = null; // Prefer restaurant owner login if it exists and is active
         }
-
-        staffMember = await StaffManagement.findOne(staffQuery);
       }
 
       existingRestaurantFoundForLogin = !!restaurant || !!staffMember;
@@ -690,8 +698,8 @@ export const verifyOTP = asyncHandler(async (req, res) => {
           restaurant.phoneVerified = true;
         }
 
-        // Update FCM Token and platform on login
-        if (fcmToken) {
+        // Update FCM Token and platform on login (Skip for staff members to avoid overwriting owner token)
+        if (fcmToken && !staffMember) {
           restaurant.platform = platform || restaurant.platform || 'web';
 
           if (['android', 'ios', 'app'].includes(restaurant.platform?.toLowerCase())) {
@@ -703,21 +711,25 @@ export const verifyOTP = asyncHandler(async (req, res) => {
           await restaurant.save();
           console.log(`[PUSH-NOTIFICATION] FCM Token stored for restaurant login ${restaurant._id}: ${fcmToken} (${restaurant.platform})`);
         } else {
-          await restaurant.save();
+          if (restaurant && !staffMember) {
+             await restaurant.save();
+          }
         }
       }
     }
 
     // Prepare response data
-    const userId = restaurant ? restaurant._id.toString() : staffMember._id.toString();
-    const userRole = 'restaurant';
-    const userEmail = restaurant ? (restaurant.email || restaurant.phone || restaurant.restaurantId) : (staffMember.email || staffMember.phone);
+    const userId = restaurant && !staffMember ? restaurant._id.toString() : (staffMember ? staffMember._id.toString() : restaurant._id.toString());
+    const userRole = staffMember ? 'staff' : (restaurant ? 'restaurant' : 'restaurant');
+    const userEmail = staffMember ? (staffMember.email || staffMember.phone) : (restaurant.email || restaurant.phone || restaurant.restaurantId);
+    const userName = staffMember ? staffMember.name : (restaurant ? restaurant.name : 'User');
 
     // Generate tokens
     const tokens = jwtService.generateTokens({
       userId,
-      role: userRole,
-      email: userEmail
+      role: 'restaurant',
+      email: userEmail,
+      isStaff: !!staffMember
     });
 
     // If it's a staff member, we need to return the restaurant info they belong to
@@ -725,8 +737,8 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       restaurant = await Restaurant.findById(staffMember.restaurantId);
     }
 
-    if (!restaurant) {
-        return errorResponse(res, 404, 'Restaurant not found for this user');
+    if (!restaurant && !staffMember) {
+        return errorResponse(res, 404, 'Restaurant or Staff record not found for this user');
     }
 
     // Set refresh token in httpOnly cookie
@@ -761,9 +773,9 @@ export const verifyOTP = asyncHandler(async (req, res) => {
     return successResponse(res, 200, 'Authentication successful', {
       accessToken: tokens.accessToken,
       user: {
-        id: restaurant._id,
+        id: userId,
         restaurantId: restaurant.restaurantId,
-        name: restaurant.name,
+        name: userName,
         email: restaurant.email,
         phone: restaurant.phone,
         phoneE164: restaurant.phoneE164 || normalizePhoneNumberE164(restaurant.phone),
@@ -772,7 +784,9 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         profileImage: restaurant.profileImage,
         isActive: restaurant.isActive,
         isProfileCompleted,
-        onboarding: restaurant.onboarding
+        onboarding: restaurant.onboarding,
+        role: userRole,
+        isStaff: !!staffMember
       },
       restaurant: {
         id: restaurant._id,
@@ -1120,7 +1134,21 @@ export const getCurrentRestaurant = asyncHandler(async (req, res) => {
 
   // Restaurant is attached by authenticate middleware
   const isProfileCompleted = computeIsProfileCompleted(req.restaurant);
+  const isStaff = !!req.staff;
+  
+  const userMetadata = {
+    id: isStaff ? req.staff._id.toString() : req.restaurant._id.toString(),
+    restaurantId: req.restaurant.restaurantId,
+    name: isStaff ? req.staff.name : req.restaurant.name,
+    email: isStaff ? (req.staff.email || req.staff.phone) : (req.restaurant.email || req.restaurant.phone),
+    role: isStaff ? 'staff' : 'restaurant',
+    isStaff: isStaff,
+    isActive: req.restaurant.isActive,
+    isProfileCompleted
+  };
+
   return successResponse(res, 200, 'Restaurant retrieved successfully', {
+    user: userMetadata,
     restaurant: {
       id: req.restaurant._id,
       restaurantId: req.restaurant.restaurantId,

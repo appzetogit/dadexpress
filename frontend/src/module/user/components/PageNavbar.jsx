@@ -41,6 +41,9 @@ export default function PageNavbar({
   )
   const location = useMemo(() => {
     const address = resolvedDeliveryAddress?.address
+    // If we have a selection but No address matched yet (loading), do NOT fall back to GPS
+    // This prevents the header from flickering between GPS and Saved address on load/login
+    if (resolvedDeliveryAddress?.loading) return null
     if (!address) return geoLocation
 
     const coords = Array.isArray(address.location?.coordinates)

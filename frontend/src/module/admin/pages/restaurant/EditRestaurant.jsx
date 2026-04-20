@@ -223,88 +223,24 @@ export default function EditRestaurant() {
 
     const validateStep3 = () => {
         const errors = {}
+        // Relaxed validation for Edit mode to prevent blocking Step 4
         const panNumber = (step3.panNumber || "").trim().toUpperCase()
-        const panName = (step3.nameOnPan || "").trim()
-        const gstNumber = (step3.gstNumber || "").trim().toUpperCase()
-        const gstLegalName = (step3.gstLegalName || "").trim()
         const fssaiNumber = (step3.fssaiNumber || "").trim()
-        const expiry = (step3.fssaiExpiry || "").trim()
         const accountNumber = (step3.accountNumber || "").trim()
         const ifscCode = (step3.ifscCode || "").trim().toUpperCase()
-        const accountHolderName = (step3.accountHolderName || "").trim()
-        const accountType = (step3.accountType || "").trim()
 
-        if (!panName) {
-            errors.nameOnPan = "PAN holder name is required"
-        } else if (!NAME_WITH_CHARS_REGEX.test(panName)) {
-            errors.nameOnPan = "PAN holder name must contain alphabetic characters only"
+        if (panNumber && !PAN_NUMBER_REGEX.test(panNumber)) {
+            errors.panNumber = "PAN format invalid"
         }
-
-        if (!panNumber) {
-            errors.panNumber = "PAN number is required"
-        } else if (!PAN_NUMBER_REGEX.test(panNumber)) {
-            errors.panNumber = "PAN number format is invalid (e.g., ABCDE1234F)"
+        if (fssaiNumber && !FSSAI_NUMBER_REGEX.test(fssaiNumber)) {
+            errors.fssaiNumber = "FSSAI must be 14 digits"
         }
-
-        if (!step3.panImage) {
-            errors.panImage = "PAN image is required"
+        if (accountNumber && !ACCOUNT_NUMBER_REGEX.test(accountNumber)) {
+            errors.accountNumber = "Account number length invalid"
         }
-
-        if (step3.gstRegistered) {
-            if (!gstNumber) {
-                errors.gstNumber = "GST number is required"
-            } else if (!GST_NUMBER_REGEX.test(gstNumber)) {
-                errors.gstNumber = "GST number format is invalid (e.g., 22AAAAA0000A1Z5)"
-            }
-
-            if (!gstLegalName) {
-                errors.gstLegalName = "GST legal name is required"
-            } else if (!NAME_WITH_CHARS_REGEX.test(gstLegalName)) {
-                errors.gstLegalName = "GST legal name must contain alphabetic characters only"
-            }
-
-            if (!step3.gstImage) {
-                errors.gstImage = "GST image is required"
-            }
+        if (ifscCode && !IFSC_REGEX.test(ifscCode)) {
+            errors.ifscCode = "IFSC code format invalid"
         }
-
-        if (!fssaiNumber) {
-            errors.fssaiNumber = "FSSAI number is required"
-        } else if (!FSSAI_NUMBER_REGEX.test(fssaiNumber)) {
-            errors.fssaiNumber = "FSSAI number must be exactly 14 digits"
-        }
-
-        if (expiry) {
-            const selectedDate = new Date(expiry)
-            const today = new Date()
-            today.setHours(0, 0, 0, 0)
-            if (selectedDate < today) {
-                errors.fssaiExpiry = "Expiry date cannot be in the past"
-            }
-        }
-
-        if (!accountNumber) {
-            errors.accountNumber = "Account number is required"
-        } else if (!ACCOUNT_NUMBER_REGEX.test(accountNumber)) {
-            errors.accountNumber = "Account number must be 9 to 18 digits"
-        }
-
-        if (!ifscCode) {
-            errors.ifscCode = "IFSC code is required"
-        } else if (!IFSC_REGEX.test(ifscCode)) {
-            errors.ifscCode = "IFSC code format is invalid (e.g., SBIN0018764)"
-        }
-
-        if (!accountHolderName) {
-            errors.accountHolderName = "Account holder name is required"
-        } else if (!NAME_WITH_CHARS_REGEX.test(accountHolderName)) {
-            errors.accountHolderName = "Account holder name must contain alphabetic characters only"
-        }
-
-        if (!accountType || !["savings", "current"].includes(accountType)) {
-            errors.accountType = "Please select account type"
-        }
-
         return errors
     }
 

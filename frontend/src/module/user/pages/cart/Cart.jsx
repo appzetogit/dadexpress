@@ -115,6 +115,7 @@ export default function Cart() {
   const [isLoadingWallet, setIsLoadingWallet] = useState(false)
   const [deliveryFleet, setDeliveryFleet] = useState("standard")
   const [showFleetOptions, setShowFleetOptions] = useState(false)
+  const [useReferralCoins, setUseReferralCoins] = useState(false)
 
   // Use memoized cart purity check to avoid heavy re-calculations
   const isCartPureVeg = useMemo(() => {
@@ -674,10 +675,12 @@ export default function Cart() {
         const response = await orderAPI.calculateOrder({
           items,
           restaurantId: restaurantData?.restaurantId || restaurantData?._id || restaurantId || null,
-          deliveryAddress: defaultAddress,
-          couponCode: appliedCoupon?.code || couponCode || null,
-          deliveryFleet: deliveryFleet || 'standard'
-        })
+           deliveryAddress: defaultAddress,
+           couponCode: appliedCoupon?.code || couponCode || null,
+           deliveryFleet: deliveryFleet || 'standard',
+           useReferralCoins: useReferralCoins,
+           coinsToUse: null // Use maximum allowed by default if useReferralCoins is true
+         })
 
         if (response?.data?.success && response?.data?.data?.pricing) {
           setPricing(response.data.data.pricing)
@@ -1260,7 +1263,8 @@ export default function Cart() {
         deliveryInstruction: deliveryInstruction || "",
         sendCutlery: sendCutlery !== false,
         paymentMethod: selectedPaymentMethod,
-        zoneId: zoneId // CRITICAL: Pass zoneId for strict zone validation
+        zoneId: zoneId, // CRITICAL: Pass zoneId for strict zone validation
+        useReferralCoins: useReferralCoins
       };
       // Log final order details (including paymentMethod for COD debugging)
       console.log('📤 FINAL: Sending order to backend with:', {
@@ -1837,6 +1841,44 @@ export default function Cart() {
                 </div>
               </div>
 
+              {/* Reward Coins Usage */}
+              {walletBalance > 0 && (
+                <div className="bg-white dark:bg-[#1a1a1a] px-4 md:px-6 py-3 md:py-4 rounded-lg md:rounded-xl border border-blue-100 dark:border-blue-900/30">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-blue-50 dark:bg-blue-900/20 rounded-full flex items-center justify-center">
+                        <Sparkles className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                      </div>
+                      <div>
+                        <p className="text-sm md:text-base font-semibold text-gray-800 dark:text-gray-200">Redeem Coins</p>
+                        <p className="text-xs text-blue-600 dark:text-blue-400">Available: {walletBalance.toFixed(0)} coins</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setUseReferralCoins(!useReferralCoins)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${useReferralCoins ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'}`}
+                    >
+                      <span
+                        className={`${useReferralCoins ? 'translate-x-6' : 'translate-x-1'} inline-block h-4 w-4 transform rounded-full bg-white transition-transform`}
+                      />
+                    </button>
+                  </div>
+                  {useReferralCoins && pricing?.referralDiscount > 0 && (
+                    <div className="mt-2 pt-2 border-t border-blue-50 dark:border-blue-900/20">
+                      <p className="text-xs text-green-600 dark:text-green-400 font-medium flex items-center gap-1">
+                        <Check className="h-3 w-3" />
+                        ₹{pricing.referralDiscount} discount applied from coins!
+                      </p>
+                    </div>
+                  )}
+                  {useReferralCoins && (!pricing || pricing.referralDiscount === 0) && (
+                    <div className="mt-2 pt-2 border-t border-blue-50 dark:border-blue-900/20">
+                      <p className="text-[10px] text-gray-500 italic">Maximize savings! Coins apply on subtotal after coupon discounts.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Delivery Fleet Type */}
               <div className="bg-white dark:bg-[#1a1a1a] px-4 md:px-6 py-3 md:py-4 rounded-lg md:rounded-xl">
                 <button
@@ -2024,6 +2066,12 @@ export default function Cart() {
                       <div className="flex justify-between text-sm md:text-base text-red-600 dark:text-red-400">
                         <span>Coupon Discount</span>
                         <span>-₹{discount}</span>
+                      </div>
+                    )}
+                    {pricing?.referralDiscount > 0 && (
+                      <div className="flex justify-between text-sm md:text-base text-blue-600 dark:text-blue-400">
+                        <span>Coin Redemption</span>
+                        <span>-₹{pricing.referralDiscount}</span>
                       </div>
                     )}
                     <div className="flex justify-between text-sm md:text-base font-semibold pt-2 md:pt-3 border-t dark:border-gray-700">

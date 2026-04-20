@@ -83,13 +83,13 @@ export default function PocketBalancePage() {
 
   const balances = calculateDeliveryBalances(walletState)
   
-  // Calculate weekly earnings for the current week (excludes bonus)
-  const weeklyEarnings = calculatePeriodEarnings(walletState, 'week')
-  
   // Calculate total bonus amount from all bonus transactions
   const totalBonus = walletState?.transactions
     ?.filter(t => t.type === 'bonus' && t.status === 'Completed')
     .reduce((sum, t) => sum + (t.amount || 0), 0) || 0
+    
+  // Calculate lifetime operational earnings (excludes bonus) for the pocket math to add up perfectly
+  const totalEarningsBase = (walletState?.totalEarned || balances.totalEarned || 0) - totalBonus
   
   // Calculate total withdrawn (needed for pocket balance calculation)
   const totalWithdrawn = balances.totalWithdrawn || 0
@@ -318,13 +318,13 @@ export default function PocketBalancePage() {
 
       {/* Section Header */}
       <div className=" bg-gray-100 py-2 pt-4 text-center text-xs font-semibold text-gray-600">
-        POCKET DETAILS • {getCurrentWeekRange()}
+        OVERALL POCKET DETAILS
       </div>
 
       {/* Detail Rows */}
       <div className="px-4 pt-2">
 
-        <DetailRow label="Earnings" value={formatCurrency(weeklyEarnings)} />
+        <DetailRow label="Earnings" value={formatCurrency(totalEarningsBase)} />
         <DetailRow label="Bonus" value={formatCurrency(totalBonus)} />
         <DetailRow label="Amount withdrawn" value={formatCurrency(totalWithdrawn)} />
         <DetailRow label="Cash collected" value={formatCurrency(cashCollected)} />

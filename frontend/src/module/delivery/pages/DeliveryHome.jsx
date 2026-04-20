@@ -12098,33 +12098,18 @@ export default function DeliveryHome() {
                     ₹{(() => {
                       const total = Number(selectedRestaurant?.total || 0);
                       const tip = Number(selectedRestaurant?.customerTip || 0);
-                      const estKm = Number(selectedRestaurant?.estimatedDistance || 0);
-                      const actualKm = actualTripDistance / 1000;
-                      // Buffer: don't charge if extra is less than 500m
-                      const extraKm = Math.max(0, actualKm - estKm);
-                      const extraCharge = actualTripDistance > (estKm * 1000 + 500) ? (extraKm * 10) : 0; // ₹10 per KM
-                      return (total + tip + extraCharge).toLocaleString('en-IN', { minimumFractionDigits: 2 });
+                      return (total + tip).toLocaleString('en-IN', { minimumFractionDigits: 2 });
                     })()}
                   </p>
                   {(() => {
                     const tip = Number(selectedRestaurant?.customerTip || 0);
-                    const estKm = Number(selectedRestaurant?.estimatedDistance || 0);
-                    const actualKm = actualTripDistance / 1000;
-                    const hasExtraDist = actualTripDistance > (estKm * 1000 + 500);
                     
-                    if (tip > 0 || hasExtraDist) {
+                    if (tip > 0) {
                       return (
                         <div className="flex flex-col gap-0.5 mt-1">
-                          {tip > 0 && (
-                            <p className="text-amber-600 text-[10px] font-bold">
-                              Rider Tip: +₹{tip.toFixed(2)} Included 🎁
-                            </p>
-                          )}
-                          {hasExtraDist && (
-                            <p className="text-amber-600 text-[10px] font-bold">
-                              Extra distance: +₹{( (actualKm - estKm) * 10 ).toFixed(2)} Included 🏍️
-                            </p>
-                          )}
+                          <p className="text-amber-600 text-[10px] font-bold">
+                            Rider Tip: +₹{tip.toFixed(2)} Included 🎁
+                          </p>
                         </div>
                       );
                     }
@@ -12425,12 +12410,7 @@ export default function DeliveryHome() {
                     ₹{(() => {
                       const total = Number(selectedRestaurant.total) || 0
                       const tip = Number(selectedRestaurant.customerTip || 0)
-                      const estKm = Number(selectedRestaurant?.estimatedDistance || 0)
-                      const actualKm = actualTripDistance / 1000
-                      // Buffer: don't charge if extra is less than 500m
-                      const extraKm = Math.max(0, actualKm - estKm)
-                      const extraCharge = actualTripDistance > (estKm * 1000 + 500) ? (extraKm * 10) : 0 // ₹10 per KM
-                      return (total + tip + extraCharge).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                      return (total + tip).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                     })()}
                   </span>
                 </div>

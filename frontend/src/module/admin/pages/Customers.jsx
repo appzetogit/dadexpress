@@ -69,10 +69,6 @@ export default function Customers() {
   useEffect(() => {
     fetchCustomers()
 
-    // Keep totals dynamic without requiring full page reload.
-    const intervalId = setInterval(fetchCustomers, 30000)
-
-    return () => clearInterval(intervalId)
   }, [fetchCustomers])
 
   const handleToggleStatus = async (customerId) => {
@@ -339,7 +335,8 @@ export default function Customers() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-slate-100">
-                {loading ? (
+                {(loading && customers.length === 0) ? (
+
                   <tr>
                     <td colSpan={8} className="px-6 py-8 text-center">
                       <div className="text-sm text-slate-500">Loading customers...</div>

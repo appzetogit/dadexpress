@@ -867,10 +867,20 @@ export default function Home() {
     [selectedDeliveryAddress, addresses, location, defaultAddress],
   )
   const selectedAddress = resolvedDeliveryAddress?.address || null
+  const isAddressLoading = resolvedDeliveryAddress?.loading || false
   const selectedCoords = resolvedDeliveryAddress?.coords || getAddressCoords(selectedAddress)
+
+  // Track the last location used for restaurant fetching to prevent jitter
+  const lastFetchedLocationRef = useRef(null)
+  const isInitialLoadRef = useRef(true)
+
   const activeLocation = useMemo(
-    () =>
-      resolveActiveLocation({
+    () => {
+      // If we are waiting for a selected address to load, do NOT return a location yet
+      // This prevents the UI from temporarily snapping to GPS location (snapping back issue)
+      if (isAddressLoading && isManualMode) return null
+
+      return resolveActiveLocation({
         selectedAddress,
         currentLocation: !isManualMode && currentLocation
           ? {
@@ -878,11 +888,13 @@ export default function Home() {
             zoneId: zoneId || currentLocation.zoneId || null,
           }
           : null,
-      }),
+      })
+    },
     [
       selectedAddress,
-      Number(currentLocation?.latitude || 0).toFixed(3),
-      Number(currentLocation?.longitude || 0).toFixed(3),
+      isAddressLoading,
+      Number(currentLocation?.latitude || 0).toFixed(4), // Increased precision but still memoized
+      Number(currentLocation?.longitude || 0).toFixed(4),
       currentLocation?.city,
       zoneId,
       isManualMode
@@ -1009,7 +1021,8 @@ export default function Home() {
           console.error("❌ Invalid selectedAddress coordinates")
           if (cancelled || resolveRequestId !== zoneResolveRequestRef.current) return
           setResolvedZoneId(null)
-          setSelectedAddressOutOfService(true)
+          // Do not set out of service here yet; the user might just have an invalid address
+          // or we are still waiting for a retry.
           setResolvedSelectedCoords(null)
           setZoneResolveLoading(false)
           return
@@ -1159,7 +1172,7 @@ export default function Home() {
 
       if (!resolvedZoneId) {
         if (requestId !== restaurantsRequestRef.current) return
-        
+
         // If zone is still resolving or loading, keep the loader active
         if (zoneResolveLoading || zoneLoading || profileLoading || (selectedAddress && !resolvedZoneId)) {
           // Stay in loading state
@@ -1423,12 +1436,46 @@ export default function Home() {
 
   // Refetch restaurants when filters or GPS zone changes
   // NOTE: Only depend on resolvedZoneId and appliedFilters to avoid re-fetching on minor GPS jitter
+  // Refetch restaurants when filters or GPS zone changes
+  // NOTE: Only depend on resolvedZoneId and appliedFilters to avoid re-fetching on minor GPS jitter
   useEffect(() => {
-    fetchRestaurants(appliedFilters)
+    if (!activeLocation) return
+
+    const lat = activeLocation.latitude || activeLocation.lat || activeLocation.coordinates?.[1]
+    const lng = activeLocation.longitude || activeLocation.lng || activeLocation.coordinates?.[0]
+
+    if (!lat || !lng) return
+
+    const prevLoc = lastFetchedLocationRef.current
+    let shouldFetch = isInitialLoadRef.current || activeLocation.source === "SELECTED"
+
+    if (!shouldFetch && prevLoc) {
+      // Calculate distance to avoid re-fetching on small GPS movements
+      const R = 6371e3
+      const dLat = (lat - prevLoc.lat) * Math.PI / 180
+      const dLon = (lng - prevLoc.lng) * Math.PI / 180
+      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat * Math.PI / 180) * Math.cos(prevLoc.lat * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2)
+      const distance = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+
+      // 150 meters threshold for background GPS updates
+      if (distance > 150) {
+        shouldFetch = true
+      }
+    }
+
+    if (shouldFetch) {
+      lastFetchedLocationRef.current = { lat, lng }
+      isInitialLoadRef.current = false
+      fetchRestaurants(appliedFilters)
+    }
   }, [
     appliedFilters,
     fetchRestaurants,
     resolvedZoneId,
+    activeLocation?.id,
+    activeLocation?.source,
     selectedAddress?.id,
   ])
 
@@ -1576,6 +1623,7 @@ export default function Home() {
     if (activeFilters.has('has-offers')) {
       filtered = filtered.filter(r => r.offer && r.offer.length > 0)
     }
+
     if (selectedCuisine) {
       filtered = filtered.filter(r => r.cuisine === selectedCuisine)
     }
@@ -1620,17 +1668,30 @@ export default function Home() {
   }, [calculatedRestaurants, activeFilters, selectedCuisine, sortBy])
 
   const emptyRestaurantsMessage = useMemo(() => {
-    if (profileLoading || zoneResolveLoading || zoneLoading || (selectedAddress && !resolvedZoneId && !selectedAddressOutOfService)) {
+    // Priority 1: Loading / Resolving states
+    // Added check for selectedDeliveryAddress to wait if we have a saved selection but hasn't resolved to full address yet
+    if (profileLoading || zoneResolveLoading || zoneLoading || isAddressLoading || loadingRestaurants ||
+      (selectedAddress && !resolvedZoneId && !selectedAddressOutOfService) ||
+      (selectedDeliveryAddress && !selectedAddress)) {
       return "Detecting your service area... 📍"
     }
-    if (selectedAddressOutOfService) {
+
+    // Priority 2: Empty selection (no address and no GPS)
+    if (!selectedAddress && !resolvedZoneId && !isManualMode) {
       return "Please select your location to explore nearby restaurants & menus 🍽️"
     }
+
+    // Priority 3: Definite "Out of Service" state
+    if (selectedAddressOutOfService) {
+      return "Service currently unavailable at this address 🏠"
+    }
+
+    // Priority 4: No zone resolved after all attempts
     if (!resolvedZoneId) {
       return "Please select your location to explore nearby restaurants & menus 🍽️"
     }
     return "No restaurants available in this area"
-  }, [selectedAddressOutOfService, resolvedZoneId, zoneResolveLoading, zoneLoading, profileLoading])
+  }, [selectedAddressOutOfService, resolvedZoneId, zoneResolveLoading, zoneLoading, profileLoading, isAddressLoading, loadingRestaurants])
 
   // Featured foods removed - will be handled by restaurants data from API
   const filteredFeaturedFoods = useMemo(() => {
@@ -2389,11 +2450,14 @@ export default function Home() {
                 />
               ))}
             </div>
-            {!isLoadingFilterResults && !loadingRestaurants && !zoneLoading && !zoneResolveLoading && !profileLoading && !(selectedAddress && !resolvedZoneId && !selectedAddressOutOfService) && filteredRestaurants.length === 0 && (
-              <div className="mt-4 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-[#1a1a1a] p-4 text-sm text-gray-700 dark:text-gray-300">
-                {emptyRestaurantsMessage}
-              </div>
-            )}
+            {!isLoadingFilterResults && !loadingRestaurants && !zoneLoading && !zoneResolveLoading && !profileLoading && !isAddressLoading &&
+              !(selectedAddress && !resolvedZoneId && !selectedAddressOutOfService) &&
+              !(selectedDeliveryAddress && !selectedAddress) &&
+              filteredRestaurants.length === 0 && (
+                <div className="mt-4 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-[#1a1a1a] p-4 text-sm text-gray-700 dark:text-gray-300">
+                  {emptyRestaurantsMessage}
+                </div>
+              )}
           </div>
           <div className="flex justify-center pt-2 sm:pt-3">
             {/* <Link to="/user/restaurants">

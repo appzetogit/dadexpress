@@ -312,7 +312,11 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
 
     // 5. Foods & Addons
     const Menu = (await import("../../restaurant/models/Menu.js")).default;
-    const activeMenus = await Menu.find({ isActive: true, restaurant: { $in: activeRestIds } }).select("sections addons").lean();
+    const menuQuery = { isActive: true };
+    if (zoneIdString) {
+      menuQuery.restaurant = { $in: activeRestIds };
+    }
+    const activeMenus = await Menu.find(menuQuery).select("sections addons").lean();
     let totalFoods = 0, totalAddons = 0;
     activeMenus.forEach(m => {
       m.sections?.forEach(s => {
@@ -393,7 +397,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
         period: "last24Hours"
       },
       monthlyData,
-      restaurants: { total: totalRestaurants, active: activeRestaurantsCount, pendingRequests: await Restaurant.countDocuments({ ...restaurantMatch, "onboarding.completedSteps": { $gte: 4 }, approvedAt: null, $or: [{ rejectionReason: null }, { rejectionReason: "" }] }) },
+      restaurants: { total: totalRestaurants, active: activeRestaurantsCount, pendingRequests: await Restaurant.countDocuments({ ...restaurantMatch, "onboarding.completedSteps": { $gte: 1 }, $or: [{ approvedAt: { $exists: false } }, { approvedAt: null }], $and: [{ $or: [{ rejectionReason: { $exists: false } }, { rejectionReason: null }, { rejectionReason: "" }] }] }) },
       deliveryBoys: { total: totalDeliveryBoys, active: activeDeliveryPartners, pendingRequests: realPendingDeliveryBoys },
       foods: { total: totalFoods },
       addons: { total: totalAddons },

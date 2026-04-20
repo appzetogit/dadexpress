@@ -174,7 +174,7 @@ const orderSchema = new mongoose.Schema({
   },
   deliveryFleet: {
     type: String,
-    enum: ['standard', 'fast', 'pure_veg'],
+    enum: ['standard', 'veg', 'pure_veg', 'express', 'fast'],
     default: 'standard'
   },
   note: {

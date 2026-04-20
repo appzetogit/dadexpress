@@ -110,7 +110,16 @@ export const getReferralAnalytics = asyncHandler(async (req, res) => {
         let areaStats = [];
         let stats = [];
         let walletStats = [];
+        let totalAllTime = 0;
 
+        // 1. Total Referrals (Across all time) - Independent of matchStage
+        try {
+            totalAllTime = await ReferralLog.countDocuments();
+        } catch (err) {
+            console.error("Error counting total referrals:", err);
+        }
+
+        // 2. Area Stats (Graph data)
         try {
             areaStats = await ReferralLog.aggregate([
                 { $match: matchStage },
@@ -129,6 +138,7 @@ export const getReferralAnalytics = asyncHandler(async (req, res) => {
             areaStats = [];
         }
 
+        // 3. Status Breakdown & Revenue
         try {
             stats = await ReferralLog.aggregate([
                 { $match: matchStage },
@@ -165,6 +175,7 @@ export const getReferralAnalytics = asyncHandler(async (req, res) => {
             stats = [];
         }
 
+        // 4. Wallet Distribution (Graph data & Total Rewards Spent)
         try {
             const UserWallet = (await import('../../user/models/UserWallet.js')).default;
 
@@ -186,12 +197,15 @@ export const getReferralAnalytics = asyncHandler(async (req, res) => {
             walletStats = [];
         }
 
+        // Calculate total rewards from wallet distributions within range
+        const rangeRewardsSpent = walletStats.reduce((sum, item) => sum + (item.distribution || 0), 0);
+
         const formattedStats = {
-            total: 0,
+            total: totalAllTime, // Show across all time as per UI subtitle
             pending: 0,
             completed: 0,
             expired: 0,
-            totalRewardsSpent: 0,
+            totalRewardsSpent: rangeRewardsSpent, // Now reflects both automated and manual distributions
             revenueGenerated: 0,
             areaData: areaStats.map(item => ({
                 name: item._id,
@@ -206,11 +220,9 @@ export const getReferralAnalytics = asyncHandler(async (req, res) => {
         };
 
         stats.forEach(s => {
-            formattedStats.total += s.count;
             if (s._id === 'pending') formattedStats.pending = s.count;
             if (s._id === 'completed') formattedStats.completed = s.count;
             if (s._id === 'expired') formattedStats.expired = s.count;
-            formattedStats.totalRewardsSpent += (s.totalReferrerRewards + s.totalRefereeRewards);
             formattedStats.revenueGenerated += (s.revenueGenerated || 0);
         });
 
@@ -342,6 +354,11 @@ export const addManualAdjustment = asyncHandler(async (req, res) => {
         });
 
         await wallet.save();
+
+        // Sync legacy User model balance to ensure coins are usable in checkout
+        await User.findByIdAndUpdate(user._id, {
+            $inc: { 'wallet.balance': action === 'add' ? amount : -amount }
+        });
 
         return successResponse(res, 200, "Coins adjusted successfully", null);
     } catch (error) {

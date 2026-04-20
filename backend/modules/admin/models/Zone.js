@@ -118,7 +118,7 @@ zoneSchema.index({ boundary: '2dsphere' }); // For spatial queries
 zoneSchema.index({ serviceLocation: 'text', name: 'text' }); // For text search
 
 // Pre-save middleware to create GeoJSON boundary
-zoneSchema.pre('save', function(next) {
+zoneSchema.pre('save', async function() {
   if (this.coordinates && this.coordinates.length >= 3) {
     // Convert coordinates to GeoJSON format: [[[lng, lat], [lng, lat], ...]]
     const geoJsonCoords = this.coordinates.map(coord => [coord.longitude, coord.latitude]);
@@ -130,7 +130,6 @@ zoneSchema.pre('save', function(next) {
       coordinates: [geoJsonCoords]
     };
   }
-  next();
 });
 
 // Method to check if a point is within the zone

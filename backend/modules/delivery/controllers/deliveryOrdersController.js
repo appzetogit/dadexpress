@@ -1916,24 +1916,7 @@ export const completeDelivery = asyncHandler(async (req, res) => {
       updateData['payment.status'] = 'completed';
     }
 
-    // EXTRA KM SURCHARGE COMPONENT (USER REQUEST):
-    // If actual distance > estimated distance (+500m buffer), add surcharge to customer total
-    const actualTripDistanceMeters = Number(req.body.actualTripDistance) || 0;
-    const estimatedDistanceEnRoute = Number(order.deliveryState?.routeToDelivery?.distance) || 
-                                     Number(order.assignmentInfo?.distance) || 0;
-    
-    if (actualTripDistanceMeters > (estimatedDistanceEnRoute * 1000 + 500)) {
-      const extraKm = Math.max(0, (actualTripDistanceMeters / 1000) - estimatedDistanceEnRoute);
-      const extraCharge = Math.round(extraKm * 10); // Rate: ₹10 per KM
 
-      if (extraCharge > 0) {
-        console.log(`💰 Adding extra distance surcharge: ₹${extraCharge} for ${extraKm.toFixed(2)} km extra`);
-        updateData['pricing.total'] = (Number(order.pricing?.total) || 0) + extraCharge;
-        updateData['pricing.extraDistanceCharge'] = extraCharge;
-        // Also update the finalized distance for commission calculation and record keeping
-        updateData['deliveryState.routeToDelivery.distance'] = Number((actualTripDistanceMeters / 1000).toFixed(3));
-      }
-    }
 
     // Update order to delivered
     const updatedOrder = await Order.findByIdAndUpdate(
@@ -2018,10 +2001,42 @@ export const completeDelivery = asyncHandler(async (req, res) => {
                       }
                     });
 
+                    // Add transaction to UserWallet for referrer
+                    try {
+                      const UserWallet = (await import('../../user/models/UserWallet.js')).default;
+                      const referrerWallet = await UserWallet.findOrCreateByUserId(user.referredBy);
+                      await referrerWallet.addTransaction({
+                        amount: referrerReward,
+                        type: 'addition',
+                        status: 'Completed',
+                        description: `Referral Reward - ${user.name} completed first order`,
+                        orderId: updatedOrder._id
+                      });
+                      await referrerWallet.save();
+                    } catch (walletErr) {
+                      console.error('⚠️ Could not record referrer reward in UserWallet:', walletErr.message);
+                    }
+
                     // Credit Referee (the one who just completed the order)
                     await User.findByIdAndUpdate(user._id, {
                       $inc: { 'wallet.balance': refereeReward }
                     });
+
+                    // Add transaction to UserWallet for referee
+                    try {
+                      const UserWallet = (await import('../../user/models/UserWallet.js')).default;
+                      const refereeWallet = await UserWallet.findOrCreateByUserId(user._id);
+                      await refereeWallet.addTransaction({
+                        amount: refereeReward,
+                        type: 'addition',
+                        status: 'Completed',
+                        description: `Joining Reward - Completed first order (min ₹${settings.referral.minOrderValue})`,
+                        orderId: updatedOrder._id
+                      });
+                      await refereeWallet.save();
+                    } catch (walletErr) {
+                      console.error('⚠️ Could not record referee reward in UserWallet:', walletErr.message);
+                    }
 
                     // Update Log
                     log.status = 'completed';
@@ -2115,16 +2130,18 @@ export const completeDelivery = asyncHandler(async (req, res) => {
         t => t.orderId && t.orderId.toString() === orderIdForTransaction && t.type === 'payment'
       );
 
+      const paymentMethod = (order.payment?.method || "").toString().toLowerCase();
+      const isCOD = paymentMethod === "cash" || paymentMethod === "cod";
+      
+      // If paymentCollectedBy is 'qr', it's NOT a cash order in terms of rider holding cash
+      const isCashCollectedByRider = isCOD && paymentCollectedBy !== "qr";
+      const codAmount = (Number(order.pricing?.total) || 0) + (Number(order.customerTip) || 0);
+
       if (existingTransaction) {
-        console.warn(`⚠️ Earning already added for order ${orderIdForLog}, skipping wallet update`);
+        console.warn(`⚠️ Earning already added for order ${orderIdForLog}, skipping wallet earning update`);
+        walletTransaction = existingTransaction;
       } else {
         // Add payment transaction (earning) with paymentCollected: false so cashInHand gets COD amount, not commission
-        const paymentMethod = (order.payment?.method || "").toString().toLowerCase();
-        const isCOD = paymentMethod === "cash" || paymentMethod === "cod";
-        
-        // If paymentCollectedBy is 'qr', it's NOT a cash order in terms of rider holding cash
-        const isCashCollectedByRider = isCOD && paymentCollectedBy !== "qr";
-
         walletTransaction = wallet.addTransaction({
           amount: totalEarning + (Number(order.customerTip) || 0),
           type: "payment",
@@ -2140,43 +2157,40 @@ export const completeDelivery = asyncHandler(async (req, res) => {
         // Update totalEarning to include tip for the response and logs
         const tipAmount = Number(order.customerTip) || 0;
         totalEarning += tipAmount;
-
-        // COD: add cash collected (order total + tip) to cashInHand so Pocket balance shows it
-        const codAmount = (Number(order.pricing?.total) || 0) + (Number(order.customerTip) || 0);
-        
-        if (isCashCollectedByRider && codAmount > 0) {
-          try {
-            const updateResult = await DeliveryWallet.updateOne(
-              { deliveryId: delivery._id },
-              { $inc: { cashInHand: codAmount } }
-            );
-            if (updateResult.modifiedCount > 0) {
-              console.log(`✅ Cash collected ₹${codAmount.toFixed(2)} (COD) added to cashInHand for order ${orderIdForLog}`);
-            } else {
-              console.warn(`⚠️ Wallet update for cashInHand had no effect (deliveryId: ${delivery._id})`);
-            }
-          } catch (codErr) {
-            console.error(`❌ Failed to add COD to cashInHand:`, codErr.message);
-          }
-        } else if (isCOD && paymentCollectedBy === "qr") {
-          console.log(`📡 QR Payment detected for order ${orderIdForLog}, skipping cashInHand increment for rider`);
-        }
-
-        const cashCollectedThisOrder = isCashCollectedByRider ? codAmount : 0;
-        logger.info(`💰 Earning added to wallet for delivery: ${delivery._id}`, {
-          deliveryId: delivery.deliveryId || delivery._id.toString(),
-          orderId: orderIdForLog,
-          amount: totalEarning,
-          cashCollected: cashCollectedThisOrder,
-          distance: deliveryDistance,
-          transactionId: walletTransaction?._id || walletTransaction?.id,
-          walletBalance: wallet.totalBalance,
-          cashInHand: wallet.cashInHand
-        });
-
-        console.log(`✅ Earning ₹${totalEarning.toFixed(2)} added to delivery boy's wallet`);
-        console.log(`💰 New wallet balance: ₹${wallet.totalBalance.toFixed(2)}, cashInHand: ₹${wallet.cashInHand?.toFixed(2) || '0.00'}`);
       }
+
+      // COD: add cash collected (order total + tip) to cashInHand so Pocket balance shows it
+      if (isCashCollectedByRider && codAmount > 0) {
+        try {
+          const updateResult = await DeliveryWallet.updateOne(
+            { deliveryId: delivery._id },
+            { $inc: { cashInHand: codAmount } }
+          );
+          if (updateResult.modifiedCount > 0) {
+            console.log(`✅ Cash collected ₹${codAmount.toFixed(2)} (COD) added to cashInHand for order ${orderIdForLog}`);
+          } else {
+            console.warn(`⚠️ Wallet update for cashInHand had no effect (deliveryId: ${delivery._id})`);
+          }
+        } catch (codErr) {
+          console.error(`❌ Failed to add COD to cashInHand:`, codErr.message);
+        }
+      } else if (isCOD && paymentCollectedBy === "qr") {
+        console.log(`📡 QR Payment detected for order ${orderIdForLog}, skipping cashInHand increment for rider`);
+      }
+
+      const cashCollectedThisOrder = isCashCollectedByRider ? codAmount : 0;
+      logger.info(`💰 Wallet processed for delivery: ${delivery._id}`, {
+        deliveryId: delivery.deliveryId || delivery._id.toString(),
+        orderId: orderIdForLog,
+        amount: totalEarning,
+        cashCollected: cashCollectedThisOrder,
+        distance: deliveryDistance,
+        transactionId: walletTransaction?._id || walletTransaction?.id,
+        walletBalance: wallet.totalBalance,
+        cashInHand: wallet.cashInHand
+      });
+
+      console.log(`✅ Pocket processing completed for delivery boy's wallet (COD: ₹${cashCollectedThisOrder})`);
     } catch (walletError) {
       logger.error('❌ Error adding earning to wallet:', walletError);
       console.error('❌ Error processing delivery wallet:', walletError);

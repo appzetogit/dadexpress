@@ -237,7 +237,7 @@ function CompletedOrders({ onSelectOrder }) {
                     </div>
 
                     <div className="mt-2">
-                      <p className="text-xs text-gray-600 line-clamp-1">
+                      <p className="text-xs text-gray-600">
                         {order.itemsSummary}
                       </p>
                     </div>
@@ -462,11 +462,11 @@ function CancelledOrders({ onSelectOrder }) {
                     </div>
 
                     <div className="mt-2">
-                      <p className="text-xs text-gray-600 line-clamp-1">
+                      <p className="text-xs text-gray-600">
                         {order.itemsSummary}
                       </p>
                       {order.cancellationReason && (
-                        <p className="text-[10px] text-red-600 mt-1 line-clamp-1">
+                        <p className="text-[10px] text-red-600 mt-1 line-clamp-3">
                           Reason: {order.cancellationReason}
                         </p>
                       )}
@@ -2445,11 +2445,11 @@ function OrderCard({
 
           {/* Middle row */}
           <div className="mt-2">
-            <p className="text-xs text-gray-600 line-clamp-1">
+            <p className="text-xs text-gray-600">
               {itemsSummary}
             </p>
             {note && (
-              <p className="text-[11px] text-gray-500 line-clamp-1 mt-1">
+              <p className="text-[11px] text-gray-500 line-clamp-3 mt-1">
                 Note: {note}
               </p>
             )}

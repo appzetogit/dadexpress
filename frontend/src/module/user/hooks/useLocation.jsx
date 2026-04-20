@@ -2105,8 +2105,8 @@ export function useLocation() {
               }
             }
 
-            // Check if coordinates have changed significantly (threshold: ~150 meters)
-            const coordThreshold = 0.001 // approximately 150 meters
+            // Check if coordinates have changed significantly (threshold: ~220 meters)
+            const coordThreshold = 0.002 // approximately 220 meters
             const coordsChanged =
               !prevLocationCoordsRef.current.latitude ||
               !prevLocationCoordsRef.current.longitude ||

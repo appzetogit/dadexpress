@@ -328,6 +328,7 @@ export const markSettlementsAsProcessed = async (settlementIds, actorType, actor
     });
 
     const restaurantPayouts = new Map();
+    const deliveryPayouts = new Map();
 
     for (const settlement of settlements) {
       if (!settlement.metadata || !(settlement.metadata instanceof Map)) {
@@ -359,6 +360,12 @@ export const markSettlementsAsProcessed = async (settlementIds, actorType, actor
 
       // If reportType is 'delivery' or not specified, process delivery payouts
       if (!reportType || reportType === 'delivery') {
+        const isDeliveryAlreadyMarked = settlement.metadata.get('deliveryFinanceReportMarked') === true;
+        if (!isDeliveryAlreadyMarked && settlement.deliveryPartnerEarning?.totalEarning > 0) {
+          const dId = settlement.deliveryPartnerId.toString();
+          deliveryPayouts.set(dId, (deliveryPayouts.get(dId) || 0) + settlement.deliveryPartnerEarning.totalEarning);
+        }
+
         settlement.metadata.set('deliveryFinanceReportMarked', true);
         settlement.metadata.set('deliveryFinanceReportMarkedAt', new Date().toISOString());
         settlement.metadata.set('deliveryFinanceReportMarkedByType', actorType || 'admin');
@@ -388,6 +395,12 @@ export const markSettlementsAsProcessed = async (settlementIds, actorType, actor
           status: 'Completed',
           description: `Payout for ${settlementIds.length} settlements processed by admin`
         });
+        
+        // Prevent mongoose validation error if withdrawal exceeds accumulated balance
+        if (wallet.totalBalance < 0) {
+          wallet.totalBalance = 0;
+        }
+        
         await wallet.save();
         console.log(`[FINANCE] Updated restaurant wallet ${restaurantId} with payout of ₹${totalAmount}`);
         
@@ -399,6 +412,30 @@ export const markSettlementsAsProcessed = async (settlementIds, actorType, actor
         }
       } catch (walletErr) {
         console.error(`[FINANCE] Failed to update wallet for restaurant ${restaurantId}:`, walletErr.message);
+      }
+    }
+
+    // Update delivery wallets for the payout
+    for (const [deliveryId, totalAmount] of deliveryPayouts.entries()) {
+      try {
+        const wallet = await DeliveryWallet.findOrCreateByDeliveryId(deliveryId);
+        wallet.addTransaction({
+          amount: totalAmount,
+          type: 'withdrawal',
+          status: 'Completed',
+          description: `Payout for ${settlementIds.length} settlements processed by admin`,
+          paymentCollected: false // Explicitly false as this is an admin withdrawal, not rider cash collection
+        });
+
+        // Prevent mongoose validation error if withdrawal exceeds accumulated balance
+        if (wallet.totalBalance < 0) {
+          wallet.totalBalance = 0;
+        }
+
+        await wallet.save();
+        console.log(`[FINANCE] Updated delivery wallet ${deliveryId} with payout of ₹${totalAmount}`);
+      } catch (walletErr) {
+        console.error(`[FINANCE] Failed to update wallet for delivery ${deliveryId}:`, walletErr.message);
       }
     }
 

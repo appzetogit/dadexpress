@@ -673,11 +673,8 @@ export default function PocketPage() {
       const month = d.toLocaleString('en-US', { month: 'short' })
       return `${day} ${month}`
     }
-
-    if (weeklyEarningsFromAPI && weeklyEarningsFromAPI.startDate && weeklyEarningsFromAPI.endDate) {
-      return `${formatDate(weeklyEarningsFromAPI.startDate)} - ${formatDate(weeklyEarningsFromAPI.endDate)}`
-    }
-
+    // Use consistent local Sunday-Saturday week to match "Valid till" and "Pocket details"
+    // (Ignored API custom week dates as it caused UI mismatch for Monday-Sunday backend vs local Sunday-Saturday)
     const now = new Date()
     const dayOfWeek = now.getDay()
     const startOfWeek = new Date(now)
