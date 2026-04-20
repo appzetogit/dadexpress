@@ -141,9 +141,16 @@ export function useZone(location) {
         setZone(cachedZone ? JSON.parse(cachedZone) : null)
         setZoneStatus('IN_SERVICE')
       } else {
-        setZoneStatus('OUT_OF_SERVICE')
-        setZoneId(null)
-        setZone(null)
+        // If location is truly null/undefined (not just empty strings), 
+        // we might still be waiting for useLocation to initialize.
+        // Only set OUT_OF_SERVICE if we have location object but no coords.
+        if (location === null) {
+           setZoneStatus('loading')
+        } else {
+           setZoneStatus('OUT_OF_SERVICE')
+           setZoneId(null)
+           setZone(null)
+        }
       }
     }
   }, [location?.latitude, location?.longitude, detectZone])

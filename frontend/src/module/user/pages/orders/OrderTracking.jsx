@@ -130,8 +130,8 @@ const DeliveryMap = ({ orderId, order, isVisible }) => {
       return result;
     }
 
-    // Default Indore coordinates
-    return { lat: 22.7196, lng: 75.8577 };
+    // Return null instead of default Indore coordinates to avoid showing wrong location
+    return null;
   };
 
   const getCustomerCoords = () => {
@@ -141,8 +141,8 @@ const DeliveryMap = ({ orderId, order, isVisible }) => {
         lng: order.address.coordinates[0]
       };
     }
-    // Default Indore coordinates
-    return { lat: 22.7196, lng: 75.8577 };
+    // Return null instead of default Indore coordinates to avoid showing wrong location
+    return null;
   };
 
   // Get user's live location coordinates

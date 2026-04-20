@@ -441,7 +441,7 @@ export const getRestaurants = async (req, res) => {
       // Menu processing
       const menu = menuLookup.get(r._id.toString());
       const menuItems = [];
-      const MAX_ITEMS = req.query.includeFullMenu === 'true' ? 1000 : 15;
+      const MAX_ITEMS = req.query.includeFullMenu === 'true' ? 1000 : 6;
 
       if (menu && menu.sections) {
         menu.sections.forEach(section => {
@@ -567,6 +567,19 @@ export const getRestaurantById = async (req, res) => {
       return errorResponse(res, 404, 'Restaurant not found');
     }
 
+    // NEW: Include menu and inventory if requested (Optimizes frontend loading)
+    let menu = null;
+    let inventory = null;
+    if (req.query.includeDetails === 'true') {
+      const [menuData, inventoryData] = await Promise.all([
+        Menu.findOne({ restaurant: restaurant._id, isActive: true }).lean(),
+        // Inventory might be useful for stock checks
+        mongoose.model('Inventory')?.findOne({ restaurantId: restaurant._id }).lean().catch(() => null)
+      ]);
+      menu = menuData;
+      inventory = inventoryData;
+    }
+
     // NEW: Check if restaurant is currently open based on outlet timings (Automatic Open/Close)
     const isCurrentlyOpen = await OutletTimings.isRestaurantOpen(restaurant._id);
     
@@ -588,6 +601,8 @@ export const getRestaurantById = async (req, res) => {
 
     return successResponse(res, 200, 'Restaurant retrieved successfully', {
       restaurant,
+      menu,
+      inventory
     });
   } catch (error) {
     console.error('Error fetching restaurant:', error);

@@ -102,7 +102,7 @@ export default function Cart() {
   }
 
   const { cart, updateQuantity, addToCart, getCartCount, clearCart, cleanCartForRestaurant } = cartContext;
-  const { getDefaultAddress, getDefaultPaymentMethod, addresses, paymentMethods, userProfile, setDefaultAddress } = useProfile()
+  const { getDefaultAddress, getDefaultPaymentMethod, addresses, paymentMethods, userProfile, setDefaultAddress, vegMode } = useProfile()
   const { createOrder } = useOrders()
   const { location: currentLocation } = useUserLocation() // Get live location address
   const { selectedDeliveryAddress, setSelectedDeliveryAddress } = useSelectedDeliveryAddress()
@@ -115,6 +115,25 @@ export default function Cart() {
   const [isLoadingWallet, setIsLoadingWallet] = useState(false)
   const [deliveryFleet, setDeliveryFleet] = useState("standard")
   const [showFleetOptions, setShowFleetOptions] = useState(false)
+
+  // Use memoized cart purity check to avoid heavy re-calculations
+  const isCartPureVeg = useMemo(() => {
+    if (!cart || cart.length === 0) return true
+    return cart.every(item => item.isVeg === true || item.foodType === 'Veg')
+  }, [cart])
+
+  // EFFECT: Handle automated fleet selection based on user preference and cart contents
+  useEffect(() => {
+    // 1. Auto-select veg fleet for pure-veg users with pure-veg carts
+    if (vegMode === true && isCartPureVeg && deliveryFleet === "standard") {
+      setDeliveryFleet("veg")
+    }
+    
+    // 2. CONSTRAINT: If non-veg items enter cart, revert fleet to standard
+    if (!isCartPureVeg && deliveryFleet === "veg") {
+      setDeliveryFleet("standard")
+    }
+  }, [vegMode, isCartPureVeg, deliveryFleet])
   const [note, setNote] = useState("")
   const [showNoteInput, setShowNoteInput] = useState(false)
   const [deliveryInstruction, setDeliveryInstruction] = useState("")
@@ -1483,11 +1502,9 @@ export default function Cart() {
       <AnimatedPage className="min-h-screen bg-gray-50 dark:bg-[#0a0a0a]">
         <div className="bg-white dark:bg-[#1a1a1a] border-b dark:border-gray-800 sticky top-0 z-10">
           <div className="flex items-center gap-3 px-4 py-3">
-            <Link onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/') )}>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-            </Link>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/') )}>
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
             <span className="font-semibold text-gray-800 dark:text-white">Cart</span>
           </div>
         </div>
@@ -1497,8 +1514,8 @@ export default function Cart() {
           </div>
           <h2 className="text-lg font-semibold text-gray-800 dark:text-white mb-1">Your cart is empty</h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 text-center">Add items from a restaurant to start a new order</p>
-          <Link to="/restaurants/">
-            <Button className="bg-primary-orange hover:opacity-90 text-white">Browse Restaurants</Button>
+          <Link to="/">
+            <Button className="bg-[#EB590E] hover:opacity-90 text-white font-bold">Browse Restaurants</Button>
           </Link>
         </div>
       </AnimatedPage>
@@ -1512,11 +1529,9 @@ export default function Cart() {
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between px-3 md:px-6 py-2 md:py-3">
             <div className="flex items-center gap-2 flex-1 min-w-0">
-              <Link onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/') )}>
-                <Button variant="ghost" size="icon" className="h-7 w-7 md:h-8 md:w-8 flex-shrink-0">
-                  <ArrowLeft className="h-4 w-4 md:h-5 md:w-5" />
-                </Button>
-              </Link>
+              <Button variant="ghost" size="icon" className="h-7 w-7 md:h-8 md:w-8 flex-shrink-0" onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/') )}>
+                <ArrowLeft className="h-4 w-4 md:h-5 md:w-5" />
+              </Button>
               <div className="min-w-0">
                 <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400">{restaurantName}</p>
                 <p className="text-sm md:text-base font-medium text-gray-800 dark:text-white truncate">
@@ -1838,8 +1853,9 @@ export default function Cart() {
                 {showFleetOptions && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4 mt-3 md:mt-4">
                     <button
+                      type="button"
                       onClick={() => setDeliveryFleet("standard")}
-                      className={`p-3 md:p-4 rounded-lg md:rounded-xl border-2 text-left transition-colors ${deliveryFleet === "standard" ? "border-[#EB590E] dark:border-[#EB590E] bg-[#FFF2EB] dark:bg-[#EB590E]/10" : "border-gray-200 dark:border-gray-700"}`}
+                      className={`p-3 md:p-4 rounded-lg md:rounded-xl border-2 text-left transition-all ${deliveryFleet === "standard" ? "border-[#EB590E] dark:border-[#EB590E] bg-[#FFF2EB] dark:bg-[#EB590E]/10 ring-2 ring-[#EB590E]/20" : "border-gray-200 dark:border-gray-700 hover:border-gray-300"}`}
                     >
                       <div className="flex items-center justify-between mb-1 md:mb-2">
                         <span className="text-sm md:text-base font-semibold text-gray-800 dark:text-gray-200">Standard Fleet</span>
@@ -1850,13 +1866,20 @@ export default function Cart() {
                       <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400">Our standard food delivery experience</p>
                     </button>
                     <button
-                      onClick={() => setDeliveryFleet("veg")}
-                      className={`p-3 md:p-4 rounded-lg md:rounded-xl border-2 text-left transition-colors ${deliveryFleet === "veg" ? "border-[#EB590E] dark:border-[#EB590E] bg-[#FFF2EB] dark:bg-[#EB590E]/10" : "border-gray-200 dark:border-gray-700"}`}
+                      type="button"
+                      onClick={() => {
+                        if (isCartPureVeg) {
+                          setDeliveryFleet("veg")
+                        } else {
+                          toast.error("Veg-only fleet is not available for non-veg items")
+                        }
+                      }}
+                      className={`p-3 md:p-4 rounded-lg md:rounded-xl border-2 text-left transition-all ${!isCartPureVeg ? "opacity-50 grayscale cursor-not-allowed border-gray-100 dark:border-gray-800" : deliveryFleet === "veg" ? "border-green-600 dark:border-green-500 bg-green-50 dark:bg-green-600/10 ring-2 ring-green-600/20" : "border-gray-200 dark:border-gray-700 hover:border-gray-300"}`}
                     >
                       <div className="flex items-center justify-between mb-1 md:mb-2">
-                        <span className="text-sm md:text-base font-semibold text-gray-800 dark:text-gray-200">Special Veg-only Fleet</span>
-                        <div className="w-8 h-8 md:w-10 md:h-10 bg-green-100 dark:bg-green-900/20 rounded-full flex items-center justify-center">
-                          <Leaf className="h-4 w-4 md:h-5 md:w-5 text-green-600 dark:text-green-400" />
+                        <span className={`text-sm md:text-base font-semibold ${!isCartPureVeg ? "text-gray-400" : "text-gray-800 dark:text-gray-200"}`}>Special Veg-only Fleet</span>
+                        <div className={`w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center ${!isCartPureVeg ? "bg-gray-100 dark:bg-gray-800" : "bg-green-100 dark:bg-green-900/20"}`}>
+                          <Leaf className={`h-4 w-4 md:h-5 md:w-5 ${!isCartPureVeg ? "text-gray-400" : "text-green-600 dark:text-green-400"}`} />
                         </div>
                       </div>
                       <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400">Fleet delivering only from Pure Veg restaurants</p>

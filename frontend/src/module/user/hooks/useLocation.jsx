@@ -17,7 +17,11 @@ export function useLocation() {
   const reverseGeocodeCacheRef = useRef(new Map())
   const ENABLE_PAID_GOOGLE_GEOCODING =
     String(import.meta.env?.VITE_ENABLE_PAID_GEOCODING || "").toLowerCase() === "true"
-  const isManualAddressLocked = () => hasManualSelectedAddress()
+  const isManualAddressLocked = () => {
+    const isLocked = hasManualSelectedAddress()
+    const isSelecting = typeof sessionStorage !== "undefined" && sessionStorage.getItem("__location_selecting_active") === "true"
+    return isLocked || isSelecting
+  }
   const enforceManualModeLock = () => {
     // Manual address is the single source of truth; clear GPS cache and stop watchers.
     try {
@@ -1491,7 +1495,7 @@ export function useLocation() {
       // If we have a valid formatted address or city, return it
       if (formattedAddress || city) {
         const finalLocation = {
-          city: city || "Unknown City",
+          city: city || "",
           state: state || "",
           country: country || "",
           area: area || "", // Area is CRITICAL - must be extracted
@@ -2110,7 +2114,10 @@ export function useLocation() {
               Math.abs(prevLocationCoordsRef.current.longitude - loc.longitude) > coordThreshold
 
             // Only update location state if coordinates changed significantly
-            if (!isManualAddressLocked()) {
+            // Final check: Is manual mode active or are we in "selecting" mode?
+            const isPausedOrLocked = isManualAddressLocked() || sessionStorage.getItem("__location_selecting_active") === "true";
+
+            if (!isPausedOrLocked) {
               if (coordsChanged) {
                 prevLocationCoordsRef.current = { latitude: loc.latitude, longitude: loc.longitude }
                 false && console.log("💾 Updating live location:", loc)
@@ -2489,7 +2496,8 @@ export function useLocation() {
   // so zone detection and UI update in real time without waiting for watcher cycles.
   useEffect(() => {
     const handleExternalLocationUpdate = (event) => {
-      if (isManualAddressLocked()) return
+      const isPausedOrLocked = isManualAddressLocked() || sessionStorage.getItem("__location_selecting_active") === "true";
+      if (isPausedOrLocked) return;
 
       const payload = event?.detail || {}
       const latitude = Number(payload?.latitude)

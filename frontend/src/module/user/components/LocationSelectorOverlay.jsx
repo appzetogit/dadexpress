@@ -16,10 +16,6 @@ const USER_LOCATION_UPDATED_EVENT = "user-location-updated"
 
 const searchCache = new Map()
 
-// Google Maps implementation - Leaflet components removed
-
-// Google Maps implementation - removed Leaflet components
-
 // Calculate distance between two coordinates using Haversine formula
 function calculateDistance(lat1, lon1, lat2, lon2) {
   const R = 6371e3 // Earth's radius in meters
@@ -77,6 +73,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
   const [isSavingAddress, setIsSavingAddress] = useState(false)
   const [isRequestingCurrentLocation, setIsRequestingCurrentLocation] = useState(false)
   const [mapLoading, setMapLoading] = useState(false)
+  const [loadingSavedAddresses, setLoadingSavedAddresses] = useState(false)
   const mapContainerRef = useRef(null)
   const googleMapRef = useRef(null) // Google Maps instance
   const greenMarkerRef = useRef(null) // Green marker for address selection
@@ -226,9 +223,8 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
     }
 
     try {
-      isGettingLocationRef.current = true
-      // Try strict GPS first with a shorter, more reasonable timeout for a web app.
-      const initialTimeout = forceLive ? 12000 : 10000;
+      // Try with strict GPS but with a faster timeout for better UX.
+      const initialTimeout = forceLive ? 8000 : 6000;
 
       console.log(`📍 Requesting GPS (forceLive: ${forceLive}, timeout: ${initialTimeout}ms)`)
       
@@ -245,12 +241,13 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
           return strictPosition
         }
 
-        // If accuracy is poor, try to refine for a few more seconds
+        // If accuracy is poor, try to refine for a very short window
         toast.loading("Refining your location for accuracy...", { id: "current-location" })
         const refinedPosition = await getBestGpsCoordinates({
-          sampleWindowMs: 8000,
+          sampleWindowMs: 4000,
           requiredAccuracy: 50,
         })
+        toast.dismiss("current-location")
         return refinedPosition || strictPosition
       } catch (err) {
         // Fallback to low accuracy (network-based) if high accuracy fails
@@ -283,15 +280,10 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
   }, [GOOGLE_MAPS_API_KEY])
 
   // Current location display - Show complete formatted address (SAVED ADDRESSES FORMAT)
-  // Format should match saved addresses: "B2/4, Gandhi Park Colony, Anand Nagar, Indore, Madhya Pradesh, 452001"
-  // Show ALL parts of formattedAddress (like saved addresses show all parts)
   const currentLocationText = (() => {
-    // Priority 0: Use currentAddress from map (most up-to-date when user selects location on map)
-    // This is updated when map moves or "Use current location" is clicked
     if (currentAddress &&
       currentAddress !== "Select location" &&
       !currentAddress.match(/^-?\d+\.\d+,\s*-?\d+\.\d+$/)) {
-      // Remove "India" from the end if present
       let fullAddress = currentAddress
       if (fullAddress.endsWith(', India')) {
         fullAddress = fullAddress.replace(', India', '').trim()
@@ -299,8 +291,6 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       return fullAddress
     }
 
-    // Priority 1: Use addressFormData.additionalDetails (updated when map moves)
-    // This contains the full formatted address from Google Maps Places API
     if (addressFormData.additionalDetails &&
       addressFormData.additionalDetails !== "Select location" &&
       addressFormData.additionalDetails.trim() !== "") {
@@ -308,7 +298,6 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       if (fullAddress.endsWith(', India')) {
         fullAddress = fullAddress.replace(', India', '').trim()
       }
-      // Build complete address with all components
       const addressParts = [fullAddress]
       if (addressFormData.city) addressParts.push(addressFormData.city)
       if (addressFormData.state) {
@@ -323,29 +312,18 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       return addressParts.join(', ')
     }
 
-    // Priority 2: Use formattedAddress from location hook (complete detailed address) - SAVED ADDRESSES FORMAT
-    // Show full address with all parts (street, area, city, state, pincode) - just like saved addresses
     if (location?.formattedAddress &&
       location.formattedAddress !== "Select location" &&
       !location.formattedAddress.match(/^-?\d+\.\d+,\s*-?\d+\.\d+$/)) {
-      // Remove "India" from the end if present (saved addresses don't show country)
       let fullAddress = location.formattedAddress
       if (fullAddress.endsWith(', India')) {
         fullAddress = fullAddress.replace(', India', '').trim()
       }
-
-      // Show complete address - ALL parts (like saved addresses format)
-      // Saved addresses format: "additionalDetails, street, city, state, zipCode"
-      // Current location format: "POI, Building, Floor, Area, City, State, Pincode"
       return fullAddress
     }
 
-    // Priority 3: Build address from components (SAVED ADDRESSES FORMAT)
-    // Format: "street/area, city, state, pincode" (matching saved addresses)
     if (location?.address || location?.area || location?.street) {
       const addressParts = []
-
-      // Add street/address/area (like saved addresses' additionalDetails + street)
       if (location.address && location.address !== "Select location") {
         addressParts.push(location.address)
       } else if (location.area) {
@@ -353,56 +331,20 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       } else if (location.street) {
         addressParts.push(location.street)
       }
-
-      // Add city
-      if (location.city) {
-        addressParts.push(location.city)
-      }
-
-      // Add state
-      if (location.state) {
-        addressParts.push(location.state)
-      }
-
-      // Add pincode (like saved addresses show zipCode)
-      if (location.postalCode) {
-        addressParts.push(location.postalCode)
-      }
-
-      if (addressParts.length > 0) {
-        return addressParts.join(', ')
-      }
+      if (location.city) addressParts.push(location.city)
+      if (location.state) addressParts.push(location.state)
+      if (location.postalCode) addressParts.push(location.postalCode)
+      if (addressParts.length > 0) return addressParts.join(', ')
     }
 
-    // Priority 3: Use area + city + state + pincode
-    if (location?.area && location?.city && location?.state) {
-      const parts = [location.area, location.city, location.state]
-      if (location.postalCode) {
-        parts.push(location.postalCode)
-      }
-      return parts.join(', ')
-    }
-
-    // Priority 4: Fallback to city + state + pincode
-    if (location?.city && location?.state) {
-      const parts = [location.city, location.state]
-      if (location.postalCode) {
-        parts.push(location.postalCode)
-      }
-      return parts.join(', ')
-    }
-
-    // Final fallback
     return location?.city || location?.area || "Detecting location..."
   })()
 
-  // Global error suppression for Ola Maps SDK errors (runs on component mount)
+  // Global error suppression for Ola Maps SDK errors
   useEffect(() => {
-    // Suppress console errors for non-critical Ola Maps SDK errors
     const originalConsoleError = console.error
     const errorSuppressor = (...args) => {
       const errorStr = args.join(' ')
-      // Suppress AbortError and sprite file errors from Ola Maps SDK
       if (errorStr.includes('AbortError') ||
         errorStr.includes('user aborted') ||
         errorStr.includes('sprite@2x.json') ||
@@ -410,178 +352,83 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
         (errorStr.includes('Source layer') && errorStr.includes('does not exist')) ||
         (errorStr.includes('AJAXError') && errorStr.includes('sprite')) ||
         (errorStr.includes('AJAXError') && errorStr.includes('olamaps.io'))) {
-        // Silently ignore these non-critical errors
         return
       }
-      // Log other errors normally
       originalConsoleError.apply(console, args)
     }
 
-    // Replace console.error globally
     console.error = errorSuppressor
 
-    // Handle unhandled promise rejections
     const unhandledRejectionHandler = (event) => {
       const error = event.reason || event
       const errorMsg = error?.message || String(error) || ''
-      const errorName = error?.name || ''
-      const errorStack = error?.stack || ''
-
-      // Suppress non-critical errors from Ola Maps SDK
-      if (errorName === 'AbortError' ||
-        errorMsg.includes('AbortError') ||
+      if (errorMsg.includes('AbortError') ||
         errorMsg.includes('user aborted') ||
         errorMsg.includes('3d_model') ||
         (errorMsg.includes('Source layer') && errorMsg.includes('does not exist')) ||
-        (errorMsg.includes('AJAXError') && (errorMsg.includes('sprite') || errorMsg.includes('olamaps.io'))) ||
-        errorStack.includes('olamaps-web-sdk')) {
-        event.preventDefault() // Prevent error from showing in console
+        (errorMsg.includes('AJAXError') && (errorMsg.includes('sprite') || errorMsg.includes('olamaps.io')))) {
+        event.preventDefault()
         return
       }
     }
 
     window.addEventListener('unhandledrejection', unhandledRejectionHandler)
-
-    // Cleanup
     return () => {
-      // Restore original console.error
       console.error = originalConsoleError
-      // Remove event listener
       window.removeEventListener('unhandledrejection', unhandledRejectionHandler)
     }
-  }, []) // Run once on mount
+  }, [])
 
-  // Initialize map position from current location and update blue dot
+  // Update blue dot indicator
   useEffect(() => {
     if (location?.latitude && location?.longitude && googleMapRef.current && window.google && window.google.maps) {
-      const userPos = {
-        lat: location.latitude,
-        lng: location.longitude
-      }
-
+      const userPos = { lat: location.latitude, lng: location.longitude }
       const accuracyRadius = Math.max(location.accuracy || 50, 20)
 
-      console.log("🔵 Updating blue dot from location hook:", {
-        position: userPos,
-        accuracy: location.accuracy,
-        radius: accuracyRadius
-      })
-
-      // Update or create blue dot marker
       if (userLocationMarkerRef.current) {
-        try {
-          if (userLocationMarkerRef.current.setPosition) {
-            userLocationMarkerRef.current.setPosition(userPos)
-          }
-          // Ensure marker is visible and on map
-          const currentMap = userLocationMarkerRef.current.getMap()
-          if (currentMap !== googleMapRef.current) {
-            userLocationMarkerRef.current.setMap(googleMapRef.current)
-          }
-          userLocationMarkerRef.current.setVisible(true)
-          console.log("✅ Updated existing blue dot marker")
-        } catch (e) {
-          console.error("Error updating blue dot marker:", e)
-          // Recreate if update fails
-          userLocationMarkerRef.current = null
+        userLocationMarkerRef.current.setPosition(userPos)
+        if (userLocationMarkerRef.current.getMap() !== googleMapRef.current) {
+          userLocationMarkerRef.current.setMap(googleMapRef.current)
         }
-      }
-
-      if (!userLocationMarkerRef.current) {
-        // Create blue dot marker if it doesn't exist
-        try {
-          const blueDotMarker = new window.google.maps.Marker({
-            position: userPos,
-            map: googleMapRef.current,
-            icon: {
-              path: window.google.maps.SymbolPath.CIRCLE,
-              scale: 10,
-              fillColor: "#4285F4",
-              fillOpacity: 1,
-              strokeColor: "#FFFFFF",
-              strokeWeight: 3,
-            },
-            zIndex: window.google.maps.Marker.MAX_ZINDEX + 1,
-            optimized: false,
-            visible: true,
-            title: "Your location"
-          })
-          userLocationMarkerRef.current = blueDotMarker
-          console.log("✅ Created blue dot marker from location hook")
-        } catch (e) {
-          console.error("Error creating blue dot marker:", e)
-        }
-      }
-
-      // Update or create accuracy circle
-      if (blueDotCircleRef.current) {
-        try {
-          blueDotCircleRef.current.setCenter(userPos)
-          blueDotCircleRef.current.setRadius(accuracyRadius)
-          // Ensure circle is visible and on map
-          const currentMap = blueDotCircleRef.current.getMap()
-          if (currentMap !== googleMapRef.current) {
-            blueDotCircleRef.current.setMap(googleMapRef.current)
-          }
-          blueDotCircleRef.current.setVisible(true)
-          console.log("✅ Updated existing accuracy circle")
-        } catch (e) {
-          console.error("Error updating accuracy circle:", e)
-          // Recreate if update fails
-          blueDotCircleRef.current = null
-        }
-      }
-
-      if (!blueDotCircleRef.current) {
-        // Create accuracy circle if it doesn't exist
-        try {
-          const blueDot = new window.google.maps.Circle({
-            strokeColor: "#4285F4",
-            strokeOpacity: 0.4,
-            strokeWeight: 1,
+      } else {
+        userLocationMarkerRef.current = new window.google.maps.Marker({
+          position: userPos,
+          map: googleMapRef.current,
+          icon: {
+            path: window.google.maps.SymbolPath.CIRCLE,
+            scale: 10,
             fillColor: "#4285F4",
-            fillOpacity: 0.15,
-            map: googleMapRef.current,
-            center: userPos,
-            radius: accuracyRadius,
-            zIndex: window.google.maps.Marker.MAX_ZINDEX,
-            visible: true
-          })
-          blueDotCircleRef.current = blueDot
-          console.log("✅ Created accuracy circle from location hook")
-        } catch (e) {
-          console.error("Error creating accuracy circle:", e)
-        }
+            fillOpacity: 1,
+            strokeColor: "#FFFFFF",
+            strokeWeight: 3,
+          },
+          zIndex: window.google.maps.Marker.MAX_ZINDEX + 1,
+          optimized: false
+        })
       }
 
-      // Final verification
-      setTimeout(() => {
-        const markerVisible = userLocationMarkerRef.current?.getVisible()
-        const circleVisible = blueDotCircleRef.current?.getVisible()
-        const markerOnMap = userLocationMarkerRef.current?.getMap() === googleMapRef.current
-        const circleOnMap = blueDotCircleRef.current?.getMap() === googleMapRef.current
-
-        console.log("🔍 Final Blue Dot Status:", {
-          markerExists: !!userLocationMarkerRef.current,
-          circleExists: !!blueDotCircleRef.current,
-          markerVisible,
-          circleVisible,
-          markerOnMap,
-          circleOnMap
+      if (blueDotCircleRef.current) {
+        blueDotCircleRef.current.setCenter(userPos)
+        blueDotCircleRef.current.setRadius(accuracyRadius)
+      } else {
+        blueDotCircleRef.current = new window.google.maps.Circle({
+          strokeColor: "#4285F4",
+          strokeOpacity: 0.4,
+          strokeWeight: 1,
+          fillColor: "#4285F4",
+          fillOpacity: 0.15,
+          map: googleMapRef.current,
+          center: userPos,
+          radius: accuracyRadius,
+          zIndex: window.google.maps.Marker.MAX_ZINDEX
         })
-      }, 500)
+      }
     }
-  }, [
-    location?.latitude ?? null,
-    location?.longitude ?? null,
-    location?.accuracy ?? null
-  ])
+  }, [location?.latitude, location?.longitude, location?.accuracy])
 
-  // Initialize Google Maps with Loader (ZOMATO-STYLE)
+  // Initialize Map
   useEffect(() => {
-    if (!showAddressForm || !mapContainerRef.current || !GOOGLE_MAPS_API_KEY) {
-      return
-    }
+    if (!showAddressForm || !mapContainerRef.current || !GOOGLE_MAPS_API_KEY) return
 
     let isMounted = true
     setMapLoading(true)
@@ -595,28 +442,21 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
         })
 
         const google = await loader.load()
-
         if (!isMounted || !mapContainerRef.current) return
 
-        // Initial location (Indore center or current location)
         const initialLocation = location?.latitude && location?.longitude
           ? { lat: location.latitude, lng: location.longitude }
           : { lat: 22.7196, lng: 75.8577 }
 
-        // Create map
         const map = new google.maps.Map(mapContainerRef.current, {
           center: initialLocation,
           zoom: 15,
-          disableDefaultUI: true, // Zomato-style clean look
-          zoomControl: true,
-          mapTypeControl: false,
-          streetViewControl: false,
-          fullscreenControl: false
+          disableDefaultUI: true,
+          zoomControl: true
         })
 
         googleMapRef.current = map
 
-        // Create Green Marker (draggable for address selection)
         const greenMarker = new google.maps.Marker({
           position: initialLocation,
           map: map,
@@ -625,13 +465,11 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
             scaledSize: new google.maps.Size(40, 40),
             anchor: new google.maps.Point(20, 40)
           },
-          draggable: true,
-          title: "Drag to select location"
+          draggable: true
         })
 
         greenMarkerRef.current = greenMarker
 
-        // Handle marker drag - update address
         google.maps.event.addListener(greenMarker, 'dragend', function () {
           const newPos = greenMarker.getPosition()
           const newLat = newPos.lat()
@@ -640,208 +478,31 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
           handleMapMoveEnd(newLat, newLng)
         })
 
-        // Function to create/update blue dot and accuracy circle
-        const createBlueDotWithCircle = (position, accuracyValue) => {
-          if (!isMounted || !map) return
-
-          const userPos = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          }
-
-          const accuracyRadius = Math.max(accuracyValue || 50, 20) // Minimum 20m
-
-          console.log("🔵 Creating/updating blue dot:", {
-            position: userPos,
-            accuracy: accuracyValue,
-            radius: accuracyRadius
-          })
-
-          // Remove existing blue dot and circle if any
-          if (userLocationMarkerRef.current) {
-            try {
-              userLocationMarkerRef.current.setMap(null)
-            } catch (e) {
-              console.warn("Error removing old marker:", e)
-            }
-          }
-          if (blueDotCircleRef.current) {
-            try {
-              blueDotCircleRef.current.setMap(null)
-            } catch (e) {
-              console.warn("Error removing old circle:", e)
-            }
-          }
-
-          // Create Blue Dot Marker (Google Maps native style)
-          const blueDotMarker = new google.maps.Marker({
-            position: userPos,
-            map: map,
-            icon: {
-              path: google.maps.SymbolPath.CIRCLE,
-              scale: 10, // Blue dot size
-              fillColor: "#4285F4", // Google blue
-              fillOpacity: 1,
-              strokeColor: "#FFFFFF", // White border
-              strokeWeight: 3,
-            },
-            zIndex: google.maps.Marker.MAX_ZINDEX + 1,
-            optimized: false,
-            visible: true,
-            title: "Your location"
-          })
-
-          // Create Accuracy Circle (Light blue zone around blue dot)
-          const accuracyCircle = new google.maps.Circle({
-            strokeColor: "#4285F4",
-            strokeOpacity: 0.4,
-            strokeWeight: 1,
-            fillColor: "#4285F4",
-            fillOpacity: 0.15, // Light transparent blue
-            map: map,
-            center: userPos,
-            radius: accuracyRadius, // Meters
-            zIndex: google.maps.Marker.MAX_ZINDEX,
-            visible: true
-          })
-
-          blueDotCircleRef.current = accuracyCircle
-          userLocationMarkerRef.current = blueDotMarker
-
-          console.log("✅✅✅ Blue dot and accuracy circle created successfully:", {
-            marker: blueDotMarker,
-            circle: accuracyCircle,
-            radius: accuracyRadius,
-            markerOnMap: blueDotMarker.getMap() === map,
-            circleOnMap: accuracyCircle.getMap() === map
-          })
-
-          // Force visibility check (silent fix - no error logging)
-          setTimeout(() => {
-            if (!isMounted || !map) return
-
-            const markerVisible = userLocationMarkerRef.current?.getVisible()
-            const circleVisible = blueDotCircleRef.current?.getVisible()
-            const markerOnMap = userLocationMarkerRef.current?.getMap() === map
-            const circleOnMap = blueDotCircleRef.current?.getMap() === map
-
-            // Silently fix marker visibility if needed
-            if (userLocationMarkerRef.current && (!markerOnMap || !markerVisible)) {
-              try {
-                userLocationMarkerRef.current.setMap(map)
-                userLocationMarkerRef.current.setVisible(true)
-                console.log("✅ Blue dot marker visibility fixed")
-              } catch (e) {
-                // Silently handle - marker might not be ready yet
-              }
-            }
-
-            // Silently fix circle visibility if needed
-            if (blueDotCircleRef.current && (!circleOnMap || !circleVisible)) {
-              try {
-                blueDotCircleRef.current.setMap(map)
-                blueDotCircleRef.current.setVisible(true)
-                console.log("✅ Accuracy circle visibility fixed")
-              } catch (e) {
-                // Silently handle - circle might not be ready yet
-              }
-            }
-          }, 1000)
-        }
-
-        // Wait for map to be fully ready before getting location
         google.maps.event.addListenerOnce(map, 'idle', () => {
-          console.log("🗺️ Map is ready, requesting user location...")
-
-          // Get user's current location and show Blue Dot
-          if (navigator.geolocation) {
-            // First, get current position immediately
-            navigator.geolocation.getCurrentPosition(
-              (position) => {
-                if (!isMounted) return
-                createBlueDotWithCircle(position, position.coords.accuracy)
-                handleMapMoveEnd(initialLocation.lat, initialLocation.lng)
-              },
-              (error) => {
-                console.warn("Geolocation getCurrentPosition error:", error)
-                handleMapMoveEnd(initialLocation.lat, initialLocation.lng)
-              },
-              {
-                enableHighAccuracy: true,
-                timeout: 10000,
-                maximumAge: 0
-              }
-            )
-
-            // Then, watch for position updates (live tracking)
-            const watchId = navigator.geolocation.watchPosition(
-              (position) => {
-                if (!isMounted) return
-                console.log("📍 Live location update:", {
-                  lat: position.coords.latitude,
-                  lng: position.coords.longitude,
-                  accuracy: position.coords.accuracy
-                })
-                createBlueDotWithCircle(position, position.coords.accuracy)
-              },
-              (error) => {
-                // Suppress timeout errors - they're non-critical
-                if (error.code !== 3) {
-                  console.warn("Geolocation watchPosition error:", error)
-                }
-              },
-              {
-                enableHighAccuracy: true,
-                timeout: 10000,
-                maximumAge: 5000 // Allow 5 second old cached location
-              }
-            )
-
-            // Store watch ID for cleanup
-            watchPositionIdRef.current = watchId
-          } else {
-            console.warn("Geolocation not supported")
-            handleMapMoveEnd(initialLocation.lat, initialLocation.lng)
-          }
+          handleMapMoveEnd(initialLocation.lat, initialLocation.lng)
+          setMapLoading(false)
         })
 
-        setMapLoading(false)
       } catch (error) {
         console.error("Error initializing Google Maps:", error)
         setMapLoading(false)
-        toast.error("Failed to load map. Please refresh the page.")
+        toast.error("Failed to load map")
       }
     }
 
     initializeGoogleMap()
+    return () => { isMounted = false }
+  }, [showAddressForm, GOOGLE_MAPS_API_KEY])
 
-    return () => {
-      isMounted = false
-      // Cleanup geolocation watch
-      if (watchPositionIdRef.current !== null) {
-        navigator.geolocation.clearWatch(watchPositionIdRef.current)
-        watchPositionIdRef.current = null
-      }
-      // Cleanup markers
-      if (greenMarkerRef.current) {
-        greenMarkerRef.current.setMap(null)
-      }
-      if (userLocationMarkerRef.current) {
-        try {
-          userLocationMarkerRef.current.setMap(null)
-        } catch (e) {
-          console.warn("Error cleaning up blue dot marker:", e)
-        }
-      }
-      if (blueDotCircleRef.current) {
-        try {
-          blueDotCircleRef.current.setMap(null)
-        } catch (e) {
-          console.warn("Error cleaning up accuracy circle:", e)
-        }
-      }
+  // Pause live GPS updates while pinning/selecting to prevent "jumping" back to current location
+  useEffect(() => {
+    if (showAddressForm && isOpen) {
+      sessionStorage.setItem("__location_selecting_active", "true")
+    } else {
+      sessionStorage.removeItem("__location_selecting_active")
     }
-  }, [showAddressForm, GOOGLE_MAPS_API_KEY, location?.latitude, location?.longitude])
+    return () => sessionStorage.removeItem("__location_selecting_active")
+  }, [showAddressForm, isOpen])
 
   useEffect(() => {
     if (isOpen && inputRef.current) {
@@ -849,56 +510,21 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
     }
   }, [isOpen])
 
-  useEffect(() => {
-    const handleEscape = (e) => {
-      if (e.key === "Escape" && isOpen) {
-        onClose()
-      }
-    }
-
-    if (isOpen) {
-      document.addEventListener("keydown", handleEscape)
-      document.body.style.overflow = "hidden"
-    }
-
-    return () => {
-      document.removeEventListener("keydown", handleEscape)
-      document.body.style.overflow = "unset"
-    }
-  }, [isOpen, onClose])
-
   const handleUseCurrentLocation = async () => {
     try {
       setIsRequestingCurrentLocation(true)
-      // Check if geolocation is supported
-      if (!navigator.geolocation) {
-        toast.error("Location services are not supported in your browser", {
-          duration: 3000,
-        })
-        return
-      }
-
-      // Show loading toast
-      toast.loading("Fetching your current location...", {
-        id: "location-request",
-      })
+      toast.loading("Detecting your location...", { id: "location-request" })
+      
       const position = await getCurrentGpsCoordinatesWithRetry({ forceLive: true })
-      const latitude = Number(position?.coords?.latitude)
-      const longitude = Number(position?.coords?.longitude)
-      const accuracy = Number(position?.coords?.accuracy || 0)
+      const latitude = position.coords.latitude
+      const longitude = position.coords.longitude
+      const accuracy = position.coords.accuracy
 
-      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-        toast.error("Invalid location data received. Please try again.", { id: "location-request" })
-        return
-      }
-
-      // Fetch detailed address from geocoding service
       const geocoded = await reverseGeocode(latitude, longitude)
-
       const gpsLocationData = {
         latitude,
         longitude,
-        accuracy: Number.isFinite(accuracy) ? accuracy : undefined,
+        accuracy,
         address: geocoded.address || "",
         city: geocoded.city || "",
         state: geocoded.state || "",
@@ -907,120 +533,19 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       }
 
       localStorage.setItem("userLocation", JSON.stringify(gpsLocationData))
-      window.dispatchEvent(
-        new CustomEvent(USER_LOCATION_UPDATED_EVENT, {
-          detail: gpsLocationData,
-        }),
-      )
-
-      // Save GPS coordinates to backend (Firebase sync happens on backend).
-      await updateLocationInDB({
-        latitude,
-        longitude,
-        address: geocoded.address || "",
-        city: geocoded.city || "",
-        state: geocoded.state || "",
-        area: geocoded.area || "",
-        formattedAddress: geocoded.formattedAddress || "",
-        accuracy: gpsLocationData.accuracy,
-      })
-
-      // On cart flow, keep a selected delivery address in sync with latest GPS.
-      // This prevents checkout from staying at "Select Delivery Address".
-      if (isCartPath) {
-        const existingDefaultAddress = addresses.find((addr) => addr.isDefault) || addresses[0] || null
-        const fallbackStreet = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
-        const nextAddressPayload = {
-          label: existingDefaultAddress?.label || "Home",
-          street: (existingDefaultAddress?.street || "").trim() || fallbackStreet,
-          additionalDetails: (existingDefaultAddress?.additionalDetails || "").trim(),
-          city: (existingDefaultAddress?.city || location?.city || "Unknown City").trim(),
-          state: (existingDefaultAddress?.state || location?.state || "Unknown State").trim(),
-          zipCode: String(existingDefaultAddress?.zipCode || "").trim(),
-          latitude,
-          longitude,
-          isDefault: true,
-        }
-
-        const existingAddressId = existingDefaultAddress?.id || existingDefaultAddress?._id
-        if (existingAddressId) {
-          await updateAddress(existingAddressId, nextAddressPayload)
-          setDefaultAddress(existingAddressId)
-        } else {
-          const createdAddress = await addAddress(nextAddressPayload)
-          const createdAddressId = createdAddress?.id || createdAddress?._id
-          if (createdAddressId) {
-            setDefaultAddress(createdAddressId)
-          }
-        }
-      }
-
+      window.dispatchEvent(new CustomEvent(USER_LOCATION_UPDATED_EVENT, { detail: gpsLocationData }))
+      
+      await updateLocationInDB(gpsLocationData)
       setSelectedDeliveryAddress({ mode: "current" })
 
-      // Update map position - don't automatically show address form
-      // User can manually open address form if needed
-      if (latitude && longitude) {
-        setMapPosition([latitude, longitude])
-        // Don't automatically show address form - keep user on same page
-        // setShowAddressForm(true)
-
-        // Update map if it's initialized
-        if (googleMapRef.current && window.google && window.google.maps) {
-          try {
-            googleMapRef.current.panTo({ lat: latitude, lng: longitude })
-            googleMapRef.current.setZoom(17)
-
-            if (greenMarkerRef.current) {
-              greenMarkerRef.current.setPosition({ lat: latitude, lng: longitude })
-            }
-
-            setTimeout(async () => {
-              await handleMapMoveEnd(latitude, longitude)
-            }, 500)
-          } catch (mapError) {
-            console.error("Error updating map:", mapError)
-          }
-        } else {
-          setTimeout(async () => {
-            await handleMapMoveEnd(latitude, longitude)
-          }, 300)
-        }
-      }
-
-      toast.success("Location updated successfully", {
-        id: "location-request",
-        duration: 2000,
-      })
-
-      // Wait 2 seconds then redirect to home page
+      toast.success("Location updated!", { id: "location-request" })
       setTimeout(() => {
         onClose()
         if (!isCartPath) navigate("/")
       }, 1200)
     } catch (error) {
-      // Handle permission denied or other errors
-      if (error.code === 1 || error.message?.includes("denied") || error.message?.includes("permission")) {
-        toast.error("Location permission denied. Please enable location access in your browser settings.", {
-          id: "location-request",
-          duration: 4000,
-        })
-      } else if (error.code === 2 || error.message?.includes("unavailable")) {
-        toast.error("Location unavailable. Please check your GPS settings.", {
-          id: "location-request",
-          duration: 3000,
-        })
-      } else if (error.code === 3 || error.message?.includes("timeout")) {
-        toast.error("Location request timed out. Please try again.", {
-          id: "location-request",
-          duration: 3000,
-        })
-      } else {
-        toast.error("Failed to get location. Please try again.", {
-          id: "location-request",
-          duration: 3000,
-        })
-      }
-      // Don't close the selector if there's an error, so user can try other options
+      console.error("Location error:", error)
+      toast.error("Failed to get location", { id: "location-request" })
     } finally {
       setIsRequestingCurrentLocation(false)
     }
@@ -1029,7 +554,6 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
   const handleAddAddress = () => {
     setEditingAddressId(null)
     setShowAddressForm(true)
-    // Initialize form with current location data
     if (location?.latitude && location?.longitude) {
       setMapPosition([location.latitude, location.longitude])
       setAddressFormData(prev => ({
@@ -1046,1084 +570,151 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
     const { name, value } = e.target
     if (name === "zipCode") {
       const nextZip = String(value || "").replace(/\D/g, "").slice(0, 6)
-      setAddressFormData(prev => ({
-        ...prev,
-        zipCode: nextZip,
-      }))
+      setAddressFormData(prev => ({ ...prev, zipCode: nextZip }))
       return
     }
-
-    setAddressFormData(prev => ({
-      ...prev,
-      [name]: value,
-    }))
-  }
-
-  // Google Maps loading is handled by the Loader in the initialization useEffect above
-
-  // OLD OLA MAPS INITIALIZATION - REMOVED (Replaced with Google Maps Loader above)
-  // All old Ola Maps/Leaflet code has been removed and replaced with Google Maps Loader implementation
-
-  // Removed old useEffect that initialized Ola Maps - now using Google Maps Loader above
-  // All old Ola Maps initialization code has been removed
-
-  // Resize Google Map when container dimensions change
-  useEffect(() => {
-    if (googleMapRef.current && showAddressForm) {
-      const resizeMap = () => {
-        try {
-          if (googleMapRef.current && typeof window.google !== 'undefined' && window.google.maps) {
-            window.google.maps.event.trigger(googleMapRef.current, 'resize');
-            console.log("✅ Google Map resized (container change)");
-          }
-        } catch (error) {
-          console.warn("⚠️ Error resizing map:", error);
-        }
-      };
-
-      const timer = setTimeout(() => {
-        resizeMap();
-      }, 300);
-
-      window.addEventListener('resize', resizeMap);
-
-      return () => {
-        clearTimeout(timer);
-        window.removeEventListener('resize', resizeMap);
-      }
-    }
-  }, [showAddressForm])
-
-  // Track user's live location with blue dot indicator
-  const trackUserLocation = (mapInstance, sdkInstance) => {
-    if (!navigator.geolocation) {
-      console.warn("⚠️ Geolocation is not supported by this browser")
-      return
-    }
-
-    console.log("🔵🔵🔵 STARTING USER LOCATION TRACKING...")
-    console.log("🔵 Map instance:", mapInstance)
-    console.log("🔵 SDK instance:", sdkInstance)
-    console.log("🔵 SDK instance type:", typeof sdkInstance)
-    console.log("🔵 SDK instance keys:", sdkInstance ? Object.keys(sdkInstance).slice(0, 20) : 'null')
-    console.log("🔵 Has addMarker:", !!(sdkInstance && sdkInstance.addMarker))
-    console.log("🔵 Has Marker:", !!(sdkInstance && sdkInstance.Marker))
-
-    // Clear any existing watchPosition
-    if (watchPositionIdRef.current !== null) {
-      navigator.geolocation.clearWatch(watchPositionIdRef.current)
-      watchPositionIdRef.current = null
-    }
-
-    // Helper function to calculate distance between two coordinates (in meters)
-    const calculateDistance = (lat1, lon1, lat2, lon2) => {
-      const R = 6371e3 // Earth's radius in meters
-      const φ1 = lat1 * Math.PI / 180
-      const φ2 = lat2 * Math.PI / 180
-      const Δφ = (lat2 - lat1) * Math.PI / 180
-      const Δλ = (lon2 - lon1) * Math.PI / 180
-
-      const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-        Math.cos(φ1) * Math.cos(φ2) *
-        Math.sin(Δλ / 2) * Math.sin(Δλ / 2)
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-
-      return R * c // Distance in meters
-    }
-
-    // Helper function to create/update marker (with throttling)
-    const createOrUpdateMarker = (latitude, longitude, heading, accuracy = null) => {
-      // Check if location changed significantly (at least 10 meters)
-      if (lastUserLocationRef.current) {
-        const distance = calculateDistance(
-          lastUserLocationRef.current.latitude,
-          lastUserLocationRef.current.longitude,
-          latitude,
-          longitude
-        )
-
-        // If distance is less than 10 meters, skip update (unless it's the first time)
-        if (distance < 10) {
-          // Only log occasionally to avoid console spam
-          if (Math.random() < 0.1) { // Log 10% of skipped updates
-            console.log(`⏭️ Skipping location update - only moved ${distance.toFixed(2)}m (threshold: 10m)`)
-          }
-          return
-        }
-
-        console.log(`📍 Location changed by ${distance.toFixed(2)}m - updating marker`)
-      }
-
-      // Update last location
-      lastUserLocationRef.current = { latitude, longitude, heading }
-
-      // 1. Custom Blue Dot Element Banana
-      let el = null
-      if (userLocationMarkerRef.current) {
-        // If marker exists, get its element
-        el = userLocationMarkerRef.current.getElement?.() ||
-          userLocationMarkerRef.current._element ||
-          document.querySelector('.user-location-marker')
-      }
-
-      if (!el) {
-        el = document.createElement('div')
-        el.className = 'user-location-marker'
-        // Ensure element is visible with inline styles (same pattern as green pin)
-        el.style.cssText = `
-          width: 20px;
-          height: 20px;
-          background-color: #4285F4;
-          border: 3px solid white;
-          border-radius: 50%;
-          box-shadow: 0 0 10px rgba(0,0,0,0.3);
-          position: relative;
-          z-index: 1001;
-          display: block;
-          visibility: visible;
-          opacity: 1;
-          cursor: default;
-        `
-        console.log("✅ Created blue dot element with styles")
-      } else {
-        // Ensure existing element styles are correct
-        el.style.display = 'block'
-        el.style.visibility = 'visible'
-        el.style.opacity = '1'
-        el.style.zIndex = '1001'
-      }
-
-      // 2. Update accuracy circle if it exists
-      if (userLocationAccuracyCircleRef.current) {
-        try {
-          if (userLocationAccuracyCircleRef.current.update) {
-            userLocationAccuracyCircleRef.current.update(latitude, longitude, accuracy)
-            console.log("✅ Updated accuracy circle position and radius")
-          }
-        } catch (circleError) {
-          console.warn("⚠️ Error updating accuracy circle:", circleError.message)
-        }
-      }
-
-      // 3. Agar marker pehle se hai to update karein, nahi to naya banayein
-      if (userLocationMarkerRef.current) {
-        try {
-          if (userLocationMarkerRef.current.setLngLat) {
-            userLocationMarkerRef.current.setLngLat([longitude, latitude])
-            console.log("✅ Updated existing marker position")
-          } else if (userLocationMarkerRef.current.setPosition) {
-            userLocationMarkerRef.current.setPosition([longitude, latitude])
-            console.log("✅ Updated existing marker position (setPosition)")
-          } else {
-            console.warn("⚠️ Marker exists but no update method found")
-          }
-        } catch (error) {
-          console.error("❌ Error updating user location marker:", error)
-        }
-      } else {
-        try {
-          // Try different marker creation methods - EXACT SAME PATTERN AS GREEN PIN
-          let newMarker = null
-
-          console.log("🔵 Creating blue dot marker with:", {
-            hasSdkInstance: !!sdkInstance,
-            hasMapInstance: !!mapInstance,
-            sdkAddMarker: !!(sdkInstance && sdkInstance.addMarker),
-            sdkMarker: !!(sdkInstance && sdkInstance.Marker),
-            element: !!el
-          })
-
-          // Method 1: Try SDK's addMarker method (EXACT SAME AS GREEN PIN)
-          if (sdkInstance && sdkInstance.addMarker) {
-            console.log("🔵 Method 1: Using sdkInstance.addMarker (same as green pin)")
-            try {
-              newMarker = sdkInstance.addMarker({
-                element: el,
-                anchor: 'center',
-                draggable: false
-              }).setLngLat([longitude, latitude]).addTo(mapInstance)
-              console.log("✅✅✅ Blue dot created using addMarker method:", newMarker)
-            } catch (err) {
-              console.error("❌ Error in addMarker:", err)
-            }
-          }
-          // Method 2: Try SDK's Marker class (EXACT SAME AS GREEN PIN)
-          else if (sdkInstance && sdkInstance.Marker) {
-            console.log("🔵 Method 2: Using sdkInstance.Marker (same as green pin)")
-            try {
-              newMarker = new sdkInstance.Marker({
-                element: el,
-                anchor: 'center',
-                draggable: false
-              }).setLngLat([longitude, latitude]).addTo(mapInstance)
-              console.log("✅✅✅ Blue dot created using Marker class:", newMarker)
-            } catch (err) {
-              console.error("❌ Error in Marker constructor:", err)
-            }
-          }
-          // Method 3: Try using MapLibre Marker (fallback - same as green pin)
-          else if (window.maplibregl && window.maplibregl.Marker) {
-            console.log("🔵 Method 3: Using maplibregl.Marker (fallback)")
-            try {
-              newMarker = new window.maplibregl.Marker({
-                element: el,
-                anchor: 'center'
-              }).setLngLat([longitude, latitude]).addTo(mapInstance)
-              console.log("✅ Blue dot created using maplibregl.Marker")
-            } catch (err) {
-              console.error("❌ Error in maplibregl.Marker:", err)
-            }
-          }
-          else {
-            console.error("❌❌❌ NO MARKER API FOUND for blue dot. Available:", {
-              sdkInstance: !!sdkInstance,
-              sdkAddMarker: !!(sdkInstance && sdkInstance.addMarker),
-              sdkMarker: !!(sdkInstance && sdkInstance.Marker),
-              maplibregl: !!window.maplibregl,
-              mapInstance: !!mapInstance,
-              elementCreated: !!el
-            })
-          }
-
-          if (newMarker) {
-            userLocationMarkerRef.current = newMarker
-            console.log("✅ User location marker (blue dot) added successfully:", newMarker)
-
-            // Verify blue dot is visible (same pattern as green pin)
-            setTimeout(() => {
-              const markerEl = newMarker.getElement?.() || newMarker._element
-              if (markerEl) {
-                console.log("✅ Blue dot element found on map:", markerEl)
-                // Ensure element is visible (same as green pin)
-                markerEl.style.display = 'block'
-                markerEl.style.visibility = 'visible'
-                markerEl.style.opacity = '1'
-                markerEl.style.zIndex = '1001'
-                console.log("✅ Blue dot visibility ensured")
-
-                // Also check the inner element (the actual blue dot div)
-                const innerEl = markerEl.querySelector('.user-location-marker') || markerEl
-                if (innerEl) {
-                  innerEl.style.display = 'block'
-                  innerEl.style.visibility = 'visible'
-                  innerEl.style.opacity = '1'
-                  console.log("✅ Blue dot inner element styles ensured")
-                }
-              } else {
-                console.warn("⚠️ Blue dot element not found in DOM")
-              }
-            }, 500)
-
-            // Additional check after 1 second
-            setTimeout(() => {
-              const markerEl = newMarker.getElement?.() || newMarker._element
-              if (markerEl) {
-                const computedStyle = window.getComputedStyle(markerEl)
-                console.log("🔍 Blue dot computed styles:", {
-                  display: computedStyle.display,
-                  visibility: computedStyle.visibility,
-                  opacity: computedStyle.opacity,
-                  zIndex: computedStyle.zIndex
-                })
-              }
-            }, 1000)
-
-            // Create accuracy circle around blue dot (like Google Maps)
-            const accuracyRadius = accuracy || 50 // Default to 50m if accuracy not available
-            try {
-              // Remove existing circle if any
-              if (userLocationAccuracyCircleRef.current) {
-                if (userLocationAccuracyCircleRef.current.remove) {
-                  userLocationAccuracyCircleRef.current.remove()
-                } else if (mapInstance.removeLayer) {
-                  mapInstance.removeLayer(userLocationAccuracyCircleRef.current)
-                }
-              }
-
-              // Try to create circle using MapLibre/Mapbox API
-              if (mapInstance.addSource && mapInstance.addLayer) {
-                const circleId = 'user-location-accuracy-circle'
-                const sourceId = 'user-location-accuracy-circle-source'
-
-                // Remove existing source/layer if present
-                if (mapInstance.getLayer(circleId)) {
-                  mapInstance.removeLayer(circleId)
-                }
-                if (mapInstance.getSource(sourceId)) {
-                  mapInstance.removeSource(sourceId)
-                }
-
-                // Add circle source
-                mapInstance.addSource(sourceId, {
-                  type: 'geojson',
-                  data: {
-                    type: 'Feature',
-                    geometry: {
-                      type: 'Point',
-                      coordinates: [longitude, latitude]
-                    },
-                    properties: {
-                      radius: accuracyRadius
-                    }
-                  }
-                })
-
-                // Add circle layer
-                // Convert meters to pixels: use zoom-based scaling
-                // At zoom 15: ~1.2 meters per pixel, at zoom 18: ~0.15 meters per pixel
-                mapInstance.addLayer({
-                  id: circleId,
-                  type: 'circle',
-                  source: sourceId,
-                  paint: {
-                    'circle-radius': [
-                      'interpolate',
-                      ['exponential', 2],
-                      ['zoom'],
-                      10, ['/', accuracyRadius, 2],
-                      15, ['/', accuracyRadius, 1.2],
-                      18, ['/', accuracyRadius, 0.15],
-                      20, ['/', accuracyRadius, 0.04]
-                    ],
-                    'circle-color': '#4285F4',
-                    'circle-opacity': 0.15,
-                    'circle-stroke-color': '#4285F4',
-                    'circle-stroke-opacity': 0.4,
-                    'circle-stroke-width': 1
-                  }
-                })
-
-                userLocationAccuracyCircleRef.current = {
-                  sourceId,
-                  layerId: circleId,
-                  update: (newLat, newLng, newAccuracy) => {
-                    if (mapInstance.getSource(sourceId)) {
-                      mapInstance.getSource(sourceId).setData({
-                        type: 'Feature',
-                        geometry: {
-                          type: 'Point',
-                          coordinates: [newLng, newLat]
-                        },
-                        properties: {
-                          radius: newAccuracy || accuracyRadius
-                        }
-                      })
-                    }
-                  },
-                  remove: () => {
-                    if (mapInstance.getLayer(circleId)) {
-                      mapInstance.removeLayer(circleId)
-                    }
-                    if (mapInstance.getSource(sourceId)) {
-                      mapInstance.removeSource(sourceId)
-                    }
-                  }
-                }
-
-                console.log("✅ Accuracy circle created around blue dot:", { radius: accuracyRadius })
-              }
-            } catch (circleError) {
-              console.warn("⚠️ Could not create accuracy circle (non-critical):", circleError.message)
-            }
-
-            // Don't auto-fly to user location - let green pin stay at center
-            // User can use "Use current location" button if needed
-          } else {
-            console.error("❌ Failed to create blue dot marker - all methods failed")
-            console.error("🔍 Debug info:", {
-              sdkInstance: !!sdkInstance,
-              mapInstance: !!mapInstance,
-              element: !!el,
-              sdkAddMarker: !!(sdkInstance && sdkInstance.addMarker),
-              sdkMarker: !!(sdkInstance && sdkInstance.Marker)
-            })
-          }
-        } catch (markerError) {
-          console.error("❌ Could not create user location marker:", markerError)
-          console.error("Error details:", {
-            message: markerError.message,
-            stack: markerError.stack,
-            name: markerError.name
-          })
-        }
-      }
-
-      // 3. Arrow Direction (Heading) agar available ho
-      // Heading is in degrees (0-360), where 0 is North
-      if (heading !== null && heading !== undefined && !isNaN(heading)) {
-        el.style.transform = `rotate(${heading}deg)`
-      } else {
-        // Reset transform if no heading
-        el.style.transform = 'rotate(0deg)'
-      }
-    }
-
-    // First, try to get current position immediately
-    // Use a small delay to ensure map is fully ready
-    console.log("🔵 About to request geolocation...")
-    setTimeout(() => {
-      console.log("🔵 Requesting geolocation with getCurrentPosition...")
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude, heading } = position.coords
-          console.log("📍📍📍 Initial location received:", { latitude, longitude, heading })
-          console.log("🔵 Calling createOrUpdateMarker with:", { latitude, longitude, heading })
-          createOrUpdateMarker(latitude, longitude, heading, position.coords.accuracy)
-
-          // Then start watching for updates (with throttling)
-          watchPositionIdRef.current = navigator.geolocation.watchPosition(
-            (position) => {
-              const { latitude, longitude, heading, accuracy } = position.coords
-
-              // Clear any pending update
-              if (locationUpdateTimeoutRef.current) {
-                clearTimeout(locationUpdateTimeoutRef.current)
-              }
-
-              // Throttle updates - only process after 2 seconds of no new updates
-              locationUpdateTimeoutRef.current = setTimeout(() => {
-                // Only log significant updates to avoid console spam
-                if (!lastUserLocationRef.current ||
-                  calculateDistance(
-                    lastUserLocationRef.current.latitude,
-                    lastUserLocationRef.current.longitude,
-                    latitude,
-                    longitude
-                  ) >= 10) {
-                  console.log("📍 Location update (throttled):", { latitude, longitude, heading })
-                }
-                createOrUpdateMarker(latitude, longitude, heading, accuracy)
-              }, 2000) // Wait 2 seconds before processing update
-            },
-            (error) => {
-              // Suppress timeout errors - they're non-critical and will retry
-              if (error.code === 3) {
-                // Timeout - silently ignore, will retry automatically
-                return
-              } else if (error.code === 1) {
-                console.warn("⚠️ Location permission denied by user")
-              } else if (error.code === 2) {
-                console.warn("⚠️ Location unavailable")
-              }
-              // Don't log timeout errors repeatedly
-            },
-            {
-              enableHighAccuracy: false, // Less strict for better compatibility
-              timeout: 30000, // Longer timeout (30 seconds)
-              maximumAge: 60000 // Allow cached location up to 1 minute old
-            }
-          )
-          console.log("✅ watchPosition started, ID:", watchPositionIdRef.current)
-        },
-        (error) => {
-          // Suppress timeout errors - they're non-critical
-          if (error.code === 3) {
-            // Timeout - try to use cached location or continue without location
-            console.warn("⚠️ Location request timeout - will retry or use cached location")
-
-            // Try to get cached location from localStorage
-            try {
-              const cachedLocation = localStorage.getItem("userLocation")
-              if (cachedLocation) {
-                const location = JSON.parse(cachedLocation)
-                if (location.latitude && location.longitude) {
-                  console.log("📍 Using cached location due to timeout:", location)
-                  createOrUpdateMarker(location.latitude, location.longitude, null, location.accuracy)
-                }
-              }
-            } catch (cacheError) {
-              // Ignore cache errors
-            }
-          } else if (error.code === 1) {
-            console.warn("⚠️ Location permission denied")
-          } else if (error.code === 2) {
-            console.warn("⚠️ Location unavailable")
-          } else {
-            // Only log non-timeout errors
-            console.warn("⚠️ Location error (code:", error.code + "):", error.message)
-          }
-
-          // Even if initial location fails, try watchPosition with less strict options
-          watchPositionIdRef.current = navigator.geolocation.watchPosition(
-            (position) => {
-              const { latitude, longitude, heading, accuracy } = position.coords
-
-              // Clear any pending update
-              if (locationUpdateTimeoutRef.current) {
-                clearTimeout(locationUpdateTimeoutRef.current)
-              }
-
-              // Throttle updates - only process after 2 seconds of no new updates
-              locationUpdateTimeoutRef.current = setTimeout(() => {
-                // Only log significant updates to avoid console spam
-                if (!lastUserLocationRef.current ||
-                  calculateDistance(
-                    lastUserLocationRef.current.latitude,
-                    lastUserLocationRef.current.longitude,
-                    latitude,
-                    longitude
-                  ) >= 10) {
-                  console.log("📍 Location update (after initial error, throttled):", { latitude, longitude, heading })
-                }
-                createOrUpdateMarker(latitude, longitude, heading, accuracy)
-              }, 2000) // Wait 2 seconds before processing update
-            },
-            (error) => {
-              // Suppress timeout errors in watchPosition too
-              if (error.code === 3) {
-                // Timeout - silently ignore, will retry
-                return
-              } else if (error.code === 1) {
-                console.warn("⚠️ Please enable location permission in browser settings")
-              }
-              // Don't log other errors repeatedly
-            },
-            {
-              enableHighAccuracy: false, // Less strict for better compatibility
-              timeout: 30000, // Longer timeout
-              maximumAge: 60000 // Allow cached location up to 1 minute old
-            }
-          )
-          console.log("✅ watchPosition started (fallback), ID:", watchPositionIdRef.current)
-        },
-        {
-          enableHighAccuracy: false, // Less strict for better compatibility
-          timeout: 30000, // Longer timeout (30 seconds)
-          maximumAge: 60000 // Allow cached location up to 1 minute old
-        }
-      )
-    }, 500) // Small delay to ensure map is ready
-
-    console.log("✅ watchPosition started, ID:", watchPositionIdRef.current)
+    setAddressFormData(prev => ({ ...prev, [name]: value }))
   }
 
   const handleMapMoveEnd = async (lat, lng, knownAddress = null) => {
-    // Round coordinates to 6 decimal places (about 10cm precision) to avoid duplicate calls
     const roundedLat = parseFloat(lat.toFixed(6))
     const roundedLng = parseFloat(lng.toFixed(6))
 
-    // Check if this is the same location as last call
-    if (lastReverseGeocodeCoordsRef.current) {
-      const lastLat = parseFloat(lastReverseGeocodeCoordsRef.current.lat.toFixed(6))
-      const lastLng = parseFloat(lastReverseGeocodeCoordsRef.current.lng.toFixed(6))
-      if (lastLat === roundedLat && lastLng === roundedLng) {
-        console.log("⏭️ Skipping reverse geocode - same coordinates as last call")
-        return
-      }
-    }
+    if (lastReverseGeocodeCoordsRef.current?.lat === roundedLat && 
+        lastReverseGeocodeCoordsRef.current?.lng === roundedLng) return
 
-    // Clear any pending timeout
-    if (reverseGeocodeTimeoutRef.current) {
-      clearTimeout(reverseGeocodeTimeoutRef.current)
-    }
+    if (reverseGeocodeTimeoutRef.current) clearTimeout(reverseGeocodeTimeoutRef.current)
 
-    // Debounce: Wait 300ms before making the API call
     reverseGeocodeTimeoutRef.current = setTimeout(async () => {
-      // Update last coordinates
       lastReverseGeocodeCoordsRef.current = { lat: roundedLat, lng: roundedLng }
-
       setLoadingAddress(true)
       try {
-        // Fetch detailed address from geocoding service
-        // If we already have a known address (e.g. from search), use it directly
         if (knownAddress) {
           setCurrentAddress(knownAddress)
-          setAddressFormData(prev => ({
-            ...prev,
-            additionalDetails: knownAddress
-          }))
+          setAddressFormData(prev => ({ ...prev, additionalDetails: knownAddress }))
           setLoadingAddress(false)
           return
         }
 
         const addr = await reverseGeocode(roundedLat, roundedLng)
-        console.log("✅ Reverse geocoding success:", addr)
+        const safeFormattedAddress = sanitizeAddressText(addr.formattedAddress)
         
-        const {
-          formattedAddress,
-          city,
-          state,
-          area,
-          street,
-          streetNumber,
-          postalCode,
-          pointOfInterest,
-          premise
-        } = addr
-        const isCoordinateText = (value) =>
-          /^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/.test(String(value || "").trim())
-        const normalizedFormattedAddress = sanitizeAddressText(formattedAddress)
-        const safeFormattedAddress =
-          normalizedFormattedAddress && !isCoordinateText(normalizedFormattedAddress)
-            ? normalizedFormattedAddress
-            : ""
-
-          // Update current address display
-          setCurrentAddress(safeFormattedAddress || "Select location")
-
-          // Update form data
-          // Store FULL formatted address in additionalDetails (Address details field) - this is what user sees
-          // This should be the complete address with all parts: POI, Building, Floor, Area, City, State, Pincode
-          const fullAddressForField = safeFormattedAddress ||
-            (pointOfInterest && city && state ? `${pointOfInterest}, ${city}, ${state}` : '') ||
-            (premise && city && state ? `${premise}, ${city}, ${state}` : '') ||
-            (street && city && state ? `${street}, ${city}, ${state}` : '') ||
-            (area && city && state ? `${area}, ${city}, ${state}` : '') ||
-            (city && state ? `${city}, ${state}` : '') ||
-            ''
-
-          setAddressFormData(prev => ({
-            ...prev,
-            street: street || prev.street,
-            city: city || prev.city,
-            state: state || prev.state,
-            zipCode: postalCode || prev.zipCode,
-            additionalDetails: sanitizeAddressText(fullAddressForField) || prev.additionalDetails, // Store FULL address in Address details field
-          }))
+        setCurrentAddress(safeFormattedAddress || "Select location")
+        setAddressFormData(prev => ({
+          ...prev,
+          street: addr.street || prev.street,
+          city: addr.city || prev.city,
+          state: addr.state || prev.state,
+          zipCode: addr.postalCode || prev.zipCode,
+          additionalDetails: safeFormattedAddress || prev.additionalDetails,
+        }))
       } catch (error) {
-        console.error("❌ Error reverse geocoding:", error)
-        console.error("Error details:", {
-          message: error.message,
-          response: error.response?.data,
-          status: error.response?.status
-        })
-        setCurrentAddress("Select location")
-        // Don't show error toast, just use coordinates
+        console.error("Reverse geocoding error:", error)
       } finally {
         setLoadingAddress(false)
       }
-    }, 300) // 300ms debounce delay
+    }, 300)
   }
 
   const handleUseCurrentLocationForAddress = async () => {
     try {
-      if (!navigator.geolocation) {
-        toast.error("Location services are not supported")
-        return
-      }
-
-      toast.loading("Getting your fresh location...", { id: "current-location" })
+      toast.loading("Getting location...", { id: "current-location" })
       const position = await getCurrentGpsCoordinatesWithRetry({ forceLive: true })
-      const lat = Number(position?.coords?.latitude)
-      const lng = Number(position?.coords?.longitude)
-      const accuracy = Number(position?.coords?.accuracy || 0)
-
-      if (isNaN(lat) || isNaN(lng)) {
-        toast.error("Invalid location coordinates", { id: "current-location" })
-        return
-      }
-
-      // Fetch detailed address from geocoding service
-      const geocoded = await reverseGeocode(lat, lng)
-
-      const gpsLocationData = {
-        latitude: lat,
-        longitude: lng,
-        accuracy: Number.isFinite(accuracy) ? accuracy : undefined,
-        address: geocoded.address || "",
-        city: geocoded.city || "",
-        state: geocoded.state || "",
-        area: geocoded.area || "",
-        formattedAddress: geocoded.formattedAddress || "",
-      }
-      localStorage.setItem("userLocation", JSON.stringify(gpsLocationData))
-      window.dispatchEvent(
-        new CustomEvent(USER_LOCATION_UPDATED_EVENT, {
-          detail: gpsLocationData,
-        }),
-      )
-
-      await userAPI.updateLocation({
-        latitude: lat,
-        longitude: lng,
-        address: geocoded.address || "",
-        city: geocoded.city || "",
-        state: geocoded.state || "",
-        area: geocoded.area || "",
-        formattedAddress: geocoded.formattedAddress || "",
-        accuracy: gpsLocationData.accuracy,
-      })
-
-      console.log("📍 Setting map position to:", [lat, lng])
-      console.log("📍 Location accuracy:", gpsLocationData.accuracy ? `${gpsLocationData.accuracy}m` : "unknown")
-      console.log("📍 Location timestamp:", new Date().toISOString())
+      const lat = position.coords.latitude
+      const lng = position.coords.longitude
+      
       setMapPosition([lat, lng])
-
-      // Update Google Maps to new location
-      if (googleMapRef.current && window.google && window.google.maps) {
-        try {
-          console.log("🗺️ Updating Google Map to:", { lat, lng })
-
-          // Pan to current location
-          googleMapRef.current.panTo({ lat, lng })
-          googleMapRef.current.setZoom(17)
-
-          // Update green marker position
-          if (greenMarkerRef.current) {
-            greenMarkerRef.current.setPosition({ lat, lng })
-            console.log("✅ Updated green marker position")
-          }
-
-          // Update blue dot marker position
-          if (userLocationMarkerRef.current) {
-            if (userLocationMarkerRef.current.setPosition) {
-              userLocationMarkerRef.current.setPosition({ lat, lng })
-              console.log("✅ Updated blue dot marker position")
-            } else if (userLocationMarkerRef.current.setMap) {
-              // Marker exists but might not be on map, ensure it's visible
-              userLocationMarkerRef.current.setMap(googleMapRef.current)
-              if (userLocationMarkerRef.current.setPosition) {
-                userLocationMarkerRef.current.setPosition({ lat, lng })
-              }
-            }
-          } else if (googleMapRef.current && window.google) {
-            // Create blue dot if it doesn't exist
-            const blueDotMarker = new window.google.maps.Marker({
-              position: { lat, lng },
-              map: googleMapRef.current,
-              icon: {
-                path: window.google.maps.SymbolPath.CIRCLE,
-                scale: 12,
-                fillColor: "#4285F4",
-                fillOpacity: 1,
-                strokeColor: "#FFFFFF",
-                strokeWeight: 4,
-              },
-              zIndex: window.google.maps.Marker.MAX_ZINDEX + 1,
-              optimized: false,
-              visible: true
-            })
-            userLocationMarkerRef.current = blueDotMarker
-            console.log("✅ Created blue dot marker")
-          }
-
-          // Update blue dot accuracy circle position
-          if (blueDotCircleRef.current) {
-            blueDotCircleRef.current.setCenter({ lat, lng })
-            // Update radius if accuracy is available
-            const accuracyRadius = Math.max(gpsLocationData?.accuracy || 50, 20)
-            blueDotCircleRef.current.setRadius(accuracyRadius)
-            console.log("✅ Updated blue dot accuracy circle position and radius:", accuracyRadius)
-          } else if (googleMapRef.current && window.google) {
-            // Create accuracy circle if it doesn't exist
-            const accuracyRadius = Math.max(gpsLocationData?.accuracy || 50, 20)
-            const blueDot = new window.google.maps.Circle({
-              strokeColor: "#4285F4",
-              strokeOpacity: 0.5,
-              strokeWeight: 2,
-              fillColor: "#4285F4",
-              fillOpacity: 0.2,
-              map: googleMapRef.current,
-              center: { lat, lng },
-              radius: accuracyRadius,
-              zIndex: window.google.maps.Marker.MAX_ZINDEX,
-              visible: true
-            })
-            blueDotCircleRef.current = blueDot
-            console.log("✅ Created blue dot accuracy circle")
-          }
-
-          // Wait for map to finish moving, then fetch address (reduced delay for faster response)
-          setTimeout(async () => {
-            await handleMapMoveEnd(lat, lng)
-            toast.success("Location updated!", { id: "current-location" })
-          }, 200)
-
-        } catch (mapError) {
-          console.error("❌ Error updating map location:", mapError)
-          toast.error("Failed to update map location", { id: "current-location" })
-        }
-      } else {
-        // Map not initialized yet, just update position and fetch address (reduced delay)
-        setTimeout(async () => {
-          await handleMapMoveEnd(lat, lng)
-          toast.success("Location updated!", { id: "current-location" })
-        }, 200)
+      if (googleMapRef.current) {
+        googleMapRef.current.panTo({ lat, lng })
+        googleMapRef.current.setZoom(17)
       }
+      if (greenMarkerRef.current) greenMarkerRef.current.setPosition({ lat, lng })
+
+      await handleMapMoveEnd(lat, lng)
+      toast.success("Location detected!", { id: "current-location" })
     } catch (error) {
-      console.error("❌ Error getting current location:", error)
-
-      // Check if it's a timeout error
-      if (error.message && (error.message.includes("timeout") || error.message.includes("Timeout"))) {
-        // Try to use cached location from localStorage
-        try {
-          const stored = localStorage.getItem("userLocation")
-          if (stored) {
-            const cachedLocation = JSON.parse(stored)
-            if (cachedLocation?.latitude && cachedLocation?.longitude) {
-              console.log("📍 Using cached location due to timeout:", cachedLocation)
-              setMapPosition([cachedLocation.latitude, cachedLocation.longitude])
-
-              // Update Google Maps with cached location
-              if (googleMapRef.current && window.google && window.google.maps) {
-                try {
-                  googleMapRef.current.panTo({ lat: cachedLocation.latitude, lng: cachedLocation.longitude });
-                  googleMapRef.current.setZoom(17);
-
-                  // Update markers
-                  if (greenMarkerRef.current) {
-                    greenMarkerRef.current.setPosition({ lat: cachedLocation.latitude, lng: cachedLocation.longitude });
-                  }
-                  if (blueDotCircleRef.current) {
-                    blueDotCircleRef.current.setCenter({ lat: cachedLocation.latitude, lng: cachedLocation.longitude });
-                  }
-
-                  setTimeout(async () => {
-                    await handleMapMoveEnd(cachedLocation.latitude, cachedLocation.longitude);
-                    toast.success("Using cached location", { id: "current-location" });
-                  }, 500);
-                } catch (mapErr) {
-                  console.error("Error updating map with cached location:", mapErr);
-                  toast.warning("Location request timed out. Please try again.", { id: "current-location" });
-                }
-              } else {
-                setTimeout(async () => {
-                  await handleMapMoveEnd(cachedLocation.latitude, cachedLocation.longitude)
-                  toast.success("Using cached location", { id: "current-location" })
-                }, 300)
-              }
-              return
-            }
-          }
-        } catch (cacheErr) {
-          console.warn("Failed to use cached location:", cacheErr)
-        }
-
-        toast.warning("Location request timed out. Please try again or check your GPS settings.", { id: "current-location" })
-      } else {
-        toast.error("Failed to get current location: " + (error.message || "Unknown error"), { id: "current-location" })
-      }
+      toast.error("Location unavailable", { id: "current-location" })
     }
   }
 
   const handleAddressFormSubmit = async (e) => {
     e.preventDefault()
-
-    // Validate that we have coordinates
-    if (!mapPosition || mapPosition.length !== 2 || !mapPosition[0] || !mapPosition[1]) {
-      toast.error("Please select a location on the map")
-      return
-    }
+    if (!mapPosition?.[0]) return toast.error("Select location on map")
 
     setIsSavingAddress(true)
     try {
-      // Prepare address data matching backend format
-      // Backend expects: label, street, additionalDetails, city, state, zipCode, latitude, longitude
-      // Backend label enum: ['Home', 'Office', 'Other'] - not 'Work'
-      // mapPosition is [latitude, longitude]
-
-      // Validate and normalize label to match backend enum
-      let normalizedLabel = addressFormData.label || "Home"
-      if (normalizedLabel === "Work") {
-        normalizedLabel = "Office" // Convert Work to Office to match backend enum
-      }
-      if (!["Home", "Office", "Other"].includes(normalizedLabel)) {
-        normalizedLabel = "Other" // Fallback to Other if invalid
-      }
-
-      // GPS-first fallback values so save works without geocoding/manual full address.
-      const lat = Number(mapPosition[0])
-      const lng = Number(mapPosition[1])
-      const fallbackStreet = `${lat.toFixed(6)}, ${lng.toFixed(6)}`
-      const trimmedStreet = (addressFormData.street || "").trim() || fallbackStreet
-      const trimmedCity = (addressFormData.city || "").trim() || location?.city || "Unknown City"
-      const trimmedState = (addressFormData.state || "").trim() || location?.state || "Unknown State"
-
       const addressToSave = {
-        label: normalizedLabel,
-        street: trimmedStreet,
-        additionalDetails: (addressFormData.additionalDetails || "").trim(),
-        city: trimmedCity,
-        state: trimmedState,
-        zipCode: (addressFormData.zipCode || "").trim(),
-        latitude: mapPosition[0], // latitude from mapPosition[0]
-        longitude: mapPosition[1], // longitude from mapPosition[1]
+        label: addressFormData.label || "Home",
+        street: addressFormData.street || "",
+        additionalDetails: addressFormData.additionalDetails || "",
+        city: addressFormData.city || location?.city || "Jaipur",
+        state: addressFormData.state || location?.state || "Rajasthan",
+        zipCode: addressFormData.zipCode || "",
+        latitude: mapPosition[0],
+        longitude: mapPosition[1],
         isDefault: true,
       }
 
-      let resultAddress = null
-      // Check if we are editing an existing address or adding a new one
-      if (editingAddressId) {
-        console.log("💾 Updating address:", addressToSave)
-        resultAddress = await updateAddress(editingAddressId, addressToSave)
-        toast.success(`Address updated!`)
-      } else {
-        // Always create a new address entry (even if label is same like Home/Office).
-        console.log("💾 Saving new address:", addressToSave)
-        resultAddress = await addAddress(addressToSave)
-        toast.success(`Address saved as ${normalizedLabel}!`)
+      let result = editingAddressId 
+        ? await updateAddress(editingAddressId, addressToSave)
+        : await addAddress(addressToSave)
+
+      const savedId = result?.id || result?._id
+      if (savedId) {
+        setSelectedDeliveryAddress({ mode: "saved", addressId: savedId })
+        setDefaultAddress(savedId)
       }
 
-      setEditingAddressId(null)
-
-      // Use newly saved/updated address as the active delivery address.
-      const savedAddressId = resultAddress?.id || resultAddress?._id
-      if (savedAddressId) {
-        setSelectedDeliveryAddress({ mode: "saved", addressId: savedAddressId })
-      }
-
-      // Reset form
-      setAddressFormData({
-        street: "",
-        city: "",
-        state: "",
-        zipCode: "",
-        additionalDetails: "",
-        label: "Home",
-        phone: "",
-      })
+      toast.success("Address saved!")
       setShowAddressForm(false)
-      setIsSavingAddress(false)
-
-      // Only close overlay and redirect IF we are in the cart flow or if it's a new address.
-      // If we are just editing, staying in the list allows the user to see the update.
-      if (isCartPath) {
-        onClose()
-      } else if (!editingAddressId) {
-        // For new addresses in home flow, we can close or stay. 
-        // But the user wants to see it "here", so let's stay if they are managing addresses.
-        // Actually, original behavior was likely to close, so we'll stay only if the user wants to see the list.
-      }
+      if (isCartPath) onClose()
     } catch (error) {
-      console.error("❌ Error saving address:", error)
-      console.error("❌ Error details:", {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-        addressData: addressToSave
-      })
-
-      // Show more detailed error message
-      let errorMessage = "Failed to add address. Please try again."
-      if (error.response?.data?.message) {
-        errorMessage = error.response.data.message
-      } else if (error.response?.status === 400) {
-        errorMessage = "Invalid address data. Please check all fields."
-      } else if (error.response?.status === 500) {
-        errorMessage = "Server error. Please try again later."
-      }
-
-      toast.error(errorMessage)
+      toast.error("Failed to save address")
+    } finally {
       setIsSavingAddress(false)
     }
   }
 
   const handleSearchLocation = async (query) => {
-    if (!query || !window.google || !window.google.maps || !googleMapRef.current) return
-    const trimmedQuery = query.trim()
-    if (!trimmedQuery) return
-
-    if (searchCache.has(trimmedQuery)) {
-      const cached = searchCache.get(trimmedQuery)
-      if (Date.now() - cached.timestamp < 30 * 60 * 1000) { // 30 min cache
-        console.log("⏭️ Using cached search result for:", trimmedQuery)
-        const { lat, lng, place } = cached.data
-        applySearchResult(lat, lng, place)
-        return
-      }
-    }
-
+    if (!query || !googleMapRef.current) return
     setMapLoading(true)
     try {
       const service = new window.google.maps.places.PlacesService(googleMapRef.current)
-      const request = {
-        query: trimmedQuery,
+      service.findPlaceFromQuery({
+        query: query.trim(),
         fields: ["geometry", "formatted_address", "name"],
-      }
-
-      service.findPlaceFromQuery(request, (results, status) => {
-        if (status === window.google.maps.places.PlacesServiceStatus.OK && results && results[0]) {
+      }, (results, status) => {
+        if (status === "OK" && results?.[0]) {
           const place = results[0]
           const lat = place.geometry.location.lat()
           const lng = place.geometry.location.lng()
-          
-          // Cache the result
-          searchCache.set(trimmedQuery, {
-            data: { lat, lng, place },
-            timestamp: Date.now()
-          })
-
           applySearchResult(lat, lng, place)
         } else {
           setMapLoading(false)
+          toast.error("Location not found")
         }
       })
     } catch (err) {
-      console.error("Search error:", err)
       setMapLoading(false)
     }
   }
 
   const applySearchResult = (lat, lng, place) => {
-    console.log("🔍 Search result:", { lat, lng, address: place.formatted_address })
-    
-    googleMapRef.current.panTo({ lat, lng })
-    googleMapRef.current.setZoom(17)
-    
-    if (greenMarkerRef.current) {
-      greenMarkerRef.current.setPosition({ lat, lng })
+    setMapPosition([lat, lng])
+    if (googleMapRef.current) {
+      googleMapRef.current.panTo({ lat, lng })
+      googleMapRef.current.setZoom(17)
     }
+    if (greenMarkerRef.current) greenMarkerRef.current.setPosition({ lat, lng })
 
-          
-          // Extract address components for form update (from formatted_address parsing since components not avail)
-          let street = ""
-          let city = ""
-          let state = ""
-          let zip = ""
-          
-          if (place.formatted_address) {
-            const parts = place.formatted_address.split(",").map(p => p.trim())
-            // Agra, Uttar Pradesh, India
-            if (parts.length >= 3) {
-              const country = parts[parts.length - 1]
-              const stateInfo = parts[parts.length - 2] // "Uttar Pradesh" or "Madhya Pradesh 452010"
-              const cityInfo = parts[parts.length - 3]  // "Agra" or "Indore"
-              
-              // Extract pincode from state info if possible (e.g. "Madhya Pradesh 452010")
-              const zipMatch = stateInfo.match(/\d{6}/)
-              if (zipMatch) zip = zipMatch[0]
-              
-              state = stateInfo.replace(/\d{6}/, "").trim()
-              city = cityInfo
-              street = parts.slice(0, parts.length - 3).join(", ")
-            } else if (parts.length === 2) {
-              city = parts[0]
-              state = parts[1]
-            }
-          }
-
-          // Use place name/address if specific components not found
-          const finalStreet = street || place.name || (place.formatted_address ? place.formatted_address.split(',')[0] : "")
-
-          // Set active location for the map
-          setMapPosition([lat, lng])
-
-          // Update form data with search results
-          const normalizedSearchAddress = sanitizeAddressText(place.formatted_address || "")
-          setAddressFormData(prev => ({
-            ...prev,
-            street: finalStreet || prev.street,
-            city: city || prev.city,
-            state: state || prev.state,
-            zipCode: zip || prev.zipCode,
-            additionalDetails: (normalizedSearchAddress || prev.additionalDetails)
-          }))
-          
-          // Use setTimeout to allow map pan to finish slightly before processing updates
-          setTimeout(() => {
-            handleMapMoveEnd(lat, lng, normalizedSearchAddress)
-            setCurrentAddress(normalizedSearchAddress || "Select location")
-          }, 300)
-        } else {
-          console.warn("🔍 Search failed or no results:", status)
-          toast.error("Location not found")
-        }
-        setMapLoading(false)
-      })
-    } catch (error) {
-      console.error("❌ Search error:", error)
-      setMapLoading(false)
-    }
+    setAddressFormData(prev => ({
+      ...prev,
+      street: place.name || prev.street,
+      additionalDetails: place.formatted_address || prev.additionalDetails
+    }))
+    
+    handleMapMoveEnd(lat, lng, place.formatted_address)
+    setMapLoading(false)
   }
 
   const handleEditAddress = (e, address) => {
@@ -2145,689 +736,235 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
   const handleCancelAddressForm = () => {
     setShowAddressForm(false)
     setEditingAddressId(null)
-    setAddressFormData({
-      street: "",
-      city: "",
-      state: "",
-      zipCode: "",
-      additionalDetails: "",
-      label: "Home",
-      phone: "",
-    })
     if (!isCartPath) navigate("/")
   }
 
   const handleSelectSavedAddress = async (address) => {
     try {
-      // Get coordinates from address location
-      const coordinates = address.location?.coordinates || []
-      const longitude = Number(coordinates[0] ?? address.longitude)
-      const latitude = Number(coordinates[1] ?? address.latitude)
-      const hasValidCoords = Number.isFinite(latitude) && Number.isFinite(longitude)
-
-      if (hasValidCoords) {
-        // Update location in backend
-        await userAPI.updateLocation({
-          latitude,
-          longitude,
-          address: `${address.street}, ${address.city}`,
-          city: address.city,
-          state: address.state,
-          area: address.additionalDetails || "",
-          formattedAddress: `${address.street}, ${address.city}, ${address.state}`
-        })
-      }
-
-      // Update the location in localStorage with this address
+      const lat = address.location?.coordinates?.[1] ?? address.latitude
+      const lng = address.location?.coordinates?.[0] ?? address.longitude
+      
       const locationData = {
         city: address.city,
         state: address.state,
         address: `${address.street}, ${address.city}`,
-        area: address.additionalDetails || "",
-        zipCode: address.zipCode,
-        latitude: hasValidCoords ? latitude : null,
-        longitude: hasValidCoords ? longitude : null,
+        latitude: lat,
+        longitude: lng,
         formattedAddress: `${address.street}, ${address.city}, ${address.state}`
       }
+
       localStorage.setItem("userLocation", JSON.stringify(locationData))
-      window.dispatchEvent(
-        new CustomEvent(USER_LOCATION_UPDATED_EVENT, {
-          detail: locationData,
-        }),
-      )
-
-      // Update map position to show selected address
-      if (hasValidCoords) {
-        setMapPosition([latitude, longitude])
+      window.dispatchEvent(new CustomEvent(USER_LOCATION_UPDATED_EVENT, { detail: locationData }))
+      
+      const savedId = address.id || address._id
+      if (savedId) {
+        await updateAddress(savedId, { isDefault: true })
+        setDefaultAddress(savedId)
+        setSelectedDeliveryAddress({ mode: "saved", addressId: savedId })
       }
 
-      // Update selected/default address so checkout reflects selection immediately.
-      const selectedAddressId = address.id || address._id
-      if (selectedAddressId) {
-        await updateAddress(selectedAddressId, { isDefault: true })
-        setDefaultAddress(selectedAddressId)
-        setSelectedDeliveryAddress({ mode: "saved", addressId: selectedAddressId })
-      }
-
-      // Update address form data with selected address
-      setAddressFormData({
-        street: address.street || "",
-        city: address.city || "",
-        state: address.state || "",
-        zipCode: address.zipCode || "",
-        additionalDetails: address.additionalDetails || "",
-        label: address.label || "Home",
-        phone: address.phone || "",
-      })
-
-      // Update Google Maps to show selected address
-      if (googleMapRef.current && window.google && window.google.maps) {
-        try {
-          if (hasValidCoords) {
-            googleMapRef.current.panTo({ lat: latitude, lng: longitude })
-            googleMapRef.current.setZoom(17)
-          }
-
-          // Update green marker position
-          if (greenMarkerRef.current && hasValidCoords) {
-            greenMarkerRef.current.setPosition({ lat: latitude, lng: longitude })
-          }
-
-          // Fetch and update address details
-          if (hasValidCoords) {
-            setTimeout(async () => {
-              await handleMapMoveEnd(latitude, longitude)
-              toast.success("Location updated!", { id: "saved-address" })
-            }, 500)
-          } else {
-            toast.success("Address selected!", { id: "saved-address" })
-          }
-        } catch (mapError) {
-          console.error("Error updating map:", mapError)
-          toast.success("Location updated!", { id: "saved-address" })
-        }
-      } else {
-        // Map not initialized yet, just fetch address
-        if (hasValidCoords) {
-          setTimeout(async () => {
-            await handleMapMoveEnd(latitude, longitude)
-            toast.success("Location updated!", { id: "saved-address" })
-          }, 300)
-        } else {
-          toast.success("Address selected!", { id: "saved-address" })
-        }
-      }
-
+      toast.success("Location updated!")
       onClose()
       if (!isCartPath) navigate("/")
     } catch (error) {
-      console.error("Error selecting saved address:", error)
-      toast.error("Failed to update location. Please try again.")
+      toast.error("Failed to select address")
     }
   }
-
-  // Calculate distance for saved addresses
-  const getAddressDistance = (address) => {
-    if (!location?.latitude || !location?.longitude) return "0 m"
-
-    const coordinates = address.location?.coordinates || []
-    const addressLng = coordinates[0]
-    const addressLat = coordinates[1]
-
-    if (!addressLat || !addressLng) return "0 m"
-
-    const distance = calculateDistance(
-      location.latitude,
-      location.longitude,
-      addressLat,
-      addressLng
-    )
-
-    return distance < 1000 ? `${Math.round(distance)} m` : `${(distance / 1000).toFixed(2)} km`
-  }
-
-
 
   const deliveryDetailsText = (() => {
-    const zipCode = String(addressFormData.zipCode || "").trim()
-    const formattedCityState = [addressFormData.city, addressFormData.state]
-      .filter(Boolean)
-      .join(", ")
-    const cityStateZip = [formattedCityState, zipCode].filter(Boolean).join(", ")
-
-    const normalizedCurrentAddress = String(currentAddress || "").trim()
-    const isCoordinateText = /^-?\d+\.\d+,\s*-?\d+\.\d+$/.test(normalizedCurrentAddress)
-
-    // Prefer explicitly typed/manual autofill fields so pincode reflects immediately.
-    if (cityStateZip) {
-      return cityStateZip
-    }
-
-    if (!normalizedCurrentAddress || normalizedCurrentAddress === "Select location" || isCoordinateText) {
-      return normalizedCurrentAddress || "Select location on map"
-    }
-
-    if (zipCode && !normalizedCurrentAddress.includes(zipCode)) {
-      return `${normalizedCurrentAddress}, ${zipCode}`
-    }
-
-    return normalizedCurrentAddress
+    const val = addressFormData.additionalDetails || currentAddress
+    return val === "Select location" ? "Select location on map" : val
   })()
 
   if (!isOpen) return null
 
-  // If showing address form, render full-screen address form
   if (showAddressForm) {
     return (
       <div className="fixed inset-0 z-[10000] bg-white dark:bg-[#0a0a0a] flex flex-col h-[100dvh] max-h-[100dvh] overflow-hidden">
-        {/* Header */}
         <div className="flex-shrink-0 bg-white dark:bg-[#1a1a1a] border-b border-gray-100 dark:border-gray-800 px-4 py-3">
           <div className="flex items-center gap-4">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={handleCancelAddressForm}
-              className="rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
-            >
-              <ChevronLeft className="h-6 w-6 text-gray-700 dark:text-gray-300" />
+            <Button variant="ghost" size="icon" onClick={handleCancelAddressForm} className="rounded-full">
+              <X className="h-6 w-6 text-gray-700 dark:text-gray-300" />
             </Button>
-            <h1 className="text-lg font-bold text-gray-900 dark:text-white">Select delivery location</h1>
+            <h1 className="text-lg font-bold text-gray-900 dark:text-white">Delivery location</h1>
           </div>
         </div>
 
-        {/* Search Bar */}
         <div className="flex-shrink-0 bg-white dark:bg-[#1a1a1a] px-4 py-3 border-b border-gray-100 dark:border-gray-800">
-          <div className="relative flex items-center">
-            <button 
-              type="button"
-              onClick={() => handleSearchLocation(searchValue)}
-              className="absolute left-4 top-1/2 transform -translate-y-1/2 h-8 w-8 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors z-20"
-            >
-              <Search className="h-5 w-5 text-orange-600" />
-            </button>
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-orange-600 z-10" />
             <Input
               value={searchValue}
               onChange={(e) => setSearchValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  handleSearchLocation(searchValue)
-                }
-              }}
-              placeholder="Search for area, street name..."
-              dir="ltr"
-              style={ltrInputStyle}
-              className="pl-12 pr-4 h-12 w-full bg-gray-50 dark:bg-[#2a2a2a] border-gray-200 dark:border-gray-700 focus:border-orange-600 dark:focus:border-orange-600 rounded-xl"
+              onKeyDown={(e) => e.key === "Enter" && handleSearchLocation(searchValue)}
+              placeholder="Search area, street..."
+              className="pl-12 h-12 w-full bg-gray-50 dark:bg-[#2a2a2a] rounded-xl text-neutral-900 dark:text-white"
             />
           </div>
         </div>
 
-        {/* Map Section - Google Maps */}
-        <div className="flex-shrink-0 relative" style={{ height: '35vh', minHeight: '250px' }}>
-          {/* Google Maps Container */}
-          <div
-            ref={mapContainerRef}
-            className="w-full h-full bg-gray-200 dark:bg-gray-800"
-            style={{
-              width: '100%',
-              height: '100%',
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              zIndex: 1
-            }}
-          />
-
-          {/* Loading State */}
+        <div className="flex-shrink-0 relative" style={{ height: '35vh' }}>
+          <div ref={mapContainerRef} className="w-full h-full bg-gray-200" />
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">
+            <Button onClick={handleUseCurrentLocationForAddress} className="bg-white dark:bg-[#1a1a1a] text-orange-600 border-2 border-orange-600 hover:bg-orange-50 shadow-lg px-4 flex items-center gap-2">
+              <Crosshair className="h-4 w-4" />
+              <span>Current location</span>
+            </Button>
+          </div>
           {mapLoading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-900 bg-opacity-75 z-20">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600 mx-auto mb-2"></div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Loading map...</p>
-              </div>
+            <div className="absolute inset-0 bg-white/60 flex items-center justify-center z-20">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600" />
             </div>
           )}
+        </div>
 
-          {/* API Key Missing Error */}
-          {!GOOGLE_MAPS_API_KEY && !mapLoading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-900 z-20">
-              <div className="text-center p-4">
-                <MapPin className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-                <p className="text-sm text-gray-600 dark:text-gray-400">Google Maps API key not found</p>
-                <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">Please set VITE_GOOGLE_MAPS_API_KEY in .env file</p>
-              </div>
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+          <div>
+            <Label className="text-sm font-semibold mb-2 block">Delivery details</Label>
+            <div className="bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-700 rounded-lg p-3 flex items-center gap-3">
+              <MapPin className="h-5 w-5 text-orange-600" />
+              <p className="text-sm text-gray-900 dark:text-white truncate">{deliveryDetailsText}</p>
             </div>
-          )}
+          </div>
 
-          {/* Use Current Location Button */}
-          <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-10">
-            <Button
-              onClick={handleUseCurrentLocationForAddress}
-              disabled={mapLoading}
-              className="bg-white dark:bg-[#1a1a1a] border-2 border-orange-600 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 shadow-lg disabled:opacity-50 flex items-center gap-2 px-4 py-2"
-            >
-              <Crosshair className="h-4 w-4 text-orange-600 dark:text-orange-400 flex-shrink-0" strokeWidth={2.5} />
-              <span className="text-orange-600 dark:text-orange-400 font-medium">Use current location</span>
-            </Button>
+          <div>
+            <Label className="text-sm font-semibold mb-2 block">Address details*</Label>
+            <Input
+              name="additionalDetails"
+              placeholder="Floor, House no."
+              value={addressFormData.additionalDetails}
+              onChange={handleAddressFormChange}
+              className="text-neutral-900 dark:text-white"
+            />
+          </div>
+
+          <div>
+            <Label className="text-sm font-semibold mb-2 block">Save as</Label>
+            <div className="flex gap-2">
+              {["Home", "Office", "Other"].map((label) => (
+                <Button
+                  key={label}
+                  onClick={() => setAddressFormData(prev => ({ ...prev, label }))}
+                  variant={addressFormData.label === label ? "default" : "outline"}
+                  className={`flex-1 ${addressFormData.label === label ? "bg-orange-600 text-white" : ""}`}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-3 pt-2">
+            <Input name="street" placeholder="Street / Area *" value={addressFormData.street} onChange={handleAddressFormChange} className="text-neutral-900 dark:text-white" />
+            <div className="grid grid-cols-2 gap-2">
+              <Input name="city" placeholder="City *" value={addressFormData.city} onChange={handleAddressFormChange} className="text-neutral-900 dark:text-white" />
+              <Input name="state" placeholder="State *" value={addressFormData.state} onChange={handleAddressFormChange} className="text-neutral-900 dark:text-white" />
+            </div>
+            <Input name="zipCode" placeholder="Pincode" value={addressFormData.zipCode} onChange={handleAddressFormChange} className="text-neutral-900 dark:text-white" />
           </div>
         </div>
 
-        {/* Form Section - Scrollable */}
-        <div className="flex-1 overflow-y-auto bg-white dark:bg-[#0a0a0a] min-h-0 overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
-          <div className="px-4 py-4 space-y-4 pb-48">
-            {/* Delivery Details */}
-            <div>
-              <Label className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 block">
-                Delivery details
-              </Label>
-              <button
-                type="button"
-                onClick={handleUseCurrentLocationForAddress}
-                disabled={mapLoading || isSavingAddress}
-                className="w-full text-left bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-700 rounded-lg p-3 flex items-center gap-3 disabled:opacity-60"
-              >
-                <MapPin className="h-5 w-5 text-orange-600 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                    {loadingAddress ? "Locating..." : deliveryDetailsText}
-                  </p>
-                </div>
-                <ChevronRight className="h-5 w-5 text-gray-400 flex-shrink-0" />
-              </button>
-            </div>
-
-            {/* Address Details */}
-            <div>
-              <Label htmlFor="additionalDetails" className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 block">
-                Address details*
-              </Label>
-              <Input
-                id="additionalDetails"
-                name="additionalDetails"
-                placeholder="E.g. Floor, House no."
-                value={addressFormData.additionalDetails}
-                onChange={handleAddressFormChange}
-                dir="ltr"
-                style={ltrInputStyle}
-                className="bg-white dark:bg-[#1a1a1a] border-gray-200 dark:border-gray-700"
-              />
-            </div>
-
-            {/* Receiver Details */}
-            <div className="mb-6">
-              <Label className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 block">
-                Receiver details for this address
-              </Label>
-              <div className="bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-700 rounded-lg p-3 flex items-center gap-3">
-                <Phone className="h-5 w-5 text-gray-600 dark:text-gray-400 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">
-                    {userProfile?.name || "User"}, {addressFormData.phone || userProfile?.phone || "Add phone"}
-                  </p>
-                </div>
-                <ChevronRight className="h-5 w-5 text-gray-400 flex-shrink-0" />
-              </div>
-            </div>
-
-            {/* Save Address As */}
-            <div>
-              <Label className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 block">
-                Save address as
-              </Label>
-              <div className="flex gap-2">
-                {["Home", "Office", "Other"].map((label) => (
-                  <Button
-                    key={label}
-                    type="button"
-                    onClick={() => setAddressFormData(prev => ({ ...prev, label }))}
-                    variant={addressFormData.label === label ? "default" : "outline"}
-                    className={`flex-1 ${addressFormData.label === label
-                      ? "bg-orange-600 hover:bg-orange-700 text-white"
-                      : "bg-white dark:bg-[#1a1a1a]"
-                      }`}
-                  >
-                    {label}
-                  </Button>
-                ))}
-              </div>
-            </div>
-
-            {/* Manual address fields (auto-filled from Google Maps, editable by user) */}
-            <div className="space-y-3">
-              <Label className="text-sm font-semibold text-gray-700 dark:text-gray-300 block">
-                Address (Manual or Auto-fill)
-              </Label>
-              <Input
-                name="street"
-                placeholder="Street / Area *"
-                value={addressFormData.street}
-                onChange={handleAddressFormChange}
-                dir="ltr"
-                style={ltrInputStyle}
-                className="bg-white dark:bg-[#1a1a1a] border-gray-200 dark:border-gray-700"
-                required
-              />
-              <div className="grid grid-cols-2 gap-2">
-                <Input
-                  name="city"
-                  placeholder="City *"
-                  value={addressFormData.city}
-                  onChange={handleAddressFormChange}
-                  dir="ltr"
-                  style={ltrInputStyle}
-                  className="bg-white dark:bg-[#1a1a1a] border-gray-200 dark:border-gray-700"
-                  required
-                />
-                <Input
-                  name="state"
-                  placeholder="State *"
-                  value={addressFormData.state}
-                  onChange={handleAddressFormChange}
-                  dir="ltr"
-                  style={ltrInputStyle}
-                  className="bg-white dark:bg-[#1a1a1a] border-gray-200 dark:border-gray-700"
-                  required
-                />
-              </div>
-              <Input
-                name="zipCode"
-                placeholder="Pincode (optional)"
-                value={addressFormData.zipCode || ""}
-                onChange={handleAddressFormChange}
-                dir="ltr"
-                style={ltrInputStyle}
-                className="bg-white dark:bg-[#1a1a1a] border-gray-200 dark:border-gray-700"
-                inputMode="numeric"
-              />
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Tip: Use map/current location for auto-detection, or type details manually.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Save Address Button */}
-        <div className="flex-shrink-0 bg-white dark:bg-[#1a1a1a] border-t border-gray-200 dark:border-gray-800 px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-          <form onSubmit={handleAddressFormSubmit}>
-            <Button
-              type="submit"
-              className="w-full bg-orange-600 hover:bg-orange-700 text-white h-12 text-base font-semibold"
-              disabled={isSavingAddress}
-            >
-              {isSavingAddress ? "Saving..." : "Save address"}
-            </Button>
-          </form>
+        <div className="p-4 bg-white dark:bg-[#1a1a1a] border-t">
+          <Button onClick={handleAddressFormSubmit} disabled={isSavingAddress} className="w-full bg-orange-600 text-white h-12 rounded-xl text-lg font-bold">
+            {isSavingAddress ? "Saving..." : "Save and Proceed"}
+          </Button>
         </div>
       </div>
     )
   }
 
-  const filteredSavedAddresses = addresses
-    .filter((address) => {
-      const query = (searchValue || "").trim().toLowerCase()
-      if (!query) return true
-      const searchableText = [
-        address.label,
-        address.additionalDetails,
-        address.street,
-        address.city,
-        address.state,
-        address.zipCode,
-        address.phone,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase()
-      return searchableText.includes(query)
-    })
+  const filteredSavedAddresses = addresses.filter(addr => {
+    const q = searchValue.toLowerCase()
+    return !q || [addr.label, addr.street, addr.city].some(s => s?.toLowerCase().includes(q))
+  })
 
   return (
-    <div
-      className="fixed inset-0 z-[9999] flex flex-col bg-white dark:bg-[#0a0a0a]"
-      style={{
-        animation: 'fadeIn 0.3s ease-out'
-      }}
-    >
-      {/* Header */}
-      <div className="flex-shrink-0 bg-white dark:bg-[#1a1a1a] border-b border-gray-100 dark:border-gray-800 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center gap-4">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                onClose()
-                if (!isCartPath) navigate("/")
-              }}
-              className="rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 -ml-2"
-            >
-              <ChevronLeft className="h-6 w-6 text-gray-700 dark:text-gray-300" />
-            </Button>
-            <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">Select a location</h1>
+    <div className="fixed inset-0 z-[9999] flex flex-col pointer-events-none overscroll-none">
+      <div className="absolute inset-0 bg-black/60 pointer-events-auto" onClick={onClose} />
+      
+      <div className="absolute bottom-0 left-0 right-0 max-h-[90vh] bg-white dark:bg-[#0a0a0a] rounded-t-[32px] overflow-hidden flex flex-col pointer-events-auto shadow-2xl">
+        <div className="w-full flex justify-center pt-3 pb-1">
+          <div className="w-12 h-1.5 bg-gray-200 dark:bg-gray-800 rounded-full" />
+        </div>
+
+        <div className="px-6 py-5 flex justify-between items-start">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Select location</h2>
+            <p className="text-sm text-gray-500 mt-1">Where should we deliver?</p>
           </div>
+          <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full">
+            <X className="h-6 w-6 text-gray-400" />
+          </Button>
         </div>
-      </div>
 
-      {/* Search Bar */}
-      <div className="flex-shrink-0 bg-white dark:bg-[#1a1a1a] px-4 sm:px-6 lg:px-8 py-3 max-w-7xl mx-auto w-full">
-        <div className="relative">
-          <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-primary-orange z-10" />
-          <Input
-            ref={inputRef}
-            value={searchValue}
-            onChange={(e) => setSearchValue(e.target.value)}
-            placeholder="Search for area, street name..."
-            dir="ltr"
-            style={ltrInputStyle}
-            className="pl-12 pr-4 h-12 w-full bg-gray-50 dark:bg-[#2a2a2a] border-gray-200 dark:border-gray-700 focus:border-primary-orange dark:focus:border-primary-orange rounded-xl text-base dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400"
-          />
-        </div>
-      </div>
+        <div className="flex-1 overflow-y-auto pb-8 custom-scrollbar">
+          <div className="px-6 mb-6">
+            <div className="relative group">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 group-focus-within:text-orange-600 transition-colors" />
+              <Input
+                placeholder="Search area, street name..."
+                className="pl-12 h-14 bg-gray-50 dark:bg-[#1a1a1a] border-gray-100 rounded-2xl text-lg text-neutral-900 dark:text-white"
+                value={searchValue}
+                onChange={(e) => setSearchValue(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && (handleSearchLocation(searchValue), setShowAddressForm(true))}
+              />
+            </div>
+          </div>
 
-      {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto scrollbar-hide min-h-0">
-        <div className="max-w-7xl mx-auto w-full pb-6">
-          {/* Use Current Location */}
-          <div
-            className="px-4 sm:px-6 lg:px-8 py-2 bg-white dark:bg-[#1a1a1a]"
-            style={{ animation: 'slideDown 0.3s ease-out 0.1s both' }}
-          >
-            <button
+          <div className="px-6 mb-8">
+            <Button
+              variant="outline"
               onClick={handleUseCurrentLocation}
               disabled={isRequestingCurrentLocation}
-              className="w-full flex items-center justify-between py-4 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors group"
+              className="w-full h-16 flex items-center gap-4 bg-white dark:bg-gray-900 border-gray-200 rounded-2xl p-4 text-left group"
             >
-              <div className="flex items-center gap-4">
-                <div className="h-10 w-10 rounded-full bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center group-hover:bg-orange-100 dark:group-hover:bg-orange-900/30 transition-colors">
-                  <Crosshair className="h-5 w-5 text-orange-600 dark:text-orange-400 flex-shrink-0" strokeWidth={2.5} />
-                </div>
-                <div className="text-left">
-                  <p className="font-semibold text-orange-700 dark:text-orange-400">Use current location</p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {isRequestingCurrentLocation ? "Getting location..." : currentLocationText}
-                  </p>
-                </div>
+              <div className="h-10 w-10 rounded-full bg-orange-50 flex items-center justify-center">
+                <Crosshair className="h-5 w-5 text-orange-600" />
               </div>
-              <ChevronRight className="h-5 w-5 text-gray-400 dark:text-gray-500" />
-            </button>
-
-            {/* Add Address */}
-            <button
-              onClick={handleAddAddress}
-              className="w-full flex items-center justify-between py-4 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors group border-t border-gray-100 dark:border-gray-800"
-            >
-              <div className="flex items-center gap-4">
-                <div className="h-10 w-10 rounded-full bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center group-hover:bg-orange-100 dark:group-hover:bg-orange-900/30 transition-colors">
-                  <Plus className="h-5 w-5 text-orange-600 dark:text-orange-400" />
-                </div>
-                <p className="font-semibold text-orange-700 dark:text-orange-400">Add Address</p>
+              <div className="flex-1">
+                <p className="font-bold text-orange-600">Use current location</p>
+                <p className="text-xs text-gray-400">{isRequestingCurrentLocation ? "Detecting..." : "Using GPS for accuracy"}</p>
               </div>
-              <ChevronRight className="h-5 w-5 text-gray-400 dark:text-gray-500" />
-            </button>
+              <ChevronRight className="h-5 w-5 text-gray-400" />
+            </Button>
           </div>
 
-          {/* Saved Addresses Section */}
-          {addresses.length > 0 && (
-            <div
-              className="mt-2"
-              style={{ animation: 'slideDown 0.3s ease-out 0.2s both' }}
-            >
-              <div className="px-4 sm:px-6 lg:px-8 py-3">
-                <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 tracking-wider uppercase">
-                  Saved Addresses
-                </h2>
-              </div>
-              <div className="bg-white dark:bg-[#1a1a1a]">
-                {filteredSavedAddresses
-                  .map((address, index) => {
-                    const IconComponent = getAddressIcon(address)
-                    return (
-                      <div
-                        key={address.id || address._id || `${address.label}-${index}`}
-                        className="px-4 sm:px-6 lg:px-8"
-                        style={{ animation: `slideUp 0.3s ease-out ${0.25 + index * 0.05}s both` }}
-                      >
-                        <div
-                          className={`py-4 ${index !== 0 ? 'border-t border-gray-100 dark:border-gray-800' : ''}`}
-                        >
-                          <div
-                            onClick={() => handleSelectSavedAddress(address)}
-                            className="w-full flex items-start gap-4 text-left hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors p-2 -m-2 cursor-pointer"
-                          >
-                            <div className="flex flex-col items-center">
-                              <div className="h-10 w-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-                                <IconComponent className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-                              </div>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-gray-900 dark:text-white">
-                                {address.label || address.additionalDetails || "Home"}
-                              </p>
-                              <p className="text-sm text-gray-500 dark:text-gray-400">
-                                {[
-                                  address.additionalDetails,
-                                  address.street,
-                                  address.city,
-                                  address.state,
-                                  address.zipCode
-                                ].filter(Boolean).join(", ")}
-                              </p>
-                              <p className="text-sm text-gray-500 dark:text-gray-400">
-                                Phone number: {address.phone || userProfile?.phone || "Not provided"}
-                              </p>
-                            </div>
-                            <div className="flex flex-col items-center justify-center">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20"
-                                onClick={(e) => handleEditAddress(e, address)}
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
-                {searchValue.trim() && filteredSavedAddresses.length === 0 && (
-                  <div className="px-4 sm:px-6 lg:px-8 py-6 text-sm text-gray-500 dark:text-gray-400">
-                    No matching saved addresses found.
-                  </div>
-                )}
-              </div>
+          <div className="px-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Saved Addresses</h3>
+              <Button variant="ghost" size="sm" className="text-orange-600 font-bold" onClick={() => setShowAddressForm(true)}>+ ADD NEW</Button>
             </div>
-          )}
+            
+            <div className="space-y-4">
+              {filteredSavedAddresses.length > 0 ? (
+                filteredSavedAddresses.map((addr) => {
+                  const Icon = getAddressIcon(addr)
+                  return (
+                    <div
+                      key={addr.id || addr._id}
+                      onClick={() => handleSelectSavedAddress(addr)}
+                      className="flex items-start gap-4 p-4 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-2xl cursor-pointer transition-colors"
+                    >
+                      <div className="h-10 w-10 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center shrink-0">
+                        <Icon className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-gray-900 dark:text-white">{addr.label}</p>
+                        <p className="text-sm text-gray-500 truncate">{addr.additionalDetails}, {addr.street}</p>
+                      </div>
+                      <Button variant="ghost" size="icon" onClick={(e) => handleEditAddress(e, addr)} className="text-orange-600">
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )
+                })
+              ) : (
+                <div className="py-8 text-center text-gray-400">No saved addresses found</div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
-
-      <style>{`
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes slideDown {
-          from {
-            opacity: 0;
-            transform: translateY(-10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        @keyframes slideUp {
-          from {
-            opacity: 0;
-            transform: translateY(10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        
-        /* Blue Dot Indicator for Live Location */
-        .user-location-marker {
-          width: 20px !important;
-          height: 20px !important;
-          background-color: #4285F4 !important; /* Google Blue */
-          border: 3px solid white !important;
-          border-radius: 50% !important;
-          box-shadow: 0 0 10px rgba(0,0,0,0.3) !important;
-          position: relative !important;
-          transition: transform 0.3s ease;
-          display: block !important;
-          visibility: visible !important;
-          opacity: 1 !important;
-          z-index: 1001 !important;
-          pointer-events: none;
-        }
-        
-        /* Ensure marker container is also visible */
-        .mapboxgl-marker.user-location-marker,
-        .maplibregl-marker.user-location-marker {
-          display: block !important;
-          visibility: visible !important;
-          opacity: 1 !important;
-          z-index: 1001 !important;
-        }
-        
-        /* Arrow indicator pointing in direction of movement */
-        .user-location-marker::before {
-          content: "";
-          position: absolute;
-          top: -8px;
-          left: 50%;
-          transform: translateX(-50%);
-          width: 0;
-          height: 0;
-          border-left: 4px solid transparent;
-          border-right: 4px solid transparent;
-          border-bottom: 8px solid #4285F4;
-          filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2));
-        }
-        
-        /* Pulsing Aura Effect */
-        .user-location-marker::after {
-          content: "";
-          position: absolute;
-          width: 40px;
-          height: 40px;
-          top: -13px;
-          left: -13px;
-          background-color: rgba(66, 133, 244, 0.2);
-          border-radius: 50%;
-          animation: pulse 2s infinite;
-        }
-        
-        @keyframes pulse {
-          0% { transform: scale(0.5); opacity: 1; }
-          100% { transform: scale(2.5); opacity: 0; }
-        }
-      `}</style>
     </div>
   )
 }

@@ -176,7 +176,7 @@ export default function SearchOverlay({ isOpen, onClose, searchValue, onSearchCh
                 value={searchValue}
                 onChange={(e) => onSearchChange(e.target.value)}
                 placeholder="Search for food, restaurants..."
-                className="pl-12 pr-4 h-12 w-full bg-white dark:bg-[#1a1a1a] border-gray-100 dark:border-gray-800 focus:border-primary-orange dark:focus:border-primary-orange rounded-full text-lg dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400"
+                className="pl-12 pr-4 h-12 w-full bg-white dark:bg-[#1a1a1a] border-gray-100 dark:border-gray-800 focus:border-primary-orange dark:focus:border-primary-orange rounded-full text-lg text-neutral-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400"
               />
             </div>
             <Button

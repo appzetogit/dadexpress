@@ -586,10 +586,13 @@ const DeliveryTrackingMap = ({
         // RAPIDO/ZOMATO-STYLE: Bike MUST stay on route polyline, NEVER use raw GPS
         if (routePolylinePointsRef.current && routePolylinePointsRef.current.length > 0) {
           // Find nearest point on polyline (ensures marker stays on road)
-          // Note: findNearestPointOnPolyline takes (polyline, riderPosition)
           const nearest = findNearestPointOnPolyline(routePolylinePointsRef.current, { lat, lng });
 
-          if (nearest && nearest.nearestPoint) {
+          // OFF-ROUTE DETECTION: If rider is > 150 meters from planned route, fallback to raw GPS
+          // This prevents the marker from freezing if the rider takes a shortcut or detour.
+          const isOffRoute = nearest && nearest.distance > 150;
+
+          if (nearest && nearest.nearestPoint && !isOffRoute) {
             const markerPos = bikeMarkerRef.current?.getPosition?.();
             if (markerPos) {
               const distanceToTarget = calculateHaversineDistance(
@@ -681,12 +684,23 @@ const DeliveryTrackingMap = ({
               }
             }
           } else {
-            // If nearest point not found, use first point of polyline (don't use raw GPS)
-            console.warn('⚠️ Could not find nearest point, using polyline start point');
-            const firstPoint = routePolylinePointsRef.current[0];
-            if (firstPoint && bikeMarkerRef.current) {
-              const firstPosition = new window.google.maps.LatLng(firstPoint.lat, firstPoint.lng);
-              bikeMarkerRef.current.setPosition(firstPosition);
+            // OFF-ROUTE FALLBACK: Use raw GPS if too far from path or nearest point not found
+            console.warn('🛣️ Off-route or nearest point not found, falling back to raw GPS');
+            const targetPos = { lat, lng };
+            const currentPos = bikeMarkerRef.current?.getPosition?.();
+
+            if (currentPos) {
+              const distanceToTarget = calculateHaversineDistance(
+                currentPos.lat(),
+                currentPos.lng(),
+                lat,
+                lng
+              );
+              if (distanceToTarget > 2) {
+                queueRawMarkerAnimation(targetPos);
+              }
+            } else {
+              bikeMarkerRef.current.setPosition(targetPos);
             }
           }
         } else {
@@ -927,6 +941,13 @@ const DeliveryTrackingMap = ({
         // Verify Google Maps is fully loaded
         if (!window.google || !window.google.maps || !window.google.maps.Map) {
           console.error('❌ Google Maps API not fully loaded');
+          return;
+        }
+
+        // Validate coordinates exist before calculating center
+        // If they don't, we can't initialize a useful map yet
+        if (!restaurantCoords || !customerCoords) {
+          console.warn('⚠️ Map initialization delayed: coordinates missing', { restaurantCoords, customerCoords });
           return;
         }
 

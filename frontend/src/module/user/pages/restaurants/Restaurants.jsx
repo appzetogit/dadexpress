@@ -94,7 +94,7 @@ export default function Restaurants() {
   const [error, setError] = useState("")
   const [emptyMessage, setEmptyMessage] = useState("No restaurants available in this area")
   const [dietaryFilter, setDietaryFilter] = useState("all")
-  const { addFavorite, removeFavorite, isFavorite, addresses = [], getDefaultAddress } = useProfile()
+  const { addFavorite, removeFavorite, isFavorite, addresses = [], getDefaultAddress, loading: profileLoading } = useProfile()
   const { selectedDeliveryAddress } = useSelectedDeliveryAddress()
   const { location } = useLocation()
   const isSavedSelectionLocked = selectedDeliveryAddress?.mode === "saved"
@@ -140,6 +140,7 @@ export default function Restaurants() {
   )
 
   useEffect(() => {
+    if (profileLoading) return
     let cancelled = false
     const resolveRequestId = ++zoneResolveRequestRef.current
 
@@ -271,7 +272,7 @@ export default function Restaurants() {
 
   useEffect(() => {
     const requestId = ++restaurantsRequestRef.current
-    if (zoneLoading || isZoneResolving) {
+    if (profileLoading || zoneLoading || isZoneResolving) {
       return
     }
 

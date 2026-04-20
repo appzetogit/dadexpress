@@ -116,21 +116,23 @@ export const updateLocation = asyncHandler(async (req, res) => {
       logger.warn(`Firebase delivery_boys sync failed: ${syncError.message}`);
     });
 
-    // Broadcast rider location to tracked customer rooms for active delivery orders.
+    // Broadcast rider location to tracked customer rooms for all active delivery orders.
     // This keeps user-app live map in sync when delivery app sends /delivery/location updates.
+    // Modified to include ALL active statuses, not just 'out_for_delivery', so customer sees rider moving to restaurant too.
     if (typeof lat === 'number' && typeof lng === 'number') {
       try {
-        const activeOrder = await Order.findOne({
+        const activeOrders = await Order.find({
           deliveryPartnerId: updatedDelivery._id,
-          status: 'out_for_delivery'
+          status: { $in: ['confirmed', 'preparing', 'ready', 'out_for_delivery'] }
         }).select('_id orderId userId status eta estimatedDeliveryTime');
 
         const io = req.app.get('io');
-        if (io && activeOrder) {
-          const trackingIds = [...new Set([
-            activeOrder.orderId,
-            activeOrder._id?.toString()
-          ].filter(Boolean).map((id) => String(id)))];
+        if (io && activeOrders.length > 0) {
+          activeOrders.forEach(async (activeOrder) => {
+            const trackingIds = [...new Set([
+              activeOrder.orderId,
+              activeOrder._id?.toString()
+            ].filter(Boolean).map((id) => String(id)))];
 
           const locationPayload = {
             orderId: activeOrder.orderId || activeOrder._id?.toString(),
@@ -144,18 +146,19 @@ export const updateLocation = asyncHandler(async (req, res) => {
             io.to(`order:${trackingId}`).emit(`location-receive-${trackingId}`, locationPayload);
           });
 
-          const now = Date.now();
-          const orderKey = activeOrder._id?.toString();
-          const lastEtaEmit = orderKey ? (lastEtaEmitByOrder.get(orderKey) || 0) : 0;
-          if (orderKey && (now - lastEtaEmit >= ETA_EMIT_THROTTLE_MS)) {
-            lastEtaEmitByOrder.set(orderKey, now);
-            try {
-              const liveETA = await etaCalculationService.getLiveETA(orderKey);
-              await etaWebSocketService.emitETAUpdate(orderKey, liveETA, activeOrder);
-            } catch (etaError) {
-              logger.warn(`ETA emit skipped for order ${orderKey}: ${etaError.message}`);
+            const now = Date.now();
+            const orderKey = activeOrder._id?.toString();
+            const lastEtaEmit = orderKey ? (lastEtaEmitByOrder.get(orderKey) || 0) : 0;
+            if (orderKey && (now - lastEtaEmit >= ETA_EMIT_THROTTLE_MS)) {
+              lastEtaEmitByOrder.set(orderKey, now);
+              try {
+                const liveETA = await etaCalculationService.getLiveETA(orderKey);
+                await etaWebSocketService.emitETAUpdate(orderKey, liveETA, activeOrder);
+              } catch (etaError) {
+                logger.warn(`ETA emit skipped for order ${orderKey}: ${etaError.message}`);
+              }
             }
-          }
+          });
         }
       } catch (liveTrackingError) {
         logger.warn(`Live tracking emit failed: ${liveTrackingError.message}`);
