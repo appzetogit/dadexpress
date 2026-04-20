@@ -44,6 +44,11 @@ export default function PageNavbar({
     // If we have a selection but No address matched yet (loading), do NOT fall back to GPS
     // This prevents the header from flickering between GPS and Saved address on load/login
     if (resolvedDeliveryAddress?.loading) return null
+
+    // If we are currently detecting live GPS location, do NOT show stale location data yet
+    // This prevents the "Dr BS Tomar" flicker during the first 2 seconds of app load
+    if (loading && !isManualMode) return null
+
     if (!address) return geoLocation
 
     const coords = Array.isArray(address.location?.coordinates)
@@ -208,6 +213,15 @@ export default function PageNavbar({
   const locationDisplay = (() => {
     let mainLocation = ""
     let subLocation = ""
+
+    // Force loading state if background GPS fetch is in progress
+    // This prevents stale DB addresses (like "Dr BS Tomar") from showing for 2 seconds
+    if (loading && !isManualMode) {
+      return {
+        main: "Detecting location...",
+        sub: "Please wait..."
+      }
+    }
 
     // Debug: Log the entire location object
     false && console.log("🔍 PageNavbar - Full Location Object:", {
