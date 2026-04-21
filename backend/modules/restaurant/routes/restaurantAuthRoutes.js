@@ -11,6 +11,7 @@ import {
   reverifyRestaurant,
   firebaseGoogleLogin,
   updateFcmToken,
+  deleteAccount,
   getReferralHistory
 } from '../controllers/restaurantAuthController.js';
 import { authenticate } from '../middleware/restaurantAuth.js';
@@ -95,5 +96,6 @@ router.patch('/update-fcm-token', authenticate, updateFcmToken);
 router.post('/save-fcm-token', authenticate, updateFcmToken);
 router.put('/save-fcm-token', authenticate, updateFcmToken);
 router.get('/referrals', authenticate, getReferralHistory);
+router.delete('/profile', authenticate, deleteAccount);
 
 export default router;

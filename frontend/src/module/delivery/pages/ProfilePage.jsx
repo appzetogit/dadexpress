@@ -41,6 +41,9 @@ export default function ProfilePage() {
   const [referralReward, setReferralReward] = useState(2000)
   const [isReferralEnabled, setIsReferralEnabled] = useState(true)
   const [loadingReferral, setLoadingReferral] = useState(false)
+  const [showStatusModal, setShowStatusModal] = useState(false)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [showAlertSoundPopup, setShowAlertSoundPopup] = useState(false)
   const [selectedAlertSound, setSelectedAlertSound] = useState(() => {
     // Load from localStorage, default to "zomato_tone"
@@ -122,13 +125,6 @@ export default function ProfilePage() {
         if (response?.data?.success && response?.data?.data?.profile) {
           const profileData = response.data.data.profile
           setProfile(profileData)
-          // Debug: Log profile image data
-          false && console.log("Profile image data:", {
-            profileImage: profileData.profileImage,
-            documentsPhoto: profileData.documents?.photo,
-            hasProfileImage: !!profileData.profileImage?.url,
-            hasDocumentsPhoto: !!profileData.documents?.photo
-          })
         }
       } catch (error) {
         console.error("Error fetching profile:", error)
@@ -165,13 +161,11 @@ export default function ProfilePage() {
         }
       } catch (error) {
         console.error("Error fetching delivery referral settings:", error)
-        // silently fall back to default 2000
       } finally {
         setLoadingReferral(false)
       }
     }
 
-    // Safe guard: only call if API exists (older builds may not have it)
     if (deliveryAPI.getReferralSettings || deliveryAPI.getDashboard) {
       fetchReferralSettings()
     }
@@ -181,7 +175,6 @@ export default function ProfilePage() {
   useEffect(() => {
     const handleProfileRefresh = () => {
       setAnimationKey(prev => prev + 1)
-      // Refetch profile data
       const fetchProfile = async () => {
         try {
           const response = await deliveryAPI.getProfile()
@@ -199,7 +192,6 @@ export default function ProfilePage() {
 
     return () => {
       window.removeEventListener('deliveryProfileRefresh', handleProfileRefresh)
-      // Stop any playing audio on unmount
       if (currentAudioRef.current) {
         currentAudioRef.current.pause()
         currentAudioRef.current.currentTime = 0
@@ -214,25 +206,17 @@ export default function ProfilePage() {
     }
 
     try {
-      // Call logout API to clear refresh token on server
       await deliveryAPI.logout()
     } catch (error) {
       console.error("Logout API error (continuing with local cleanup):", error)
-      // Continue with local cleanup even if API call fails
     }
 
-    // Use utility function to clear module auth
     clearModuleAuth("delivery")
-
-    // Clear all delivery-related data
     localStorage.removeItem("delivery_gig_storage")
     localStorage.removeItem("delivery_module_storage")
     localStorage.removeItem("app:isOnline")
-
-    // Clear sessionStorage
     sessionStorage.removeItem("deliveryAuthData")
 
-    // Clear any other delivery-related data
     const keysToRemove = []
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i)
@@ -242,66 +226,63 @@ export default function ProfilePage() {
     }
     keysToRemove.forEach(key => localStorage.removeItem(key))
 
-    // Dispatch custom events for same-tab updates
     window.dispatchEvent(new Event('deliveryAuthChanged'))
     window.dispatchEvent(new Event('onlineStatusChanged'))
 
     toast.success("Logged out successfully")
 
-    // Small delay to ensure cleanup completes
     setTimeout(() => {
-      // Redirect to sign-in
       navigate("/delivery/sign-in", { replace: true })
     }, 100)
   }
 
-  const handleDeleteAccount = () => {
-    // Clear delivery module authentication data
-    clearModuleAuth("delivery")
-    localStorage.removeItem("delivery_gig_storage")
-    localStorage.removeItem("delivery_module_storage")
-    localStorage.removeItem("app:isOnline")
-    sessionStorage.removeItem("deliveryAuthData")
-    
-    // Clear any other delivery-related data
-    const keysToRemove = []
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i)
-      if (key && key.startsWith("delivery_")) {
-        keysToRemove.push(key)
+  const handleDeleteAccount = async () => {
+    try {
+      setIsDeleting(true)
+      const response = await deliveryAPI.deleteProfile()
+      
+      if (response?.data?.success) {
+        clearModuleAuth("delivery")
+        localStorage.removeItem("delivery_accessToken")
+        localStorage.removeItem("delivery_authenticated")
+        localStorage.removeItem("delivery_user_authenticated")
+        localStorage.removeItem("delivery_user")
+        localStorage.removeItem("delivery")
+        
+        window.dispatchEvent(new Event("deliveryAuthChanged"))
+        toast.success("Account deleted successfully")
+        
+        setTimeout(() => {
+          navigate("/delivery/sign-in", { replace: true })
+        }, 100)
+      } else {
+        toast.error(response?.data?.message || "Failed to delete account")
       }
+    } catch (error) {
+      console.error("Error deleting account:", error)
+      toast.error("An error occurred while deleting your account")
+    } finally {
+      setIsDeleting(false)
+      setIsDeleteDialogOpen(false)
     }
-    keysToRemove.forEach(key => localStorage.removeItem(key))
-
-    window.dispatchEvent(new Event('deliveryAuthChanged'))
-    window.dispatchEvent(new Event('onlineStatusChanged'))
-    
-    // Navigate to sign in page
-    navigate("/delivery/sign-in", { replace: true })
   }
 
   const playPreviewSound = (soundFile) => {
     try {
-      // Stop any currently playing audio
       if (currentAudioRef.current) {
         currentAudioRef.current.pause()
         currentAudioRef.current.currentTime = 0
       }
 
-      false && console.log('🔊 Playing preview sound:', soundFile)
       const audio = new Audio(soundFile)
       audio.volume = 0.7
       currentAudioRef.current = audio
 
       const playPromise = audio.play()
       if (playPromise !== undefined) {
-        playPromise
-          .then(() => {
-            false && console.log('✅ Preview sound playing successful')
-          })
-          .catch(err => {
-            console.error('❌ Preview audio error:', err)
-          })
+        playPromise.catch(err => {
+          console.error('❌ Preview audio error:', err)
+        })
       }
     } catch (err) {
       console.error('❌ Could not create or play preview audio:', err)
@@ -309,7 +290,6 @@ export default function ProfilePage() {
   }
 
   const handleClosePopup = () => {
-    // Stop any playing audio when closing the popup
     if (currentAudioRef.current) {
       currentAudioRef.current.pause()
       currentAudioRef.current.currentTime = 0
@@ -320,13 +300,8 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-screen bg-gray-100 text-gray-900 font-poppins overflow-x-hidden">
-      {/* Main Content */}
-      {/* Back Button and Profile Section */}
       <div ref={profileRef} className="mb-0">
         <div className="bg-white p-4 w-full shadow-sm">
-
-
-          {/* Profile Information */}
           <div
             onClick={() => navigate("/delivery/profile/details")}
             className="flex items-start justify-between"
@@ -349,11 +324,9 @@ export default function ProfilePage() {
                   alt="Profile"
                   className="w-20 h-20 md:w-24 md:h-24 rounded-full object-cover border-2 border-gray-200"
                   onError={(e) => {
-                    // Fallback to documents.photo if profileImage fails to load
                     if (profile?.documents?.photo) {
                       e.target.src = profile.documents.photo
                     } else {
-                      // Show default icon if both fail
                       e.target.style.display = 'none'
                       e.target.nextElementSibling?.classList.remove('hidden')
                     }
@@ -365,7 +338,6 @@ export default function ProfilePage() {
                   alt="Profile"
                   className="w-20 h-20 md:w-24 md:h-24 rounded-full object-cover border-2 border-gray-200"
                   onError={(e) => {
-                    // Show default icon if image fails to load
                     e.target.style.display = 'none'
                     e.target.nextElementSibling?.classList.remove('hidden')
                   }}
@@ -385,8 +357,6 @@ export default function ProfilePage() {
       </div>
 
       <div className="px-4 py-6 pb-24 md:pb-6">
-
-        {/* Navigation Buttons */}
         <div ref={navButtonsRef} className="grid grid-cols-1 gap-3 mb-6">
           <button
             onClick={() => navigate("/delivery/trip-history")}
@@ -399,11 +369,7 @@ export default function ProfilePage() {
           </button>
         </div>
 
-        {/* Sections */}
         <div ref={sectionsRef} className="space-y-4">
-
-
-          {/* Support Section */}
           <div>
             <h3 className="text-base font-medium mb-3 px-1">Support</h3>
             <div className="space-y-0">
@@ -423,7 +389,6 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* Partner options Section */}
           <div>
             <h3 className="text-base font-medium mb-3 px-1">Partner options</h3>
             <Card
@@ -440,7 +405,6 @@ export default function ProfilePage() {
             </Card>
           </div>
 
-          {/* Logout Section */}
           <div className="pt-4 space-y-2">
             <Card
               onClick={handleLogout}
@@ -456,7 +420,7 @@ export default function ProfilePage() {
             </Card>
 
             <Card
-              onClick={handleDeleteAccount}
+              onClick={() => setIsDeleteDialogOpen(true)}
               className="bg-white py-0 border border-red-100 shadow-none rounded-lg cursor-pointer hover:bg-red-50 transition-colors"
             >
               <CardContent className="p-4 flex items-center justify-between">
@@ -471,11 +435,9 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* Order Alert Sound Popup */}
       {showAlertSoundPopup && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center">
           <div className="bg-white w-full max-w-md rounded-t-2xl shadow-2xl animate-in slide-in-from-bottom duration-300">
-            {/* Header */}
             <div className="flex items-center justify-between p-4 border-b border-gray-200">
               <h3 className="text-lg font-semibold">Order alert sound</h3>
               <button
@@ -485,11 +447,8 @@ export default function ProfilePage() {
                 <X className="w-5 h-5 text-gray-500" />
               </button>
             </div>
-
-            {/* Options */}
             <div className="p-4">
               <div className="space-y-4">
-                {/* Original Option */}
                 <label className="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50 rounded-lg transition-colors">
                   <span className="text-base font-medium">Original</span>
                   <input
@@ -505,8 +464,6 @@ export default function ProfilePage() {
                     className="w-5 h-5 text-black focus:ring-2 focus:ring-black"
                   />
                 </label>
-
-                {/* DadExpress Tone Option */}
                 <label className="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50 rounded-lg transition-colors">
                   <span className="text-base font-medium">DadExpress Tone</span>
                   <input
@@ -524,8 +481,6 @@ export default function ProfilePage() {
                 </label>
               </div>
             </div>
-
-            {/* Ok Button */}
             <div className="p-4 border-t border-gray-200">
               <button
                 onClick={handleClosePopup}
@@ -538,7 +493,50 @@ export default function ProfilePage() {
         </div>
       )}
 
+      {isDeleteDialogOpen && (
+        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-[340px] rounded-3xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 border-0">
+            <div className="p-8 text-center">
+              <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Trash2 className="text-red-500" size={40} />
+              </div>
+              
+              <h3 className="text-2xl font-bold text-gray-900 mb-3 italic uppercase">
+                Delete Account?
+              </h3>
+              
+              <p className="text-gray-500 text-base leading-relaxed mb-8">
+                Are you sure you want to delete your delivery partner account? This action is permanent and cannot be undone.
+              </p>
+              
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={handleDeleteAccount}
+                  disabled={isDeleting}
+                  className="w-full bg-red-600 text-white font-bold py-4 rounded-2xl hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 italic uppercase"
+                >
+                  {isDeleting ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                      Deleting...
+                    </>
+                  ) : (
+                    "Yes, Delete Account"
+                  )}
+                </button>
+                
+                <button
+                  onClick={() => setIsDeleteDialogOpen(false)}
+                  disabled={isDeleting}
+                  className="w-full bg-gray-100 text-gray-700 font-bold py-4 rounded-2xl hover:bg-gray-200 transition-colors disabled:opacity-50 italic uppercase"
+                >
+                  No, Keep Account
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
-

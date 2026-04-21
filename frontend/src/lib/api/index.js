@@ -166,6 +166,11 @@ export const userAPI = {
     return apiClient.put(API_ENDPOINTS.USER.PROFILE, data);
   },
 
+  // Delete user account
+  deleteProfile: () => {
+    return apiClient.delete(API_ENDPOINTS.USER.PROFILE);
+  },
+
   // Upload profile image
   uploadProfileImage: (file) => {
     const formData = new FormData();
@@ -424,6 +429,11 @@ export const restaurantAPI = {
   // Update restaurant profile
   updateProfile: (data) => {
     return apiClient.put(API_ENDPOINTS.RESTAURANT.PROFILE, data);
+  },
+
+  // Delete restaurant account
+  deleteProfile: () => {
+    return apiClient.delete("/restaurant/auth/profile");
   },
 
   // Delete restaurant account
@@ -981,6 +991,11 @@ export const deliveryAPI = {
   // Update delivery profile
   updateProfile: (data) => {
     return apiClient.put(API_ENDPOINTS.DELIVERY.PROFILE, data);
+  },
+
+  // Delete delivery account
+  deleteProfile: () => {
+    return apiClient.delete("/delivery/profile");
   },
 
   // Get orders

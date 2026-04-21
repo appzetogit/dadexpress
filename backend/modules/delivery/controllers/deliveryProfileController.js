@@ -170,3 +170,30 @@ export const reverify = asyncHandler(async (req, res) => {
   }
 });
 
+/**
+ * Delete Delivery Partner Account
+ * DELETE /api/delivery/profile
+ */
+export const deleteAccount = asyncHandler(async (req, res) => {
+  try {
+    const deliveryId = req.delivery._id;
+    
+    const delivery = await Delivery.findById(deliveryId);
+    if (!delivery) {
+      return errorResponse(res, 404, 'Delivery partner not found');
+    }
+
+    // Delete the account
+    await Delivery.findByIdAndDelete(deliveryId);
+
+    logger.info(`Delivery partner account deleted: ${deliveryId}`, {
+      deliveryId: delivery.deliveryId
+    });
+
+    return successResponse(res, 200, 'Account deleted successfully');
+  } catch (error) {
+    logger.error(`Error deleting delivery account: ${error.message}`);
+    return errorResponse(res, 500, 'Failed to delete account');
+  }
+});
+

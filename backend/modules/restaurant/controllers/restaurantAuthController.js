@@ -1549,8 +1549,33 @@ export const getReferralHistory = asyncHandler(async (req, res) => {
       joined: !!ref.isActive,
       rewardStatus: ref.referralStatus === 'completed' ? 'Credited' : 'Locked',
       commissionPercentage: Number(ref.referralCommission) || null,
-      joinedAt: ref.createdAt,
-      approvedAt: ref.approvedAt
     }))
   });
+});
+
+/**
+ * Delete Restaurant Account
+ * DELETE /api/restaurant/auth/profile
+ */
+export const deleteAccount = asyncHandler(async (req, res) => {
+  try {
+    const restaurantId = req.restaurant._id;
+    
+    const restaurant = await Restaurant.findById(restaurantId);
+    if (!restaurant) {
+      return errorResponse(res, 404, 'Restaurant not found');
+    }
+
+    // Delete the account
+    await Restaurant.findByIdAndDelete(restaurantId);
+
+    logger.info(`Restaurant account deleted: ${restaurantId}`, {
+      restaurantId: restaurant.restaurantId
+    });
+
+    return successResponse(res, 200, 'Account deleted successfully');
+  } catch (error) {
+    logger.error(`Error deleting restaurant account: ${error.message}`);
+    return errorResponse(res, 500, 'Failed to delete account');
+  }
 });

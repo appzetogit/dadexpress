@@ -2,6 +2,7 @@ import express from 'express';
 import {
   getUserProfile,
   updateUserProfile,
+  deleteAccount,
   uploadProfileImage,
   updateUserLocation,
   getUserLocation,
@@ -25,6 +26,7 @@ router.use(authenticate);
 // Profile routes
 router.get('/profile', getUserProfile);
 router.put('/profile', updateUserProfile);
+router.delete('/profile', deleteAccount);
 router.post('/save-fcm-token', updateFcmToken);
 router.put('/save-fcm-token', updateFcmToken);
 router.post('/update-fcm-token', updateFcmToken);

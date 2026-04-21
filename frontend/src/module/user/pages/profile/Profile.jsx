@@ -44,9 +44,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { authAPI } from "@/lib/api"
+import { authAPI, userAPI } from "@/lib/api"
 import { firebaseAuth } from "@/lib/firebase"
 import { clearModuleAuth } from "@/lib/utils/auth"
+import { toast } from "sonner"
 
 export default function Profile() {
   const { userProfile, vegMode, setVegMode } = useProfile()
@@ -65,6 +66,8 @@ export default function Profile() {
   const [vegModeOpen, setVegModeOpen] = useState(false)
   const [appearanceOpen, setAppearanceOpen] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   // Settings states
   const [appearance, setAppearance] = useState(() => {
@@ -208,7 +211,7 @@ export default function Profile() {
   }
 
   const profileCompletion = calculateProfileCompletion()
-  const isComplete = profileCompletion === 100
+  const iComplete = profileCompletion === 100
 
   // Handle logout
   const handleLogout = async () => {
@@ -275,22 +278,41 @@ export default function Profile() {
   }
 
   // Handle Delete Account
-  const handleDeleteAccount = () => {
-    // Clear local data using utility function to ensure they are logged out
-    clearModuleAuth("user")
-    
-    // Clear legacy token data
-    localStorage.removeItem("accessToken")
-    localStorage.removeItem("user_authenticated")
-    localStorage.removeItem("user_user")
-    localStorage.removeItem("user")
-    localStorage.removeItem("cart")
+  const handleDeleteAccount = async () => {
+    try {
+      setIsDeleting(true)
+      
+      // Call backend API to delete account
+      const response = await userAPI.deleteProfile()
+      
+      if (response?.data?.success) {
+        toast.success("Account deleted successfully")
+        
+        // Clear local data
+        clearModuleAuth("user")
+        
+        // Clear legacy token data
+        localStorage.removeItem("accessToken")
+        localStorage.removeItem("user_authenticated")
+        localStorage.removeItem("user_user")
+        localStorage.removeItem("user")
+        localStorage.removeItem("cart")
 
-    // Dispatch auth change event
-    window.dispatchEvent(new Event("userAuthChanged"))
+        // Dispatch auth change event
+        window.dispatchEvent(new Event("userAuthChanged"))
 
-    // Navigate to sign in page as requested
-    navigate("/auth/sign-in", { replace: true })
+        // Navigate to sign in page
+        navigate("/auth/sign-in", { replace: true })
+      } else {
+        toast.error(response?.data?.message || "Failed to delete account")
+      }
+    } catch (error) {
+      console.error("Error deleting account:", error)
+      toast.error("An error occurred while deleting your account")
+    } finally {
+      setIsDeleting(false)
+      setIsDeleteDialogOpen(false)
+    }
   }
 
   return (
@@ -338,16 +360,10 @@ export default function Profile() {
                 {!hasValidEmail && !userProfile?.phone && (
                   <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">Not available</p>
                 )}
-                {/* <Link to="/user/profile/activity" className="flex items-center gap-1 text-green-600 text-sm font-medium">
-                  View activity
-                  <ChevronRight className="h-4 w-4" />
-                </Link> */}
               </div>
             </div>
           </CardContent>
         </Card>
-
-
 
         {/* Account Options */}
         <div className="space-y-2 mb-3 mt-3">
@@ -487,7 +503,7 @@ export default function Profile() {
                   </div>
                   <div className="flex items-center gap-2">
                     <motion.span
-                      className={`text-xs font-medium px-2 py-1 rounded ${isComplete
+                      className={`text-xs font-medium px-2 py-1 rounded ${profileCompletion === 100
                         ? 'bg-green-100 text-green-700 border border-green-300'
                         : 'bg-orange-100 text-orange-800'
                         }`}
@@ -951,7 +967,7 @@ export default function Profile() {
             >
               <Card
                 className="bg-white dark:bg-[#1a1a1a] py-0 rounded-xl shadow-sm border-0 dark:border-gray-800 cursor-pointer"
-                onClick={handleDeleteAccount}
+                onClick={() => setIsDeleteDialogOpen(true)}
               >
                 <CardContent className="p-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -1090,7 +1106,49 @@ export default function Profile() {
         </DialogContent>
       </Dialog>
 
+      {/* Delete Account Confirmation Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="max-w-[340px] w-[calc(100%-2rem)] rounded-3xl p-0 overflow-hidden bg-white dark:bg-[#1a1a1a] border-0 shadow-2xl">
+          <div className="p-8 text-center">
+            <div className="w-20 h-20 bg-red-50 dark:bg-red-900/20 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Trash2 className="text-red-500 dark:text-red-400" size={40} />
+            </div>
+            
+            <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3 italic uppercase">
+              Delete Account?
+            </h3>
+            
+            <p className="text-gray-500 dark:text-gray-400 text-base leading-relaxed mb-8">
+              Are you sure you want to delete your user account? This action cannot be undone.
+            </p>
+            
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={handleDeleteAccount}
+                disabled={isDeleting}
+                className="w-full bg-red-600 text-white font-bold py-4 rounded-2xl hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 italic uppercase"
+              >
+                {isDeleting ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    Deleting...
+                  </>
+                ) : (
+                  "Yes, Delete Account"
+                )}
+              </button>
+              
+              <button
+                onClick={() => setIsDeleteDialogOpen(false)}
+                disabled={isDeleting}
+                className="w-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-bold py-4 rounded-2xl hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 italic uppercase"
+              >
+                No, Keep Account
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </AnimatedPage>
   )
 }
-

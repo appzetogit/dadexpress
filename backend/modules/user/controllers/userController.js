@@ -854,4 +854,26 @@ export const deleteUserAddress = asyncHandler(async (req, res) => {
     logger.error(`Error deleting address: ${error.message}`, { error: error.stack });
     return errorResponse(res, 500, 'Failed to delete address');
   }
+});/**
+ * Delete user account
+ * DELETE /api/user/profile
+ */
+export const deleteAccount = asyncHandler(async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+
+    if (!user) {
+      return errorResponse(res, 404, 'User not found');
+    }
+
+    // Delete user from database
+    await User.findByIdAndDelete(req.user._id);
+
+    logger.info(`User account deleted: ${req.user._id}`);
+
+    return successResponse(res, 200, 'Account deleted successfully');
+  } catch (error) {
+    logger.error(`Error deleting user account: ${error.message}`, { error: error.stack });
+    return errorResponse(res, 500, 'Failed to delete account');
+  }
 });

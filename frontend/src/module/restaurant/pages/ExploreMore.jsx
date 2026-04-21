@@ -30,9 +30,17 @@ import {
   Calendar,
   MapPin,
   Gift,
-  Share2
+  Share2,
+  Trash2
 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { DateRangeCalendar } from "@/components/ui/date-range-calendar"
 import { clearModuleAuth, clearAuthData } from "@/lib/utils/auth"
 import { restaurantAPI } from "@/lib/api"
@@ -459,6 +467,8 @@ export default function ExploreMore() {
   const restaurantDisplayAddress = restaurantData?.location ? formatAddress(restaurantData.location) : ""
 
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const handleLogout = async () => {
     if (isLoggingOut) return // Prevent multiple clicks
@@ -587,20 +597,37 @@ export default function ExploreMore() {
     }
   }
 
-  const handleDeleteAccount = () => {
-    // Clear restaurant module authentication data
-    clearModuleAuth("restaurant")
-    localStorage.removeItem("restaurant_onboarding")
-    localStorage.removeItem("restaurant_accessToken")
-    localStorage.removeItem("restaurant_authenticated")
-    localStorage.removeItem("restaurant_user")
-    sessionStorage.removeItem("restaurantAuthData")
-    
-    // Dispatch auth change event
-    window.dispatchEvent(new Event("restaurantAuthChanged"))
-    
-    // Navigate to login page
-    navigate("/restaurant/login", { replace: true })
+  const handleDeleteAccount = async () => {
+    try {
+      setIsDeleting(true)
+      
+      // Call backend API to delete account
+      const response = await restaurantAPI.deleteProfile()
+      
+      if (response?.data?.success) {
+        // Clear restaurant module authentication data
+        clearModuleAuth("restaurant")
+        localStorage.removeItem("restaurant_onboarding")
+        localStorage.removeItem("restaurant_accessToken")
+        localStorage.removeItem("restaurant_authenticated")
+        localStorage.removeItem("restaurant_user")
+        sessionStorage.removeItem("restaurantAuthData")
+        
+        // Dispatch auth change event
+        window.dispatchEvent(new Event("restaurantAuthChanged"))
+        
+        // Navigate to login page
+        navigate("/restaurant/login", { replace: true })
+      } else {
+        alert(response?.data?.message || "Failed to delete account")
+      }
+    } catch (error) {
+      console.error("Error deleting account:", error)
+      alert("An error occurred while deleting your account")
+    } finally {
+      setIsDeleting(false)
+      setIsDeleteDialogOpen(false)
+    }
   }
 
   const scheduleOffReasons = [
@@ -1211,7 +1238,7 @@ export default function ExploreMore() {
                   {isLoggingOut ? "Logging out..." : "Logout"}
                 </button>
                 <button
-                  onClick={handleDeleteAccount}
+                  onClick={() => setIsDeleteDialogOpen(true)}
                   className="w-full bg-white border border-red-600 text-red-600 hover:bg-red-50 font-semibold py-3 px-4 rounded-lg transition-colors"
                 >
                   Delete Account
@@ -1629,7 +1656,53 @@ export default function ExploreMore() {
           </>
         )}
       </AnimatePresence>
+
+
+      {/* Delete Account Confirmation Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="max-w-[340px] w-[calc(100%-2rem)] rounded-3xl p-0 overflow-hidden bg-white border-0 shadow-2xl">
+          <div className="p-8 text-center">
+            <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Trash2 className="text-red-500" size={40} />
+            </div>
+            
+            <h3 className="text-2xl font-bold text-gray-900 mb-3 italic uppercase">
+              Delete Account?
+            </h3>
+            
+            <p className="text-gray-500 text-base leading-relaxed mb-8">
+              Are you sure you want to delete your restaurant account? This action cannot be undone.
+            </p>
+            
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={handleDeleteAccount}
+                disabled={isDeleting}
+                className="w-full bg-red-600 text-white font-bold py-4 rounded-2xl hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 italic uppercase"
+              >
+                {isDeleting ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    Deleting...
+                  </>
+                ) : (
+                  "Yes, Delete Account"
+                )}
+              </button>
+              
+              <button
+                onClick={() => setIsDeleteDialogOpen(false)}
+                disabled={isDeleting}
+                className="w-full bg-gray-100 text-gray-700 font-bold py-4 rounded-2xl hover:bg-gray-200 transition-colors disabled:opacity-50 italic uppercase"
+              >
+                No, Keep Account
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </motion.div>
   )
 }
+
 
