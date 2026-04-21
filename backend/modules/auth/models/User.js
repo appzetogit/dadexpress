@@ -35,6 +35,13 @@ const userSchema = new mongoose.Schema({
     type: String,
     sparse: true
   },
+  appleId: {
+    type: String
+  },
+  appleEmail: {
+    type: String,
+    sparse: true
+  },
   role: {
     type: String,
     enum: ['user', 'restaurant', 'delivery', 'admin'],
@@ -42,7 +49,7 @@ const userSchema = new mongoose.Schema({
   },
   signupMethod: {
     type: String,
-    enum: ['google', 'phone', 'email'],
+    enum: ['google', 'phone', 'email', 'apple'],
     default: null
   },
   profileImage: {
@@ -252,6 +259,7 @@ userSchema.index(
   }
 );
 userSchema.index({ googleId: 1 }, { unique: true, sparse: true });
+userSchema.index({ appleId: 1 }, { unique: true, sparse: true });
 userSchema.index({ 'addresses.location': '2dsphere' });
 userSchema.index({ 'currentLocation.location': '2dsphere' }); // GeoJSON index for current location queries
 // Note: Single-field indexes on email/phone removed - compound indexes {email:1,role:1} and {phone:1,role:1} can serve as prefixes

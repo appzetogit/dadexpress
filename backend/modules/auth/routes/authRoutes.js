@@ -10,6 +10,8 @@ import {
   getCurrentUser,
   googleAuth,
   googleCallback,
+  appleLogin,
+  appleCallback,
   firebaseGoogleLogin,
   updateFcmToken
 } from '../controllers/authController.js';
@@ -90,6 +92,10 @@ router.post('/firebase/google-login', firebaseGoogleLogin);
 // Google OAuth routes
 router.get('/google/:role', googleAuth);
 router.get('/google/:role/callback', googleCallback);
+
+// Apple OAuth routes
+router.post('/apple/login', appleLogin);
+router.post('/apple/callback', appleCallback);
 
 // Protected routes
 router.get('/me', authenticate, getCurrentUser);

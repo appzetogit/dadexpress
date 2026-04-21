@@ -3,6 +3,7 @@ import otpService from "../services/otpService.js";
 import jwtService from "../services/jwtService.js";
 import googleAuthService from "../services/googleAuthService.js";
 import firebaseAuthService from "../services/firebaseAuthService.js";
+import appleAuthService from "../services/appleAuthService.js";
 import {
   successResponse,
   errorResponse,
@@ -1363,6 +1364,197 @@ export const googleCallback = asyncHandler(async (req, res) => {
     return res.redirect(
       `${process.env.FRONTEND_URL || "http://localhost:5173"}/restaurant/login?error=auth_failed`,
     );
+  }
+});
+
+/**
+ * Login / register using Apple ID token
+ * POST /api/auth/apple/login
+ */
+export const appleLogin = asyncHandler(async (req, res) => {
+  const { idToken, role = "user", name: providedName } = req.body;
+
+  if (!idToken) {
+    return errorResponse(res, 400, "Apple ID token is required");
+  }
+
+  // Validate role
+  const allowedRoles = ["user", "restaurant", "delivery"];
+  const userRole = role || "user";
+  if (!allowedRoles.includes(userRole)) {
+    return errorResponse(res, 400, "Invalid role");
+  }
+
+  try {
+    const decoded = await appleAuthService.verifyIdToken(idToken);
+    const { uid, email } = decoded;
+
+    if (!email) {
+      return errorResponse(res, 400, "Email not found in Apple token");
+    }
+
+    // Find or create user
+    let user = await User.findOne({
+      $or: [{ appleId: uid }, { email, role: userRole }], // Note: Assuming email is unique per role or globally
+    });
+
+    if (user) {
+      if (!user.appleId) {
+        user.appleId = uid;
+        user.appleEmail = email;
+        if (!user.signupMethod) user.signupMethod = "apple";
+        await user.save();
+      }
+    } else {
+      // Create new user
+      const userData = {
+        name: providedName || email.split('@')[0],
+        email: email.toLowerCase(),
+        appleId: uid,
+        appleEmail: email.toLowerCase(),
+        role: userRole,
+        signupMethod: "apple",
+        isActive: true,
+        platform: req.body.platform || 'web'
+      };
+
+      user = await User.create(userData);
+      logger.info(`New user registered via Apple: ${user._id}`, { email, userId: user._id });
+    }
+
+    // FCM Token Update
+    const { fcmToken, platform = 'web' } = req.body;
+    if (fcmToken) {
+      user.platform = platform;
+      if (['android', 'ios', 'app'].includes(platform.toLowerCase())) {
+        user.fcmTokenMobile = fcmToken;
+      } else {
+        user.fcmToken = fcmToken;
+      }
+      await user.save();
+    }
+
+    const tokens = jwtService.generateTokens({
+      userId: user._id.toString(),
+      role: user.role,
+      email: user.email,
+    });
+
+    const cookieName = user.role === "admin" ? "admin_refreshToken" :
+      user.role === "restaurant" ? "restaurant_refreshToken" :
+      user.role === "delivery" ? "delivery_refreshToken" : "user_refreshToken";
+
+    res.cookie(cookieName, tokens.refreshToken, getRefreshCookieOptions({
+      maxAge: 365 * 24 * 60 * 60 * 1000,
+    }));
+
+    return successResponse(res, 200, "Authentication successful", {
+      accessToken: tokens.accessToken,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        phoneVerified: user.phoneVerified,
+        role: user.role,
+        profileImage: user.profileImage,
+        signupMethod: user.signupMethod,
+      },
+    });
+  } catch (error) {
+    logger.error(`Error in Apple login: ${error.message}`);
+    return errorResponse(res, 400, error.message || "Authentication failed");
+  }
+});
+
+/**
+ * Handle Apple OAuth callback (POST from Apple)
+ * POST /api/auth/apple/callback
+ */
+export const appleCallback = asyncHandler(async (req, res) => {
+  const { id_token, user: userJson, state } = req.body;
+
+  if (!id_token) {
+    return res.status(400).send('Missing identity token');
+  }
+
+  try {
+    const decoded = await appleAuthService.verifyIdToken(id_token);
+    const { uid, email } = decoded;
+
+    let fullName = "";
+    if (userJson) {
+      try {
+        const appleUser = JSON.parse(userJson);
+        if (appleUser.name) {
+          fullName = `${appleUser.name.firstName || ""} ${appleUser.name.lastName || ""}`.trim();
+        }
+      } catch (e) {
+        logger.error("Failed to parse Apple user JSON", e);
+      }
+    }
+
+    // Role is expected in state, or default to user
+    const userRole = state || "user";
+
+    let user = await User.findOne({
+      $or: [{ appleId: uid }, { email, role: userRole }],
+    });
+
+    if (user) {
+      if (!user.appleId) {
+        user.appleId = uid;
+        user.appleEmail = email;
+        if (!user.signupMethod) user.signupMethod = "apple";
+        await user.save();
+      }
+    } else {
+      user = await User.create({
+        name: fullName || email.split('@')[0],
+        email: email.toLowerCase(),
+        appleId: uid,
+        appleEmail: email.toLowerCase(),
+        role: userRole,
+        signupMethod: "apple",
+        isActive: true
+      });
+    }
+
+    const jwtTokens = jwtService.generateTokens({
+      userId: user._id.toString(),
+      role: user.role,
+      email: user.email,
+    });
+
+    const cookieName = user.role === 'admin' ? 'admin_refreshToken' :
+      user.role === 'restaurant' ? 'restaurant_refreshToken' :
+      user.role === 'delivery' ? 'delivery_refreshToken' : 'user_refreshToken';
+
+    res.cookie(cookieName, jwtTokens.refreshToken, getRefreshCookieOptions({
+      maxAge: 365 * 24 * 60 * 60 * 1000,
+    }));
+
+    const frontendUrl = process.env.FRONTEND_URL || "https://dadexpress.in";
+    const redirectPath = userRole === "restaurant" ? "/restaurant/auth/google-callback" : // Using google-callback as it exists
+      userRole === "delivery" ? "/delivery/auth/callback" : "/auth/callback";
+
+    const userData = {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      phoneVerified: user.phoneVerified,
+      role: user.role,
+      profileImage: user.profileImage,
+      signupMethod: user.signupMethod,
+    };
+
+    const redirectUrl = `${frontendUrl}${redirectPath}?token=${jwtTokens.accessToken}&user=${encodeURIComponent(JSON.stringify(userData))}&provider=apple`;
+    return res.redirect(redirectUrl);
+  } catch (error) {
+    logger.error(`Error in Apple OAuth callback: ${error.message}`);
+    const frontendUrl = process.env.FRONTEND_URL || "https://dadexpress.in";
+    return res.redirect(`${frontendUrl}/user/login?error=apple_auth_failed`);
   }
 });
 

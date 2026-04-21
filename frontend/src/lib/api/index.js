@@ -122,6 +122,17 @@ export const authAPI = {
     });
   },
 
+  // Login/Register via Apple ID token
+  appleLogin: (idToken, role = "user", name = null, fcmToken = null, platform = "web") => {
+    return apiClient.post(API_ENDPOINTS.AUTH.APPLE_LOGIN, {
+      idToken,
+      role,
+      name,
+      fcmToken,
+      platform,
+    });
+  },
+
   // Refresh token
   refreshToken: () => {
     return apiClient.post(API_ENDPOINTS.AUTH.REFRESH_TOKEN);

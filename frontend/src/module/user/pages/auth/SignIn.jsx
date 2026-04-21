@@ -456,6 +456,85 @@ export default function SignIn() {
     }
   }
 
+  const handleAppleSignIn = async () => {
+    if (isLoading) return
+    setIsLoading(true)
+    setApiError("")
+
+    try {
+      if (typeof window.AppleID === 'undefined') {
+        throw new Error("Apple Sign-In is not initialized. Please try again later.")
+      }
+
+      window.AppleID.auth.init({
+        clientId: 'com.dadexpress.web',
+        scope: 'name email',
+        redirectURI: 'https://dadexpress.in/api/auth/apple/callback',
+        state: 'user',
+        usePopup: true
+      });
+
+      let idToken = null;
+      let fullName = null;
+
+      if (window.flutter_inappwebview && typeof window.flutter_inappwebview.callHandler === "function") {
+        // 🚀 Mobile app (Flutter InAppWebView) flow
+        debugLog("📱 Starting Apple sign-in via Flutter native bridge...")
+        const result = await window.flutter_inappwebview.callHandler("nativeAppleSignIn")
+
+        if (result && result.success && result.identityToken) {
+          idToken = result.identityToken
+          fullName = result.fullName || (result.givenName ? `${result.givenName} ${result.familyName || ""}`.trim() : null)
+        } else {
+          debugLog("ℹ️ User cancelled native Apple sign in.")
+          setIsLoading(false)
+          return
+        }
+      } else {
+        // 🌐 Web browser flow
+        const response = await window.AppleID.auth.signIn();
+        debugLog("✅ Apple sign-in successful:", response);
+
+        if (response && response.authorization) {
+          idToken = response.authorization.id_token;
+          if (response.user && response.user.name) {
+            fullName = `${response.user.name.firstName || ""} ${response.user.name.lastName || ""}`.trim();
+          }
+        }
+      }
+
+      if (idToken) {
+        // Get FCM token
+        const fcmToken = await requestFcmToken();
+        debugLog("🚀 Calling backend appleLogin with idToken...");
+        const responseApi = await authAPI.appleLogin(idToken, "user", fullName, fcmToken, "web");
+        const data = responseApi?.data?.data || {};
+
+        if (data.accessToken && data.user) {
+          setAuthData("user", data.accessToken, data.user);
+          window.dispatchEvent(new Event("userAuthChanged"));
+          debugLog("✅ Apple login successful, navigating to /user");
+          navigate("/user", { replace: true });
+        } else {
+          throw new Error("Invalid response from server");
+        }
+      }
+    } catch (error) {
+      console.error("❌ Apple sign-in error:", error);
+      let message = "Apple sign-in failed. Please try again."
+      if (error?.response?.data?.message) {
+        message = error.response.data.message
+      } else if (error?.error === "popup_closed_by_user") {
+        message = "Sign-in was cancelled."
+      } else if (error?.message) {
+        message = error.message
+      }
+      setApiError(message)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const toggleMode = () => {
     const newMode = isSignUp ? "signin" : "signup"
     navigate(`/auth/sign-in?mode=${newMode}`, { replace: true })
@@ -558,7 +637,7 @@ export default function SignIn() {
                     <span>{errors.phone}</span>
                   </div>
                 )}
-                {apiError && authMethod === "phone" && (
+                {apiError && (
                   <div className="flex items-center gap-1 text-xs text-red-600">
                     <AlertCircle className="h-3 w-3" />
                     <span>{apiError}</span>
@@ -599,6 +678,17 @@ export default function SignIn() {
 
           {/* Social Login Icons */}
           <div className="flex justify-center gap-4 md:gap-6">
+            {/* Apple Login */}
+            <button
+              type="button"
+              onClick={handleAppleSignIn}
+              disabled={isLoading}
+              className="w-12 h-12 md:w-14 md:h-14 rounded-full border border-gray-300 dark:border-gray-700 flex items-center justify-center hover:bg-gray-50 dark:hover:bg-gray-800 transition-all hover:shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-label="Sign in with Apple"
+            >
+              <img src="/apple-logo.png" alt="Apple" className="h-6 w-6 object-contain" />
+            </button>
+
             {/* Google Login */}
             <button
               type="button"
@@ -626,7 +716,6 @@ export default function SignIn() {
                 />
               </svg>
             </button>
-
           </div>
 
           {/* Legal Disclaimer */}
