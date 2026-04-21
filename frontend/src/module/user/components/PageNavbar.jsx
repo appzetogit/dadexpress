@@ -709,24 +709,35 @@ export default function PageNavbar({
             }
           }
         } else {
-          // City not found, filter out city/state and take first parts
+          // City not found, filter out country and pincode, but KEEP city/state if needed
           const filteredParts = parts.filter(part => {
             if (/^\d{6}$/.test(part)) return false
             if (part.toLowerCase() === "india" || part.length > 25) return false
-            if (part.toLowerCase() === "indore" || part.toLowerCase() === location?.city?.toLowerCase()) return false
+            // DO NOT filter out city yet - we need it if no better area is found
             if (part.toLowerCase().includes("madhya") || part.toLowerCase().includes("pradesh")) return false
             return true
           })
 
           if (filteredParts.length >= 1) {
-            const extractedArea = filteredParts[0]
-            if (extractedArea && extractedArea.toLowerCase() !== location.city.toLowerCase() &&
-              extractedArea.length > 2 && !extractedArea.match(/^\d+/)) {
-              mainLocation = `${extractedArea}, ${location.city}`
+            // Find the best descriptor (usually the first part that isn't the city, or just the first part)
+            const potentialArea = filteredParts[0]
+            if (potentialArea && potentialArea.length > 2 && !potentialArea.match(/^\d+/)) {
+              mainLocation = potentialArea
+              // If we have more parts and the first was just the city, maybe include the second
+              if (filteredParts.length >= 2 && potentialArea.toLowerCase() === location?.city?.toLowerCase()) {
+                mainLocation = filteredParts.slice(0, 2).join(', ')
+              }
               false && console.log("✅✅✅ Extracted area (first part) from formattedAddress:", mainLocation)
             }
           }
         }
+      }
+    }
+
+    // Final check: If mainLocation is still empty or "Location Found", use city as primary
+    if (!mainLocation || mainLocation === "Location Found") {
+      if (location?.city && location.city !== "Unknown City" && location.city !== "Current Location" && location.city !== "Select location") {
+        mainLocation = location.city
       }
     }
 

@@ -361,10 +361,13 @@ const restaurantSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  },
+  }
 );
 
 // Note: email, phone, and googleId indexes are now defined at the field level
+
+// geospatial index for location
+restaurantSchema.index({ "location.coordinates": "2dsphere" });
 
 // Hash password before saving
 restaurantSchema.pre("save", async function () {

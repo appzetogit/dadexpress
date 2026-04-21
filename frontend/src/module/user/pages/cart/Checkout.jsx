@@ -335,7 +335,9 @@ export default function Checkout() {
                             <div className="flex-1">
                               <Badge className="mb-2 bg-[#EB590E] text-white">Current Location</Badge>
                               <p className="text-sm font-medium">
-                                {currentLocation.formattedAddress || currentLocation.address || "Use current location"}
+                                {(currentLocation.area && currentLocation.area !== "Location Found") 
+                                  ? (currentLocation.city && currentLocation.city !== currentLocation.area ? `${currentLocation.area}, ${currentLocation.city}` : currentLocation.area)
+                                  : (currentLocation.city && currentLocation.city !== "Unknown City" ? currentLocation.city : (currentLocation.formattedAddress || currentLocation.address || "Use current location"))}
                               </p>
                             </div>
                             {selectedAddressId === "__current__" && (
@@ -573,11 +575,8 @@ export default function Checkout() {
                     )}
                     <div className="border-t dark:border-gray-700 pt-3 md:pt-4 flex justify-between font-bold text-base md:text-lg lg:text-xl">
                       <span className="dark:text-white">Total</span>
-                      {refreshing ? (
-                        <span className="text-muted-foreground animate-pulse">Calculating...</span>
-                      ) : (
-                        <span className="text-[#EB590E]">₹{total.toFixed(2)}</span>
-                      )}
+                      <span className="text-[#EB590E]">₹{total.toFixed(2)}</span>
+
                     </div>
                   </div>
 

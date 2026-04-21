@@ -322,22 +322,19 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       return fullAddress
     }
 
-    if (location?.address || location?.area || location?.street) {
-      const addressParts = []
-      if (location.address && location.address !== "Select location") {
-        addressParts.push(location.address)
-      } else if (location.area) {
-        addressParts.push(location.area)
-      } else if (location.street) {
-        addressParts.push(location.street)
+    // Final fallback: Use city/area combine
+    const mainPart = location?.area && location.area !== "Location Found" 
+      ? location.area 
+      : (location?.city && location.city !== "Unknown City" && location.city !== "Current Location" ? location.city : "");
+    
+    if (mainPart) {
+      if (location?.city && location.city !== mainPart && location.city !== "Unknown City") {
+        return `${mainPart}, ${location.city}`
       }
-      if (location.city) addressParts.push(location.city)
-      if (location.state) addressParts.push(location.state)
-      if (location.postalCode) addressParts.push(location.postalCode)
-      if (addressParts.length > 0) return addressParts.join(', ')
+      return mainPart
     }
 
-    return location?.city || location?.area || "Detecting location..."
+    return "Detecting location..."
   })()
 
   // Global error suppression for Ola Maps SDK errors

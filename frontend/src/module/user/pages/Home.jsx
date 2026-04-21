@@ -872,6 +872,7 @@ export default function Home() {
 
   // Track the last location used for restaurant fetching to prevent jitter
   const lastFetchedLocationRef = useRef(null)
+  const lastFetchedZoneIdRef = useRef(null)
   const isInitialLoadRef = useRef(true)
 
   const activeLocation = useMemo(
@@ -1072,12 +1073,16 @@ export default function Home() {
       }
 
       if (cancelled || resolveRequestId !== zoneResolveRequestRef.current) return
-      setResolvedZoneId(nextZoneId || null)
-      setResolvedZoneSource("manual")
+      
+      // Sync with the zone provider's detected zone if our manual resolution is still null
+      const finalZoneId = nextZoneId || zoneId || null
+      
+      setResolvedZoneId(finalZoneId)
+      setResolvedZoneSource(nextZoneId ? "manual" : "gps")
       // Only set out of service if we successfully called the API and it confirmed no service.
       // If there was a network error, we don't want to show the "Not available" error flash.
-      setSelectedAddressOutOfService(!networkError && (outOfService || !nextZoneId))
-      setResolvedSelectedCoords(nextZoneId ? (selectedLocationCoords || null) : null)
+      setSelectedAddressOutOfService(!networkError && (outOfService || !finalZoneId))
+      setResolvedSelectedCoords(finalZoneId ? (selectedLocationCoords || null) : null)
       setZoneResolveLoading(false)
     }
 
@@ -1453,7 +1458,8 @@ export default function Home() {
     if (!lat || !lng) return
 
     const prevLoc = lastFetchedLocationRef.current
-    let shouldFetch = isInitialLoadRef.current || activeLocation.source === "SELECTED"
+    
+    let shouldFetch = isInitialLoadRef.current || (resolvedZoneId !== lastFetchedZoneIdRef.current)
 
     if (!shouldFetch && prevLoc) {
       // Calculate distance to avoid re-fetching on small GPS movements
@@ -1473,6 +1479,7 @@ export default function Home() {
 
     if (shouldFetch) {
       lastFetchedLocationRef.current = { lat, lng }
+      lastFetchedZoneIdRef.current = resolvedZoneId
       isInitialLoadRef.current = false
       fetchRestaurants(appliedFilters)
     }

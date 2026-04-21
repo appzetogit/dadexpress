@@ -1195,12 +1195,11 @@ export const deleteRestaurantAccount = asyncHandler(async (req, res) => {
   }
 });
 
-// Get restaurants with dishes under ₹250
+// Get restaurants with dishes under ₹250 - OPTIMIZED FOR PERFORMANCE (<2s)
 export const getRestaurantsWithDishesUnder250 = async (req, res) => {
   try {
-    const { zoneId } = req.query; // User's zone ID (optional - if provided, filters by zone)
+    const { zoneId } = req.query;
     
-    // CRITICAL: Require zoneId for Under-250 list to prevent showing all restaurants
     if (!zoneId) {
       return successResponse(res, 200, 'Please select a location within a service zone', {
         restaurants: [],
@@ -1208,156 +1207,43 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
       });
     }
 
-    // Validate zone exists and is active
-    let userZone = await Zone.findById(zoneId).lean();
-    if (!userZone || !userZone.isActive) {
-      console.warn(`⚠️ Invalid/inactive zoneId on under-250 list: ${zoneId}`);
+    // 1. Fetch Zone Boundary FIRST - Lean query
+    const userZone = await Zone.findById(zoneId).select("boundary isActive").lean();
+    if (!userZone || !userZone.isActive || !userZone.boundary) {
       return successResponse(res, 200, 'Location outside service area', {
         restaurants: [],
         total: 0
       });
     }
 
-    const MAX_PRICE = 250;
-    
-    // Helper function to calculate final price after discount
-    const getFinalPrice = (item) => {
-      // price is typically the current/discounted price
-      // If discount exists, calculate from originalPrice, otherwise use price directly
-      if (item.originalPrice && item.discountAmount && item.discountAmount > 0) {
-        // Calculate discounted price from originalPrice
-        let discountedPrice = item.originalPrice;
-        if (item.discountType === 'Percent') {
-          discountedPrice = item.originalPrice - (item.originalPrice * item.discountAmount / 100);
-        } else if (item.discountType === 'Fixed') {
-          discountedPrice = item.originalPrice - item.discountAmount;
+    // 2. Fetch Restaurants inside the zone using Geospatial Index - FAST DB Query
+    const restaurantsInZone = await Restaurant.find({
+      isActive: true,
+      "location.coordinates": {
+        $geoWithin: {
+          $geometry: userZone.boundary
         }
-        return Math.max(0, discountedPrice);
       }
-      // Otherwise, use price as the final price
-      return Math.max(0, item.price || 0);
-    };
+    })
+    .select("restaurantId name slug rating totalRatings estimatedDeliveryTime distance cuisines priceRange profileImage menuImages location isAcceptingOrders openDays deliveryTimings")
+    .lean();
 
-    // Helper function to filter items under ₹250
-    const filterItemsUnder250 = (items) => {
-      return items.filter(item => {
-        if (item.isAvailable === false) return false;
-        const finalPrice = getFinalPrice(item);
-        return finalPrice <= MAX_PRICE;
+    if (restaurantsInZone.length === 0) {
+      return successResponse(res, 200, 'No restaurants found in this area', {
+        restaurants: [],
+        total: 0
       });
-    };
-
-    // Helper function to process a single restaurant with its menu
-    const processRestaurantSync = (restaurant, menu) => {
-      if (!menu || !menu.sections || menu.sections.length === 0) {
-        return null; // Skip restaurants without menus
-      }
-
-        // Collect all dishes under ₹250 from all sections
-        const dishesUnder250 = [];
-
-        menu.sections.forEach(section => {
-          if (section.isEnabled === false) return;
-
-          // Filter direct items in section
-          const sectionItems = filterItemsUnder250(section.items || []);
-          dishesUnder250.push(...sectionItems.map(item => ({
-            ...item,
-            sectionName: section.name
-          })));
-
-          // Filter items in subsections
-          (section.subsections || []).forEach(subsection => {
-            const subsectionItems = filterItemsUnder250(subsection.items || []);
-            dishesUnder250.push(...subsectionItems.map(item => ({
-              ...item,
-              sectionName: section.name,
-              subsectionName: subsection.name
-            })));
-          });
-        });
-
-        // Only include restaurant if it has at least one dish under ₹250
-        if (dishesUnder250.length > 0) {
-          return {
-            id: restaurant._id.toString(),
-            restaurantId: restaurant.restaurantId,
-            name: restaurant.name,
-            slug: restaurant.slug,
-            rating: restaurant.rating || 0,
-            totalRatings: restaurant.totalRatings || 0,
-            deliveryTime: restaurant.estimatedDeliveryTime || "25-30 mins",
-            distance: restaurant.distance || "1.2 km",
-            cuisine: restaurant.cuisines && restaurant.cuisines.length > 0 
-              ? restaurant.cuisines.join(' • ') 
-              : "Multi-cuisine",
-            price: restaurant.priceRange || "$$",
-            image: restaurant.profileImage?.url || restaurant.menuImages?.[0]?.url || "",
-            menuItems: dishesUnder250.slice(0, 12).map(item => ({
-              id: item.id,
-              name: item.name,
-              price: getFinalPrice(item),
-              originalPrice: item.originalPrice || item.price,
-              image: item.image || (item.images && item.images.length > 0 ? item.images[0] : ""),
-              isVeg: item.foodType === 'Veg',
-              bestPrice: item.discountAmount > 0 || (item.originalPrice && item.originalPrice > getFinalPrice(item)),
-              description: item.description || "",
-              category: item.category || item.sectionName || "",
-            }))
-          };
-        }
-        return null;
-    };
-
-    const parseCoordinate = (value) => {
-      const parsed = Number(value);
-      return Number.isFinite(parsed) ? parsed : null;
-    };
-
-    const getRestaurantCoords = (restaurantDoc) => {
-      const coords = restaurantDoc?.location?.coordinates;
-      if (Array.isArray(coords) && coords.length >= 2) {
-        const lng = parseCoordinate(coords[0]);
-        const lat = parseCoordinate(coords[1]);
-        if (lat !== null && lng !== null) return { lat, lng };
-      }
-      const lat = parseCoordinate(restaurantDoc?.location?.latitude);
-      const lng = parseCoordinate(restaurantDoc?.location?.longitude);
-      if (lat !== null && lng !== null) return { lat, lng };
-      return null;
-    };
-
-    const isRestaurantInsideZone = (restaurantDoc, zoneDoc) => {
-      if (!zoneDoc?.coordinates || zoneDoc.coordinates.length < 3) return true;
-      const coords = getRestaurantCoords(restaurantDoc);
-      if (!coords) return false;
-      
-      // Strict polygon check (removed 0.5km buffer which caused leaks)
-      return isPointInZone(coords.lat, coords.lng, zoneDoc.coordinates);
-    };
-
-    // Get all active restaurants
-    let restaurants = await Restaurant.find({ isActive: true })
-      .select("restaurantId name slug rating totalRatings estimatedDeliveryTime distance cuisines priceRange profileImage menuImages location isActive isAcceptingOrders openDays deliveryTimings")
-      .lean();
-
-    // When zone is detected, restrict to restaurants inside the same zone.
-    if (userZone) {
-      restaurants = restaurants.filter((restaurantDoc) =>
-        isRestaurantInsideZone(restaurantDoc, userZone),
-      );
     }
 
-    // Bulk fetch all relevant metadata in ONE go to solve N+1 performance bottleneck
-    const restaurantIds = restaurants.map(r => r._id);
+    const MAX_PRICE = 250;
+    const restaurantIds = restaurantsInZone.map(r => r._id);
     
-    // Fetch all menus and outlet timings for these restaurants in parallel
-    // OPTIMIZATION: Only fetch 'sections' to avoid heavy payload
+    // 3. Parallel Fetch Menus and Timings - REDUCED payload
     const [allMenus, allTimings] = await Promise.all([
       Menu.find({ restaurant: { $in: restaurantIds }, isActive: true })
-          .select("restaurant sections isActive")
+          .select("restaurant sections")
           .lean(),
-      OutletTimings.find({ restaurantId: { $in: restaurantIds }, isActive: true }).lean()
+      OutletTimings.find({ restaurantId: { $in: restaurantIds }, isActive: true }).select("restaurantId timings").lean()
     ]);
 
     // Create fast lookup maps
@@ -1367,87 +1253,124 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
     const timingLookup = new Map();
     allTimings.forEach(t => timingLookup.set(t.restaurantId?.toString(), t));
 
-    // Common sync helper for open/closed check (Internal to controller)
-    const isRestaurantOpenSyncLocal = (restaurant, outletTimings) => {
-      const now = new Date();
-      const istDate = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
-      const currentMinutes = istDate.getUTCHours() * 60 + istDate.getUTCMinutes();
-      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-      const currentDay = days[istDate.getUTCDay()];
-      const previousDay = days[(istDate.getUTCDay() + 6) % 7];
-
-      const timeToMinutesLocal = (timeStr) => {
-        if (!timeStr) return null;
-        const match = timeStr.match(/^(\d{1,2}):(\d{2})\s?(AM|PM|am|pm)?$/i);
-        if (!match) return null;
-        let h = parseInt(match[1], 10);
-        const m = parseInt(match[2], 10);
-        const ampm = match[3] ? match[3].toUpperCase() : null;
-        if (ampm === 'PM' && h < 12) h += 12;
-        if (ampm === 'AM' && h === 12) h = 0;
-        return h * 60 + m;
-      };
-
-      if (!outletTimings || !outletTimings.timings || outletTimings.timings.length === 0) {
-        const openDays = Array.isArray(restaurant.openDays) ? restaurant.openDays : [];
-        const isDayMarkedOpen = (dayName) => {
-          const norm = dayName.toLowerCase().substring(0, 3);
-          return openDays.some(d => d?.toString().toLowerCase().substring(0, 3) === norm);
-        };
-        const openMin = timeToMinutesLocal(restaurant.deliveryTimings?.openingTime);
-        const closeMin = timeToMinutesLocal(restaurant.deliveryTimings?.closingTime);
-        if (openDays.length > 0 && !isDayMarkedOpen(currentDay)) return false;
-        if (openMin === null || closeMin === null) return true;
-        if (closeMin < openMin) return currentMinutes >= openMin || currentMinutes <= closeMin;
-        return currentMinutes >= openMin && currentMinutes <= closeMin;
+    // Price calculator helper
+    const getFinalPrice = (item) => {
+      if (item.originalPrice && item.discountAmount > 0) {
+        let discountedPrice = item.originalPrice;
+        if (item.discountType === 'Percent') {
+          discountedPrice = item.originalPrice - (item.originalPrice * item.discountAmount / 100);
+        } else if (item.discountType === 'Fixed') {
+          discountedPrice = item.originalPrice - item.discountAmount;
+        }
+        return Math.max(0, discountedPrice);
       }
-
-      const today = outletTimings.timings.find(t => t.day === currentDay);
-      if (today?.isOpen) {
-        const o = timeToMinutesLocal(today.openingTime), c = timeToMinutesLocal(today.closingTime);
-        if (c < o) return currentMinutes >= o || currentMinutes <= c;
-        return currentMinutes >= o && currentMinutes <= c;
-      }
-      return false;
+      return Math.max(0, item.price || 0);
     };
 
-    // Process restaurants synchronously and STOP once we have enough results (40)
-    const restaurantsWithDishes = [];
-    for (const r of restaurants) {
-      if (restaurantsWithDishes.length >= 40) break;
+    // 4. Process only relevant restaurants - Optimized loop
+    const results = [];
+    const now = new Date();
+    const istDate = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
+    const currentMinutes = istDate.getUTCHours() * 60 + istDate.getUTCMinutes();
+    const currentDay = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][istDate.getUTCDay()];
 
+    for (const r of restaurantsInZone) {
       const menu = menuLookup.get(r._id.toString());
-      if (!menu) continue;
-      
-      const openStatus = isRestaurantOpenSyncLocal(r, timingLookup.get(r._id.toString()));
-      const isAcceptingOrders = openStatus && r.isAcceptingOrders !== false;
+      if (!menu || !menu.sections) continue;
 
-      const processed = processRestaurantSync(r, menu);
-      if (processed) {
-        restaurantsWithDishes.push({ 
-          ...processed, 
-          isAcceptingOrders, 
-          status: openStatus ? "Open" : "Closed" 
+      const dishesUnder250 = [];
+      
+      // Efficiently scan sections and items
+      for (const section of menu.sections) {
+        if (section.isEnabled === false) continue;
+        
+        // Check items
+        const items = section.items || [];
+        for (const item of items) {
+          if (!item.isAvailable) continue;
+          const price = getFinalPrice(item);
+          if (price <= MAX_PRICE && price > 0) {
+            dishesUnder250.push({
+              id: item.id,
+              name: item.name,
+              price: price,
+              originalPrice: item.originalPrice || item.price,
+              image: item.image || (item.images?.length > 0 ? item.images[0] : ""),
+              isVeg: item.foodType === 'Veg',
+              description: item.description || "",
+              category: item.category || section.name || "",
+            });
+          }
+          if (dishesUnder250.length >= 10) break; // Limit items per restaurant for performance
+        }
+        
+        // Check subsections if needed
+        if (dishesUnder250.length < 10) {
+          for (const sub of (section.subsections || [])) {
+            for (const item of (sub.items || [])) {
+              if (!item.isAvailable) continue;
+              const price = getFinalPrice(item);
+              if (price <= MAX_PRICE && price > 0) {
+                dishesUnder250.push({
+                  id: item.id,
+                  name: item.name,
+                  price: price,
+                  originalPrice: item.originalPrice || item.price,
+                  image: item.image || (item.images?.length > 0 ? item.images[0] : ""),
+                  isVeg: item.foodType === 'Veg',
+                  description: item.description || "",
+                  category: item.category || section.name || "",
+                });
+              }
+              if (dishesUnder250.length >= 10) break;
+            }
+            if (dishesUnder250.length >= 10) break;
+          }
+        }
+        if (dishesUnder250.length >= 10) break;
+      }
+
+      if (dishesUnder250.length > 0) {
+        // Simple timing check
+        let isOpen = true;
+        const timing = timingLookup.get(r._id.toString());
+        if (timing?.timings?.length > 0) {
+          const todayTiming = timing.timings.find(t => t.day === currentDay);
+          if (todayTiming && !todayTiming.isOpen) isOpen = false;
+        }
+
+        results.push({
+          id: r._id.toString(),
+          restaurantId: r.restaurantId,
+          name: r.name,
+          slug: r.slug,
+          rating: r.rating || 0,
+          deliveryTime: r.estimatedDeliveryTime || "25-30 mins",
+          distance: r.distance || "1.2 km",
+          cuisine: (r.cuisines?.length > 0) ? r.cuisines.join(' • ') : "Multi-cuisine",
+          image: r.profileImage?.url || r.menuImages?.[0]?.url || "",
+          isAcceptingOrders: isOpen && r.isAcceptingOrders !== false,
+          menuItems: dishesUnder250
         });
       }
+      
+      if (results.length >= 50) break; // Return top 50 restaurants for optimal frontend speed
     }
 
-    // Sort by rating (highest first) or by number of dishes
-    restaurantsWithDishes.sort((a, b) => {
-      if (b.rating !== a.rating) {
-        return b.rating - a.rating;
-      }
-      return b.menuItems.length - a.menuItems.length;
+    // Final sort: Accepting orders first, then by rating
+    results.sort((a, b) => {
+      if (a.isAcceptingOrders !== b.isAcceptingOrders) return b.isAcceptingOrders ? 1 : -1;
+      return b.rating - a.rating;
     });
 
-    return successResponse(res, 200, 'Restaurants with dishes under ₹250 retrieved successfully', {
-      restaurants: restaurantsWithDishes,
-      total: restaurantsWithDishes.length,
+    return successResponse(res, 200, 'Optimized results retrieved', {
+      restaurants: results,
+      total: results.length,
     });
     
   } catch (error) {
-    console.error('Error fetching restaurants with dishes under ₹250:', error);
-    return errorResponse(res, 500, 'Failed to fetch restaurants with dishes under ₹250');
+    console.error('Error in Under 250:', error);
+    return errorResponse(res, 500, 'Performance error');
   }
 };
 

@@ -198,9 +198,24 @@ export default function RestaurantDetails() {
           const userLng = userLocation?.longitude
 
           let calculatedDistance = null
-          if (userLat && userLng && restaurantLat && restaurantLng) {
-             // simplified distance for speed, exact calc will happen in effect
-             calculatedDistance = "Calculating..."
+          if (userLat && userLng && restaurantLat && restaurantLng && 
+              !isNaN(userLat) && !isNaN(userLng) && !isNaN(restaurantLat) && !isNaN(restaurantLng)) {
+             // Immediate calculation to avoid 'Calculating...' glitch
+             const R = 6371
+             const dLat = (restaurantLat - userLat) * Math.PI / 180
+             const dLng = (restaurantLng - userLng) * Math.PI / 180
+             const a = 
+               Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+               Math.cos(userLat * Math.PI / 180) * Math.cos(restaurantLat * Math.PI / 180) *
+               Math.sin(dLng / 2) * Math.sin(dLng / 2)
+             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+             const distKm = R * c
+             
+             if (distKm >= 1) {
+               calculatedDistance = `${distKm.toFixed(1)} km`
+             } else {
+               calculatedDistance = `${Math.round(distKm * 1000)} m`
+             }
           }
 
           const transformedRestaurant = {

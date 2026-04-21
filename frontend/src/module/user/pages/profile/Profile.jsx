@@ -281,16 +281,16 @@ export default function Profile() {
   const handleDeleteAccount = async () => {
     try {
       setIsDeleting(true)
-      
+
       // Call backend API to delete account
       const response = await userAPI.deleteProfile()
-      
+
       if (response?.data?.success) {
         toast.success("Account deleted successfully")
-        
+
         // Clear local data
         clearModuleAuth("user")
-        
+
         // Clear legacy token data
         localStorage.removeItem("accessToken")
         localStorage.removeItem("user_authenticated")
@@ -1113,15 +1113,15 @@ export default function Profile() {
             <div className="w-20 h-20 bg-red-50 dark:bg-red-900/20 rounded-full flex items-center justify-center mx-auto mb-6">
               <Trash2 className="text-red-500 dark:text-red-400" size={40} />
             </div>
-            
+
             <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3 italic uppercase">
               Delete Account?
             </h3>
-            
+
             <p className="text-gray-500 dark:text-gray-400 text-base leading-relaxed mb-8">
               Are you sure you want to delete your user account? This action cannot be undone.
             </p>
-            
+
             <div className="flex flex-col gap-3">
               <button
                 onClick={handleDeleteAccount}
@@ -1137,7 +1137,7 @@ export default function Profile() {
                   "Yes, Delete Account"
                 )}
               </button>
-              
+
               <button
                 onClick={() => setIsDeleteDialogOpen(false)}
                 disabled={isDeleting}

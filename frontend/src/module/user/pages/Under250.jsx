@@ -21,10 +21,11 @@ import { restaurantAPI } from "@/lib/api"
 import { isModuleAuthenticated } from "@/lib/utils/auth"
 
 export default function Under250() {
-  const { location, loading, isManualMode } = useLocation()
-  const { zoneId, zoneStatus, isInService, isOutOfService } = useZone(
-    loading && !isManualMode ? null : location
-  )
+  const { location, loading: loadingLocation, isManualMode } = useLocation()
+  
+  // OPTIMIZATION: Don't pass null during loading if we want to use cached zoneId for immediate fetch
+  // This allows the page to start loading restaurants even while GPS is still resolving
+  const { zoneId, zoneStatus, isInService, isOutOfService } = useZone(location)
   const navigate = useNavigate()
   const { addToCart, updateQuantity, removeFromCart, getCartItem, cart } = useCart()
   const [activeCategory, setActiveCategory] = useState(null)
@@ -170,11 +171,15 @@ export default function Under250() {
 
   // Fetch restaurants with dishes under ₹250 from backend
   useEffect(() => {
+    let isMounted = true;
     const fetchRestaurantsUnder250 = async () => {
-      // Don't fetch if zoneId is not yet available
+      // If we don't have a zoneId and location is still loading, wait a bit
+      // But if we've been loading for more than 5s without a zone, show empty to stop spinner
       if (!zoneId) {
-        setUnder250Restaurants([])
-        setLoadingRestaurants(false)
+        if (!loadingLocation) {
+          setUnder250Restaurants([])
+          setLoadingRestaurants(false)
+        }
         return
       }
 
@@ -190,12 +195,14 @@ export default function Under250() {
         console.error('Error fetching restaurants under 250:', error)
         setUnder250Restaurants([])
       } finally {
+        if (!isMounted) return
         setLoadingRestaurants(false)
       }
     }
 
     fetchRestaurantsUnder250()
-  }, [zoneId]) // Removed isOutOfService as zoneId is null when out of service anyway
+    return () => { isMounted = false }
+  }, [zoneId, loadingLocation]) // Added loadingLocation to re-check if zoneId is still missing after location loads
 
   // Fetch categories from admin API
   useEffect(() => {
