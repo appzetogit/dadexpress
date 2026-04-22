@@ -111,6 +111,11 @@ const orderSchema = new mongoose.Schema({
       default: 0,
       min: 0
     },
+    referralDiscount: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
     total: {
       type: Number,
       required: true,

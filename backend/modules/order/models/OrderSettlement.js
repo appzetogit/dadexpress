@@ -44,6 +44,7 @@ const orderSettlementSchema = new mongoose.Schema({
     platformFee: { type: Number, default: 0, min: 0 },
     gst: { type: Number, default: 0, min: 0 },
     packagingFee: { type: Number, default: 0, min: 0 },
+    referralDiscount: { type: Number, default: 0, min: 0 },
     total: { type: Number, required: true, min: 0 }
   },
   

@@ -1657,18 +1657,27 @@ export const cancelOrder = async (req, res) => {
     order.cancelledAt = new Date();
     await order.save();
 
-    // Calculate refund amount only for online payments (Razorpay) and wallet
-    // COD orders don't need refund since payment hasn't been made
+    // Calculate or process refund based on order stage
+    // For pre-acceptance cancellations (pending/confirmed), we can auto-process
+    // For post-acceptance, we calculate and wait for admin approval
     let refundMessage = '';
-    if (actualPaymentMethod === 'razorpay' || actualPaymentMethod === 'wallet') {
+    if (actualPaymentMethod === 'razorpay' || actualPaymentMethod === 'wallet' || order.pricing?.referralDiscount > 0) {
       try {
-        const { calculateCancellationRefund } = await import('../services/cancellationRefundService.js');
-        await calculateCancellationRefund(order._id, reason);
-        logger.info(`Cancellation refund calculated for order ${order.orderId} - awaiting admin approval`);
-        refundMessage = ' Refund will be processed after admin approval.';
+        const { calculateCancellationRefund, processCancellationRefund } = await import('../services/cancellationRefundService.js');
+        
+        // If order was still in initial stages, auto-process the refund (especially for referral coins)
+        if (order.status === 'pending' || order.status === 'confirmed' || !order.tracking?.confirmed?.status) {
+          await processCancellationRefund(order._id, reason);
+          refundMessage = ' Refund has been processed automatically.';
+          logger.info(`Cancellation refund auto-processed for order ${order.orderId}`);
+        } else {
+          await calculateCancellationRefund(order._id, reason);
+          refundMessage = ' Refund will be processed after admin approval.';
+          logger.info(`Cancellation refund calculated for order ${order.orderId} - awaiting admin approval`);
+        }
       } catch (refundError) {
-        logger.error(`Error calculating cancellation refund for order ${order.orderId}: `, refundError);
-        // Don't fail the cancellation if refund calculation fails
+        logger.error(`Error handling cancellation refund for order ${order.orderId}: `, refundError);
+        // Don't fail the cancellation if refund fails
       }
     } else if (actualPaymentMethod === 'cash') {
       refundMessage = ' No refund required as payment was not made.';

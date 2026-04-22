@@ -451,23 +451,47 @@ export const calculateOrderPricing = async ({
     const total = subtotal - discount + finalDeliveryFee + platformFee + gst - referralDiscount;
     const savings = discount + (baseDeliveryFee > finalDeliveryFee ? baseDeliveryFee - finalDeliveryFee : 0) + referralDiscount;
 
+    const result = {
+      subtotal: roundCurrency(subtotal),
+      discount: roundCurrency(discount),
+      deliveryFee: roundCurrency(finalDeliveryFee),
+      baseDeliveryFee: roundCurrency(baseDeliveryFee),
+      platformFee: roundCurrency(platformFee),
+      tax: roundCurrency(gst),
+      total: roundCurrency(total),
+      savings: roundCurrency(savings),
+      referralDiscount: roundCurrency(referralDiscount),
+      isFreeDelivery: finalDeliveryFee === 0,
+      breakdown: {
+        deliveryFee: finalDeliveryFee,
+        platformFee: platformFee,
+        gst: gst
+      }
+    };
+
+    // DEBUG: Log breakdown to catch the ₹2606 glitch
+    if (total > 500 && items.length <= 2) {
+      console.warn('⚠️ High order total detected in backend calculation:', {
+        orderId: restaurantId, // using restaurantId as context
+        pricing: result,
+        itemCount: items.length,
+        items: items.map(i => ({ id: i.itemId, price: i.price, qty: i.quantity }))
+      });
+    }
+
     return {
       subtotal: roundCurrency(subtotal),
       discount: roundCurrency(discount),
       referralDiscount: roundCurrency(referralDiscount),
       deliveryFee: roundCurrency(finalDeliveryFee),
+      baseDeliveryFee: roundCurrency(baseDeliveryFee),
       platformFee: roundCurrency(platformFee),
-      platformFeePercentage: Number(feeSettings.platformFeePercentage || 0),
-      tax: gst,
+      platformFeePercentage: Number(feeSettings?.platformFeePercentage || 0),
+      tax: roundCurrency(gst),
       total: Math.max(0, roundCurrency(total)),
       totalAmount: Math.max(0, roundCurrency(totalAmount)),
       savings: roundCurrency(savings),
-      couponCode: appliedCoupon ? appliedCoupon.code : null,
-      appliedCoupon: appliedCoupon ? {
-        code: appliedCoupon.code,
-        discount: roundCurrency(discount),
-        freeDelivery: appliedCoupon.freeDelivery || false
-      } : null,
+      isFreeDelivery: finalDeliveryFee === 0,
       breakdown: {
         itemTotal: roundCurrency(subtotal),
         discountAmount: roundCurrency(discount),

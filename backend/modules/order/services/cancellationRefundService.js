@@ -215,6 +215,13 @@ export const processCancellationRefund = async (orderId, cancellationReason) => 
       settlement.cancellationDetails.refundStatus = 'processed';
     }
 
+    // Process referral coins refund (always refund in full)
+    const referralDiscount = settlement.userPayment?.referralDiscount || 0;
+    if (referralDiscount > 0) {
+      await refundReferralCoinsToUser(order.userId, orderId, referralDiscount, settlement.orderNumber);
+      logger.info(`Refunded ${referralDiscount} referral coins to user for order ${settlement.orderNumber}`);
+    }
+
     // Compensate restaurant if applicable
     if (restaurantCompensation > 0) {
       await compensateRestaurant(
@@ -302,6 +309,51 @@ const refundToUser = async (userId, orderId, amount, orderNumber, reason) => {
     });
   } catch (error) {
     console.error('Error refunding to user:', error);
+    throw error;
+  }
+};
+
+/**
+ * Refund referral coins to user wallet balance
+ */
+const refundReferralCoinsToUser = async (userId, orderId, amount, orderNumber) => {
+  try {
+    const wallet = await UserWallet.findOrCreateByUserId(userId);
+    
+    wallet.addTransaction({
+      amount: amount,
+      type: 'refund',
+      status: 'Completed',
+      description: `Refund of referral coins for cancelled order ${orderNumber}`,
+      orderId: orderId
+    });
+    
+    // Increment wallet balance
+    wallet.balance += amount;
+    
+    await wallet.save();
+
+    // Create audit log
+    await AuditLog.createLog({
+      entityType: 'user',
+      entityId: userId,
+      action: 'referral_coin_refund',
+      actionType: 'refund',
+      performedBy: {
+        type: 'system',
+        name: 'System'
+      },
+      transactionDetails: {
+        amount: amount,
+        type: 'referral_refund',
+        status: 'success',
+        orderId: orderId,
+        walletType: 'user'
+      },
+      description: `User referral coins refunded for cancelled order ${orderNumber}`
+    });
+  } catch (error) {
+    console.error('Error refunding referral coins to user:', error);
     throw error;
   }
 };

@@ -62,6 +62,7 @@ export const calculateOrderSettlement = async (orderId) => {
       platformFee: order.pricing.platformFee || platformFee,
       gst: order.pricing.tax || 0,
       packagingFee: 0, // Can be added later if needed
+      referralDiscount: order.pricing.referralDiscount || 0,
       total: order.pricing.total || 0
     };
 

@@ -1,5 +1,7 @@
 // src/context/cart-context.jsx
 import { createContext, useContext, useEffect, useMemo, useState } from "react"
+import { toast } from "sonner"
+
 
 // Default cart context value to prevent errors during initial render
 const defaultCartContext = {
@@ -75,29 +77,47 @@ export function CartProvider({ children }) {
         
         // Check restaurant name first (more reliable than IDs which can have different formats)
         // If names match, allow it even if IDs differ (same restaurant, different ID format)
+        let isMismatch = false;
+        let conflictRestaurantName = firstItemRestaurantName;
+
         if (firstRestaurantNameNormalized && newRestaurantNameNormalized) {
           if (firstRestaurantNameNormalized !== newRestaurantNameNormalized) {
-            console.error('❌ Cannot add item: Restaurant name mismatch!', {
-              cartRestaurantId: firstItemRestaurantId,
-              cartRestaurantName: firstItemRestaurantName,
-              newItemRestaurantId: newItemRestaurantId,
-              newItemRestaurantName: newItemRestaurantName
-            });
-            throw new Error(`Cart already contains items from "${firstItemRestaurantName}". Please clear cart or complete order first.`);
+            isMismatch = true;
           }
-          // Names match - allow it (even if IDs differ, it's the same restaurant)
         } else if (firstItemRestaurantId && newItemRestaurantId) {
-          // If names are not available, fallback to ID comparison
           if (firstItemRestaurantId !== newItemRestaurantId) {
-            console.error('❌ Cannot add item: Cart contains items from different restaurant!', {
-              cartRestaurantId: firstItemRestaurantId,
-              cartRestaurantName: firstItemRestaurantName,
-              newItemRestaurantId: newItemRestaurantId,
-              newItemRestaurantName: newItemRestaurantName
-            });
-            throw new Error(`Cart already contains items from "${firstItemRestaurantName || 'another restaurant'}". Please clear cart or complete order first.`);
+            isMismatch = true;
           }
         }
+
+        if (isMismatch) {
+          console.warn('🧹 Restaurant mismatch detected. Clearing cart for new restaurant:', newItemRestaurantName);
+          
+          // Notify user about cart clearing
+          toast.info(`Cart cleared! Adding items from "${newItemRestaurantName || 'new restaurant'}" instead of "${firstItemRestaurantName || 'previous one'}".`, {
+            duration: 4000,
+            icon: '🛒'
+          });
+
+          // Return a new cart containing only the new item
+          const newItem = { ...item, quantity: 1 };
+          
+          // Trigger animation for the new item
+          if (sourcePosition) {
+            setLastAddEvent({
+              product: {
+                id: item.id,
+                name: item.name,
+                imageUrl: item.image || item.imageUrl,
+              },
+              sourcePosition,
+            });
+            setTimeout(() => setLastAddEvent(null), 1500);
+          }
+          
+          return [newItem];
+        }
+
       }
       
       const existing = prev.find((i) => i.id === item.id)
