@@ -23,8 +23,8 @@ export default function PageNavbar({
   const { selectedDeliveryAddress } = useSelectedDeliveryAddress()
   const { openLocationSelector } = useLocationSelector()
   const cartCount = getCartCount()
-  const [logoUrl, setLogoUrl] = useState(null)
-  const [companyName, setCompanyName] = useState(null)
+  const [logoUrl, setLogoUrl] = useState(() => getCachedSettings()?.logo?.url || null)
+  const [companyName, setCompanyName] = useState(() => getCachedSettings()?.companyName || null)
   const defaultAddress = useMemo(
     () => (typeof getDefaultAddress === "function" ? getDefaultAddress() : null),
     [getDefaultAddress, addresses],
@@ -60,12 +60,12 @@ export default function PageNavbar({
     return {
       ...geoLocation,
       ...address,
-      area: address.area || 
-           ((address.additionalDetails && 
-             address.additionalDetails.length < 50 && 
-             (address.additionalDetails.split(',').length - 1) < 2) 
-             ? address.additionalDetails : "") || 
-           geoLocation?.area || "",
+      area: address.area ||
+        ((address.additionalDetails &&
+          address.additionalDetails.length < 50 &&
+          (address.additionalDetails.split(',').length - 1) < 2)
+          ? address.additionalDetails : "") ||
+        geoLocation?.area || "",
       address: address.address || address.street || geoLocation?.address || "",
       formattedAddress:
         address.formattedAddress ||
@@ -250,9 +250,9 @@ export default function PageNavbar({
     // Priority 0: Use mainTitle (ZOMATO-STYLE) - Exact building/cafe name
     // This is the most accurate - directly from Google Maps components
     // If mainTitle is available, show it with area if area is different
-    if (location?.mainTitle && 
-        location.mainTitle.trim() !== "" && 
-        location.mainTitle !== "Location Found") {
+    if (location?.mainTitle &&
+      location.mainTitle.trim() !== "" &&
+      location.mainTitle !== "Location Found") {
       mainLocation = location.mainTitle;
       // If area is available and different from mainTitle, append it
       if (location?.area && location.area.trim() !== "" &&

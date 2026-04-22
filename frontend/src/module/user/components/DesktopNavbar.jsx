@@ -21,8 +21,8 @@ export default function DesktopNavbar() {
     const { openSearch, closeSearch, searchValue, setSearchValue } = useSearchOverlay()
     const { vegMode, setVegMode } = useProfile()
     const [heroSearch, setHeroSearch] = useState("")
-    const [logoUrl, setLogoUrl] = useState(null)
-    const [companyName, setCompanyName] = useState(null)
+    const [logoUrl, setLogoUrl] = useState(() => getCachedSettings()?.logo?.url || null)
+    const [companyName, setCompanyName] = useState(() => getCachedSettings()?.companyName || null)
     const cartCount = getCartCount()
 
 

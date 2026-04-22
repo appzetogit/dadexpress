@@ -223,6 +223,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
     }
 
     try {
+      isGettingLocationRef.current = true
       // Try with strict GPS but with a faster timeout for better UX.
       const initialTimeout = forceLive ? 8000 : 6000;
 
@@ -267,6 +268,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       throw error
     } finally {
       isGettingLocationRef.current = false
+      toast.dismiss("current-location")
     }
   }
 
@@ -508,11 +510,16 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
   }, [isOpen])
 
   const handleUseCurrentLocation = async () => {
+    if (isRequestingCurrentLocation) return
     try {
       setIsRequestingCurrentLocation(true)
       toast.loading("Detecting your location...", { id: "location-request" })
       
       const position = await getCurrentGpsCoordinatesWithRetry({ forceLive: true })
+      if (!position) {
+        toast.dismiss("location-request")
+        return
+      }
       const latitude = position.coords.latitude
       const longitude = position.coords.longitude
       const accuracy = position.coords.accuracy
@@ -545,6 +552,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       toast.error("Failed to get location", { id: "location-request" })
     } finally {
       setIsRequestingCurrentLocation(false)
+      toast.dismiss("current-location")
     }
   }
 

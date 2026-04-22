@@ -20,6 +20,7 @@ export default function ReferralAnalytics() {
     barData: []
   });
   const [loading, setLoading] = useState(true);
+  const daysInt = filter === "7days" ? 7 : 30;
 
   useEffect(() => {
     fetchAnalytics();
@@ -28,8 +29,7 @@ export default function ReferralAnalytics() {
   const fetchAnalytics = async () => {
     try {
       setLoading(true);
-      const days = filter === "7days" ? 7 : 30;
-      const res = await api.get(API_ENDPOINTS.REFERRAL.ANALYTICS, { params: { days } });
+      const res = await api.get(API_ENDPOINTS.REFERRAL.ANALYTICS, { params: { days: daysInt } });
       if (res.data?.success) {
         setStats(res.data.data);
       }
@@ -109,7 +109,14 @@ export default function ReferralAnalytics() {
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
-                    <XAxis dataKey="name" hide />
+                    <XAxis 
+                      dataKey="name" 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fontSize: 9, fill: "#94A3B8", fontWeight: 600 }}
+                      interval={daysInt === 7 ? 0 : 4}
+                      dy={10}
+                    />
                     <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#94A3B8", fontWeight: 600 }} />
                     <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', fontSize: '11px' }} />
                     <Area type="monotone" dataKey="referrals" stroke="#3B82F6" strokeWidth={2.5} fillOpacity={1} fill="url(#colorRef)" />
@@ -127,9 +134,16 @@ export default function ReferralAnalytics() {
             <CardContent className="px-2 pb-5">
               <div className="h-[280px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={stats.barData || []} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <BarChart data={stats.barData || []} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#94A3B8", fontWeight: 600 }} dy={5} />
+                    <XAxis 
+                      dataKey="name" 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fontSize: 9, fill: "#94A3B8", fontWeight: 600 }} 
+                      interval={daysInt === 7 ? 0 : 4}
+                      dy={10} 
+                    />
                     <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#94A3B8", fontWeight: 600 }} />
                     <Tooltip cursor={{ fill: '#F8FAFC' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', fontSize: '11px' }} />
                     <Bar dataKey="distribution" fill="#8B5CF6" radius={[4, 4, 0, 0]} barSize={20} />

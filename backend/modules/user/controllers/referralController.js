@@ -92,139 +92,160 @@ export const getUserReferralLogs = asyncHandler(async (req, res) => {
 export const getReferralAnalytics = asyncHandler(async (req, res) => {
     try {
         const { days } = req.query;
-        const daysInt = Number.parseInt(days, 10);
+        const daysInt = Number.parseInt(days, 10) || 7;
 
-        // Build date filters (optional)
-        let matchStage = {};
-        let txMatch = {};
-        if (!Number.isNaN(daysInt) && daysInt > 0) {
-            const fromDate = new Date();
-            fromDate.setDate(fromDate.getDate() - daysInt);
-            matchStage = { createdAt: { $gte: fromDate } };
-            txMatch = { "transactions.createdAt": { $gte: fromDate } };
-        }
+        // Build date filters
+        const fromDate = new Date();
+        fromDate.setDate(fromDate.getDate() - daysInt);
+        fromDate.setHours(0, 0, 0, 0); // Start of the day
 
-        const groupByFormat = daysInt === 7 ? "%a" : "%d %b";
+        const matchStage = { createdAt: { $gte: fromDate } };
+        const txMatch = { "transactions.createdAt": { $gte: fromDate } };
 
-        // Defensive aggregation: if any pipeline fails, log and fall back to empty data
-        let areaStats = [];
-        let stats = [];
-        let walletStats = [];
-        let totalAllTime = 0;
+        const groupByFormat = "%Y-%m-%d";
 
-        // 1. Total Referrals (Across all time) - Independent of matchStage
-        try {
-            totalAllTime = await ReferralLog.countDocuments();
-        } catch (err) {
-            console.error("Error counting total referrals:", err);
-        }
-
-        // 2. Area Stats (Graph data)
-        try {
-            areaStats = await ReferralLog.aggregate([
-                { $match: matchStage },
-                {
-                    $group: {
-                        _id: { $dateToString: { format: groupByFormat, date: "$createdAt", timezone: "Asia/Kolkata" } },
-                        referrals: { $sum: 1 },
-                        conversions: { $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] } },
-                        sortDate: { $first: "$createdAt" }
-                    }
-                },
-                { $sort: { "sortDate": 1 } }
-            ]);
-        } catch (aggError) {
-            console.error("Error aggregating referral area stats:", aggError);
-            areaStats = [];
-        }
-
-        // 3. Status Breakdown & Revenue
-        try {
-            stats = await ReferralLog.aggregate([
-                { $match: matchStage },
-                {
-                    $lookup: {
-                        from: "orders",
-                        localField: "orderId",
-                        foreignField: "_id",
-                        as: "orderData"
-                    }
-                },
-                {
-                    $unwind: {
-                        path: "$orderData",
-                        preserveNullAndEmptyArrays: true
-                    }
-                },
-                {
-                    $group: {
-                        _id: "$status",
-                        count: { $sum: 1 },
-                        totalReferrerRewards: { $sum: "$referrerReward" },
-                        totalRefereeRewards: { $sum: "$refereeReward" },
-                        revenueGenerated: {
-                            $sum: {
-                                $cond: [{ $eq: ["$status", "completed"] }, "$orderData.pricing.total", 0]
-                            }
-                        }
+        // 1. All-time stats (for boxes)
+        const totalAllTime = await ReferralLog.countDocuments();
+        
+        const allTimeStats = await ReferralLog.aggregate([
+            {
+                $lookup: {
+                    from: "orders",
+                    localField: "orderId",
+                    foreignField: "_id",
+                    as: "orderData"
+                }
+            },
+            { $unwind: { path: "$orderData", preserveNullAndEmptyArrays: true } },
+            {
+                $group: {
+                    _id: "$status",
+                    count: { $sum: 1 },
+                    revenue: {
+                        $sum: { $cond: [{ $eq: ["$status", "completed"] }, "$orderData.pricing.total", 0] }
                     }
                 }
-            ]);
-        } catch (aggError) {
-            console.error("Error aggregating referral stats:", aggError);
-            stats = [];
-        }
+            }
+        ]);
 
-        // 4. Wallet Distribution (Graph data & Total Rewards Spent)
-        try {
-            const UserWallet = (await import('../../user/models/UserWallet.js')).default;
+        let completedAllTime = 0;
+        let revenueAllTime = 0;
+        allTimeStats.forEach(s => {
+            if (s._id === 'completed') {
+                completedAllTime = s.count;
+                revenueAllTime = s.revenue;
+            }
+        });
 
-            walletStats = await UserWallet.aggregate([
-                { $unwind: "$transactions" },
-                { $match: txMatch },
-                {
-                    $group: {
-                        _id: { $dateToString: { format: groupByFormat, date: "$transactions.createdAt", timezone: "Asia/Kolkata" } },
-                        usage: { $sum: { $cond: [{ $eq: ["$transactions.type", "deduction"] }, "$transactions.amount", 0] } },
-                        distribution: { $sum: { $cond: [{ $eq: ["$transactions.type", "addition"] }, "$transactions.amount", 0] } },
-                        sortDate: { $first: "$transactions.createdAt" }
-                    }
-                },
-                { $sort: { "sortDate": 1 } }
-            ]);
-        } catch (walletError) {
-            console.error("Error aggregating referral wallet stats:", walletError);
-            walletStats = [];
-        }
+        // 2. Period-specific stats (for charts and recent metrics)
+        const areaStats = await ReferralLog.aggregate([
+            { $match: matchStage },
+            {
+                $group: {
+                    _id: { $dateToString: { format: groupByFormat, date: "$createdAt", timezone: "Asia/Kolkata" } },
+                    referrals: { $sum: 1 },
+                    conversions: { $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] } },
+                    sortDate: { $first: "$createdAt" }
+                }
+            },
+            { $sort: { "sortDate": 1 } }
+        ]);
 
-        // Calculate total rewards from wallet distributions within range
+        const UserWallet = (await import('../../user/models/UserWallet.js')).default;
+        const walletStats = await UserWallet.aggregate([
+            { $unwind: "$transactions" },
+            { 
+                $match: {
+                    ...txMatch,
+                    "transactions.type": "addition",
+                    "transactions.status": "Completed",
+                    "transactions.description": { $regex: /Referral|Joining/i }
+                } 
+            },
+            {
+                $group: {
+                    _id: { $dateToString: { format: groupByFormat, date: "$transactions.createdAt", timezone: "Asia/Kolkata" } },
+                    distribution: { $sum: "$transactions.amount" },
+                    sortDate: { $first: "$transactions.createdAt" }
+                }
+            },
+            { $sort: { "sortDate": 1 } }
+        ]);
+
+        // Also get usage (deductions) for the bar chart
+        const usageStats = await UserWallet.aggregate([
+            { $unwind: "$transactions" },
+            { 
+                $match: {
+                    ...txMatch,
+                    "transactions.type": "deduction",
+                    "transactions.status": "Completed"
+                } 
+            },
+            {
+                $group: {
+                    _id: { $dateToString: { format: groupByFormat, date: "$transactions.createdAt", timezone: "Asia/Kolkata" } },
+                    usage: { $sum: "$transactions.amount" },
+                    sortDate: { $first: "$transactions.createdAt" }
+                }
+            },
+            { $sort: { "sortDate": 1 } }
+        ]);
+
+        // Calculate total rewards issued in period
         const rangeRewardsSpent = walletStats.reduce((sum, item) => sum + (item.distribution || 0), 0);
 
-        const formattedStats = {
-            total: totalAllTime, // Show across all time as per UI subtitle
-            pending: 0,
-            completed: 0,
-            expired: 0,
-            totalRewardsSpent: rangeRewardsSpent, // Now reflects both automated and manual distributions
-            revenueGenerated: 0,
-            areaData: areaStats.map(item => ({
-                name: item._id,
-                referrals: item.referrals,
-                conversions: item.conversions
-            })),
-            barData: walletStats.map(item => ({
-                name: item._id,
-                usage: item.usage,
-                distribution: item.distribution
-            }))
-        };
-
-        stats.forEach(s => {
-            if (s._id === 'pending') formattedStats.pending = s.count;
-            if (s._id === 'completed') formattedStats.completed = s.count;
-            if (s._id === 'expired') formattedStats.expired = s.count;
-            formattedStats.revenueGenerated += (s.revenueGenerated || 0);
+        // 3. Zero-filling for charts
+        const areaDataMap = new Map(areaStats.map(i => [i._id, i]));
+        const barDataMap = new Map();
+        
+        walletStats.forEach(i => {
+            const existing = barDataMap.get(i._id) || { distribution: 0, usage: 0 };
+            barDataMap.set(i._id, { ...existing, distribution: i.distribution });
         });
+        usageStats.forEach(i => {
+            const existing = barDataMap.get(i._id) || { distribution: 0, usage: 0 };
+            barDataMap.set(i._id, { ...existing, usage: i.usage });
+        });
+
+        const finalAreaData = [];
+        const finalBarData = [];
+        
+        for (let i = daysInt - 1; i >= 0; i--) {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            
+            // Format matching the aggregation's format (YYYY-MM-DD)
+            const key = d.toISOString().split('T')[0];
+
+            // Display label for the chart
+            const label = daysInt === 7 
+                ? d.toLocaleDateString('en-IN', { weekday: 'short', timeZone: 'Asia/Kolkata' })
+                : d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', timeZone: 'Asia/Kolkata' });
+
+            const areaItem = areaDataMap.get(key) || { referrals: 0, conversions: 0 };
+            finalAreaData.push({
+                name: label,
+                referrals: areaItem.referrals,
+                conversions: areaItem.conversions
+            });
+
+            const barItem = barDataMap.get(key) || { distribution: 0, usage: 0 };
+            finalBarData.push({
+                name: label,
+                distribution: barItem.distribution,
+                usage: barItem.usage
+            });
+        }
+
+        const formattedStats = {
+            total: totalAllTime,
+            completed: completedAllTime,
+            totalRewardsSpent: rangeRewardsSpent,
+            revenueGenerated: revenueAllTime,
+            areaData: finalAreaData,
+            barData: finalBarData
+        };
 
         return successResponse(res, 200, "Referral analytics retrieved successfully", formattedStats);
     } catch (error) {

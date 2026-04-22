@@ -130,7 +130,7 @@ export default function PocketBalancePage() {
     balancesTotalBalance: balances.totalBalance,
     calculatedPocketBalance: pocketBalance,
     totalBonus: totalBonus,
-    weeklyEarnings: weeklyEarnings,
+    weeklyEarnings: calculatePeriodEarnings(walletState, 'week'),
     withdrawableAmount: withdrawableAmount,
     withdrawalLimit,
     canWithdraw

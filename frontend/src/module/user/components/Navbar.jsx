@@ -21,8 +21,8 @@ export default function Navbar() {
   const { openLocationSelector } = useLocationSelector()
   const { points: userPoints } = useUserPoints()
   const cartCount = getCartCount()
-  const [logoUrl, setLogoUrl] = useState(null)
-  const [companyName, setCompanyName] = useState(null)
+  const [logoUrl, setLogoUrl] = useState(() => getCachedSettings()?.logo?.url || null)
+  const [companyName, setCompanyName] = useState(() => getCachedSettings()?.companyName || null)
 
   // Load business settings logo
   useEffect(() => {
