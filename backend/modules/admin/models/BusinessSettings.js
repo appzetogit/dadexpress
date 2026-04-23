@@ -156,12 +156,6 @@ businessSettingsSchema.statics.getSettings = async function () {
         deliveryCashLimit: 5000,
         deliveryWithdrawalLimit: 100,
       });
-    } else {
-      // Migrate old default (750) to new default (5000) if found
-      if (settings.deliveryCashLimit === 750) {
-        settings.deliveryCashLimit = 5000;
-        await settings.save();
-      }
     }
     return settings;
   } catch (error) {
