@@ -987,7 +987,6 @@ export const verifyOrderPayment = async (req, res) => {
 
     // 1. Robust Order Lookup
     let order = null;
-    const mongoose = (await import('mongoose')).default;
     try {
       if (mongoose.Types.ObjectId.isValid(orderId)) {
         order = await Order.findOne({ _id: orderId, userId });
@@ -1081,9 +1080,9 @@ export const verifyOrderPayment = async (req, res) => {
     order.payment.paidAt = new Date();
     
     // Set tracking confirmed
-    if (order.tracking) {
-      order.tracking.confirmed = true;
-      order.tracking.confirmedAt = new Date();
+    if (order.tracking && order.tracking.confirmed) {
+      order.tracking.confirmed.status = true;
+      order.tracking.confirmed.timestamp = new Date();
     }
 
     await order.save();
