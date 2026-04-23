@@ -1553,8 +1553,14 @@ export const appleCallback = asyncHandler(async (req, res) => {
       signupMethod: user.signupMethod,
     };
 
-    // If it's an AJAX/JSON request (like from a mobile app background POST), return JSON
-    if (req.xhr || (req.headers.accept && req.headers.accept.includes('application/json')) || req.body.isNative) {
+    // Response logic: Handle AJAX/JSON requests (mobile apps) or standard browser redirects
+    const isAppRequest = req.xhr || 
+                         (req.headers.accept && req.headers.accept.includes('application/json')) || 
+                         req.body.isNative || 
+                         req.body.idToken || 
+                         req.body.id_token;
+
+    if (isAppRequest && (req.xhr || (req.headers.accept && req.headers.accept.includes('application/json')) || req.body.isNative)) {
       return successResponse(res, 200, "Authentication successful", {
         accessToken: jwtTokens.accessToken,
         user: userData,
@@ -1562,11 +1568,69 @@ export const appleCallback = asyncHandler(async (req, res) => {
       });
     }
 
+    // Default: Return HTML with script for WebViews/Browsers (The "Script wala response")
+    // This avoids 405 Method Not Allowed on POST redirects and allows WebView communication
     const redirectUrl = `${frontendUrl}${redirectPath}?token=${jwtTokens.accessToken}&user=${encodeURIComponent(JSON.stringify(userData))}&provider=apple`;
-    return res.redirect(redirectUrl);
+    
+    const htmlResponse = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Apple Sign In Successful</title>
+        <style>
+          body { font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f9f9f9; }
+          .loader { border: 3px solid #f3f3f3; border-top: 3px solid #3498db; border-radius: 50%; width: 30px; height: 30px; animation: spin 2s linear infinite; }
+          @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        </style>
+      </head>
+      <body>
+        <div class="loader"></div>
+        <script>
+          const authData = {
+            success: true,
+            token: "${jwtTokens.accessToken}",
+            user: ${JSON.stringify(userData)},
+            provider: "apple"
+          };
+
+          // 1. Try to communicate with window.opener (for popup flows)
+          if (window.opener) {
+            window.opener.postMessage(authData, "*");
+          }
+          
+          // 2. Try to communicate with window.parent (for iframe flows)
+          if (window.parent && window.parent !== window) {
+            window.parent.postMessage(authData, "*");
+          }
+
+          // 3. For Flutter/Native WebViews
+          if (window.ReactNativeWebView) {
+            window.ReactNativeWebView.postMessage(JSON.stringify(authData));
+          }
+          
+          // 4. Fallback: Redirect to the callback page
+          setTimeout(function() {
+            window.location.href = "${redirectUrl}";
+          }, 1000);
+        </script>
+      </body>
+      </html>
+    `;
+
+    return res.status(200).set('Content-Type', 'text/html').send(htmlResponse);
   } catch (error) {
     logger.error(`Error in Apple OAuth callback: ${error.message}`);
     const frontendUrl = process.env.FRONTEND_URL || "https://dadexpress.in";
+    
+    if (req.method === 'POST') {
+      return res.status(200).send(`
+        <html><body><script>
+          if (window.opener) window.opener.postMessage({ success: false, error: "${error.message}" }, "*");
+          setTimeout(function() { window.location.href = "${frontendUrl}/user/login?error=apple_auth_failed"; }, 1000);
+        </script></body></html>
+      `);
+    }
+    
     return res.redirect(`${frontendUrl}/user/login?error=apple_auth_failed`);
   }
 });
