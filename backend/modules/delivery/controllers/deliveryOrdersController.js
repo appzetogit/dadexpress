@@ -2059,10 +2059,7 @@ export const completeDelivery = asyncHandler(async (req, res) => {
       } catch (referralError) {
         console.error('⚠️ Error processing referral rewards:', referralError.message);
       }
-    } catch (escrowError) {
-      console.error(`❌ Error releasing escrow for order ${orderIdForLog}:`, escrowError);
-      // Continue with legacy wallet update as fallback
-    }
+
 
     // Calculate delivery earnings based on admin's commission rules
     // Get delivery distance (in km) from order (PREFER UPDATED ACTUAL DISTANCE)
