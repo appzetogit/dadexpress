@@ -98,6 +98,7 @@ export async function findNearestDeliveryBoys(restaurantLat, restaurantLng, rest
                               order?.payment?.method?.toLowerCase() === 'cod' ||
                               order?.paymentMethod === 'cash';
 
+        // HARD GATE: Only block if limit is explicitly enabled (greater than 0)
         if (totalCashLimit > 0 && isCashCandidate) {
           const wallet = (wallets || []).find(w => w.deliveryId.toString() === partner._id.toString());
           const cashInHand = Math.max(0, Number(wallet?.cashInHand) || 0);

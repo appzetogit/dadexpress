@@ -87,7 +87,7 @@ const businessSettingsSchema = new mongoose.Schema(
     // Used for "Available cash limit" in delivery Pocket/Wallet UI.
     deliveryCashLimit: {
       type: Number,
-      default: 750,
+      default: 5000,
       min: 0,
     },
     // Minimum amount above which delivery boy can withdraw. Withdrawal allowed only when withdrawable amount >= this.
@@ -153,7 +153,7 @@ businessSettingsSchema.statics.getSettings = async function () {
           countryCode: "+91",
           number: "",
         },
-        deliveryCashLimit: 750,
+        deliveryCashLimit: 5000,
         deliveryWithdrawalLimit: 100,
       });
     }
@@ -172,7 +172,7 @@ businessSettingsSchema.statics.getSettings = async function () {
           countryCode: "+91",
           number: "",
         },
-        deliveryCashLimit: 750,
+        deliveryCashLimit: 5000,
         deliveryWithdrawalLimit: 100,
       });
       await settings.save();

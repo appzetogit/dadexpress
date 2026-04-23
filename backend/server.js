@@ -712,7 +712,7 @@ io.on('connection', (socket) => {
   const firebaseSyncTimers = new Map(); // orderId -> timer
 
   // Delivery boy sends location update
-  socket.on('update-location', (data) => {
+  socket.on('update-location', async (data) => {
     try {
       // Validate data
       if (!data.orderId || typeof data.lat !== 'number' || typeof data.lng !== 'number') {
@@ -720,8 +720,10 @@ io.on('connection', (socket) => {
         return;
       }
 
-      // Broadcast location to customer tracking this order (only to specific room)
-      // Format: { orderId, lat, lng, heading }
+      // Broadcast location to customer tracking this order (all related IDs)
+      const { trackingIds } = await getTrackedOrderAndIds(data.orderId);
+      const emitIds = trackingIds.length ? trackingIds : [String(data.orderId)];
+
       const locationData = {
         orderId: data.orderId,
         lat: data.lat,
@@ -730,8 +732,10 @@ io.on('connection', (socket) => {
         timestamp: Date.now()
       };
 
-      // Send to specific order room (Socket.IO - real-time, 1-3 sec)
-      io.to(`order:${data.orderId}`).emit(`location-receive-${data.orderId}`, locationData);
+      emitIds.forEach((trackingId) => {
+        // Send to specific order room (Socket.IO - real-time, 1-3 sec)
+        io.to(`order:${trackingId}`).emit(`location-receive-${trackingId}`, locationData);
+      });
 
       // Throttle Firebase sync to 10 seconds per order
       const orderId = data.orderId;
@@ -776,16 +780,10 @@ io.on('connection', (socket) => {
         firebaseSyncTimers.set(orderId, newTimer);
       }
 
-      console.log(`📍 Location broadcasted to order room ${data.orderId}:`, {
+      console.log(`📍 Location broadcasted to order rooms: ${emitIds.join(', ')}`, {
         lat: locationData.lat,
         lng: locationData.lng,
         heading: locationData.heading
-      });
-
-      console.log(`📍 Location update for order ${data.orderId}:`, {
-        lat: data.lat,
-        lng: data.lng,
-        heading: data.heading
       });
     } catch (error) {
       console.error('Error handling location update:', error);

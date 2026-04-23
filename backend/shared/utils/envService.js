@@ -91,6 +91,25 @@ export function clearEnvCache() {
 }
 
 /**
+ * Strip invisible chars and all whitespace from Razorpay key/secret.
+ * @param {string|undefined|null} value
+ * @returns {string}
+ */
+export function scrubRazorpayKeyOrSecret(value) {
+  if (value == null || value === "") return "";
+  let s = String(value).trim();
+  if (
+    (s.startsWith('"') && s.endsWith('"')) ||
+    (s.startsWith("'") && s.endsWith("'"))
+  ) {
+    s = s.slice(1, -1).trim();
+  }
+  s = s.replace(/[\u200B-\u200D\uFEFF]/g, "");
+  s = s.replace(/\s/g, "");
+  return s;
+}
+
+/**
  * Get Razorpay credentials
  * @returns {Promise<Object>} { keyId, keySecret }
  */
@@ -98,10 +117,13 @@ export async function getRazorpayCredentials() {
   const apiKey = await getEnvVar("RAZORPAY_API_KEY");
   const secretKey = await getEnvVar("RAZORPAY_SECRET_KEY");
 
-  // Fallback to old env var names
+  // Scrub credentials to remove any whitespace or hidden characters from copy-paste
+  const scrubbedKeyId = scrubRazorpayKeyOrSecret(apiKey || process.env.RAZORPAY_KEY_ID || "");
+  const scrubbedKeySecret = scrubRazorpayKeyOrSecret(secretKey || process.env.RAZORPAY_KEY_SECRET || "");
+
   return {
-    keyId: apiKey || process.env.RAZORPAY_KEY_ID || "",
-    keySecret: secretKey || process.env.RAZORPAY_KEY_SECRET || "",
+    keyId: scrubbedKeyId,
+    keySecret: scrubbedKeySecret,
   };
 }
 

@@ -1952,12 +1952,16 @@ export const completeDelivery = asyncHandler(async (req, res) => {
     }
 
     // Release escrow and distribute funds (this handles all wallet credits)
+    let settlementHandledByEscrow = false;
     try {
       const { releaseEscrow } = await import('../../order/services/escrowWalletService.js');
       await releaseEscrow(orderMongoId);
       console.log(`✅ Escrow released and funds distributed for order ${orderIdForLog}`);
-
-      // Referral Reward Logic
+      settlementHandledByEscrow = true;
+    } catch (escrowError) {
+      console.error(`❌ Error releasing escrow for order ${orderIdForLog}:`, escrowError.message);
+      // Continue with legacy wallet update as fallback
+    }
       try {
         if (updatedOrder.userId && updatedOrder.userId._id) {
           const User = (await import('../../auth/models/User.js')).default;
@@ -2137,10 +2141,11 @@ export const completeDelivery = asyncHandler(async (req, res) => {
       const isCashCollectedByRider = isCOD && paymentCollectedBy !== "qr";
       const codAmount = (Number(order.pricing?.total) || 0) + (Number(order.customerTip) || 0);
 
+      // Add earning to delivery boy's wallet (ONLY if escrow didn't handle it)
       if (existingTransaction) {
         console.warn(`⚠️ Earning already added for order ${orderIdForLog}, skipping wallet earning update`);
         walletTransaction = existingTransaction;
-      } else {
+      } else if (!settlementHandledByEscrow) {
         // Add payment transaction (earning) with paymentCollected: false so cashInHand gets COD amount, not commission
         walletTransaction = wallet.addTransaction({
           amount: totalEarning + (Number(order.customerTip) || 0),
@@ -2157,6 +2162,9 @@ export const completeDelivery = asyncHandler(async (req, res) => {
         // Update totalEarning to include tip for the response and logs
         const tipAmount = Number(order.customerTip) || 0;
         totalEarning += tipAmount;
+      } else {
+        console.log(`ℹ️ Skipping manual delivery wallet update for order ${orderIdForLog} - already handled by escrow`);
+        walletTransaction = existingTransaction; // Might be null if added by escrow service just now
       }
 
       // COD: add cash collected (order total + tip) to cashInHand so Pocket balance shows it
@@ -2261,14 +2269,10 @@ export const completeDelivery = asyncHandler(async (req, res) => {
         if (restaurant._id) {
           const restaurantWallet = await RestaurantWallet.findOrCreateByRestaurantId(restaurant._id);
 
-          // Check if transaction already exists for this order
-          const existingRestaurantTransaction = restaurantWallet.transactions?.find(
-            t => t.orderId && t.orderId.toString() === orderIdForTransaction && t.type === 'payment'
-          );
-
+          // Update restaurant wallet (ONLY if escrow didn't handle it)
           if (existingRestaurantTransaction) {
             console.warn(`⚠️ Restaurant earning already added for order ${orderIdForLog}, skipping wallet update`);
-          } else {
+          } else if (!settlementHandledByEscrow) {
             // Add payment transaction to restaurant wallet
             restaurantWalletTransaction = restaurantWallet.addTransaction({
               amount: restaurantEarning,
@@ -2291,6 +2295,8 @@ export const completeDelivery = asyncHandler(async (req, res) => {
 
             console.log(`✅ Restaurant earning ₹${restaurantEarning.toFixed(2)} added to wallet`);
             console.log(`💰 New restaurant wallet balance: ₹${restaurantWallet.totalBalance.toFixed(2)}`);
+          } else {
+            console.log(`ℹ️ Skipping manual restaurant wallet update for order ${orderIdForLog} - already handled by escrow`);
           }
         }
 

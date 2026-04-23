@@ -96,6 +96,7 @@ router.get('/google/:role/callback', googleCallback);
 // Apple OAuth routes
 router.post('/apple/login', appleLogin);
 router.post('/apple/callback', appleCallback);
+router.get('/apple/callback', appleCallback);
 
 // Protected routes
 router.get('/me', authenticate, getCurrentUser);

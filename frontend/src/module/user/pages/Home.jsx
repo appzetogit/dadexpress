@@ -1683,7 +1683,9 @@ export default function Home() {
   const emptyRestaurantsMessage = useMemo(() => {
     // Priority 1: Loading / Resolving states
     // Added check for selectedDeliveryAddress to wait if we have a saved selection but hasn't resolved to full address yet
+    // Also added check for zone ID synchronization to prevent flash of empty state
     if (profileLoading || zoneResolveLoading || zoneLoading || isAddressLoading || loadingRestaurants ||
+      isInitialLoadRef.current || (resolvedZoneId !== lastFetchedZoneIdRef.current) ||
       (selectedAddress && !resolvedZoneId && !selectedAddressOutOfService) ||
       (selectedDeliveryAddress && !selectedAddress)) {
       return "Detecting your service area... 📍"

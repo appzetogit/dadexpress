@@ -44,6 +44,11 @@ export default function OrderTrackingCard() {
 
     // Try once on mount, but don't retry if it fails
     fetchOrders();
+    
+    // Add polling to keep status in sync (e.g., when order moves from pending to preparing)
+    const interval = setInterval(fetchOrders, 10000); // 10 seconds
+
+    return () => clearInterval(interval);
   }, []);
 
   // Get active order (not delivered) - check both context and API orders

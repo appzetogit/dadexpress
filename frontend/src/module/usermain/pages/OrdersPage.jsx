@@ -142,6 +142,11 @@ export default function OrdersPage() {
     }
 
     fetchOrders()
+    
+    // Add polling to keep orders in sync
+    const interval = setInterval(fetchOrders, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
   }, [])
 
   // Get order status text

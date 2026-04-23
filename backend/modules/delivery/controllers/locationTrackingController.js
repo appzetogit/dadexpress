@@ -124,21 +124,30 @@ export const receiveLocationUpdate = asyncHandler(async (req, res) => {
     // Broadcast via WebSocket (handled by socket.io in server.js)
     const io = req.app.get('io');
     if (io) {
-      io.to(`order-${orderId}`).emit(`location-update-${orderId}`, {
-        lat: processedLocation.lat,
-        lng: processedLocation.lng,
-        bearing: processedLocation.bearing,
-        speed: processedLocation.speed,
-        progress: processedLocation.progress,
-        distanceCovered: processedLocation.distanceCovered,
-        remainingDistance: processedLocation.remainingDistance,
-        timestamp: processedLocation.timestamp,
-        snapped: processedLocation.snapped,
-        onRoute: processedLocation.onRoute
+      const trackingIds = [...new Set([
+        String(orderId),
+        order?._id?.toString(),
+        order?.orderId
+      ].filter(Boolean))];
+
+      trackingIds.forEach((trackingId) => {
+        // Broadcast to order tracking room (standard format)
+        io.to(`order:${trackingId}`).emit(`location-receive-${trackingId}`, {
+          lat: processedLocation.lat,
+          lng: processedLocation.lng,
+          bearing: processedLocation.bearing,
+          speed: processedLocation.speed,
+          progress: processedLocation.progress,
+          distanceCovered: processedLocation.distanceCovered,
+          remainingDistance: processedLocation.remainingDistance,
+          timestamp: processedLocation.timestamp,
+          snapped: processedLocation.snapped,
+          onRoute: processedLocation.onRoute
+        });
       });
       
-      // Also broadcast to customer
-      io.to(`user-${order.userId}`).emit(`location-update-${orderId}`, {
+      // Also broadcast to customer specifically
+      io.to(`user-${order.userId}`).emit(`location-receive-${orderId}`, {
         lat: processedLocation.lat,
         lng: processedLocation.lng,
         bearing: processedLocation.bearing,

@@ -8,6 +8,7 @@ import Menu from "../../restaurant/models/Menu.js";
 import AdminCommission from "../models/AdminCommission.js";
 import OrderSettlement from "../../order/models/OrderSettlement.js";
 import AdminWallet from "../models/AdminWallet.js";
+import StaffManagement from "../../restaurant/models/StaffManagement.js";
 import {
   successResponse,
   errorResponse,
@@ -2520,8 +2521,10 @@ export const deleteRestaurant = asyncHandler(async (req, res) => {
       return errorResponse(res, 404, "Restaurant not found");
     }
 
-    // Delete restaurant
+    // Delete restaurant and associated records
     await Restaurant.findByIdAndDelete(id);
+    await StaffManagement.deleteMany({ restaurantId: id });
+    await Menu.deleteMany({ restaurantId: id });
 
     logger.info(`Restaurant deleted: ${id}`, {
       deletedBy: adminId,

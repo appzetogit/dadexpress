@@ -1472,14 +1472,18 @@ export const appleLogin = asyncHandler(async (req, res) => {
  * POST /api/auth/apple/callback
  */
 export const appleCallback = asyncHandler(async (req, res) => {
-  const { id_token, user: userJson, state } = req.body;
+  // Support both POST (body) and GET (query) for flexibility with different clients/redirects
+  const data = { ...req.query, ...req.body };
+  const { id_token, idToken, user: userJson, state } = data;
+  const identityToken = id_token || idToken;
 
-  if (!id_token) {
+  if (!identityToken) {
+    logger.error("Apple callback failed: Missing identity token", { method: req.method, data });
     return res.status(400).send('Missing identity token');
   }
 
   try {
-    const decoded = await appleAuthService.verifyIdToken(id_token);
+    const decoded = await appleAuthService.verifyIdToken(identityToken);
     const { uid, email } = decoded;
 
     let fullName = "";

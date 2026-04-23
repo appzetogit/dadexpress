@@ -89,7 +89,9 @@ export const releaseEscrow = async (orderId) => {
         settlement.deliveryPartnerId,
         settlement.orderId,
         settlement.deliveryPartnerEarning.totalEarning,
-        settlement.orderNumber
+        settlement.orderNumber,
+        settlement.deliveryPartnerEarning.tipAmount || 0,
+        settlement // pass settlement to check payment method
       );
       settlement.deliveryPartnerEarning.status = 'credited';
       settlement.deliveryPartnerEarning.creditedAt = new Date();
@@ -196,18 +198,29 @@ const creditRestaurantWallet = async (restaurantId, orderId, netAmount, orderNum
 /**
  * Credit delivery partner wallet
  */
-const creditDeliveryWallet = async (deliveryId, orderId, amount, orderNumber) => {
+const creditDeliveryWallet = async (deliveryId, orderId, amount, orderNumber, tipAmount = 0, settlement = null) => {
   try {
     const DeliveryWallet = (await import('../../delivery/models/DeliveryWallet.js')).default;
     const wallet = await DeliveryWallet.findOrCreateByDeliveryId(deliveryId);
     
+    const paymentMethod = settlement?.userPayment?.paymentMethod || 'other';
+    const isCOD = paymentMethod.toLowerCase() === 'cash' || paymentMethod.toLowerCase() === 'cod';
+    
+    let description = `Payment for order ${orderNumber}`;
+    if (tipAmount > 0) {
+      description = `Delivery earnings for Order #${orderNumber} (incl. ₹${tipAmount.toFixed(2)} tip)`;
+    } else {
+      description = `Delivery earnings for Order #${orderNumber}`;
+    }
+
     wallet.addTransaction({
       amount: amount,
       type: 'payment',
       status: 'Completed',
-      description: `Payment for order ${orderNumber}`,
+      description: description,
       orderId: orderId,
-      paymentCollected: false // Will be updated when COD is collected
+      paymentMethod: isCOD ? 'cash' : 'other',
+      paymentCollected: false // Earnings themselves are not 'collected' from customer, but COD amount is.
     });
     
     await wallet.save();

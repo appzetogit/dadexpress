@@ -176,10 +176,6 @@ export default function Under250() {
       // If we don't have a zoneId and location is still loading, wait a bit
       // But if we've been loading for more than 5s without a zone, show empty to stop spinner
       if (!zoneId) {
-        if (!loadingLocation) {
-          setUnder250Restaurants([])
-          setLoadingRestaurants(false)
-        }
         return
       }
 

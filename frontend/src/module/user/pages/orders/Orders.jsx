@@ -308,41 +308,24 @@ export default function Orders() {
           // Sort by date (newest first)
           transformedOrders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
 
-          // Show only completed history orders:
-          // - delivered/completed
-          // - or explicitly cancelled (user or restaurant)
-          // Pending / failed / in-progress orders should not appear in history list.
-          const historyOrders = transformedOrders.filter((o) => {
+          // Show all orders that are processed (not payment_pending)
+          const visibleOrders = transformedOrders.filter((o) => {
             const status = (o.originalStatus || o.status || '').toLowerCase()
-
-            const isDeliveredOrCompleted =
-              status === 'delivered' ||
-              status === 'completed' ||
-              !!o.deliveredAt
-
-            const isCancelled =
-              status === 'cancelled' ||
-              status === 'canceled' ||
-              status === 'restaurant_cancelled'
-
-            return isDeliveredOrCompleted || isCancelled
+            // Exclude only payment_pending or empty status
+            return status !== 'payment_pending' && status !== ''
           })
 
-          console.log('✅ Orders fetched and transformed (history only):', {
+          console.log('✅ Orders fetched and transformed:', {
             total: transformedOrders.length,
-            historyCount: historyOrders.length,
-            delivered: historyOrders.filter(o => (o.originalStatus || o.status || '').toLowerCase() === 'delivered').length,
-            cancelled: historyOrders.filter(o => (o.originalStatus || o.status || '').toLowerCase().includes('cancel')).length,
-            sample: historyOrders.slice(0, 2).map(o => ({
+            visibleCount: visibleOrders.length,
+            sample: visibleOrders.slice(0, 2).map(o => ({
               id: o.id,
               status: o.status,
-              originalStatus: o.originalStatus,
-              rating: o.rating,
-              deliveredAt: o.deliveredAt
+              originalStatus: o.originalStatus
             }))
           })
 
-          setOrders(historyOrders)
+          setOrders(visibleOrders)
         } else {
           console.log('⚠️ No orders data in response')
           setOrders([])
@@ -364,13 +347,10 @@ export default function Orders() {
 
     fetchOrders()
 
-    // Poll for order updates every 20 seconds to detect delivered orders
-    // This ensures rating popup shows quickly when order is delivered
-    const pollInterval = setInterval(() => {
-      fetchOrders()
-    }, 20000) // Poll every 20 seconds
+    // Add polling to keep orders in sync
+    const interval = setInterval(fetchOrders, 30000); // 30 seconds
 
-    return () => clearInterval(pollInterval)
+    return () => clearInterval(interval);
   }, [])
 
   // Format date helper

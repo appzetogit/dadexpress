@@ -63,6 +63,7 @@ export const calculateOrderSettlement = async (orderId) => {
       gst: order.pricing.tax || 0,
       packagingFee: 0, // Can be added later if needed
       referralDiscount: order.pricing.referralDiscount || 0,
+      paymentMethod: order.payment?.method || 'other',
       total: order.pricing.total || 0
     };
 
@@ -103,9 +104,9 @@ export const calculateOrderSettlement = async (orderId) => {
       // Robust distance calculation
       let distance = order.assignmentInfo?.distance || order.deliveryState?.routeToDelivery?.distance || 0;
       
-      if (distance <= 0 && order.restaurantId?.location?.coordinates && order.address?.location?.coordinates) {
+      if (distance <= 0 && restaurant?.location?.coordinates && order.address?.location?.coordinates) {
         // Fallback to Haversine if no computed distance exists
-        const [rLng, rLat] = order.restaurantId.location.coordinates;
+        const [rLng, rLat] = restaurant.location.coordinates;
         const [cLng, cLat] = order.address.location.coordinates;
         const R = 6371; // km
         const dLat = (cLat - rLat) * Math.PI / 180;
@@ -130,6 +131,7 @@ export const calculateOrderSettlement = async (orderId) => {
         breakdown.basePayout = baseEarning;
       }
       
+      const tipAmount = Number(order.customerTip) || 0;
       const surgeMultiplier = order.assignmentInfo?.surgeMultiplier || 1;
       const surgeAmount = baseEarning * (surgeMultiplier - 1);
 
@@ -140,7 +142,8 @@ export const calculateOrderSettlement = async (orderId) => {
         distanceCommission: breakdown.distanceCommission,
         surgeMultiplier: surgeMultiplier,
         surgeAmount: surgeAmount,
-        totalEarning: Math.round((baseEarning + surgeAmount) * 100) / 100,
+        tipAmount: tipAmount,
+        totalEarning: Math.round((baseEarning + surgeAmount + tipAmount) * 100) / 100,
         status: 'pending'
       };
     }

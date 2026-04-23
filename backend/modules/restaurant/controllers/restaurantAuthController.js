@@ -457,6 +457,15 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       }
 
       staffMember = await StaffManagement.findOne(staffQuery);
+      
+      // If staff member is found, verify the restaurant they belong to still exists
+      if (staffMember) {
+        const staffRestaurant = await Restaurant.findById(staffMember.restaurantId).select('_id');
+        if (!staffRestaurant) {
+          logger.warn(`Staff member found but associated restaurant ${staffMember.restaurantId} no longer exists. Ignoring staff record.`);
+          staffMember = null;
+        }
+      }
 
       // Prioritize logic: If both found, decide which role to login with.
       // If the owner account is not approved or inactive, but they are an active staff member elsewhere,
@@ -719,9 +728,9 @@ export const verifyOTP = asyncHandler(async (req, res) => {
     }
 
     // Prepare response data
-    const userId = restaurant && !staffMember ? restaurant._id.toString() : (staffMember ? staffMember._id.toString() : restaurant._id.toString());
-    const userRole = staffMember ? 'staff' : (restaurant ? 'restaurant' : 'restaurant');
-    const userEmail = staffMember ? (staffMember.email || staffMember.phone) : (restaurant.email || restaurant.phone || restaurant.restaurantId);
+    const userId = restaurant && !staffMember ? restaurant._id.toString() : (staffMember ? staffMember._id.toString() : (restaurant?._id?.toString() || ''));
+    const userRole = staffMember ? 'staff' : 'restaurant';
+    const userEmail = staffMember ? (staffMember.email || staffMember.phone) : (restaurant?.email || restaurant?.phone || restaurant?.restaurantId || '');
     const userName = staffMember ? staffMember.name : (restaurant ? restaurant.name : 'User');
 
     // Generate tokens
@@ -774,34 +783,34 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       accessToken: tokens.accessToken,
       user: {
         id: userId,
-        restaurantId: restaurant.restaurantId,
+        restaurantId: restaurant?.restaurantId,
         name: userName,
-        email: restaurant.email,
-        phone: restaurant.phone,
-        phoneE164: restaurant.phoneE164 || normalizePhoneNumberE164(restaurant.phone),
-        phoneVerified: restaurant.phoneVerified,
-        signupMethod: restaurant.signupMethod,
-        profileImage: restaurant.profileImage,
-        isActive: restaurant.isActive,
+        email: restaurant?.email,
+        phone: restaurant?.phone,
+        phoneE164: restaurant?.phoneE164 || (restaurant?.phone ? normalizePhoneNumberE164(restaurant.phone) : ''),
+        phoneVerified: restaurant?.phoneVerified || false,
+        signupMethod: restaurant?.signupMethod,
+        profileImage: restaurant?.profileImage,
+        isActive: restaurant?.isActive || false,
         isProfileCompleted,
-        onboarding: restaurant.onboarding,
+        onboarding: restaurant?.onboarding,
         role: userRole,
         isStaff: !!staffMember
       },
-      restaurant: {
+      restaurant: restaurant ? {
         id: restaurant._id,
         restaurantId: restaurant.restaurantId,
         name: restaurant.name,
         email: restaurant.email,
         phone: restaurant.phone,
-        phoneE164: restaurant.phoneE164 || normalizePhoneNumberE164(restaurant.phone),
+        phoneE164: restaurant.phoneE164 || (restaurant.phone ? normalizePhoneNumberE164(restaurant.phone) : ''),
         phoneVerified: restaurant.phoneVerified,
         signupMethod: restaurant.signupMethod,
         profileImage: restaurant.profileImage,
         isActive: restaurant.isActive,
         isProfileCompleted,
         onboarding: restaurant.onboarding
-      }
+      } : null
     });
   } catch (error) {
     logger.error(`Error verifying OTP: ${error.message}`);

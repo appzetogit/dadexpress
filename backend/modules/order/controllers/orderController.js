@@ -985,50 +985,60 @@ export const verifyOrderPayment = async (req, res) => {
       });
     }
 
-    // Find order (support both MongoDB ObjectId and orderId string)
-    let order;
+    // 1. Robust Order Lookup
+    let order = null;
+    const mongoose = (await import('mongoose')).default;
     try {
-      // Try to find by MongoDB ObjectId first
-      const mongoose = (await import('mongoose')).default;
       if (mongoose.Types.ObjectId.isValid(orderId)) {
-        order = await Order.findOne({
-          _id: orderId,
-          userId
-        });
+        order = await Order.findOne({ _id: orderId, userId });
       }
 
-      // If not found, try by orderId string
+      // If not found by _id, try finding by orderId (ORD-xxxx)
       if (!order) {
-        order = await Order.findOne({
-          orderId: orderId,
-          userId
-        });
+        order = await Order.findOne({ orderId: orderId, userId });
       }
-    } catch (error) {
-      // Fallback: try both
-      order = await Order.findOne({
-        $or: [
-          { _id: orderId },
-          { orderId: orderId }
-        ],
-        userId
-      });
+
+      // Final fallback: try finding by razorpayOrderId
+      if (!order && razorpayOrderId) {
+        order = await Order.findOne({ "payment.razorpayOrderId": razorpayOrderId, userId });
+      }
+    } catch (lookupError) {
+      logger.error(`❌ Error looking up order ${orderId}:`, lookupError);
+      throw new Error(`Order lookup failed: ${lookupError.message}`);
     }
 
     if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: 'Order not found'
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    // 2. Check if already processed
+    if (order.payment?.status === 'completed' || order.status !== 'pending') {
+      logger.info(`ℹ️ Order ${order.orderId} already processed. Status: ${order.status}, Payment: ${order.payment?.status}`);
+      return res.status(200).json({
+        success: true,
+        message: 'Order already processed successfully',
+        data: {
+          order: {
+            id: order._id.toString(),
+            orderId: order.orderId,
+            status: order.status
+          }
+        }
       });
     }
 
-    // Verify payment signature
-    const isValid = await verifyPayment(razorpayOrderId, razorpayPaymentId, razorpaySignature);
+    // 3. Signature Verification
+    let isValid = false;
+    try {
+      isValid = await verifyPayment(razorpayOrderId, razorpayPaymentId, razorpaySignature);
+    } catch (verifyError) {
+      isValid = false;
+    }
 
     if (!isValid) {
-      // Update order payment status to failed
+      logger.warn(`🚫 Invalid payment signature for order: ${order.orderId}`);
       order.payment.status = 'failed';
-      await order.save();
+      await order.save().catch(e => logger.error('Failed to save failed status:', e));
 
       return res.status(400).json({
         success: false,
@@ -1036,11 +1046,11 @@ export const verifyOrderPayment = async (req, res) => {
       });
     }
 
-    // Create payment record
+    // 4. Update Order and Create Payment Record
     const payment = new Payment({
-      paymentId: `PAY - ${Date.now()} -${Math.floor(Math.random() * 1000)} `,
+      paymentId: `PAY-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       orderId: order._id,
-      userId,
+      userId: order.userId,
       amount: order.pricing.total,
       currency: 'INR',
       method: 'razorpay',
@@ -1056,112 +1066,54 @@ export const verifyOrderPayment = async (req, res) => {
         action: 'completed',
         timestamp: new Date(),
         details: {
-          razorpayOrderId,
-          razorpayPaymentId
-        },
-        ipAddress: req.ip,
-        userAgent: req.get('user-agent')
+          note: 'Razorpay payment verified via callback'
+        }
       }]
     });
 
     await payment.save();
+    logger.info(`✅ Payment record created: ${payment.paymentId}`);
 
-    // Update order status (stay in pending initially even after payment to allow manual restaurant acceptance)
+    // Update Order
+    order.status = 'confirmed';
     order.payment.status = 'completed';
-    order.payment.razorpayPaymentId = razorpayPaymentId;
-    order.payment.razorpaySignature = razorpaySignature;
     order.payment.transactionId = razorpayPaymentId;
-    order.status = 'pending';
-    // tracking.confirmed will be set when the restaurant manualy accepts the order
+    order.payment.paidAt = new Date();
+    
+    // Set tracking confirmed
+    if (order.tracking) {
+      order.tracking.confirmed = true;
+      order.tracking.confirmedAt = new Date();
+    }
+
     await order.save();
-    await recordCouponUsageForOrder({ order, userId });
+    logger.info(`✅ Order ${order.orderId} confirmed and awaiting restaurant acceptance`);
 
-    // Calculate order settlement and hold escrow
-    try {
-      // Calculate settlement breakdown
-      await calculateOrderSettlement(order._id);
+    // 5. Post-Payment Tasks (Non-blocking)
+    (async () => {
+      try {
+        await recordCouponUsageForOrder({ order, userId }).catch(e => logger.error('Coupon usage error:', e));
+        await calculateOrderSettlement(order._id).catch(e => logger.error('Settlement calculation error:', e));
+        await holdEscrow(order._id, userId, order.pricing.total).catch(e => logger.error('Escrow hold error:', e));
+        
+        const restaurantId = order.restaurantId;
+        if (restaurantId) {
+          await notifyRestaurantNewOrder(order, restaurantId).catch(e => logger.error('Restaurant notification error:', e));
+        }
 
-      // Hold funds in escrow
-      await holdEscrow(order._id, userId, order.pricing.total);
-
-      logger.info(`✅ Order settlement calculated and escrow held for order ${order.orderId}`);
-    } catch (settlementError) {
-      logger.error(`❌ Error calculating settlement for order ${order.orderId}: `, settlementError);
-      // Don't fail payment verification if settlement calculation fails
-      // But log it for investigation
-    }
-
-    // Notify restaurant about confirmed order (payment verified)
-    try {
-      const restaurantId = order.restaurantId?.toString() || order.restaurantId;
-      const restaurantName = order.restaurantName;
-
-      // CRITICAL: Log detailed info before notification
-      logger.info('🔔 CRITICAL: Attempting to notify restaurant about confirmed order:', {
-        orderId: order.orderId,
-        orderMongoId: order._id.toString(),
-        restaurantId: restaurantId,
-        restaurantName: restaurantName,
-        restaurantIdType: typeof restaurantId,
-        orderRestaurantId: order.restaurantId,
-        orderRestaurantIdType: typeof order.restaurantId,
-        orderStatus: order.status,
-        orderCreatedAt: order.createdAt,
-        orderItems: order.items.map(item => ({ name: item.name, quantity: item.quantity }))
-      });
-
-      // Verify order has restaurantId before notifying
-      if (!restaurantId) {
-        logger.error('❌ CRITICAL: Cannot notify restaurant - order.restaurantId is missing!', {
-          orderId: order.orderId,
-          order: {
-            _id: order._id?.toString(),
-            restaurantId: order.restaurantId,
-            restaurantName: order.restaurantName
-          }
-        });
-        throw new Error('Order restaurantId is missing');
+        const io = await getIOInstance();
+        if (io) {
+          io.emit('new_order_placed', { orderId: order.orderId, restaurantName: order.restaurantName });
+        }
+      } catch (postError) {
+        logger.error('Post-payment background tasks error:', postError);
       }
+    })();
 
-      // Verify order has restaurantName before notifying
-      if (!restaurantName) {
-        logger.warn('⚠️ Order restaurantName is missing:', {
-          orderId: order.orderId,
-          restaurantId: restaurantId
-        });
-      }
-
-      const notificationResult = await notifyRestaurantNewOrder(order, restaurantId);
-
-      logger.info(`✅ Successfully notified restaurant about confirmed order: `, {
-        orderId: order.orderId,
-        restaurantId: restaurantId,
-        restaurantName: restaurantName,
-        notificationResult: notificationResult
-      });
-    } catch (notificationError) {
-      logger.error(`❌ CRITICAL: Error notifying restaurant after payment verification: `, {
-        error: notificationError.message,
-        stack: notificationError.stack,
-        orderId: order.orderId,
-        orderMongoId: order._id?.toString(),
-        restaurantId: order.restaurantId,
-        restaurantName: order.restaurantName,
-        orderStatus: order.status
-      });
-      // Don't fail payment verification if notification fails
-      // Order is still saved and restaurant can fetch it via API
-      // But log it as critical for debugging
-    }
-
-    logger.info(`Order payment verified: ${order.orderId} `, {
-      orderId: order.orderId,
-      paymentId: payment.paymentId,
-      razorpayPaymentId
-    });
-
-    res.json({
+    // 6. Response
+    return res.status(200).json({
       success: true,
+      message: 'Payment verified and order confirmed',
       data: {
         order: {
           id: order._id.toString(),
@@ -1175,15 +1127,13 @@ export const verifyOrderPayment = async (req, res) => {
         }
       }
     });
+
   } catch (error) {
-    logger.error(`Error verifying order payment: ${error.message} `, {
-      error: error.message,
-      stack: error.stack
-    });
+    logger.error(`❌ Error verifying order payment: ${error.message}`, { stack: error.stack });
     res.status(500).json({
       success: false,
       message: 'Failed to verify payment',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      error: error.message
     });
   }
 };

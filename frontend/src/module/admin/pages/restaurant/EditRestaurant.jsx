@@ -122,24 +122,27 @@ export default function EditRestaurant() {
                     openDays: r.openDays || ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
                 })
 
-                // Populate Step 3
+                // Populate Step 3 - data is nested inside onboarding.step3
+                const s3 = r.onboarding?.step3 || {}
                 setStep3({
-                    panNumber: r.panNumber || "",
-                    nameOnPan: r.nameOnPan || "",
-                    panImage: r.panImage || null,
-                    gstRegistered: r.gstRegistered || false,
-                    gstNumber: r.gstNumber || "",
-                    gstLegalName: r.gstLegalName || "",
-                    gstAddress: r.gstAddress || "",
-                    gstImage: r.gstImage || null,
-                    fssaiNumber: r.fssaiNumber || "",
-                    fssaiExpiry: r.fssaiExpiry ? r.fssaiExpiry.substring(0, 10) : "",
-                    fssaiImage: r.fssaiImage || null,
-                    accountNumber: r.accountNumber || "",
-                    confirmAccountNumber: r.accountNumber || "",
-                    ifscCode: r.ifscCode || "",
-                    accountHolderName: r.accountHolderName || "",
-                    accountType: r.accountType || "",
+                    panNumber: s3.pan?.panNumber || r.panNumber || "",
+                    nameOnPan: s3.pan?.nameOnPan || r.nameOnPan || "",
+                    panImage: s3.pan?.image || r.panImage || null,
+                    gstRegistered: s3.gst?.isRegistered ?? r.gstRegistered ?? false,
+                    gstNumber: s3.gst?.gstNumber || r.gstNumber || "",
+                    gstLegalName: s3.gst?.legalName || r.gstLegalName || "",
+                    gstAddress: s3.gst?.address || r.gstAddress || "",
+                    gstImage: s3.gst?.image || r.gstImage || null,
+                    fssaiNumber: s3.fssai?.registrationNumber || r.fssaiNumber || "",
+                    fssaiExpiry: s3.fssai?.expiryDate
+                        ? new Date(s3.fssai.expiryDate).toISOString().substring(0, 10)
+                        : (r.fssaiExpiry ? r.fssaiExpiry.substring(0, 10) : ""),
+                    fssaiImage: s3.fssai?.image || r.fssaiImage || null,
+                    accountNumber: s3.bank?.accountNumber || r.accountNumber || "",
+                    confirmAccountNumber: s3.bank?.accountNumber || r.accountNumber || "",
+                    ifscCode: s3.bank?.ifscCode || r.ifscCode || "",
+                    accountHolderName: s3.bank?.accountHolderName || r.accountHolderName || "",
+                    accountType: s3.bank?.accountType || r.accountType || "",
                 })
 
                 // Populate Step 4
