@@ -7,10 +7,16 @@ import appleSignin from 'apple-signin-auth';
  */
 const verifyIdToken = async (idToken) => {
   try {
-    const clientID = process.env.APPLE_CLIENT_ID || 'dadexpress.in';
-    
+    const audiences = [
+      process.env.APPLE_CLIENT_ID,
+      'com.dadexpress.web',
+      'com.dadexpress.in',
+      'com.dadexpress.app',
+      'com.dadexpress.ios'
+    ].filter(Boolean);
+
     const tokenData = await appleSignin.verifyIdToken(idToken, {
-      audience: clientID,
+      audience: audiences,
       ignoreExpiration: false,
     });
 

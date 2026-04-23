@@ -1553,6 +1553,15 @@ export const appleCallback = asyncHandler(async (req, res) => {
       signupMethod: user.signupMethod,
     };
 
+    // If it's an AJAX/JSON request (like from a mobile app background POST), return JSON
+    if (req.xhr || (req.headers.accept && req.headers.accept.includes('application/json')) || req.body.isNative) {
+      return successResponse(res, 200, "Authentication successful", {
+        accessToken: jwtTokens.accessToken,
+        user: userData,
+        provider: 'apple'
+      });
+    }
+
     const redirectUrl = `${frontendUrl}${redirectPath}?token=${jwtTokens.accessToken}&user=${encodeURIComponent(JSON.stringify(userData))}&provider=apple`;
     return res.redirect(redirectUrl);
   } catch (error) {
