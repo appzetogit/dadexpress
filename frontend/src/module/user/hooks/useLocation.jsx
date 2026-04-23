@@ -2313,53 +2313,54 @@ export function useLocation() {
       }
     }
 
-    // Background sync with DB: always try to get the most recent server-resolved address
-    fetchLocationFromDB()
-      .then((dbLoc) => {
-        if (dbLoc && (dbLoc.latitude || dbLoc.city)) {
-          // Race condition protection: Do not overwrite a fresh GPS location 
-          // that might have been resolved in the background by checkPermissionAndStart
-          const currentSessionResolved = typeof sessionStorage !== "undefined" && 
-                                       sessionStorage.getItem(SESSION_RESOLVED_KEY) === "true"
-          
-          if (currentSessionResolved && !isManualAddressLocked()) {
-            false && console.log("⏭️ Skipping DB location: fresh session location already exists")
-            return
-          }
+    // Background sync with DB: only apply if we have no cached location at all (new user/cleared storage)
+    // Do NOT overwrite a localStorage or GPS location with potentially stale DB data.
+    // The DB location gets applied via updateLocationInDB when GPS resolves.
+    if (!hasInitialLocation) {
+      fetchLocationFromDB()
+        .then((dbLoc) => {
+          if (dbLoc && (dbLoc.latitude || dbLoc.city)) {
+            // Race condition protection: Do not overwrite a fresh GPS location 
+            // that might have been resolved in the background by checkPermissionAndStart
+            const currentSessionResolved = typeof sessionStorage !== "undefined" &&
+              sessionStorage.getItem(SESSION_RESOLVED_KEY) === "true"
 
-          setLocation(dbLoc)
-          setPermissionGranted(true)
-          
-          // If we are trusting DB as the session resolver (e.g. returning user)
-          // we can set loading false, but usually we wait for GPS for "live" mode.
-          // For now, let DB resolve loading ONLY if it's not a fresh boot or if 
-          // it is a manual selection.
-          if (isSessionResolved || isManualAddressLocked()) {
+            if (currentSessionResolved && !isManualAddressLocked()) {
+              false && console.log("⏭️ Skipping DB location: fresh session location already exists")
+              return
+            }
+
+            setLocation(dbLoc)
+            setPermissionGranted(true)
+
+            if (isSessionResolved || isManualAddressLocked()) {
+              setLoading(false)
+            }
+
+            hasInitialLocation = true
+            false && console.log("📂 Loaded location from DB (no cached location):", dbLoc)
+
+            // Check if we should refresh for better address
+            const hasCompleteAddress = dbLoc?.formattedAddress &&
+              dbLoc.formattedAddress !== "Select location" &&
+              !dbLoc.formattedAddress.match(/^-?\d+\.\d+,\s*-?\d+\.\d+$/) &&
+              dbLoc.formattedAddress.split(',').length >= 4
+
+            if (!hasCompleteAddress) {
+              shouldForceRefresh = true
+            }
+          } else {
+            // No location found - set loading to false and show fallback
             setLoading(false)
-          }
-          
-          hasInitialLocation = true
-          false && console.log("📂 Loaded location from DB:", dbLoc)
-
-          // Check if we should refresh for better address
-          const hasCompleteAddress = dbLoc?.formattedAddress &&
-            dbLoc.formattedAddress !== "Select location" &&
-            !dbLoc.formattedAddress.match(/^-?\d+\.\d+,\s*-?\d+\.\d+$/) &&
-            dbLoc.formattedAddress.split(',').length >= 4
-
-          if (!hasCompleteAddress) {
             shouldForceRefresh = true
           }
-        } else {
-          // No location found - set loading to false and show fallback
-          setLoading(false)
+        })
+        .catch(() => {
+          if (!hasInitialLocation) setLoading(false)
           shouldForceRefresh = true
-        }
-      })
-      .catch(() => {
-        if (!hasInitialLocation) setLoading(false)
-        shouldForceRefresh = true
-      })
+        })
+    }
+
 
     // Always ensure loading is false after initial check
     // Safety timeout to prevent infinite loading
