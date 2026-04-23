@@ -1586,32 +1586,39 @@ export const appleCallback = asyncHandler(async (req, res) => {
       <body>
         <div class="loader"></div>
         <script>
-          const authData = {
-            success: true,
-            token: "${jwtTokens.accessToken}",
-            user: ${JSON.stringify(userData)},
-            provider: "apple"
-          };
+          (function() {
+            var data = {
+              "type": "APPLE_LOGIN_SUCCESS",
+              "token": "${jwtTokens.accessToken}",
+              "user": ${JSON.stringify(userData)},
+              "signupMethod": "apple",
+              "provider": "apple"
+            };
 
-          // 1. Try to communicate with window.opener (for popup flows)
-          if (window.opener) {
-            window.opener.postMessage(authData, "*");
-          }
-          
-          // 2. Try to communicate with window.parent (for iframe flows)
-          if (window.parent && window.parent !== window) {
-            window.parent.postMessage(authData, "*");
-          }
+            // 1. Try to communicate with window.opener (for popup flows)
+            if (window.opener) {
+              window.opener.postMessage(data, "*");
+            }
+            
+            // 2. Try to communicate with window.parent (for iframe flows)
+            if (window.parent && window.parent !== window) {
+              window.parent.postMessage(data, "*");
+            }
 
-          // 3. For Flutter/Native WebViews
-          if (window.ReactNativeWebView) {
-            window.ReactNativeWebView.postMessage(JSON.stringify(authData));
-          }
-          
-          // 4. Fallback: Redirect to the callback page
-          setTimeout(function() {
-            window.location.href = "${redirectUrl}";
-          }, 1000);
+            // 3. For Flutter/Native WebViews
+            if (window.ReactNativeWebView) {
+              window.ReactNativeWebView.postMessage(JSON.stringify(data));
+            }
+            
+            // Log for debugging in Flutter JS Console
+            console.log("✅ Native Apple Tokens passed to web successfully.");
+            console.log("🔄 Reloading page in 1.5s to apply session...");
+            
+            // 4. Fallback: Redirect to the callback page
+            setTimeout(function() {
+              window.location.href = "${redirectUrl}";
+            }, 1500);
+          })();
         </script>
       </body>
       </html>
