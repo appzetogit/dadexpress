@@ -167,7 +167,11 @@ export function ProfileProvider({ children }) {
           // Auto-select default address for immediate restaurant display upon login
           try {
             const currentSelected = safeStorage.getItem("selectedDeliveryAddress")
-            if (!currentSelected && addressesData.length > 0) {
+            const parsedSelected = currentSelected ? JSON.parse(currentSelected) : null
+            
+            // Auto-select default address for immediate restaurant display upon login
+            // We do this if no address is selected OR if only GPS (current) mode was being used
+            if ((!parsedSelected || parsedSelected.mode === "current") && addressesData.length > 0) {
               const defaultAddr = addressesData.find((addr) => addr.isDefault) || addressesData[0]
               if (defaultAddr) {
                 const payload = {

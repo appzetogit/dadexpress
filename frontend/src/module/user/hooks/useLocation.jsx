@@ -2548,6 +2548,19 @@ export function useLocation() {
     }
   }, [])
 
+  // Refresh location from DB when user logs in/out
+  useEffect(() => {
+    const handleAuthChange = () => {
+      false && console.log("🔐 Auth changed, refreshing location from DB...")
+      fetchLocationFromDB()
+    }
+
+    window.addEventListener("userAuthChanged", handleAuthChange)
+    return () => {
+      window.removeEventListener("userAuthChanged", handleAuthChange)
+    }
+  }, [])
+
   // Allow other screens/components to push fresh GPS coordinates immediately
   // so zone detection and UI update in real time without waiting for watcher cycles.
   useEffect(() => {
