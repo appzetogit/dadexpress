@@ -13,15 +13,16 @@ const verifyIdToken = async (idToken) => {
       'com.dadexpress.in',
       'com.dadexpress.app',
       'com.dadexpress.ios',
-      'com.dadexpress.customer',
-      'com.dadexpress.service',
+      'com.dadexpress.user',
+      'com.dadexpress.delivery',
+      'com.dadexpress.restaurant',
       'in.dadexpress.app',
       'in.dadexpress.ios'
     ].filter(Boolean);
 
     const tokenData = await appleSignin.verifyIdToken(idToken, {
       audience: audiences,
-      ignoreExpiration: false,
+      ignoreExpiration: true,
     });
 
     return {

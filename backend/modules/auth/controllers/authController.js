@@ -1442,7 +1442,7 @@ export const appleLogin = asyncHandler(async (req, res) => {
 
     const cookieName = user.role === "admin" ? "admin_refreshToken" :
       user.role === "restaurant" ? "restaurant_refreshToken" :
-      user.role === "delivery" ? "delivery_refreshToken" : "user_refreshToken";
+        user.role === "delivery" ? "delivery_refreshToken" : "user_refreshToken";
 
     res.cookie(cookieName, tokens.refreshToken, getRefreshCookieOptions({
       maxAge: 365 * 24 * 60 * 60 * 1000,
@@ -1532,7 +1532,7 @@ export const appleCallback = asyncHandler(async (req, res) => {
 
     const cookieName = user.role === 'admin' ? 'admin_refreshToken' :
       user.role === 'restaurant' ? 'restaurant_refreshToken' :
-      user.role === 'delivery' ? 'delivery_refreshToken' : 'user_refreshToken';
+        user.role === 'delivery' ? 'delivery_refreshToken' : 'user_refreshToken';
 
     res.cookie(cookieName, jwtTokens.refreshToken, getRefreshCookieOptions({
       maxAge: 365 * 24 * 60 * 60 * 1000,
@@ -1554,11 +1554,11 @@ export const appleCallback = asyncHandler(async (req, res) => {
     };
 
     // Response logic: Handle AJAX/JSON requests (mobile apps) or standard browser redirects
-    const isAppRequest = req.xhr || 
-                         (req.headers.accept && req.headers.accept.includes('application/json')) || 
-                         req.body.isNative || 
-                         req.body.idToken || 
-                         req.body.id_token;
+    const isAppRequest = req.xhr ||
+      (req.headers.accept && req.headers.accept.includes('application/json')) ||
+      req.body.isNative ||
+      req.body.idToken ||
+      req.body.id_token;
 
     if (isAppRequest && (req.xhr || (req.headers.accept && req.headers.accept.includes('application/json')) || req.body.isNative)) {
       return successResponse(res, 200, "Authentication successful", {
@@ -1571,7 +1571,7 @@ export const appleCallback = asyncHandler(async (req, res) => {
     // Default: Return HTML with script for WebViews/Browsers (The "Script wala response")
     // This avoids 405 Method Not Allowed on POST redirects and allows WebView communication
     const redirectUrl = `${frontendUrl}${redirectPath}?token=${jwtTokens.accessToken}&user=${encodeURIComponent(JSON.stringify(userData))}&provider=apple`;
-    
+
     const htmlResponse = `
       <!DOCTYPE html>
       <html>
@@ -1628,7 +1628,7 @@ export const appleCallback = asyncHandler(async (req, res) => {
   } catch (error) {
     logger.error(`Error in Apple OAuth callback: ${error.message}`);
     const frontendUrl = process.env.FRONTEND_URL || "https://dadexpress.in";
-    
+
     if (req.method === 'POST') {
       return res.status(200).send(`
         <html><body><script>
@@ -1637,7 +1637,7 @@ export const appleCallback = asyncHandler(async (req, res) => {
         </script></body></html>
       `);
     }
-    
+
     return res.redirect(`${frontendUrl}/user/login?error=apple_auth_failed`);
   }
 });
