@@ -141,7 +141,7 @@ paymentSchema.index({ 'razorpay.orderId': 1 });
 paymentSchema.index({ 'razorpay.paymentId': 1 });
 
 // Add log entry before status change
-paymentSchema.pre('save', function(next) {
+paymentSchema.pre('save', async function() {
   if (this.isModified('status')) {
     const newStatus = this.status;
     
@@ -166,7 +166,6 @@ paymentSchema.pre('save', function(next) {
       }
     });
   }
-  next();
 });
 
 export default mongoose.models.Payment || mongoose.model('Payment', paymentSchema);
