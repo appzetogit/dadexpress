@@ -991,8 +991,9 @@ export const createOrder = async (req, res) => {
  * Verify payment and confirm order
  */
 export const verifyOrderPayment = async (req, res) => {
+  let userId;
   try {
-    const userId = req.user?._id || req.user?.id;
+    userId = req.user?._id || req.user?.id;
     const { orderId, razorpayOrderId, razorpayPaymentId, razorpaySignature } = req.body;
 
     if (!orderId || !razorpayOrderId || !razorpayPaymentId || !razorpaySignature) {
@@ -1244,8 +1245,10 @@ export const getUserOrders = async (req, res) => {
  * Get order details
  */
 export const getOrderDetails = async (req, res) => {
+  let userId;
   try {
-    const userId = req.user.id;
+    const user = req.user;
+    userId = user?._id || user?.id;
     const { id } = req.params;
 
     // Try to find order by MongoDB _id or orderId (custom order ID)

@@ -357,9 +357,10 @@ const verifyTopupPaymentSchema = Joi.object({
 });
 
 export const verifyTopupPayment = asyncHandler(async (req, res) => {
+  let userId;
   try {
     const user = req.user;
-    const userId = user?._id || user?.id;
+    userId = user?._id || user?.id;
     const { razorpayOrderId, razorpayPaymentId, razorpaySignature } = req.body;
     const amount = Number(req.body.amount);
 
