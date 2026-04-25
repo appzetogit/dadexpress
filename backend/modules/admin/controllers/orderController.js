@@ -2247,15 +2247,16 @@ export const processRefund = asyncHandler(async (req, res) => {
       return errorResponse(res, 400, 'Order is not cancelled');
     }
 
-    // Check if it's a cancelled order (by restaurant or user)
+    // Check if it's a cancelled order (by restaurant, user or admin)
     const isRestaurantCancelled = order.cancelledBy === 'restaurant' ||
       (order.cancellationReason &&
         /rejected by restaurant|restaurant rejected|restaurant cancelled|restaurant is too busy|item not available|outside delivery area|kitchen closing|technical issue/i.test(order.cancellationReason));
 
     const isUserCancelled = order.cancelledBy === 'user';
+    const isAdminCancelled = order.cancelledBy === 'admin';
 
-    if (!isRestaurantCancelled && !isUserCancelled) {
-      return errorResponse(res, 400, 'This order was not cancelled by restaurant or user');
+    if (!isRestaurantCancelled && !isUserCancelled && !isAdminCancelled) {
+      return errorResponse(res, 400, 'This order was not cancelled by restaurant, user or admin');
     }
 
     // Check payment method - wallet payments don't use Razorpay
