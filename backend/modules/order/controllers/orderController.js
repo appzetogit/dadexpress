@@ -21,6 +21,23 @@ import OrderEvent from '../models/OrderEvent.js';
 import UserWallet from '../../user/models/UserWallet.js';
 import { recordCouponUsage } from '../services/couponValidationService.js';
 
+// Dynamic import to avoid circular dependency
+let getIO = null;
+
+async function getIOInstance() {
+  if (!getIO) {
+    try {
+      const serverModule = await import('../../../server.js');
+      getIO = serverModule.getIO;
+    } catch (error) {
+      console.error('Failed to import getIO from server.js:', error);
+      return null;
+    }
+  }
+  return getIO ? getIO() : null;
+}
+
+
 const logger = winston.createLogger({
   level: 'info',
   format: winston.format.json(),
@@ -975,7 +992,7 @@ export const createOrder = async (req, res) => {
  */
 export const verifyOrderPayment = async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user?._id || req.user?.id;
     const { orderId, razorpayOrderId, razorpayPaymentId, razorpaySignature } = req.body;
 
     if (!orderId || !razorpayOrderId || !razorpayPaymentId || !razorpaySignature) {
@@ -1128,10 +1145,14 @@ export const verifyOrderPayment = async (req, res) => {
     });
 
   } catch (error) {
-    logger.error(`❌ Error verifying order payment: ${error.message}`, { stack: error.stack });
+    logger.error(`❌ Error verifying order payment: ${error.message}`, { 
+      userId,
+      stack: error.stack 
+    });
     res.status(500).json({
       success: false,
       message: 'Failed to verify payment',
+      userId,
       error: error.message
     });
   }

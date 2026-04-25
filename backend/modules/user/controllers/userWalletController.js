@@ -359,7 +359,10 @@ const verifyTopupPaymentSchema = Joi.object({
 export const verifyTopupPayment = asyncHandler(async (req, res) => {
   try {
     const user = req.user;
-    const { razorpayOrderId, razorpayPaymentId, razorpaySignature, amount } = req.body;
+    const userId = user?._id || user?.id;
+    const { razorpayOrderId, razorpayPaymentId, razorpaySignature } = req.body;
+    const amount = Number(req.body.amount);
+
 
     // Validation
     const { error: validationError } = verifyTopupPaymentSchema.validate(req.body);
@@ -371,7 +374,7 @@ export const verifyTopupPayment = asyncHandler(async (req, res) => {
     const isValid = await verifyPayment(razorpayOrderId, razorpayPaymentId, razorpaySignature);
     
     if (!isValid) {
-      logger.warn(`Invalid payment signature for wallet top-up: ${user._id}`, {
+      logger.warn(`Invalid payment signature for wallet top-up: ${userId}`, {
         razorpayOrderId,
         razorpayPaymentId
       });
@@ -379,7 +382,7 @@ export const verifyTopupPayment = asyncHandler(async (req, res) => {
     }
 
     // Find or create wallet
-    let wallet = await UserWallet.findOrCreateByUserId(user._id);
+    let wallet = await UserWallet.findOrCreateByUserId(userId);
 
     // Check if transaction already exists for this payment
     const existingTransaction = wallet.transactions.find(
@@ -404,13 +407,13 @@ export const verifyTopupPayment = asyncHandler(async (req, res) => {
     await wallet.save();
 
     // Update user's wallet balance in User model (for backward compatibility)
-    await User.findByIdAndUpdate(user._id, {
+    await User.findByIdAndUpdate(userId, {
       'wallet.balance': wallet.balance,
       'wallet.currency': wallet.currency
     });
 
-    logger.info(`Money added to wallet after payment verification: ${user._id}`, {
-      userId: user._id,
+    logger.info(`Money added to wallet after payment verification: ${userId}`, {
+      userId: userId,
       amount,
       razorpayPaymentId,
       transactionId: transaction._id,
@@ -433,8 +436,11 @@ export const verifyTopupPayment = asyncHandler(async (req, res) => {
       }
     });
   } catch (error) {
-    logger.error('Error verifying payment and adding money to wallet:', error);
-    return errorResponse(res, 500, 'Failed to verify payment');
+    logger.error(`❌ Error verifying wallet top-up payment: ${error.message}`, {
+      userId: userId,
+      stack: error.stack
+    });
+    return errorResponse(res, 500, 'Failed to verify payment', error.message);
   }
 });
 
