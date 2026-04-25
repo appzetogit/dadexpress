@@ -501,8 +501,24 @@ export const processRazorpayRefund = async (orderId, adminId = null) => {
     }
 
     // Check if Razorpay payment ID exists
-    if (!order.payment.razorpayPaymentId) {
-      throw new Error('Razorpay payment ID not found for this order');
+    let razorpayPaymentId = order.payment?.razorpayPaymentId;
+    
+    if (!razorpayPaymentId) {
+      console.log('🔍 [processRazorpayRefund] Payment ID not found in order, searching in Payment model...');
+      const payment = await Payment.findOne({ 
+        orderId: order._id, 
+        status: 'completed',
+        method: 'razorpay'
+      }).lean();
+      
+      if (payment && payment.razorpay?.paymentId) {
+        razorpayPaymentId = payment.razorpay.paymentId;
+        console.log('✅ [processRazorpayRefund] Found payment ID in Payment model:', razorpayPaymentId);
+      }
+    }
+
+    if (!razorpayPaymentId) {
+      throw new Error('Razorpay payment ID not found for this order. Please ensure the payment was completed successfully.');
     }
 
     const settlement = await OrderSettlement.findOne({ orderId });
@@ -537,7 +553,7 @@ export const processRazorpayRefund = async (orderId, adminId = null) => {
     let razorpayRefund = null;
     try {
       razorpayRefund = await createRefund(
-        order.payment.razorpayPaymentId,
+        razorpayPaymentId,
         refundAmountInPaise,
         {
           orderId: order.orderId,
@@ -560,7 +576,7 @@ export const processRazorpayRefund = async (orderId, adminId = null) => {
     // Update Payment model with refund details
     const payment = await Payment.findOne({ 
       orderId: order._id,
-      'razorpay.paymentId': order.payment.razorpayPaymentId
+      'razorpay.paymentId': razorpayPaymentId
     });
 
     if (payment) {
@@ -623,7 +639,7 @@ export const processRazorpayRefund = async (orderId, adminId = null) => {
         status: 'initiated',
         orderId: orderId,
         razorpayRefundId: razorpayRefund.id,
-        razorpayPaymentId: order.payment.razorpayPaymentId
+        razorpayPaymentId: razorpayPaymentId
       },
       description: `Razorpay refund initiated for order ${settlement.orderNumber}. Refund ID: ${razorpayRefund.id}, Amount: ₹${refundAmount}`
     });
