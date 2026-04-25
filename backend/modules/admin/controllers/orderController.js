@@ -2417,10 +2417,22 @@ export const processRefund = asyncHandler(async (req, res) => {
       const { processWalletRefund } = await import('../../order/services/cancellationRefundService.js');
       refundResult = await processWalletRefund(order._id, adminId, finalRefundAmount);
     } else {
-      // For Razorpay, check if refund amount is calculated
-      const refundAmount = settlement.cancellationDetails?.refundAmount || 0;
+      // For Razorpay, check if refund amount is calculated. If not, calculate it now.
+      let refundAmount = settlement.cancellationDetails?.refundAmount || 0;
+      
       if (refundAmount <= 0) {
-        return errorResponse(res, 400, 'No refund amount calculated for this order');
+        console.log('📝 [processRefund] Refund amount not found in settlement, calculating now...');
+        const { calculateCancellationRefund } = await import('../../order/services/cancellationRefundService.js');
+        const calculationResult = await calculateCancellationRefund(order._id, order.cancellationReason || 'Order cancelled');
+        refundAmount = calculationResult.refundAmount;
+        
+        // Reload settlement after calculation
+        settlement = await OrderSettlement.findOne({ orderId: order._id });
+        console.log('✅ [processRefund] Refund amount calculated:', refundAmount);
+      }
+
+      if (refundAmount <= 0) {
+        return errorResponse(res, 400, 'No refund amount calculated for this order even after calculation attempt');
       }
 
       // Process Razorpay refund
