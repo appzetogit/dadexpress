@@ -458,7 +458,7 @@ const reverseAdminEarnings = async (orderId, adminEarning, orderNumber) => {
       entityType: 'order',
       entityId: orderId,
       action: 'admin_earning_reversal',
-      actionType: 'deduction',
+      actionType: 'debit',
       performedBy: {
         type: 'system',
         name: 'System'
