@@ -1,9 +1,11 @@
-import { useEffect, useState, useRef } from "react"
-import { MapPin, X } from "lucide-react"
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
+import { useEffect, useState } from "react"
+import { MapPin } from "lucide-react"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useLocation } from "../hooks/useLocation"
 import { hasManualSelectedAddress } from "../utils/deliveryAddress"
+
+const OPEN_LOCATION_SELECTOR_EVENT = "user-open-location-selector"
 
 const safeStorage = {
   getItem(key) {
@@ -26,47 +28,67 @@ const safeStorage = {
 export default function LocationPrompt() {
   const { location, loading, permissionGranted, requestLocation } = useLocation()
   const [showPrompt, setShowPrompt] = useState(false)
-  const cardRef = useRef(null)
+
+  const closePrompt = (persistDismissal = true) => {
+    setShowPrompt(false)
+    document.body.style.overflow = ""
+
+    if (persistDismissal) {
+      safeStorage.setItem("locationPromptDismissed", "true")
+    }
+
+    try {
+      sessionStorage.removeItem("showLocationPromptAfterLogin")
+    } catch {
+      // Ignore session storage access failures.
+    }
+  }
 
   useEffect(() => {
     if (hasManualSelectedAddress()) {
-      setShowPrompt(false)
+      closePrompt()
       return
     }
 
-    // Check if location permission was already granted
     const storedLocation = safeStorage.getItem("userLocation")
     const promptDismissed = safeStorage.getItem("locationPromptDismissed")
+    const shouldShowAfterLogin = (() => {
+      try {
+        return sessionStorage.getItem("showLocationPromptAfterLogin") === "true"
+      } catch {
+        return false
+      }
+    })()
 
-    // The useLocation hook will automatically try to get location on app start
-    // We only show the prompt if:
-    // 1. No location is stored (first time user)
-    // 2. Prompt hasn't been dismissed
-    // 3. Location permission was denied (we'll detect this after a delay)
-    
-    if (!storedLocation && !promptDismissed) {
-      // Wait a bit to let the hook try to get location automatically
-      // If it fails, we'll show the prompt
+    if (shouldShowAfterLogin) {
       const timer = setTimeout(() => {
-        // Check again if location was set (hook might have succeeded)
+        if (!permissionGranted && !hasManualSelectedAddress()) {
+          setShowPrompt(true)
+          document.body.style.overflow = "hidden"
+        } else {
+          closePrompt(false)
+        }
+      }, 0)
+
+      return () => {
+        clearTimeout(timer)
+        document.body.style.overflow = ""
+      }
+    }
+
+    if (storedLocation) {
+      closePrompt(false)
+      return
+    }
+
+    if (!promptDismissed) {
+      const timer = setTimeout(() => {
         const currentLocation = safeStorage.getItem("userLocation")
         if (!currentLocation && !permissionGranted) {
           setShowPrompt(true)
-          // Prevent body scroll when popup is open
           document.body.style.overflow = "hidden"
-          // CSS animation will handle the fade-in
-          if (cardRef.current) {
-            cardRef.current.style.opacity = '0'
-            cardRef.current.style.transform = 'translateY(20px)'
-            requestAnimationFrame(() => {
-              if (cardRef.current) {
-                cardRef.current.style.opacity = '1'
-                cardRef.current.style.transform = 'translateY(0)'
-              }
-            })
-          }
         }
-      }, 2000) // Wait 2 seconds for automatic location request to complete
+      }, 2000)
 
       return () => {
         clearTimeout(timer)
@@ -75,41 +97,37 @@ export default function LocationPrompt() {
     }
   }, [permissionGranted])
 
-  // Close prompt when location is successfully obtained
   useEffect(() => {
     if (location && showPrompt) {
       const timer = setTimeout(() => {
-        setShowPrompt(false)
-        document.body.style.overflow = ""
-        safeStorage.setItem("locationPromptDismissed", "true")
-      }, 1000)
+        closePrompt()
+      }, 300)
       return () => clearTimeout(timer)
     }
   }, [location, showPrompt])
 
   const handleAllow = async () => {
     if (hasManualSelectedAddress()) {
-      setShowPrompt(false)
-      document.body.style.overflow = ""
+      closePrompt()
       return
     }
 
-    await requestLocation()
-    // Wait a bit for location to be set
-    setTimeout(() => {
-      setShowPrompt(false)
-      document.body.style.overflow = ""
-      safeStorage.setItem("locationPromptDismissed", "true")
-    }, 500)
+    try {
+      const nextLocation = await requestLocation()
+      if (nextLocation) {
+        closePrompt()
+      }
+    } catch {
+      setShowPrompt(true)
+      document.body.style.overflow = "hidden"
+    }
   }
 
-  const handleDismiss = () => {
-    setShowPrompt(false)
-    document.body.style.overflow = ""
-    safeStorage.setItem("locationPromptDismissed", "true")
+  const handleManualLocation = () => {
+    window.dispatchEvent(new Event(OPEN_LOCATION_SELECTOR_EVENT))
+    closePrompt()
   }
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       document.body.style.overflow = ""
@@ -119,53 +137,34 @@ export default function LocationPrompt() {
   if (!showPrompt) return null
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
-      <Card
-        ref={cardRef}
-        className="w-full max-w-md border-2 border-gray-200 shadow-2xl mx-auto my-auto"
-      >
-        <CardHeader className="relative">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute right-2 top-2"
-            onClick={handleDismiss}
-          >
-            <X className="h-4 w-4" />
-          </Button>
-          <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center">
-              <MapPin className="h-6 w-6 text-primary-orange" />
-            </div>
-            <div>
-              <CardTitle>Enable Location Services</CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">
-                Get faster delivery and better recommendations
-              </p>
-            </div>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/45 px-4 backdrop-blur-[2px]">
+      <Card className="w-full max-w-[350px] rounded-[24px] border border-[#f1e6e7] bg-white p-0 shadow-[0_24px_60px_rgba(62,24,28,0.18)] animate-in fade-in zoom-in-95 duration-200">
+        <CardContent className="px-6 py-7 text-center">
+          <div className="mx-auto mb-5 flex h-[72px] w-[72px] items-center justify-center rounded-full bg-[#f8efef]">
+            <MapPin className="h-8 w-8 text-[#b98b8f]" strokeWidth={2.25} />
           </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            We use your location to show nearby restaurants and provide accurate
-            delivery times. Your location data is stored locally and never
-            shared.
+          <h2 className="text-[29px] font-extrabold tracking-[-0.03em] text-[#766c80] sm:text-[31px]">
+            Location Access Required
+          </h2>
+          <p className="mx-auto mt-3 max-w-[260px] text-[16px] leading-6 text-[#938a99]">
+            We need your location to show you products available near you and enable
+            delivery services. Location access is required to continue.
           </p>
-          <div className="flex gap-2">
-            <Button
-              onClick={handleDismiss}
-              variant="outline"
-              className="flex-1"
-            >
-              Not Now
-            </Button>
+          <div className="mt-6 space-y-3">
             <Button
               onClick={handleAllow}
-              className="flex-1 bg-primary-orange hover:opacity-90 text-white"
+              className="h-12 w-full rounded-xl bg-gradient-to-r from-[#c78b8f] to-[#b86b71] text-[15px] font-semibold text-white shadow-[0_10px_24px_rgba(184,107,113,0.28)] hover:opacity-95"
               disabled={loading}
             >
-              {loading ? "Getting location..." : "Allow Location"}
+              {loading ? "Getting Location..." : "Allow Location Access"}
             </Button>
+            <button
+              type="button"
+              onClick={handleManualLocation}
+              className="w-full bg-transparent text-[15px] font-semibold text-[#8d8496]"
+            >
+              Enter Location Manually
+            </button>
           </div>
         </CardContent>
       </Card>

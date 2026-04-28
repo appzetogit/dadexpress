@@ -8,6 +8,9 @@ import { authAPI } from "@/lib/api"
 import { setAuthData as setUserAuthData } from "@/lib/utils/auth"
 import { requestFcmToken } from "@/lib/firebase"
 
+const TEST_BYPASS_PHONE = "7610416911"
+const TEST_BYPASS_OTP = "123456"
+
 export default function OTP() {
   const navigate = useNavigate()
   const [otp, setOtp] = useState(["", "", "", "", "", ""])
@@ -23,8 +26,14 @@ export default function OTP() {
   const [contactInfo, setContactInfo] = useState("")
   const [contactType, setContactType] = useState("phone")
   const inputRefs = useRef([])
+  const autoVerifiedRef = useRef(false)
   const savedReferral = localStorage.getItem("referralCode")
   const [referral, setReferral] = useState(savedReferral || "")
+
+  const isBypassTestNumber = (value) => {
+    const digitsOnly = String(value || "").replace(/\D/g, "")
+    return digitsOnly === TEST_BYPASS_PHONE || digitsOnly === `91${TEST_BYPASS_PHONE}`
+  }
 
   useEffect(() => {
     // Redirect to home if already authenticated
@@ -83,6 +92,18 @@ export default function OTP() {
       inputRefs.current[0].focus()
     }
   }, [showNameInput])
+
+  useEffect(() => {
+    if (!authData || showNameInput || isLoading || autoVerifiedRef.current) {
+      return
+    }
+
+    if (authData.method === "phone" && isBypassTestNumber(authData.phone)) {
+      autoVerifiedRef.current = true
+      setOtp(TEST_BYPASS_OTP.split(""))
+      handleVerify(TEST_BYPASS_OTP)
+    }
+  }, [authData, showNameInput, isLoading])
 
   const handleChange = (index, value) => {
     // Only allow digits

@@ -25,6 +25,9 @@ const logger = winston.createLogger({
   ],
 });
 
+const TEST_BYPASS_PHONE = "917610416911";
+const TEST_BYPASS_OTP = "123456";
+
 /**
  * Build phone query that searches in multiple formats (with/without country code)
  * This handles both old data (without country code) and new data (with country code)
@@ -93,7 +96,7 @@ export const sendOTP = asyncHandler(async (req, res) => {
     const normalizedPhone = phone ? normalizePhoneNumber(phone) : null;
 
     // Default OTP for specific number (Requested by USER)
-    if (normalizedPhone === "917610416911") {
+    if (normalizedPhone === TEST_BYPASS_PHONE) {
       return successResponse(res, 200, "OTP sent successfully to phone", {
         expiresIn: 300,
         identifierType: "phone",
@@ -194,7 +197,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
 
       // Verify OTP (phone or email) before creating user
       // Default OTP for specific number (Requested by USER)
-      if (phone === "917610416911" && otp === "110211" && userRole === "user") {
+      if (phone === TEST_BYPASS_PHONE && otp === TEST_BYPASS_OTP && userRole === "user") {
         // Skip verification for default OTP
       } else {
         await otpService.verifyOTP(phone || null, otp, purpose, email || null);
@@ -323,7 +326,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         }
         // Verify OTP for password reset
         // Default OTP for specific number (Requested by USER)
-        if (phone === "917610416911" && otp === "110211" && userRole === "user") {
+        if (phone === TEST_BYPASS_PHONE && otp === TEST_BYPASS_OTP && userRole === "user") {
           // Skip verification for default OTP
         } else {
           await otpService.verifyOTP(phone || null, otp, purpose, email || null);
@@ -342,7 +345,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
 
       // In both cases we must verify OTP first.
       // Default OTP for specific number (Requested by USER)
-      if (phone === "917610416911" && otp === "110211" && userRole === "user") {
+      if (phone === TEST_BYPASS_PHONE && otp === TEST_BYPASS_OTP && userRole === "user") {
         // Skip verification for default OTP
       } else {
         await otpService.verifyOTP(phone || null, otp, purpose, email || null);

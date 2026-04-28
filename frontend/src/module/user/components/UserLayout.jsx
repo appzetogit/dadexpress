@@ -10,6 +10,8 @@ const LocationSelectorOverlay = lazy(() => import("./LocationSelectorOverlay"))
 import BottomNavigation from "./BottomNavigation"
 import DesktopNavbar from "./DesktopNavbar"
 
+const OPEN_LOCATION_SELECTOR_EVENT = "user-open-location-selector"
+
 // Create SearchOverlay context with default value
 const SearchOverlayContext = createContext({
   isSearchOpen: false,
@@ -78,6 +80,17 @@ export function useLocationSelector() {
 
 function LocationSelectorProvider({ children }) {
   const [isLocationSelectorOpen, setIsLocationSelectorOpen] = useState(false)
+
+  useEffect(() => {
+    const handleOpenLocationSelector = () => {
+      setIsLocationSelectorOpen(true)
+    }
+
+    window.addEventListener(OPEN_LOCATION_SELECTOR_EVENT, handleOpenLocationSelector)
+    return () => {
+      window.removeEventListener(OPEN_LOCATION_SELECTOR_EVENT, handleOpenLocationSelector)
+    }
+  }, [])
 
   const openLocationSelector = () => {
     setIsLocationSelectorOpen(true)

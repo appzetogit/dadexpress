@@ -243,6 +243,11 @@ export function setAuthData(module, token, user) {
 
     safeStorage.setItem(tokenKey, token);
     safeStorage.setItem(authKey, 'true');
+
+    if (module === 'user' && typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem('showLocationPromptAfterLogin', 'true');
+      safeStorage.removeItem('locationPromptDismissed');
+    }
     
     if (user) {
       try {
