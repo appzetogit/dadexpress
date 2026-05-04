@@ -1447,8 +1447,6 @@ export default function Home() {
 
   // Refetch restaurants when filters or GPS zone changes
   // NOTE: Only depend on resolvedZoneId and appliedFilters to avoid re-fetching on minor GPS jitter
-  // Refetch restaurants when filters or GPS zone changes
-  // NOTE: Only depend on resolvedZoneId and appliedFilters to avoid re-fetching on minor GPS jitter
   useEffect(() => {
     if (!activeLocation) return
 
@@ -1459,10 +1457,11 @@ export default function Home() {
 
     const prevLoc = lastFetchedLocationRef.current
     
+    // Force fetch if zone ID changed OR it's the initial load
     let shouldFetch = isInitialLoadRef.current || (resolvedZoneId !== lastFetchedZoneIdRef.current)
 
     if (!shouldFetch && prevLoc) {
-      // Calculate distance to avoid re-fetching on small GPS movements
+      // Calculate distance to avoid re-fetching on tiny GPS jitter
       const R = 6371e3
       const dLat = (lat - prevLoc.lat) * Math.PI / 180
       const dLon = (lng - prevLoc.lng) * Math.PI / 180
@@ -1471,8 +1470,8 @@ export default function Home() {
         Math.sin(dLon / 2) * Math.sin(dLon / 2)
       const distance = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 
-      // 150 meters threshold for background GPS updates
-      if (distance > 150) {
+      // Tighten threshold to 20 meters for better responsiveness
+      if (distance > 20) {
         shouldFetch = true
       }
     }
@@ -1697,7 +1696,7 @@ export default function Home() {
     }
 
     // Priority 4: Definite "Out of Service" state for GPS/Resolved zone
-    if (isOutOfService || (!resolvedZoneId && !zoneLoading && !zoneResolveLoading)) {
+    if (isOutOfService || selectedAddressOutOfService || (!resolvedZoneId && !zoneLoading && !zoneResolveLoading)) {
       if (currentLocation?.city && currentLocation.city !== "Current Location") {
         return `Service currently unavailable in ${currentLocation.city} 📍`
       }
