@@ -135,7 +135,33 @@ export function useZone(location) {
     } else {
       // Try to use cached zone if location not available
       const cachedZoneId = localStorage.getItem('userZoneId')
-      if (cachedZoneId) {
+      const cachedCoordsRaw = localStorage.getItem('userZoneDetectedCoords')
+      
+      let canUseCachedZone = false
+      if (cachedZoneId && cachedCoordsRaw) {
+        try {
+          const parsed = JSON.parse(cachedCoordsRaw)
+          const cachedLat = toNumber(parsed?.latitude)
+          const cachedLng = toNumber(parsed?.longitude)
+          const currentLat = toNumber(lat)
+          const currentLng = toNumber(lng)
+          
+          if (!currentLat || !currentLng) {
+            // If we don't have current coords at all, we might be in initial load.
+            // Check if cache is recent (e.g. < 24h)
+            const detectedAt = parsed?.detectedAt || 0
+            const isRecent = (Date.now() - detectedAt) < 24 * 60 * 60 * 1000
+            canUseCachedZone = isRecent
+          } else {
+            const distance = calculateDistanceKm(currentLat, currentLng, cachedLat, cachedLng)
+            canUseCachedZone = distance <= 1
+          }
+        } catch (_err) {
+          canUseCachedZone = false
+        }
+      }
+
+      if (cachedZoneId && canUseCachedZone) {
         const cachedZone = localStorage.getItem('userZone')
         setZoneId(cachedZoneId)
         setZone(cachedZone ? JSON.parse(cachedZone) : null)

@@ -1696,12 +1696,15 @@ export default function Home() {
       return "Please select your location to explore nearby restaurants & menus 🍽️"
     }
 
-    // Priority 3: Definite "Out of Service" state
-    if (selectedAddressOutOfService) {
-      return "Service currently unavailable at this address 🏠"
+    // Priority 4: Definite "Out of Service" state for GPS/Resolved zone
+    if (isOutOfService || (!resolvedZoneId && !zoneLoading && !zoneResolveLoading)) {
+      if (currentLocation?.city && currentLocation.city !== "Current Location") {
+        return `Service currently unavailable in ${currentLocation.city} 📍`
+      }
+      return "Service currently unavailable in this area 📍"
     }
 
-    // Priority 4: No zone resolved after all attempts
+    // Priority 5: No zone resolved (still waiting for selection or detection)
     if (!resolvedZoneId) {
       return "Please select your location to explore nearby restaurants & menus 🍽️"
     }

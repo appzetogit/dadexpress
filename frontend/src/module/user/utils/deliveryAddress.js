@@ -29,7 +29,7 @@ const buildAddressFromCurrentLocation = (currentLocation, fallbackAddress = null
     "";
 
   const base = {
-    ...(fallbackAddress || {}),
+    // No more merging with fallbackAddress to prevent 'Home' label/stale address mixing with GPS
     formattedAddress,
     address: currentLocation.address || formattedAddress,
     street: currentLocation.street || currentLocation.address || "",
@@ -166,7 +166,8 @@ export const resolveDeliveryAddress = ({
         address: null,
         coords: null,
         source: "current",
-        error: "Current location unavailable",
+        loading: true, // Mark as loading so UI can show a spinner/locating state
+        error: "Detecting your live location...",
       };
     }
     if (!isValidCoords(latitude, longitude)) {
@@ -185,6 +186,22 @@ export const resolveDeliveryAddress = ({
     };
   }
 
+  // Priority 3: Fresh GPS Location (Preferred if no selection made)
+  const currentFallback = buildAddressFromCurrentLocation(currentLocation, null);
+  const currentCoords = currentFallback?.location?.coordinates || null;
+  const currentLat = toNumber(currentCoords?.[1]);
+  const currentLng = toNumber(currentCoords?.[0]);
+
+  if (isValidCoords(currentLat, currentLng)) {
+    return {
+      address: currentFallback,
+      coords: { lat: currentLat, lng: currentLng },
+      source: "current",
+      error: null,
+    };
+  }
+
+  // Priority 4: Saved Fallback (Home/Default) - only if GPS fails
   if (normalizedFallback) {
     const fallbackCoords = normalizedFallback?.location?.coordinates || null;
     const fallbackLat = toNumber(fallbackCoords?.[1]);
@@ -202,20 +219,6 @@ export const resolveDeliveryAddress = ({
       coords: null,
       source: "saved",
       error: "Invalid coordinates for default address",
-    };
-  }
-
-  const currentFallback = buildAddressFromCurrentLocation(currentLocation, normalizedFallback);
-  const currentCoords = currentFallback?.location?.coordinates || null;
-  const currentLat = toNumber(currentCoords?.[1]);
-  const currentLng = toNumber(currentCoords?.[0]);
-
-  if (isValidCoords(currentLat, currentLng)) {
-    return {
-      address: currentFallback,
-      coords: { lat: currentLat, lng: currentLng },
-      source: "current",
-      error: null,
     };
   }
 

@@ -224,8 +224,8 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
 
     try {
       isGettingLocationRef.current = true
-      // Try with strict GPS but with a faster timeout for better UX.
-      const initialTimeout = forceLive ? 8000 : 6000;
+      // Try with strict GPS but with a sufficient timeout for device warm-up.
+      const initialTimeout = forceLive ? 15000 : 10000;
 
       console.log(`📍 Requesting GPS (forceLive: ${forceLive}, timeout: ${initialTimeout}ms)`)
       

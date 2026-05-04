@@ -279,8 +279,9 @@ export default function Restaurants() {
     if (!resolvedZoneId) {
       setLoading(false)
       setRestaurants([])
-      setError("Service not available in this area")
-      setEmptyMessage("No restaurants available in this area")
+      const isOut = !zoneLoading && !isZoneResolving && !currentZoneId
+      setError(isOut ? "Service not available in this area" : "")
+      setEmptyMessage(isOut ? "Service currently unavailable in this area 📍" : "No restaurants available in this area")
       return
     }
 

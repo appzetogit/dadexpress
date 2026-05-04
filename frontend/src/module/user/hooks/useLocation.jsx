@@ -16,6 +16,7 @@ export function useLocation() {
   const prevLocationCoordsRef = useRef({ latitude: null, longitude: null })
   const lastReverseGeocodeCoordsRef = useRef(null)
   const reverseGeocodeCacheRef = useRef(new Map())
+  const isFirstWatchUpdateRef = useRef(true)
   const ENABLE_PAID_GOOGLE_GEOCODING =
     String(import.meta.env?.VITE_ENABLE_PAID_GEOCODING || "").toLowerCase() === "true"
   const isManualAddressLocked = () => {
@@ -149,11 +150,17 @@ export function useLocation() {
 
   /* ===================== DIRECT REVERSE GEOCODE ===================== */
   const reverseGeocodeDirect = async (latitude, longitude) => {
-    const roundedLat = Number(latitude).toFixed(4)
-    const roundedLng = Number(longitude).toFixed(4)
+    // Use high precision for cache key to avoid sticking to old addresses when moving slightly
+    // 6 decimal places is ~10cm accuracy
+    const roundedLat = Number(latitude).toFixed(6)
+    const roundedLng = Number(longitude).toFixed(6)
     const cacheKey = `${roundedLat},${roundedLng}`
     const now = Date.now()
     const cached = reverseGeocodeCacheRef.current.get(cacheKey)
+
+    if (cached && now - cached.timestamp < 2 * 60 * 1000) { // Reduced cache time to 2 mins
+      return cached.value
+    }
     const isCoordinateText = (value) =>
       /^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/.test(String(value || "").trim())
     const normalizeParts = (parts = []) => {
@@ -1837,90 +1844,25 @@ export function useLocation() {
 
             // Don't log timeout errors as errors - they're expected in some cases
             if (err.code === 3) {
-              false && console.warn("⏱️ Geolocation timeout (code 3) - using fallback location")
+              false && console.warn("⏱️ Geolocation timeout (code 3)")
             } else {
               console.error("❌ Geolocation error:", err.code, err.message)
             }
-            // Try multiple fallback strategies
-            try {
-              // Strategy 1: Use DB location if available
-              let fallback = dbLocation
-              if (!fallback) {
-                fallback = await fetchLocationFromDB()
-              }
-
-              // Strategy 2: Use cached location from localStorage
-              if (!fallback) {
-                const stored = localStorage.getItem("userLocation")
-                if (stored) {
-                  try {
-                    fallback = JSON.parse(stored)
-                    false && console.log("✅ Using cached location from localStorage")
-                  } catch (parseErr) {
-                    false && console.warn("⚠️ Failed to parse stored location:", parseErr)
-                  }
-                }
-              }
-
-              if (fallback) {
-                false && console.log("✅ Using fallback location:", fallback)
-                setLocation(fallback)
-                // Don't set error for timeout when we have fallback
-                if (err.code !== 3) {
-                  setError(err.message)
-                }
-                setPermissionGranted(true) // Still grant permission if we have location
-                if (showLoading) setLoading(false)
-                resolve(fallback)
-              } else {
-                // No fallback available - set a default location so UI doesn't hang
-                false && console.warn("⚠️ No fallback location available, setting default")
-                const defaultLocation = {
-                  city: "Select location",
-                  address: "Select location",
-                  formattedAddress: "Select location"
-                }
-                setLocation(defaultLocation)
-                setError(err.code === 3 ? "Location request timed out. Please try again." : err.message)
-                setPermissionGranted(false)
-                if (showLoading) setLoading(false)
-                resolve(defaultLocation) // Always resolve with something
-              }
-            } catch (fallbackErr) {
-              false && console.warn("⚠️ Fallback retrieval failed:", fallbackErr)
-              // Preserve any previously valid location so checkout/cart CTA state does not flicker.
-              setLocation((currentLocation) => {
-                if (
-                  currentLocation &&
-                  currentLocation.formattedAddress &&
-                  currentLocation.formattedAddress !== "Select location"
-                ) {
-                  return currentLocation
-                }
-                return {
-                  city: "Select location",
-                  address: "Select location",
-                  formattedAddress: "Select location"
-                }
-              })
-              setError(err.code === 3 ? "Location request timed out. Please try again." : err.message)
-              setPermissionGranted(false)
-              if (showLoading) setLoading(false)
-              resolve(null)
-            }
-          },
-          options
+            
+            // NO FALLBACK TO STALE DATA
+            setError(err.code === 3 ? "Location request timed out. Please try again." : err.message)
+            if (showLoading) setLoading(false)
+            reject(err)
+          }
         )
       })
     }
 
     // Try with high accuracy first
-    // If forceFresh is true, don't use cached location (maximumAge: 0)
-    // Otherwise, allow cached location for faster response
     return getPositionWithRetry({
-      enableHighAccuracy: true,  // Use GPS for exact location (highest accuracy)
-      timeout: 8000,             // Reduced from 15s to 8s for faster initial response
-      maximumAge: forceFresh ? 0 : 60000  // If forceFresh, get fresh location. Otherwise allow 1 minute cache
+      enableHighAccuracy: true,
+      timeout: 15000,
+      maximumAge: forceFresh ? 0 : 60000
     })
   }
 
@@ -1969,7 +1911,7 @@ export function useLocation() {
               const lngDiff = longitude - lastLng
               const distanceMeters = Math.sqrt(latDiff * latDiff + lngDiff * lngDiff) * 111320
 
-              if (distanceMeters < 100 && location && location.formattedAddress && location.formattedAddress !== "Select location") {
+              if (distanceMeters < 20 && location && location.formattedAddress && location.formattedAddress !== "Select location") {
                 false && console.log(`📍 Movement too small (${distanceMeters.toFixed(1)}m), skipping geocode to save costs.`)
 
                 // Still update coordinates but keep the SAME address
@@ -1982,11 +1924,11 @@ export function useLocation() {
                 }
 
                 if (!isManualAddressLocked()) {
-                  // Skip setLocation to prevent jitter-induced re-renders
-                  // coordinates will only update when significant (>100m) or geocoded
+                  // Update state and storage so UI reflects live movement immediately
                   localStorage.setItem("userLocation", JSON.stringify(loc))
+                  setLocation(loc)
 
-                  // Update DB with fresh coordinates but SAME address (de-duplicated on backend)
+                  // Update DB with fresh coordinates but SAME address
                   clearTimeout(updateTimerRef.current)
                   updateTimerRef.current = setTimeout(() => {
                     updateLocationInDB(loc).catch(() => { })
@@ -2072,15 +2014,10 @@ export function useLocation() {
 
               // Check if address is better (more parts = more complete)
               const currentParts = (currentLoc.formattedAddress || "").split(',').filter(p => p.trim()).length
-              const newParts = completeFormattedAddress.split(',').filter(p => p.trim()).length
+              const newParts = (loc.formattedAddress || "").split(',').filter(p => p.trim()).length
               const addressImproved = newParts > currentParts
 
-              // Only update if moved >150 meters OR address significantly improved
-              if (distanceMeters <= 150 && !addressImproved) {
-                false && console.log(`📍 Location unchanged (${distanceMeters.toFixed(1)}m change), keeping stable address`)
-                return // Don't update - keep current stable address
-              }
-
+              // ALWAYS update if moved or address changed (No threshold for maximum snappiness)
               false && console.log(`📍 Location updated: ${distanceMeters.toFixed(1)}m change, address parts: ${currentParts} → ${newParts}`)
             }
 
@@ -2118,7 +2055,7 @@ export function useLocation() {
             }
 
             // Check if coordinates have changed significantly (threshold: ~220 meters)
-            const coordThreshold = 0.002 // approximately 220 meters
+            const coordThreshold = 0.0002 // approximately 20 meters
             const coordsChanged =
               !prevLocationCoordsRef.current.latitude ||
               !prevLocationCoordsRef.current.longitude ||
@@ -2129,8 +2066,10 @@ export function useLocation() {
             // Final check: Is manual mode active or are we in "selecting" mode?
             const isPausedOrLocked = isManualAddressLocked() || sessionStorage.getItem("__location_selecting_active") === "true";
 
+            // Only update location state if coordinates changed significantly (or it's the first sync)
             if (!isPausedOrLocked) {
-              if (coordsChanged) {
+              if (coordsChanged || isFirstWatchUpdateRef.current) {
+                isFirstWatchUpdateRef.current = false // First sync complete
                 prevLocationCoordsRef.current = { latitude: loc.latitude, longitude: loc.longitude }
                 false && console.log("💾 Updating live location:", loc)
                 localStorage.setItem("userLocation", JSON.stringify(loc))
