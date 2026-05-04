@@ -144,7 +144,7 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
         restaurantId: { $in: restaurantIdVariations },
         restaurantSettled: true
       }).select('orderId').lean();
-      settledOrderIds = settledSettlements.map(s => s.orderId.toString());
+      settledOrderIds = settledSettlements.map(s => s.orderId);
     } catch (settleErr) {
       console.warn('⚠️ Could not fetch settled status:', settleErr.message);
     }

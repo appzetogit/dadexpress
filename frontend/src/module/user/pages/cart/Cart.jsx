@@ -2047,7 +2047,7 @@ export default function Cart() {
                         )}
                         <span className="text-sm md:text-base font-semibold text-gray-800 dark:text-gray-200">₹{total.toFixed(0)}</span>
                         {savings > 0 && (
-                          <span className="text-xs md:text-sm bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-1.5 md:px-2 py-0.5 rounded font-medium">You saved ₹{savings}</span>
+                          <span className="text-xs md:text-sm bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-1.5 md:px-2 py-0.5 rounded font-medium">You saved ₹{Number(savings).toFixed(2)}</span>
                         )}
                       </div>
                       <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400">Incl. taxes and charges</p>
@@ -2070,22 +2070,22 @@ export default function Cart() {
                     </div>
                     <div className="flex justify-between text-sm md:text-base">
                       <span className="text-gray-600 dark:text-gray-400">Platform Fee</span>
-                      <span className="text-gray-800 dark:text-gray-200">₹{platformFee}</span>
+                      <span className="text-gray-800 dark:text-gray-200">₹{Number(platformFee || 0).toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-sm md:text-base">
                       <span className="text-gray-600 dark:text-gray-400">GST and Restaurant Charges</span>
-                      <span className="text-gray-800 dark:text-gray-200">₹{gstCharges}</span>
+                      <span className="text-gray-800 dark:text-gray-200">₹{Number(gstCharges || 0).toFixed(2)}</span>
                     </div>
                     {discount > 0 && (
                       <div className="flex justify-between text-sm md:text-base text-red-600 dark:text-red-400">
                         <span>Coupon Discount</span>
-                        <span>-₹{discount}</span>
+                        <span>-₹{Number(discount || 0).toFixed(2)}</span>
                       </div>
                     )}
                     {pricing?.referralDiscount > 0 && (
                       <div className="flex justify-between text-sm md:text-base text-blue-600 dark:text-blue-400">
                         <span>Coin Redemption</span>
-                        <span>-₹{pricing.referralDiscount}</span>
+                        <span>-₹{Number(pricing.referralDiscount || 0).toFixed(2)}</span>
                       </div>
                     )}
                     <div className="flex justify-between text-sm md:text-base font-semibold pt-2 md:pt-3 border-t dark:border-gray-700">
@@ -2117,16 +2117,16 @@ export default function Cart() {
                     </div>
                     <div className="flex justify-between text-sm md:text-base">
                       <span className="text-gray-600 dark:text-gray-400">Platform Fee</span>
-                      <span className="text-gray-800 dark:text-gray-200">₹{platformFee}</span>
+                      <span className="text-gray-800 dark:text-gray-200">₹{Number(platformFee || 0).toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-sm md:text-base">
                       <span className="text-gray-600 dark:text-gray-400">GST</span>
-                      <span className="text-gray-800 dark:text-gray-200">₹{gstCharges}</span>
+                      <span className="text-gray-800 dark:text-gray-200">₹{Number(gstCharges || 0).toFixed(2)}</span>
                     </div>
                     {discount > 0 && (
                       <div className="flex justify-between text-sm md:text-base text-red-600 dark:text-red-400">
                         <span>Discount</span>
-                        <span>-₹{discount}</span>
+                        <span>-₹{Number(discount || 0).toFixed(2)}</span>
                       </div>
                     )}
                     <div className="flex justify-between text-base md:text-lg font-bold pt-3 md:pt-4 pb-6 border-t dark:border-gray-700">
@@ -2219,7 +2219,7 @@ export default function Cart() {
       <AnimatePresence>
         {showDeliveryInstructionModal && (
           <motion.div
-            className="fixed inset-0 z-[65] flex items-end md:items-center justify-center"
+            className="fixed inset-0 z-[80] flex items-center justify-center p-4"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -2228,12 +2228,12 @@ export default function Cart() {
               setDeliveryInstructionDraft(deliveryInstruction || "")
             }}
           >
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+            <div className="absolute inset-0 bg-black/60" />
             <motion.div
-              className="relative w-full md:max-w-lg bg-white dark:bg-[#1a1a1a] rounded-t-2xl md:rounded-2xl p-5 md:p-6 shadow-2xl"
-              initial={{ y: 80, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 80, opacity: 0 }}
+              className="relative w-full md:max-w-lg bg-white dark:bg-[#1a1a1a] rounded-2xl p-5 md:p-6 shadow-2xl"
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
               transition={{ duration: 0.2 }}
               onClick={(e) => e.stopPropagation()}
             >

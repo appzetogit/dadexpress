@@ -775,14 +775,11 @@ export const createOrder = async (req, res) => {
           logger.error('❌ Error creating wallet payment record:', paymentError);
         }
 
-        // Mark order as confirmed and payment as completed
+        // Mark order as pending (waiting for restaurant acceptance) and payment as completed
         order.payment.method = 'wallet';
         order.payment.status = 'completed';
-        order.status = 'confirmed';
-        order.tracking.confirmed = {
-          status: true,
-          timestamp: new Date()
-        };
+        order.status = 'pending';
+        // tracking.confirmed will be set when the restaurant manually accepts the order
         await order.save();
         await recordCouponUsageForOrder({ order, userId });
 
@@ -1091,18 +1088,13 @@ export const verifyOrderPayment = async (req, res) => {
     await payment.save();
     logger.info(`✅ Payment record created: ${payment.paymentId}`);
 
-    // Update Order
-    order.status = 'confirmed';
+    // Update Order to pending (waiting for restaurant acceptance)
+    order.status = 'pending';
     order.payment.status = 'completed';
     order.payment.transactionId = razorpayPaymentId;
     order.payment.paidAt = new Date();
     
-    // Set tracking confirmed
-    if (order.tracking && order.tracking.confirmed) {
-      order.tracking.confirmed.status = true;
-      order.tracking.confirmed.timestamp = new Date();
-    }
-
+    // tracking.confirmed will be set when the restaurant manually accepts the order
     await order.save();
     logger.info(`✅ Order ${order.orderId} confirmed and awaiting restaurant acceptance`);
 

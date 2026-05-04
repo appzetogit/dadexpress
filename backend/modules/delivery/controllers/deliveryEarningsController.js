@@ -114,14 +114,19 @@ export const getEarnings = asyncHandler(async (req, res) => {
 
     // Combine transaction and order data
     const earnings = transactions.map(transaction => {
-      const order = transaction.orderId ? orderMap[transaction.orderId.toString()] : null;
+      const orderIdStr = transaction.orderId?.toString();
+      const order = orderIdStr ? orderMap[orderIdStr] : null;
+      
+      // Use transaction.createdAt as fallback for deliveredAt
+      const deliveredAt = order?.deliveredAt || transaction.processedAt || transaction.createdAt || new Date();
+      
       return {
         transactionId: transaction._id?.toString(),
-        orderId: order?.orderId || transaction.orderId?.toString() || 'Unknown',
-        restaurantName: order?.restaurantName || 'Unknown Restaurant',
+        orderId: order?.orderId || orderIdStr || 'Unknown',
+        restaurantName: order?.restaurantName || (transaction.description?.includes('Order #') ? transaction.description.split('Order #')[1] : 'Unknown Restaurant'),
         amount: transaction.amount || 0,
         description: transaction.description || '',
-        deliveredAt: order?.deliveredAt || transaction.createdAt || transaction.processedAt,
+        deliveredAt,
         createdAt: transaction.createdAt || transaction.processedAt,
         paymentCollected: transaction.paymentCollected || false
       };
@@ -139,11 +144,12 @@ export const getEarnings = asyncHandler(async (req, res) => {
     // Calculate time on orders (difference between order creation and delivery)
     let totalTimeMinutes = 0;
     earnings.forEach(e => {
-      // Find order by orderId string (e.orderId is string like "ORD-123-456")
-      const order = orders.find(o => o.orderId === e.orderId);
-      if (order && order.createdAt && order.deliveredAt) {
-        const timeDiff = new Date(order.deliveredAt) - new Date(order.createdAt);
-        totalTimeMinutes += Math.floor(timeDiff / (1000 * 60));
+      // Find order in the original fetched orders list
+      const order = orders.find(o => o.orderId === e.orderId || o._id.toString() === e.orderId);
+      if (order && order.createdAt && (order.deliveredAt || e.deliveredAt)) {
+        const delDate = order.deliveredAt ? new Date(order.deliveredAt) : new Date(e.deliveredAt);
+        const timeDiff = delDate - new Date(order.createdAt);
+        totalTimeMinutes += Math.max(0, Math.floor(timeDiff / (1000 * 60)));
       }
     });
 

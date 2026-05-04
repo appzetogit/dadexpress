@@ -346,11 +346,21 @@ export default function Orders() {
     }
 
     fetchOrders()
+    
+    // Refresh on window focus to ensure sync when coming back from checkout/tracking
+    const handleFocus = () => {
+      console.log('🔄 Window focused, refreshing orders...')
+      fetchOrders()
+    }
+    window.addEventListener('focus', handleFocus)
 
     // Add polling to keep orders in sync
     const interval = setInterval(fetchOrders, 30000); // 30 seconds
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('focus', handleFocus)
+    }
   }, [])
 
   // Format date helper
@@ -854,7 +864,14 @@ Order again from this restaurant in the ${companyName} app.`
                     </div>
                   ) : (
                     <div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">{order.status === 'preparing' ? 'Preparing' : order.status === 'outForDelivery' ? 'Out for delivery' : order.status === 'confirmed' ? 'Order confirmed' : ''}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {order.status === 'preparing' ? 'Preparing your food' :
+                          order.status === 'outForDelivery' ? 'Out for delivery' :
+                            order.status === 'confirmed' ? 'Order confirmed' :
+                              order.status === 'pending' ? 'Waiting for restaurant to accept' :
+                                order.status === 'ready' ? 'Ready for pickup' :
+                                  ''}
+                      </p>
                       {/* Countdown Timer */}
                       {countdowns[order.id] && countdowns[order.id] > 0 && (
                         <div className="flex items-center gap-1 mt-1 text-xs text-[#EB590E] font-medium">

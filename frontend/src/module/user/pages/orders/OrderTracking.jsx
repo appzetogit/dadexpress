@@ -2205,7 +2205,7 @@ export default function OrderTracking() {
               <p className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-1">Bill Summary</p>
               <div className="flex justify-between items-center text-sm">
                 <span className="text-gray-600">Item Total</span>
-                <span className="text-gray-900 font-medium">₹{order?.totalAmount - (order?.deliveryFee || 0) - (order?.gst || 0) - (order?.platformFee || 0)}</span>
+                <span className="text-gray-900 font-medium">₹{Number((order?.totalAmount || 0) - (order?.deliveryFee || 0) - (order?.gst || 0) - (order?.platformFee || 0)).toFixed(2)}</span>
               </div>
               <div className="flex justify-between items-center text-sm">
                 <span className="text-gray-600">Delivery Fee</span>

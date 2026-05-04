@@ -104,7 +104,7 @@ export const getReferralAnalytics = asyncHandler(async (req, res) => {
 
         const groupByFormat = "%Y-%m-%d";
 
-        // 1. All-time stats (for boxes)
+        // 1. All-time stats (for boxes) - Customer referrals via ReferralLog
         const totalAllTime = await ReferralLog.countDocuments();
         
         const allTimeStats = await ReferralLog.aggregate([
@@ -137,7 +137,7 @@ export const getReferralAnalytics = asyncHandler(async (req, res) => {
             }
         });
 
-        // 2. Period-specific stats (for charts and recent metrics)
+        // 2. Period-specific stats (for charts and recent metrics) - Customer referrals
         const areaStats = await ReferralLog.aggregate([
             { $match: matchStage },
             {
@@ -145,6 +145,23 @@ export const getReferralAnalytics = asyncHandler(async (req, res) => {
                     _id: { $dateToString: { format: groupByFormat, date: "$createdAt", timezone: "Asia/Kolkata" } },
                     referrals: { $sum: 1 },
                     conversions: { $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] } },
+                    sortDate: { $first: "$createdAt" }
+                }
+            },
+            { $sort: { "sortDate": 1 } }
+        ]);
+
+        // 1b + 2b. Restaurant referrals from Restaurant collection
+        const Restaurant = (await import('../../restaurant/models/Restaurant.js')).default;
+        const restaurantReferralTotal = await Restaurant.countDocuments({ referredBy: { $exists: true, $ne: null } });
+        const restaurantReferralCompleted = await Restaurant.countDocuments({ referredBy: { $exists: true, $ne: null }, referralStatus: 'completed' });
+        const restaurantAreaStats = await Restaurant.aggregate([
+            { $match: { referredBy: { $exists: true, $ne: null }, createdAt: { $gte: fromDate } } },
+            {
+                $group: {
+                    _id: { $dateToString: { format: groupByFormat, date: "$createdAt", timezone: "Asia/Kolkata" } },
+                    referrals: { $sum: 1 },
+                    conversions: { $sum: { $cond: [{ $eq: ["$referralStatus", "completed"] }, 1, 0] } },
                     sortDate: { $first: "$createdAt" }
                 }
             },
@@ -195,8 +212,9 @@ export const getReferralAnalytics = asyncHandler(async (req, res) => {
         // Calculate total rewards issued in period
         const rangeRewardsSpent = walletStats.reduce((sum, item) => sum + (item.distribution || 0), 0);
 
-        // 3. Zero-filling for charts
+        // 3. Zero-filling for charts — merge customer + restaurant referrals per day
         const areaDataMap = new Map(areaStats.map(i => [i._id, i]));
+        const restAreaDataMap = new Map(restaurantAreaStats.map(i => [i._id, i]));
         const barDataMap = new Map();
         
         walletStats.forEach(i => {
@@ -224,10 +242,11 @@ export const getReferralAnalytics = asyncHandler(async (req, res) => {
                 : d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', timeZone: 'Asia/Kolkata' });
 
             const areaItem = areaDataMap.get(key) || { referrals: 0, conversions: 0 };
+            const restAreaItem = restAreaDataMap.get(key) || { referrals: 0, conversions: 0 };
             finalAreaData.push({
                 name: label,
-                referrals: areaItem.referrals,
-                conversions: areaItem.conversions
+                referrals: (areaItem.referrals || 0) + (restAreaItem.referrals || 0),
+                conversions: (areaItem.conversions || 0) + (restAreaItem.conversions || 0)
             });
 
             const barItem = barDataMap.get(key) || { distribution: 0, usage: 0 };
@@ -239,8 +258,8 @@ export const getReferralAnalytics = asyncHandler(async (req, res) => {
         }
 
         const formattedStats = {
-            total: totalAllTime,
-            completed: completedAllTime,
+            total: totalAllTime + restaurantReferralTotal,
+            completed: completedAllTime + restaurantReferralCompleted,
             totalRewardsSpent: rangeRewardsSpent,
             revenueGenerated: revenueAllTime,
             areaData: finalAreaData,

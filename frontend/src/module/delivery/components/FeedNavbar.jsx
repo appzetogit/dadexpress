@@ -71,6 +71,13 @@ export default function FeedNavbar({ className = "", onEmergencyClick, onHelpCli
   useEffect(() => {
     try {
       localStorage.setItem(LS_KEY, JSON.stringify(isOnline));
+      if (isOnline) {
+        if (!localStorage.getItem('delivery_online_at')) {
+          localStorage.setItem('delivery_online_at', new Date().toISOString());
+        }
+      } else {
+        localStorage.removeItem('delivery_online_at');
+      }
       // Dispatch custom event for same-tab sync (storage event only works across tabs)
       window.dispatchEvent(new CustomEvent('onlineStatusChanged'));
     } catch {}

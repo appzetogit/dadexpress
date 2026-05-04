@@ -84,24 +84,18 @@ export const getDashboard = asyncHandler(async (req, res) => {
       ?.filter(t => t.type === 'payment' && t.description?.toLowerCase().includes('tip'))
       .reduce((sum, t) => sum + t.amount, 0) || delivery.earnings?.tips || 0;
 
-    // Calculate weekly earnings (last 7 days)
+    // Calculate weekly earnings (last 7 days) from wallet transactions
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
     
-    let weeklyOrders = [];
-    try {
-      weeklyOrders = await Order.find({
-        deliveryPartnerId: delivery._id,
-        status: 'delivered',
-        deliveredAt: { $gte: sevenDaysAgo }
-      }).select('pricing.deliveryFee');
-    } catch (error) {
-      logger.warn(`Error fetching weekly orders for delivery ${delivery._id}:`, error);
-    }
-
-    const weeklyEarnings = weeklyOrders.reduce((sum, order) => {
-      return sum + (order.pricing?.deliveryFee || 0);
-    }, 0);
+    const weeklyEarnings = wallet?.transactions
+      ?.filter(t => 
+        t.type === 'payment' && 
+        t.status === 'Completed' && 
+        (t.createdAt || t.processedAt) >= sevenDaysAgo
+      )
+      .reduce((sum, t) => sum + t.amount, 0) || 0;
 
     // Get recent orders (last 5)
     let recentOrders = [];
@@ -117,24 +111,17 @@ export const getDashboard = asyncHandler(async (req, res) => {
       logger.warn(`Error fetching recent orders for delivery ${delivery._id}:`, error);
     }
 
-    // Calculate today's earnings
+    // Calculate today's earnings from wallet transactions
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     
-    let todayOrders = [];
-    try {
-      todayOrders = await Order.find({
-        deliveryPartnerId: delivery._id,
-        status: 'delivered',
-        deliveredAt: { $gte: todayStart }
-      }).select('pricing.deliveryFee');
-    } catch (error) {
-      logger.warn(`Error fetching today's orders for delivery ${delivery._id}:`, error);
-    }
-
-    const todayEarnings = todayOrders.reduce((sum, order) => {
-      return sum + (order.pricing?.deliveryFee || 0);
-    }, 0);
+    const todayEarnings = wallet?.transactions
+      ?.filter(t => 
+        t.type === 'payment' && 
+        t.status === 'Completed' && 
+        (t.createdAt || t.processedAt) >= todayStart
+      )
+      .reduce((sum, t) => sum + t.amount, 0) || 0;
 
     // Prepare dashboard data
     const dashboardData = {
@@ -179,14 +166,22 @@ export const getDashboard = asyncHandler(async (req, res) => {
           ? (joiningBonusClaimed ? 'Bonus claimed' : 'Complete 1 order to unlock')
           : 'Complete 1 order to unlock',
       },
-      recentOrders: recentOrders.map(order => ({
-        orderId: order.orderId,
-        status: order.status,
-        restaurantName: order.restaurantName,
-        deliveryFee: order.pricing?.deliveryFee || 0,
-        createdAt: order.createdAt,
-        deliveredAt: order.deliveredAt,
-      })),
+      recentOrders: recentOrders.map(order => {
+        // Find matching transaction in wallet to get actual earning
+        const transaction = wallet?.transactions?.find(t => 
+          t.orderId && t.orderId.toString() === (order._id?.toString() || order.id) && 
+          t.type === 'payment' && t.status === 'Completed'
+        );
+        
+        return {
+          orderId: order.orderId,
+          status: order.status,
+          restaurantName: order.restaurantName,
+          deliveryFee: transaction ? transaction.amount : (order.pricing?.deliveryFee || 0),
+          createdAt: order.createdAt,
+          deliveredAt: order.deliveredAt,
+        };
+      }),
       availability: {
         isOnline: delivery.availability?.isOnline || false,
         lastLocationUpdate: delivery.availability?.lastLocationUpdate || null,
@@ -382,20 +377,15 @@ export const getOrderStats = asyncHandler(async (req, res) => {
     });
     const cancelledOrders = await Order.countDocuments({ ...query, status: 'cancelled' });
 
-    // Calculate earnings
-    let orders = [];
-    try {
-      orders = await Order.find({
-        ...query,
-        status: 'delivered'
-      }).select('pricing.deliveryFee deliveredAt');
-    } catch (error) {
-      logger.warn(`Error fetching orders for stats:`, error);
-    }
+    // Calculate earnings from wallet transactions
+    const wallet = await DeliveryWallet.findOne({ deliveryId: delivery._id });
+    const paymentTransactions = wallet?.transactions?.filter(t => 
+      t.type === 'payment' && 
+      t.status === 'Completed' &&
+      (!startDate || (t.createdAt || t.processedAt) >= startDate)
+    ) || [];
 
-    const totalEarnings = orders.reduce((sum, order) => {
-      return sum + (order.pricing?.deliveryFee || 0);
-    }, 0);
+    const totalEarnings = paymentTransactions.reduce((sum, t) => sum + (t.amount || 0), 0);
 
     const stats = {
       period,

@@ -225,7 +225,7 @@ export default function OrderTrackingCard() {
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: 100, opacity: 0 }}
         transition={{ type: "spring", damping: 25, stiffness: 200 }}
-        className="fixed bottom-20 left-4 right-4 z-[60] md:hidden"
+        className="fixed bottom-20 left-4 right-4 z-[60]"
         onClick={() => navigate(`/user/orders/${activeOrder.id || activeOrder._id}`)}
       >
         <div className="bg-gray-800 rounded-xl p-4 shadow-2xl border border-gray-700">

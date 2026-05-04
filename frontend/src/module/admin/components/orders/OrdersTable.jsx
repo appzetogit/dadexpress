@@ -331,7 +331,7 @@ export default function OrdersTable({
                 {visibleColumns.actions && (
                   <td className="px-6 py-4 whitespace-nowrap text-center">
                     <div className="flex items-center justify-center gap-2">
-                      {order.orderStatus === "Pending" && onAcceptOrder && (
+                      {(order.orderStatus === "Pending" || order.orderStatus === "Accepted") && onAcceptOrder && (
                         <button
                           onClick={() => onAcceptOrder(order)}
                           disabled={actionLoadingOrderId === (order.id || order.orderId)}
@@ -346,7 +346,7 @@ export default function OrdersTable({
                           <span>Accept</span>
                         </button>
                       )}
-                      {order.orderStatus === "Pending" && onRejectOrder && (
+                      {(order.orderStatus === "Pending" || order.orderStatus === "Accepted") && onRejectOrder && (
                         <button
                           onClick={() => onRejectOrder(order)}
                           disabled={actionLoadingOrderId === (order.id || order.orderId)}

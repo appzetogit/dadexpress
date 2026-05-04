@@ -296,6 +296,47 @@ export const verifyOTP = asyncHandler(async (req, res) => {
 
       user = await User.findOne(findQuery);
 
+      if (!user && userRole === 'restaurant') {
+        const { default: StaffManagement } = await import('../../restaurant/models/StaffManagement.js');
+        const staffQuery = { status: 'active' };
+        if (phone) {
+          const normalizedPhone = normalizePhoneNumber(phone);
+          let variants = [normalizedPhone];
+          if (normalizedPhone.startsWith("91") && normalizedPhone.length === 12) {
+            const phoneWithoutCountryCode = normalizedPhone.substring(2);
+            variants = [normalizedPhone, phoneWithoutCountryCode, `+${normalizedPhone}`, `+91${phoneWithoutCountryCode}`];
+          } else {
+            variants = [normalizedPhone, `91${normalizedPhone}`, `+91${normalizedPhone}`, `+${normalizedPhone}`];
+          }
+          staffQuery.phone = { $in: variants };
+        } else {
+          staffQuery.email = email;
+        }
+
+        const staff = await StaffManagement.findOne(staffQuery);
+        if (staff) {
+          user = {
+            _id: staff._id,
+            role: 'restaurant',
+            phone: staff.phone,
+            email: staff.email,
+            name: staff.name,
+            phoneVerified: true,
+            platform: staff.platform || 'web',
+            fcmToken: staff.fcmToken,
+            fcmTokenMobile: staff.fcmTokenMobile,
+            save: async function() {
+              await StaffManagement.updateOne({ _id: staff._id }, {
+                $set: {
+                  fcmToken: this.fcmToken,
+                  fcmTokenMobile: this.fcmTokenMobile,
+                  platform: this.platform
+                }
+              });
+            }
+          };
+        }
+      }
       if (!user && !name) {
         // OTP has NOT been verified yet in this flow.
         // Tell the client that we need user's name to proceed with auto-registration.

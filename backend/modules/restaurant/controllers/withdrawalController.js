@@ -81,8 +81,21 @@ const getCurrentCycleAvailablePayout = async (restaurantId) => {
     return fallbackType === "percentage" ? (foodPrice * fallbackValue) / 100 : fallbackValue;
   };
 
+  let settledOrderIds = [];
+  try {
+    const OrderSettlement = mongoose.model('OrderSettlement');
+    const settledSettlements = await OrderSettlement.find({
+      ...restaurantIdQuery,
+      restaurantSettled: true
+    }).select('orderId').lean();
+    settledOrderIds = settledSettlements.map(s => s.orderId);
+  } catch (err) {
+    logger.warn('Could not fetch settled status: ' + err.message);
+  }
+
   let deliveredOrders = await Order.find({
     status: "delivered",
+    _id: { $nin: settledOrderIds },
     $and: [
       restaurantIdQuery,
       {
@@ -100,6 +113,7 @@ const getCurrentCycleAvailablePayout = async (restaurantId) => {
     deliveredOrders = await Order.find({
       ...restaurantIdQuery,
       status: "delivered",
+      _id: { $nin: settledOrderIds },
       createdAt: { $gte: cycleStart, $lte: cycleEnd }
     })
       .select("pricing")

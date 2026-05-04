@@ -595,8 +595,8 @@ export default function OrdersPage({ statusKey = "all" }) {
         onDeleteOrder={handleDeleteOrder}
         onCancelOrder={handleCancelOrder}
         onResendNotification={handleResendNotification}
-        onAcceptOrder={statusKey === "all" || statusKey === "pending" ? handleAcceptOrder : undefined}
-        onRejectOrder={statusKey === "all" || statusKey === "pending" ? handleRejectOrder : undefined}
+        onAcceptOrder={["all", "pending", "accepted"].includes(statusKey) ? handleAcceptOrder : undefined}
+        onRejectOrder={["all", "pending", "accepted"].includes(statusKey) ? handleRejectOrder : undefined}
         actionLoadingOrderId={processingActionOrderId}
         isLoading={isLoading}
       />

@@ -278,7 +278,17 @@ export default function Earnings() {
       }
     }
 
+    const handleFocus = () => {
+      // console.log('🔄 Window focused, refreshing earnings...')
+      fetchEarnings()
+    }
+    window.addEventListener('focus', handleFocus)
+
     fetchEarnings()
+
+    return () => {
+      window.removeEventListener('focus', handleFocus)
+    }
   }, [selectedDate, activeTab, updateTodayEarnings])
 
   // Close dropdowns when clicking outside

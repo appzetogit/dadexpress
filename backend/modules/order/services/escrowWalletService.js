@@ -53,13 +53,27 @@ export const holdEscrow = async (orderId, userId, amount) => {
  */
 export const releaseEscrow = async (orderId) => {
   try {
-    const settlement = await OrderSettlement.findOne({ orderId });
-    if (!settlement) {
-      throw new Error('Settlement not found');
+    const { calculateOrderSettlement } = await import('./orderSettlementService.js');
+    
+    // Ensure settlement is calculated and up-to-date before release
+    let settlement = await OrderSettlement.findOne({ orderId });
+    
+    // Force calculate if missing OR if earnings are 0 but order is delivered
+    if (!settlement || (settlement.deliveryPartnerEarning?.totalEarning === 0)) {
+      settlement = await calculateOrderSettlement(orderId);
     }
 
-    if (settlement.escrowStatus !== 'held') {
-      throw new Error(`Escrow not in held status. Current status: ${settlement.escrowStatus}`);
+    if (!settlement) {
+      throw new Error('Settlement not found and could not be calculated');
+    }
+
+    // Relax check for 'held' status to allow 'pending' for COD/Manual settlements
+    if (settlement.escrowStatus !== 'held' && settlement.escrowStatus !== 'pending') {
+      // If already released, we can just return success (idempotent)
+      if (settlement.escrowStatus === 'released') {
+        return settlement;
+      }
+      throw new Error(`Escrow not in valid status for release. Current status: ${settlement.escrowStatus}`);
     }
 
     // Update escrow status

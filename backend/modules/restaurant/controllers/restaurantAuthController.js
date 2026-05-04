@@ -358,6 +358,13 @@ export const verifyOTP = asyncHandler(async (req, res) => {
             if (restaurantData.password) {
               retryRestaurantData.password = restaurantData.password;
             }
+            // Preserve referral data if present
+            if (restaurantData.referredBy) {
+              retryRestaurantData.referredBy = restaurantData.referredBy;
+              retryRestaurantData.referredByName = restaurantData.referredByName || null;
+              retryRestaurantData.referralCommission = restaurantData.referralCommission;
+              retryRestaurantData.referralStatus = restaurantData.referralStatus;
+            }
             try {
               restaurant = await Restaurant.create(retryRestaurantData);
               logger.info(`New restaurant registered (fixed email null issue): ${restaurant._id}`, {

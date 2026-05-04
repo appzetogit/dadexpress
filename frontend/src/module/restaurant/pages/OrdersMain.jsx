@@ -966,11 +966,25 @@ export default function OrdersMain() {
   useEffect(() => {
     if (showNewOrderPopup && countdown > 0) {
       const timer = setInterval(() => {
-        setCountdown(prev => prev - 1)
+        setCountdown(prev => {
+          if (prev <= 1) {
+            // Auto-dismiss when timer hits zero
+            setShowNewOrderPopup(false)
+            setPopupOrder(null)
+            clearNewOrder()
+            setCountdown(240)
+            if (audioRef.current) {
+              audioRef.current.pause()
+              audioRef.current.currentTime = 0
+            }
+            return 0
+          }
+          return prev - 1
+        })
       }, 1000)
       return () => clearInterval(timer)
     }
-  }, [showNewOrderPopup, countdown])
+  }, [showNewOrderPopup, countdown, clearNewOrder])
 
   // Format countdown time
   const formatTime = (seconds) => {
@@ -2663,7 +2677,8 @@ function PreparingOrders({ onSelectOrder, onCancel }) {
               markedReadyOrdersRef.current.add(orderKey) // Mark as processing
               await restaurantAPI.markOrderReady(order.mongoId || order.orderId)
               debugLog(`✅ Order ${order.orderId} marked as ready`)
-              // Order will be removed from preparing list on next fetch
+              // Immediately remove from local state
+              setOrders((prev) => prev.filter((item) => (item.mongoId || item.orderId) !== orderKey))
             } catch (error) {
               const status = error.response?.status
               const msg = (error.response?.data?.message || error.message || '').toLowerCase()

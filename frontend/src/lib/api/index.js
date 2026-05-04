@@ -77,6 +77,7 @@ export const authAPI = {
     password = null,
     fcmToken = null,
     platform = "web",
+    referralCode = null
   ) => {
     const payload = {
       otp,
@@ -89,6 +90,7 @@ export const authAPI = {
     if (email != null) payload.email = email;
     if (name != null) payload.name = name;
     if (password != null) payload.password = password; // don't send null, Joi expects string
+    if (referralCode != null && String(referralCode).trim() !== "") payload.referralCode = String(referralCode).trim().toUpperCase();
     return apiClient.post(API_ENDPOINTS.AUTH.VERIFY_OTP, payload);
   },
 
@@ -359,7 +361,7 @@ export const restaurantAPI = {
     ownerPhone = null,
     referralCode = null,
     fcmToken = null,
-    platform = "web",
+    platform = "web"
   ) => {
     return apiClient.post(API_ENDPOINTS.RESTAURANT.AUTH.REGISTER, {
       name,
@@ -673,7 +675,7 @@ export const restaurantAPI = {
     });
   },
 
-  // Get restaurants with dishes under ₹250
+  // Get restaurants with dishes under â‚¹250
   getRestaurantsUnder250: (zoneId) => {
     const params = zoneId ? { zoneId } : {};
     return apiClient.get(API_ENDPOINTS.RESTAURANT.UNDER_250, { params });
@@ -2374,3 +2376,4 @@ export const publicAPI = {
     });
   }
 };
+

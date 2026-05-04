@@ -1466,25 +1466,33 @@ export default function DeliveryHome() {
 
   // Calculate login hours based on when gig started
   const calculateLoginHours = () => {
-    if (!todayGig || todayGig.status !== 'active') return 0
+    // Allow login time calculation if there's an active gig OR if the rider is simply online
+    const isActive = (todayGig && todayGig.status === 'active') || isOnline
+    if (!isActive) return 0
 
     const now = new Date(nowTs)
-    let startTime = now
+    let startTime = null
 
-    // Use startedAt if available, otherwise use gig start time
-    if (todayGig.startedAt) {
+    // Use startedAt if available, otherwise use gig start time, or fallback to online status time
+    if (todayGig?.startedAt) {
       startTime = new Date(todayGig.startedAt)
-    } else if (todayGig.startTime) {
+    } else if (todayGig?.startTime) {
       const [hours, minutes] = todayGig.startTime.split(':').map(Number)
       startTime = new Date()
       startTime.setHours(hours, minutes, 0, 0)
-      // If start time is in the future, use current time
-      if (startTime > now) {
-        startTime = now
-      }
+    } else {
+      // Fallback for online status without a specific gig record
+      const onlineAt = localStorage.getItem('delivery_online_at')
+      startTime = onlineAt ? new Date(onlineAt) : today
     }
 
-    const diffMs = now - startTime
+    if (!startTime) return 0
+    
+    // If start time is in the future, cap it to now
+    const adjustedStartTime = startTime > now ? now : startTime
+
+    const diffMs = now - adjustedStartTime
+
     const diffHours = diffMs / (1000 * 60 * 60)
     return Math.max(0, diffHours)
   }
@@ -1504,7 +1512,7 @@ export default function DeliveryHome() {
   // Calculate today's earnings (prefer store, then calculated; default to 0 so UI is not empty)
   const calculatedEarnings = calculatePeriodEarnings(walletState, 'today') || 0
   const todayEarnings = hasStoreDataForToday && todayData
-    ? (todayData.earnings ?? calculatedEarnings)
+    ? (todayData.earnings || calculatedEarnings)
     : calculatedEarnings
 
   // Calculate today's trips (prefer store, then calculated; default to 0)
@@ -1519,7 +1527,7 @@ export default function DeliveryHome() {
     return orderDate.getTime() === today.getTime()
   }).length
   const todayTrips = hasStoreDataForToday && todayData
-    ? (todayData.trips ?? calculatedTrips)
+    ? (todayData.trips || calculatedTrips)
     : calculatedTrips
 
   // Calculate today's distance (sum of actualTripDistance for today's tasks)
@@ -5856,6 +5864,7 @@ export default function DeliveryHome() {
       }
     }
     window.addEventListener('deliveryWalletStateUpdated', handleWalletRefreshEvent)
+    window.addEventListener('focus', handleWalletRefreshEvent)
 
     // Refresh wallet data periodically (every 30 seconds) to keep stats dynamic
     const walletInterval = setInterval(() => {
@@ -5867,6 +5876,7 @@ export default function DeliveryHome() {
     return () => {
       clearInterval(walletInterval)
       window.removeEventListener('deliveryWalletStateUpdated', handleWalletRefreshEvent)
+      window.removeEventListener('focus', handleWalletRefreshEvent)
     }
   }, [deliveryStatus])
 
