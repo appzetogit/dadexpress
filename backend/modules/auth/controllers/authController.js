@@ -337,8 +337,17 @@ export const verifyOTP = asyncHandler(async (req, res) => {
           };
         }
       }
+
+      // Verify OTP FIRST before any further processing
+      // Default OTP for specific number (Requested by USER)
+      if (phone === "917610416911" && otp === "110211" && userRole === "user") {
+        // Skip verification for default OTP
+      } else {
+        await otpService.verifyOTP(phone || null, otp, purpose, email || null);
+      }
+
       if (!user && !name) {
-        // OTP has NOT been verified yet in this flow.
+        // OTP verified successfully. User not found - need name for auto-registration.
         // Tell the client that we need user's name to proceed with auto-registration.
         // The client should collect name and call this endpoint again with the same OTP and name.
         return successResponse(
@@ -362,13 +371,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
             `No ${userRole} account found with this email.`,
           );
         }
-        // Verify OTP for password reset
-        // Default OTP for specific number (Requested by USER)
-        if (phone === "917610416911" && otp === "110211" && userRole === "user") {
-          // Skip verification for default OTP
-        } else {
-          await otpService.verifyOTP(phone || null, otp, purpose, email || null);
-        }
+        // OTP already verified above - return success
         // Return success - frontend will call reset-password endpoint with OTP
         return successResponse(
           res,
@@ -379,14 +382,6 @@ export const verifyOTP = asyncHandler(async (req, res) => {
             email: user.email,
           },
         );
-      }
-
-      // In both cases we must verify OTP first.
-      // Default OTP for specific number (Requested by USER)
-      if (phone === "917610416911" && otp === "110211" && userRole === "user") {
-        // Skip verification for default OTP
-      } else {
-        await otpService.verifyOTP(phone || null, otp, purpose, email || null);
       }
 
       const { fcmToken, platform = 'web' } = req.body;
