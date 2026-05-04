@@ -166,10 +166,13 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         }
       }
     } else {
-      // Login (with optional auto-registration)
       // Find delivery boy by phone
       // Search in both formats (with and without country code) to handle varied data
       delivery = await Delivery.findOne(buildPhoneQuery(phone));
+
+      if (delivery && delivery.isDeleted) {
+        return errorResponse(res, 403, 'Your account has been deleted. Please contact support.');
+      }
 
       if (!delivery && !name) {
         // New user - create minimal record for signup flow

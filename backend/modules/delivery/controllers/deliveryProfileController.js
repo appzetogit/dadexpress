@@ -183,8 +183,10 @@ export const deleteAccount = asyncHandler(async (req, res) => {
       return errorResponse(res, 404, 'Delivery partner not found');
     }
 
-    // Delete the account
-    await Delivery.findByIdAndDelete(deliveryId);
+    // Soft delete - mark as deleted instead of removing from database
+    delivery.isDeleted = true;
+    delivery.deletedAt = new Date();
+    await delivery.save();
 
     logger.info(`Delivery partner account deleted: ${deliveryId}`, {
       deliveryId: delivery.deliveryId

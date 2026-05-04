@@ -451,6 +451,10 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         : { email: email?.toLowerCase().trim() };
       const candidateRestaurants = await Restaurant.find(findQuery);
       restaurant = pickBestRestaurantForOtpLogin(candidateRestaurants);
+
+      if (restaurant && restaurant.isDeleted) {
+        return errorResponse(res, 403, 'Your account has been deleted. Please contact support.');
+      }
       
       // Check if this is a staff member (always check, regardless of restaurant search)
       // Use flexible phone query to handle different formats (+91, 10-digit, etc)
@@ -1582,8 +1586,10 @@ export const deleteAccount = asyncHandler(async (req, res) => {
       return errorResponse(res, 404, 'Restaurant not found');
     }
 
-    // Delete the account
-    await Restaurant.findByIdAndDelete(restaurantId);
+    // Soft delete - mark as deleted instead of removing from database
+    restaurant.isDeleted = true;
+    restaurant.deletedAt = new Date();
+    await restaurant.save();
 
     logger.info(`Restaurant account deleted: ${restaurantId}`, {
       restaurantId: restaurant.restaurantId

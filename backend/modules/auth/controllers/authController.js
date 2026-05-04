@@ -296,6 +296,10 @@ export const verifyOTP = asyncHandler(async (req, res) => {
 
       user = await User.findOne(findQuery);
 
+      if (user && user.isDeleted) {
+        return errorResponse(res, 403, 'Your account has been deleted. Please contact support.');
+      }
+
       if (!user && userRole === 'restaurant') {
         const { default: StaffManagement } = await import('../../restaurant/models/StaffManagement.js');
         const staffQuery = { status: 'active' };
