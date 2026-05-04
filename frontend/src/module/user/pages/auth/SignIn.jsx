@@ -461,10 +461,26 @@ export default function SignIn() {
     setIsLoading(true)
     setApiError("")
 
+    let appleLoginSuccess = false;
+    const appleLoginListener = (event) => {
+      if (event.data && event.data.type === 'APPLE_LOGIN_SUCCESS') {
+        const { token, user } = event.data;
+        if (token && user) {
+          appleLoginSuccess = true;
+          setAuthData("user", token, user);
+          window.dispatchEvent(new Event("userAuthChanged"));
+          debugLog("✅ Apple login successful via postMessage, navigating to /user");
+          navigate("/user", { replace: true });
+        }
+      }
+    };
+
     try {
       if (typeof window.AppleID === 'undefined') {
         throw new Error("Apple Sign-In is not initialized. Please try again later.")
       }
+
+      window.addEventListener('message', appleLoginListener);
 
       window.AppleID.auth.init({
         clientId: 'com.dadexpress.web',
@@ -492,18 +508,27 @@ export default function SignIn() {
         }
       } else {
         // 🌐 Web browser flow
-        const response = await window.AppleID.auth.signIn();
-        debugLog("✅ Apple sign-in successful:", response);
+        try {
+          const response = await window.AppleID.auth.signIn();
+          debugLog("✅ Apple sign-in successful:", response);
 
-        if (response && response.authorization) {
-          idToken = response.authorization.id_token;
-          if (response.user && response.user.name) {
-            fullName = `${response.user.name.firstName || ""} ${response.user.name.lastName || ""}`.trim();
+          if (response && response.authorization) {
+            idToken = response.authorization.id_token;
+            if (response.user && response.user.name) {
+              fullName = `${response.user.name.firstName || ""} ${response.user.name.lastName || ""}`.trim();
+            }
           }
+        } catch (signInError) {
+          // If we already succeeded via postMessage, ignore the SDK error (common for popup_closed_by_user)
+          if (appleLoginSuccess) {
+            debugLog("ℹ️ Apple SDK returned error, but login already succeeded via postMessage. Ignoring.");
+            return;
+          }
+          throw signInError;
         }
       }
 
-      if (idToken) {
+      if (idToken && !appleLoginSuccess) {
         // Get FCM token
         const fcmToken = await requestFcmToken();
         debugLog("🚀 Calling backend appleLogin with idToken...");
@@ -520,6 +545,7 @@ export default function SignIn() {
         }
       }
     } catch (error) {
+      if (appleLoginSuccess) return;
       console.error("❌ Apple sign-in error:", error);
       let message = "Apple sign-in failed. Please try again."
       if (error?.response?.data?.message) {
@@ -531,7 +557,10 @@ export default function SignIn() {
       }
       setApiError(message)
     } finally {
-      setIsLoading(false)
+      window.removeEventListener('message', appleLoginListener);
+      if (!appleLoginSuccess) {
+        setIsLoading(false)
+      }
     }
   }
 

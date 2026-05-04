@@ -37,13 +37,13 @@ export const getOrders = asyncHandler(async (req, res) => {
         {
           $or: [
             { 'payment.method': 'cash' },
-            { 
+            {
               $and: [
                 { 'payment.method': { $in: ['razorpay', 'wallet', 'upi', 'card', 'online'] } },
                 { 'payment.status': 'completed' }
               ]
             },
-            { 
+            {
               $and: [
                 { 'payment.method': { $exists: false } },
                 { 'payment.status': 'completed' }
@@ -128,18 +128,18 @@ export const getOrders = asyncHandler(async (req, res) => {
     if (zone && zone !== 'All Zones') {
       const Zone = (await import('../models/Zone.js')).default;
       const zoneDoc = await Zone.findOne({ name: { $regex: zone, $options: 'i' } });
-      
+
       if (zoneDoc) {
         // Find all restaurants belonging to this zone
         const Restaurant = (await import('../../restaurant/models/Restaurant.js')).default;
         const restaurants = await Restaurant.find({ isActive: true }).select('name location').lean();
-        
+
         const restaurantNamesInZone = restaurants
           .filter(r => {
             const lat = r.location?.latitude || r.location?.coordinates?.[1];
             const lng = r.location?.longitude || r.location?.coordinates?.[0];
             if (!lat || !lng) return false;
-            
+
             // Simplified ray casting for point-in-polygon check
             const coords = zoneDoc.boundary.coordinates[0];
             let inside = false;
@@ -462,13 +462,13 @@ export const getOrderById = asyncHandler(async (req, res) => {
     const paymentFilter = {
       $or: [
         { 'payment.method': 'cash' },
-        { 
+        {
           $and: [
             { 'payment.method': { $in: ['razorpay', 'wallet', 'upi', 'card', 'online'] } },
             { 'payment.status': 'completed' }
           ]
         },
-        { 
+        {
           $and: [
             { 'payment.method': { $exists: false } },
             { 'payment.status': 'completed' }
@@ -515,13 +515,13 @@ const findOrderByIdOrOrderId = async (id) => {
   const paymentFilter = {
     $or: [
       { 'payment.method': 'cash' },
-      { 
+      {
         $and: [
           { 'payment.method': { $in: ['razorpay', 'wallet', 'upi', 'card', 'online'] } },
           { 'payment.status': 'completed' }
         ]
       },
-      { 
+      {
         $and: [
           { 'payment.method': { $exists: false } },
           { 'payment.status': 'completed' }
@@ -772,13 +772,13 @@ export const getSearchingDeliverymanOrders = asyncHandler(async (req, res) => {
         {
           $or: [
             { 'payment.method': 'cash' },
-            { 
+            {
               $and: [
                 { 'payment.method': { $in: ['razorpay', 'wallet', 'upi', 'card', 'online'] } },
                 { 'payment.status': 'completed' }
               ]
             },
-            { 
+            {
               $and: [
                 { 'payment.method': { $exists: false } },
                 { 'payment.status': 'completed' }
@@ -1208,12 +1208,12 @@ export const getTransactionReport = asyncHandler(async (req, res) => {
       if (zoneDoc) {
         const Restaurant = (await import('../../restaurant/models/Restaurant.js')).default;
         const allRestaurants = await Restaurant.find({ isActive: true }).select('_id restaurantId location').lean();
-        
+
         const restaurantIdsInZone = allRestaurants.filter(r => {
           const lat = r.location?.latitude || r.location?.coordinates?.[1];
           const lng = r.location?.longitude || r.location?.coordinates?.[0];
           if (!lat || !lng || !zoneDoc.coordinates) return false;
-          
+
           let inside = false;
           const coords = zoneDoc.coordinates;
           for (let i = 0, j = coords.length - 1; i < coords.length; j = i++) {
@@ -1338,7 +1338,7 @@ export const getTransactionReport = asyncHandler(async (req, res) => {
 
     // Financial base query for "Completed/Earnings" should also respect all filters
     const financialBaseQuery = { ...query };
-    
+
     // If we're not in a specific metric view, we use the same primary status/date as used for the main list 
     // to ensure summary boxes match the table results perfectly.
     const completedOrdersRaw = await Order.find({
@@ -1486,11 +1486,11 @@ export const getTransactionReport = asyncHandler(async (req, res) => {
           'transactions.status': 'Completed',
           ...(fromDate || toDate
             ? {
-                effectiveTransactionDate: {
-                  ...(fromDate ? { $gte: new Date(new Date(fromDate).setHours(0, 0, 0, 0)) } : {}),
-                  ...(toDate ? { $lte: new Date(new Date(toDate).setHours(23, 59, 59, 999)) } : {})
-                }
+              effectiveTransactionDate: {
+                ...(fromDate ? { $gte: new Date(new Date(fromDate).setHours(0, 0, 0, 0)) } : {}),
+                ...(toDate ? { $lte: new Date(new Date(toDate).setHours(23, 59, 59, 999)) } : {})
               }
+            }
             : {})
         }
       },
@@ -1503,7 +1503,7 @@ export const getTransactionReport = asyncHandler(async (req, res) => {
     ];
     const deliveryWalletResult = await DeliveryWallet.aggregate(deliveryWalletPipeline);
     const deliverymanEarningFromWallets = Number(deliveryWalletResult?.[0]?.total || 0);
-    
+
     // If filters are active, we ALWAYS rely on order-based calculations (which are correctly filtered)
     // Wallet transactions are typically global/accumulated and don't easily map to restaurants/zones.
     const hasActiveFilters = (restaurant && restaurant !== 'All restaurants') || (zone && zone !== 'All Zones') || search;
@@ -1648,7 +1648,7 @@ export const getRestaurantReport = asyncHandler(async (req, res) => {
       if (zoneDoc && Array.isArray(zoneDoc.coordinates)) {
         // Find ALL restaurants and check which ones fall inside the zone polygon
         const allRestaurants = await Restaurant.find({}).select('_id restaurantId location').lean();
-        
+
         // Separate ObjectIds and String IDs to avoid CastError
         const restaurantInternalIds = [];
         const restaurantSlugIds = [];
@@ -1657,7 +1657,7 @@ export const getRestaurantReport = asyncHandler(async (req, res) => {
           const lat = r.location?.latitude || r.location?.coordinates?.[1];
           const lng = r.location?.longitude || r.location?.coordinates?.[0];
           if (!lat || !lng || !zoneDoc.coordinates) return;
-          
+
           let inside = false;
           const coords = zoneDoc.coordinates;
           for (let i = 0, j = coords.length - 1; i < coords.length; j = i++) {
@@ -2419,13 +2419,13 @@ export const processRefund = asyncHandler(async (req, res) => {
     } else {
       // For Razorpay, check if refund amount is calculated. If not, calculate it now.
       let refundAmount = settlement.cancellationDetails?.refundAmount || 0;
-      
+
       if (refundAmount <= 0) {
         console.log('📝 [processRefund] Refund amount not found in settlement, calculating now...');
         const { calculateCancellationRefund } = await import('../../order/services/cancellationRefundService.js');
         const calculationResult = await calculateCancellationRefund(order._id, order.cancellationReason || 'Order cancelled');
         refundAmount = calculationResult.refundAmount;
-        
+
         // Reload settlement after calculation
         settlement = await OrderSettlement.findOne({ orderId: order._id });
         console.log('✅ [processRefund] Refund amount calculated:', refundAmount);
@@ -2486,7 +2486,7 @@ export const assignDeliveryPartner = asyncHandler(async (req, res) => {
 
     // Update order with delivery partner
     order.deliveryPartnerId = deliveryPartner._id;
-    
+
     // If order was pending, move to confirmed/preparing
     // Admin assignment usually means it's ready or preparing
     if (order.status === 'pending') {
@@ -2547,7 +2547,7 @@ export const resendDeliveryNotification = asyncHandler(async (req, res) => {
 
     // Check if order is in valid status (preparing or ready or confirmed)
     if (!['preparing', 'ready', 'confirmed'].includes(order.status)) {
-       return errorResponse(res, 400, `Cannot resend notification. Order status must be 'preparing' or 'ready'. Current status: ${order.status}`);
+      return errorResponse(res, 400, `Cannot resend notification. Order status must be 'preparing' or 'ready'. Current status: ${order.status}`);
     }
 
     const Restaurant = (await import('../../restaurant/models/Restaurant.js')).default;
@@ -2588,7 +2588,7 @@ export const resendDeliveryNotification = asyncHandler(async (req, res) => {
     }
 
     const deliveryPartnerIds = deliveryBoys.map(db => db.deliveryPartnerId);
-    
+
     // Update assignment info
     await Order.findByIdAndUpdate(order._id, {
       $set: {
@@ -2606,7 +2606,7 @@ export const resendDeliveryNotification = asyncHandler(async (req, res) => {
     if (populatedOrder) {
       await notifyMultipleDeliveryBoys(populatedOrder, deliveryPartnerIds, 'priority');
     }
-    
+
     return successResponse(res, 200, `Notification resent to ${deliveryPartnerIds.length} delivery partners`);
   } catch (error) {
     console.error('Error resending delivery notification by admin:', error);

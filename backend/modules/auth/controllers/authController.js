@@ -1598,6 +1598,8 @@ export const appleCallback = asyncHandler(async (req, res) => {
             // 1. Try to communicate with window.opener (for popup flows)
             if (window.opener) {
               window.opener.postMessage(data, "*");
+              // Close the popup after a small delay to ensure message is sent
+              setTimeout(function() { window.close(); }, 500);
             }
             
             // 2. Try to communicate with window.parent (for iframe flows)
@@ -1612,13 +1614,14 @@ export const appleCallback = asyncHandler(async (req, res) => {
             
             // Log for debugging in Flutter JS Console
             console.log("✅ Native Apple Tokens passed to web successfully.");
-            console.log("🔄 Reloading page in 1.5s to apply session...");
             
-            // 4. Fallback: Redirect to the callback page
+            // 4. Fallback: If not closed, redirect to the callback page
             setTimeout(function() {
+              if (window.opener) return; // Already handled
               window.location.href = "${redirectUrl}";
             }, 1500);
           })();
+        </script>
         </script>
       </body>
       </html>
