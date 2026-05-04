@@ -1,0 +1,21 @@
+{
+  "name": "DadExpress - Food Delivery",
+  "short_name": "DadExpress",
+  "description": "DadExpress - The best food delivery app",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#EB590E",
+  "icons": [
+    {
+      "src": "/dadexpress.jpeg",
+      "sizes": "192x192",
+      "type": "image/jpeg"
+    },
+    {
+      "src": "/dadexpress.jpeg",
+      "sizes": "512x512",
+      "type": "image/jpeg"
+    }
+  ]
+}
