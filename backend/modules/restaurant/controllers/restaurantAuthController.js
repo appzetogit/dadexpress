@@ -710,7 +710,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         }
       } else {
         // Existing restaurant login - update verification status if needed
-        if (phone && !restaurant.phoneVerified) {
+        if (restaurant && phone && !restaurant.phoneVerified) {
           restaurant.phoneVerified = true;
         }
 
