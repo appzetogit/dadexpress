@@ -188,21 +188,8 @@ export const getCouponsByItemId = asyncHandler(async (req, res) => {
   const now = new Date();
   console.log(`[COUPONS] Current date: ${now.toISOString()}`);
 
-  // Debug: Check all offers for this restaurant
-  const allRestaurantOffers = await Offer.find({
-    restaurant: restaurantId,
-    status: 'active',
-  })
-    .select('items discountType minOrderValue startDate endDate status')
-    .lean();
-  
-  console.log(`[COUPONS] Total active offers for restaurant: ${allRestaurantOffers.length}`);
-  allRestaurantOffers.forEach(offer => {
-    console.log(`[COUPONS] Offer ${offer._id} has ${offer.items?.length || 0} items`);
-    offer.items?.forEach((item, idx) => {
-      console.log(`[COUPONS]   Item ${idx}: itemId=${item.itemId}, couponCode=${item.couponCode}`);
-    });
-  });
+  // Support variation item IDs (e.g., "itemId-variation") by also checking base itemId
+  const baseItemId = itemId.includes('-') ? itemId.split('-')[0] : itemId;
 
   const offerSelect =
     'items discountType minOrderValue maxLimit startDate endDate status customerGroup';
@@ -210,7 +197,10 @@ export const getCouponsByItemId = asyncHandler(async (req, res) => {
   const itemSpecificOffers = await Offer.find({
     restaurant: restaurantId,
     status: 'active',
-    'items.itemId': itemId,
+    $or: [
+      { 'items.itemId': itemId },
+      { 'items.itemId': baseItemId }
+    ],
   })
     .select(offerSelect)
     .lean();
@@ -253,10 +243,6 @@ export const getCouponsByItemId = asyncHandler(async (req, res) => {
     // End date should be >= now (or null)
     const endValid = !endDate || endDate >= now;
     
-    console.log(`[COUPONS] Offer ${offer._id}:`);
-    console.log(`  startDate: ${startDate?.toISOString()}, now: ${now.toISOString()}, startValid: ${startValid}`);
-    console.log(`  endDate: ${endDate?.toISOString()}, now: ${now.toISOString()}, endValid: ${endValid}`);
-    
     return startValid && endValid;
   });
 
@@ -271,14 +257,11 @@ export const getCouponsByItemId = asyncHandler(async (req, res) => {
   // Extract coupons for this specific item + restaurant-wide (admin) coupons
   const coupons = [];
   validOffers.forEach(offer => {
-    console.log(`[COUPONS] Processing offer ${offer._id} with ${offer.items?.length || 0} items`);
-    offer.items.forEach((item, idx) => {
+    offer.items.forEach(item => {
       const general = isGeneralCouponItem(item);
-      console.log(
-        `[COUPONS]   Item ${idx}: itemId="${item.itemId}", searching for="${itemId}", general=${general}, match=${item.itemId === itemId}`,
-      );
-      if (general || item.itemId === itemId) {
-        const coupon = {
+      // Support matching baseItemId for variations
+      if (general || item.itemId === itemId || item.itemId === baseItemId) {
+        coupons.push({
           couponCode: item.couponCode,
           discountPercentage: item.discountPercentage,
           originalPrice: item.originalPrice,
@@ -289,21 +272,19 @@ export const getCouponsByItemId = asyncHandler(async (req, res) => {
           endDate: offer.endDate,
           maxLimit: offer.maxLimit,
           isGeneral: general,
-        };
-        console.log(`[COUPONS]   ✅ Adding coupon:`, coupon);
-        coupons.push(coupon);
+        });
       }
     });
   });
 
   console.log(`[COUPONS] ✅ Returning ${coupons.length} coupons for itemId ${itemId}`);
-  console.log(`[COUPONS] Coupons array:`, JSON.stringify(coupons, null, 2));
 
   return successResponse(res, 200, 'Coupons retrieved successfully', {
     coupons,
     total: coupons.length,
   });
 });
+
 
 // Get coupons for a specific item/dish (PUBLIC - for user cart)
 export const getCouponsByItemIdPublic = asyncHandler(async (req, res) => {
@@ -339,8 +320,9 @@ export const getCouponsByItemIdPublic = asyncHandler(async (req, res) => {
     const restaurant = await Restaurant.findOne(restaurantQuery).select('_id isActive').lean();
 
     if (restaurant) {
-      if (!restaurant.isActive) {
-        console.log(`[COUPONS-PUBLIC] Restaurant found but not active: ${restaurantId}`);
+      // CRITICAL: Be consistent with getPublicOffers - only hide if explicitly false
+      if (restaurant.isActive === false) {
+        console.log(`[COUPONS-PUBLIC] Restaurant found but explicitly inactive: ${restaurantId}`);
         return successResponse(res, 200, 'Restaurant is currently inactive', {
           coupons: [],
           total: 0,
@@ -363,10 +345,16 @@ export const getCouponsByItemIdPublic = asyncHandler(async (req, res) => {
   const offerSelectPublic =
     'items discountType minOrderValue maxLimit startDate endDate status customerGroup';
 
+  // Support variation item IDs (e.g., "itemId-variation") by also checking base itemId
+  const baseItemId = itemId.includes('-') ? itemId.split('-')[0] : itemId;
+
   const itemSpecificOffers = await Offer.find({
     restaurant: restaurantObjectId,
     status: 'active',
-    'items.itemId': itemId,
+    $or: [
+      { 'items.itemId': itemId },
+      { 'items.itemId': baseItemId }
+    ],
   })
     .select(offerSelectPublic)
     .lean();
@@ -421,7 +409,8 @@ export const getCouponsByItemIdPublic = asyncHandler(async (req, res) => {
   validOffers.forEach(offer => {
     offer.items.forEach(item => {
       const general = isGeneralCouponItem(item);
-      if (general || item.itemId === itemId) {
+      // Support matching baseItemId for variations
+      if (general || item.itemId === itemId || item.itemId === baseItemId) {
         coupons.push({
           couponCode: item.couponCode,
           discountPercentage: item.discountPercentage,
@@ -445,6 +434,7 @@ export const getCouponsByItemIdPublic = asyncHandler(async (req, res) => {
     total: coupons.length,
   });
 });
+
 
 // Get all active offers with restaurant and dish details (PUBLIC - for user offers page)
 export const getPublicOffers = asyncHandler(async (req, res) => {
