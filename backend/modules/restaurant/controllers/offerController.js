@@ -64,7 +64,14 @@ export const createOffer = asyncHandler(async (req, res) => {
     freebieItems,
     status: 'active', // Automatically activate
     startDate: startDate ? new Date(startDate) : new Date(),
-    endDate: endDate ? new Date(endDate) : null,
+    endDate: endDate ? (() => {
+      const d = new Date(endDate);
+      // If time is not specified (00:00:00), set to end of day
+      if (d.getHours() === 0 && d.getMinutes() === 0 && d.getSeconds() === 0) {
+        d.setHours(23, 59, 59, 999);
+      }
+      return d;
+    })() : null,
   };
 
   const offer = await Offer.create(offerData);
@@ -244,14 +251,11 @@ export const getCouponsByItemId = asyncHandler(async (req, res) => {
     const startValid = !startDate || startDate <= now;
     
     // End date should be >= now (or null)
-    // Add 1 day buffer to include offers that end today
-    const endOfToday = new Date(now);
-    endOfToday.setHours(23, 59, 59, 999);
-    const endValid = !endDate || endDate >= endOfToday;
+    const endValid = !endDate || endDate >= now;
     
     console.log(`[COUPONS] Offer ${offer._id}:`);
     console.log(`  startDate: ${startDate?.toISOString()}, now: ${now.toISOString()}, startValid: ${startValid}`);
-    console.log(`  endDate: ${endDate?.toISOString()}, endOfToday: ${endOfToday.toISOString()}, endValid: ${endValid}`);
+    console.log(`  endDate: ${endDate?.toISOString()}, now: ${now.toISOString()}, endValid: ${endValid}`);
     
     return startValid && endValid;
   });
@@ -332,9 +336,16 @@ export const getCouponsByItemIdPublic = asyncHandler(async (req, res) => {
       ];
     }
 
-    const restaurant = await Restaurant.findOne(restaurantQuery).select('_id').lean();
+    const restaurant = await Restaurant.findOne(restaurantQuery).select('_id isActive').lean();
 
     if (restaurant) {
+      if (!restaurant.isActive) {
+        console.log(`[COUPONS-PUBLIC] Restaurant found but not active: ${restaurantId}`);
+        return successResponse(res, 200, 'Restaurant is currently inactive', {
+          coupons: [],
+          total: 0,
+        });
+      }
       restaurantObjectId = restaurant._id;
       console.log(`[COUPONS-PUBLIC] Found restaurant with _id: ${restaurantObjectId}`);
     } else {
@@ -393,9 +404,7 @@ export const getCouponsByItemIdPublic = asyncHandler(async (req, res) => {
     const endDate = offer.endDate ? new Date(offer.endDate) : null;
     
     const startValid = !startDate || startDate <= now;
-    const endOfToday = new Date(now);
-    endOfToday.setHours(23, 59, 59, 999);
-    const endValid = !endDate || endDate >= endOfToday;
+    const endValid = !endDate || endDate >= now;
     
     return startValid && endValid;
   });
@@ -447,7 +456,7 @@ export const getPublicOffers = asyncHandler(async (req, res) => {
     const offers = await Offer.find({
       status: 'active',
     })
-      .populate('restaurant', 'name restaurantId slug profileImage rating estimatedDeliveryTime distance')
+      .populate('restaurant', 'name restaurantId slug profileImage rating estimatedDeliveryTime distance isActive')
       .sort({ createdAt: -1 })
       .lean();
     
@@ -462,16 +471,14 @@ export const getPublicOffers = asyncHandler(async (req, res) => {
       const endDate = offer.endDate ? new Date(offer.endDate) : null;
       
       const startValid = !startDate || startDate <= now;
-      const endOfToday = new Date(now);
-      endOfToday.setHours(23, 59, 59, 999);
-      const endValid = !endDate || endDate >= endOfToday;
+      const endValid = !endDate || endDate >= now;
       
       if (!startValid || !endValid) {
         return; // Skip expired or not yet started offers
       }
 
       // Skip if restaurant is not found or not active
-      if (!offer.restaurant || !offer.restaurant.name) {
+      if (!offer.restaurant || !offer.restaurant.name || offer.restaurant.isActive === false) {
         return;
       }
 

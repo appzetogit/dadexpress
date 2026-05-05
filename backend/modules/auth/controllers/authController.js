@@ -329,7 +329,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
             platform: staff.platform || 'web',
             fcmToken: staff.fcmToken,
             fcmTokenMobile: staff.fcmTokenMobile,
-            save: async function() {
+            save: async function () {
               await StaffManagement.updateOne({ _id: staff._id }, {
                 $set: {
                   fcmToken: this.fcmToken,

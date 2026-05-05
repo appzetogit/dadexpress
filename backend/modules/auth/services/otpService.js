@@ -58,7 +58,7 @@ class OTPService {
 
       // Generate random OTP
       const otp = generateOTP();
-      const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
       // Build query for invalidating previous OTPs
       const invalidateQuery = { purpose, verified: false };
@@ -100,7 +100,7 @@ class OTPService {
       return {
         success: true,
         message: `OTP sent successfully to ${identifierType === 'phone' ? 'phone' : 'email'}`,
-        expiresIn: 300, // 5 minutes in seconds
+        expiresIn: 600, // 10 minutes in seconds
         identifierType
       };
     } catch (error) {
@@ -133,10 +133,10 @@ class OTPService {
       const identifierType = phone ? 'phone' : 'email';
 
       // Verify OTP from database
-      // For reset-password purpose, allow already-verified OTPs within 10 minutes
+      // For reset-password and login purposes, allow already-verified OTPs within 10 minutes
       let otpRecord;
 
-      if (purpose === 'reset-password') {
+      if (purpose === 'reset-password' || purpose === 'login' || purpose === 'register') {
         // First try to find unverified OTP
         const unverifiedQuery = {
           otp,

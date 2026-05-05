@@ -321,6 +321,9 @@ export const calculateOrderPricing = async ({
           const now = new Date();
 
           // Find active offer with this coupon code for this restaurant
+          const startOfToday = new Date(now);
+          startOfToday.setHours(0, 0, 0, 0);
+
           const offer = await Offer.findOne({
             restaurant: restaurantObjectId,
             status: 'active',
@@ -328,6 +331,17 @@ export const calculateOrderPricing = async ({
             startDate: { $lte: now },
             $or: [
               { endDate: { $gte: now } },
+              { 
+                // Handle cases where endDate was set to beginning of today (00:00:00)
+                // by allowing it to be valid until the end of that day.
+                endDate: { $gte: startOfToday },
+                $expr: { 
+                  $and: [
+                    { $eq: [{ $hour: "$endDate" }, 0] },
+                    { $eq: [{ $minute: "$endDate" }, 0] }
+                  ]
+                }
+              },
               { endDate: null }
             ]
           }).lean();
