@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react"
 import { useNavigate, useSearchParams, Link } from "react-router-dom"
-import { Mail, Phone, AlertCircle, Loader2 } from "lucide-react"
+import { Mail, Phone, AlertCircle, Loader2, SkipForward } from "lucide-react"
 import AnimatedPage from "../../components/AnimatedPage"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -577,7 +577,7 @@ export default function SignIn() {
   }
 
   return (
-    <AnimatedPage className="min-h-screen flex flex-col bg-white dark:bg-[#0a0a0a] !pb-0 md:flex-row md:overflow-hidden">
+    <AnimatedPage className="min-h-screen flex flex-col bg-white dark:bg-[#0a0a0a] !pb-0 md:flex-row md:overflow-hidden relative">
 
       {/* Mobile: Top Section - Banner Image */}
       {/* Desktop: Left Section - Banner Image */}
@@ -602,6 +602,14 @@ export default function SignIn() {
       {/* Mobile: Bottom Section - White Login Form */}
       {/* Desktop: Right Section - Login Form */}
       <div className="bg-white dark:bg-[#1a1a1a] p-4 sm:p-5 md:p-6 lg:p-8 xl:p-10 flex-1 md:w-1/2 md:flex md:items-center md:justify-center md:h-screen">
+        {/* Skip Button - Fixed at top right of the page */}
+        <button
+          onClick={() => navigate("/")}
+          className="absolute top-4 right-4 md:top-8 md:right-8 text-xs md:text-sm font-extrabold text-[#EB590E] hover:text-[#D94F0C] transition-all bg-[#FFF5EF]/90 backdrop-blur-sm px-4 py-1.5 md:px-6 md:py-2.5 rounded-full shadow-lg hover:shadow-xl active:scale-95 z-[100] flex items-center gap-2 border border-[#FFD8C2]"
+        >
+          Skip
+          <SkipForward className="w-3 h-3 md:w-4 md:h-4" />
+        </button>
         <div className="max-w-md lg:max-w-lg xl:max-w-xl mx-auto space-y-6 md:space-y-8 lg:space-y-10 w-full">
           {/* Heading */}
           <div className="text-center space-y-2 md:space-y-3">

@@ -79,32 +79,7 @@ export default function PageNavbar({
     }
   }, [resolvedDeliveryAddress, geoLocation])
 
-  // Auto-trigger location fetch if we have placeholder values (only once on mount)
-  useEffect(() => {
-    if (location &&
-      !loading &&
-      requestLocation &&
-      (location.formattedAddress === "Select location" ||
-        location.city === "Current Location")) {
-      false && console.log("🔄 Auto-triggering location fetch due to placeholder values")
-      // Wait a bit to avoid multiple rapid calls, and only trigger once
-      const timeoutId = setTimeout(() => {
-        requestLocation().then((fetchedLocation) => {
-          if (fetchedLocation &&
-            fetchedLocation.formattedAddress !== "Select location" &&
-            fetchedLocation.city !== "Current Location") {
-            false && console.log("✅ Location fetched successfully:", fetchedLocation)
-          } else {
-            false && console.warn("⚠️ Location fetch returned placeholder, user may need to select manually")
-          }
-        }).catch(err => {
-          false && console.warn("Location fetch failed:", err)
-        })
-      }, 2000) // Wait 2 seconds before triggering
 
-      return () => clearTimeout(timeoutId)
-    }
-  }, []) // Only run once on mount
 
   // Load business settings logo
   useEffect(() => {

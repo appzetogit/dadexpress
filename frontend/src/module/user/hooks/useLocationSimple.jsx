@@ -290,7 +290,8 @@ export function useLocationSimple() {
       setLoading(false)
     }
 
-    // Request fresh location in background
+    // Request fresh location in background - DISABLED for iOS compliance
+    /*
     getCurrentLocation()
       .then((locationData) => {
         setLocation(locationData)
@@ -305,6 +306,7 @@ export function useLocationSimple() {
         }
         // If we have cached location, silently fail (background request)
       })
+    */
   }, [])
 
   return {

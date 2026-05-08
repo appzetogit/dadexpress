@@ -1,5 +1,5 @@
-// src/context/cart-context.jsx
 import { createContext, useContext, useEffect, useMemo, useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { toast } from "sonner"
 
 
@@ -35,6 +35,7 @@ const defaultCartContext = {
 const CartContext = createContext(defaultCartContext)
 
 export function CartProvider({ children }) {
+  const navigate = useNavigate()
   // Safe init (works with SSR and bad JSON)
   const [cart, setCart] = useState(() => {
     if (typeof window === "undefined") return []
@@ -61,6 +62,18 @@ export function CartProvider({ children }) {
   }, [cart])
 
   const addToCart = (item, sourcePosition = null) => {
+    // Check if user is authenticated for user module
+    const isAuthenticated = localStorage.getItem("user_accessToken") || localStorage.getItem("user_authenticated") === "true";
+    
+    if (!isAuthenticated) {
+      toast.error("Please login first to add items to cart", {
+        duration: 3000,
+        id: "login-required"
+      });
+      navigate("/auth/sign-in");
+      return;
+    }
+
     setCart((prev) => {
       // CRITICAL: Validate restaurant consistency
       // If cart already has items, ensure new item belongs to the same restaurant
@@ -187,6 +200,18 @@ export function CartProvider({ children }) {
   }
 
   const updateQuantity = (itemId, quantity, sourcePosition = null, productInfo = null) => {
+    // Check if user is authenticated for user module
+    const isAuthenticated = localStorage.getItem("user_accessToken") || localStorage.getItem("user_authenticated") === "true";
+
+    if (!isAuthenticated) {
+      toast.error("Please login first to modify your cart", {
+        duration: 3000,
+        id: "login-required-update"
+      });
+      navigate("/auth/sign-in");
+      return;
+    }
+
     if (quantity <= 0) {
       setCart((prev) => {
         const itemToRemove = prev.find((i) => i.id === itemId)

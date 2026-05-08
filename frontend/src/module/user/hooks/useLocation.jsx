@@ -2355,9 +2355,10 @@ export function useLocation() {
           }
         } else {
           // iOS WebView / in-app browsers may not expose Permissions API.
-          // Fallback to direct geolocation flow so location features still work.
-          permissionGranted = true;
-          false && console.log("📍 Permissions API not available - using direct geolocation fallback");
+          // To comply with App Store policies, we MUST NOT trigger the prompt automatically.
+          // So we default to false and wait for an explicit user action (requestLocation).
+          permissionGranted = false;
+          false && console.log("📍 Permissions API not available - defaulting to false to avoid automatic prompt");
         }
 
         // If permission NOT granted, and we don't have a specific user request (this is page load),

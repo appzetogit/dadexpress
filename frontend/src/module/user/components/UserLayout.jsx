@@ -1,7 +1,7 @@
 import { Outlet, useLocation } from "react-router-dom"
 import { useEffect, useState, createContext, useContext, lazy, Suspense } from "react"
 import { ProfileProvider } from "../context/ProfileContext"
-import LocationPrompt from "./LocationPrompt"
+
 import { CartProvider } from "../context/CartContext"
 import { OrdersProvider } from "../context/OrdersContext"
 // Lazy load overlays to reduce initial bundle size
@@ -167,7 +167,7 @@ export default function UserLayout() {
                 <div className="hidden md:block">
                   {showBottomNav && <DesktopNavbar />}
                 </div>
-                {!isUserAuthRoute && <LocationPrompt />}
+
                 <main className={showBottomNav ? "md:pt-40" : ""}>
                   <Outlet />
                 </main>
