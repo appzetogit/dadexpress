@@ -1962,95 +1962,132 @@ export const completeDelivery = asyncHandler(async (req, res) => {
       console.error(`❌ Error releasing escrow for order ${orderIdForLog}:`, escrowError.message);
       // Continue with legacy wallet update as fallback
     }
+      // 🎁 Process Referral Rewards
       try {
         if (updatedOrder.userId && updatedOrder.userId._id) {
           const User = (await import('../../auth/models/User.js')).default;
-          const user = await User.findById(updatedOrder.userId._id);
+          const refereeUser = await User.findById(updatedOrder.userId._id);
 
-          if (user && user.referredBy) {
-            // Check if it's their first successful order
-            const previousOrdersCount = await Order.countDocuments({
-              userId: user._id,
-              status: 'delivered',
-              _id: { $ne: updatedOrder._id }
-            });
+          if (refereeUser && refereeUser.referredBy) {
+            const BusinessSettings = (await import('../../admin/models/BusinessSettings.js')).default;
+            const settings = await BusinessSettings.getSettings();
 
-            if (previousOrdersCount === 0) {
-              const BusinessSettings = (await import('../../admin/models/BusinessSettings.js')).default;
-              const settings = await BusinessSettings.getSettings();
+            if (settings?.referral?.isEnabled) {
+              const ReferralLog = (await import('../../admin/models/ReferralLog.js')).default;
+              
+              // Find the pending referral log for this referee
+              const log = await ReferralLog.findOne({
+                referrer: refereeUser.referredBy,
+                referee: refereeUser._id,
+                status: 'pending'
+              });
 
-              if (settings?.referral?.isEnabled) {
-                const minOrderValue = settings.referral.minOrderValue || 0;
+              if (log) {
+                // Criteria: First successful order of minimum value
                 const orderTotal = updatedOrder.pricing?.total || 0;
+                const minOrderValue = settings.referral.minOrderValue || 0;
 
-                if (orderTotal >= minOrderValue) {
-                  const ReferralLog = (await import('../../admin/models/ReferralLog.js')).default;
-                  const log = await ReferralLog.findOne({
-                    referrer: user.referredBy,
-                    referee: user._id,
-                    status: 'pending'
+                // Check if this is truly the first DELIVERED order
+                const previousOrdersCount = await Order.countDocuments({
+                  userId: refereeUser._id,
+                  status: 'delivered',
+                  _id: { $ne: updatedOrder._id }
+                });
+
+                if (previousOrdersCount === 0 && orderTotal >= minOrderValue) {
+                  const referrerReward = settings.referral.referrerReward || 0;
+                  const refereeReward = settings.referral.refereeReward || 0;
+
+                  // 1. Credit Referrer
+                  const referrer = await User.findByIdAndUpdate(refereeUser.referredBy, {
+                    $inc: {
+                      'wallet.balance': referrerReward,
+                      'referralStats.completed': 1,
+                      'referralStats.pending': -1,
+                      'referralStats.earned': referrerReward
+                    }
+                  }, { new: true });
+
+                  // Add transaction to UserWallet for referrer
+                  try {
+                    const UserWallet = (await import('../../user/models/UserWallet.js')).default;
+                    const referrerWallet = await UserWallet.findOrCreateByUserId(refereeUser.referredBy);
+                    await referrerWallet.addTransaction({
+                      amount: referrerReward,
+                      type: 'addition',
+                      status: 'Completed',
+                      description: `Referral Reward - ${refereeUser.name} completed first order`,
+                      orderId: updatedOrder._id
+                    });
+                    await referrerWallet.save();
+                  } catch (walletErr) {
+                    console.error('⚠️ Could not record referrer reward in UserWallet:', walletErr.message);
+                  }
+
+                  // 2. Credit Referee
+                  await User.findByIdAndUpdate(refereeUser._id, {
+                    $inc: { 'wallet.balance': refereeReward }
                   });
 
-                  if (log) {
-                    const referrerReward = settings.referral.referrerReward || 0;
-                    const refereeReward = settings.referral.refereeReward || 0;
-
-                    // Credit Referrer
-                    await User.findByIdAndUpdate(user.referredBy, {
-                      $inc: {
-                        'wallet.balance': referrerReward,
-                        'referralStats.completed': 1,
-                        'referralStats.pending': -1,
-                        'referralStats.earned': referrerReward
-                      }
+                  // Add transaction to UserWallet for referee
+                  try {
+                    const UserWallet = (await import('../../user/models/UserWallet.js')).default;
+                    const refereeWallet = await UserWallet.findOrCreateByUserId(refereeUser._id);
+                    await refereeWallet.addTransaction({
+                      amount: refereeReward,
+                      type: 'addition',
+                      status: 'Completed',
+                      description: `Joining Reward - Completed first order (min ₹${minOrderValue})`,
+                      orderId: updatedOrder._id
                     });
-
-                    // Add transaction to UserWallet for referrer
-                    try {
-                      const UserWallet = (await import('../../user/models/UserWallet.js')).default;
-                      const referrerWallet = await UserWallet.findOrCreateByUserId(user.referredBy);
-                      await referrerWallet.addTransaction({
-                        amount: referrerReward,
-                        type: 'addition',
-                        status: 'Completed',
-                        description: `Referral Reward - ${user.name} completed first order`,
-                        orderId: updatedOrder._id
-                      });
-                      await referrerWallet.save();
-                    } catch (walletErr) {
-                      console.error('⚠️ Could not record referrer reward in UserWallet:', walletErr.message);
-                    }
-
-                    // Credit Referee (the one who just completed the order)
-                    await User.findByIdAndUpdate(user._id, {
-                      $inc: { 'wallet.balance': refereeReward }
-                    });
-
-                    // Add transaction to UserWallet for referee
-                    try {
-                      const UserWallet = (await import('../../user/models/UserWallet.js')).default;
-                      const refereeWallet = await UserWallet.findOrCreateByUserId(user._id);
-                      await refereeWallet.addTransaction({
-                        amount: refereeReward,
-                        type: 'addition',
-                        status: 'Completed',
-                        description: `Joining Reward - Completed first order (min ₹${settings.referral.minOrderValue})`,
-                        orderId: updatedOrder._id
-                      });
-                      await refereeWallet.save();
-                    } catch (walletErr) {
-                      console.error('⚠️ Could not record referee reward in UserWallet:', walletErr.message);
-                    }
-
-                    // Update Log
-                    log.status = 'completed';
-                    log.referrerReward = referrerReward;
-                    log.refereeReward = refereeReward;
-                    log.orderId = updatedOrder._id;
-                    await log.save();
-
-                    console.log(`🎁 Referral rewards credited! Referrer: ${referrerReward}, Referee: ${refereeReward} for order ${updatedOrder.orderId}`);
+                    await refereeWallet.save();
+                  } catch (walletErr) {
+                    console.error('⚠️ Could not record referee reward in UserWallet:', walletErr.message);
                   }
+
+                  // 3. Update Log
+                  log.status = 'completed';
+                  log.referrerReward = referrerReward;
+                  log.refereeReward = refereeReward;
+                  log.orderId = updatedOrder._id;
+                  await log.save();
+
+                  console.log(`🎁 Referral rewards credited! Referrer: ${referrerReward}, Referee: ${refereeReward} for order ${updatedOrder.orderId}`);
+
+                  // 4. Send Notifications
+                  try {
+                    const notificationService = (await import('../../../shared/services/notificationService.js')).default;
+                    
+                    // Notify Referrer
+                    if (referrer && (referrer.fcmToken || referrer.fcmTokenMobile)) {
+                      await notificationService.sendPushNotification(
+                        referrer.fcmTokenMobile || referrer.fcmToken,
+                        {
+                          title: '🎁 Referral Reward Earned!',
+                          body: `Congratulations! You earned ₹${referrerReward} because ${refereeUser.name} completed their first order.`
+                        },
+                        { click_action: '/profile/refer-and-earn', type: 'referral_reward' },
+                        referrer.platform || 'web'
+                      );
+                    }
+
+                    // Notify Referee
+                    if (refereeUser.fcmToken || refereeUser.fcmTokenMobile) {
+                      await notificationService.sendPushNotification(
+                        refereeUser.fcmTokenMobile || refereeUser.fcmToken,
+                        {
+                          title: '🎁 Joining Bonus Credited!',
+                          body: `You've earned ₹${refereeReward} joining bonus for completing your first order. Keep ordering!`
+                        },
+                        { click_action: '/profile/wallet', type: 'joining_bonus' },
+                        refereeUser.platform || 'web'
+                      );
+                    }
+                  } catch (notifErr) {
+                    console.error('⚠️ Error sending referral notifications:', notifErr.message);
+                  }
+                } else if (previousOrdersCount === 0 && orderTotal < minOrderValue) {
+                  console.log(`ℹ️ Order value (₹${orderTotal}) below minimum (₹${minOrderValue}) for referral reward. Order: ${updatedOrder.orderId}`);
                 }
               }
             }
@@ -2058,6 +2095,7 @@ export const completeDelivery = asyncHandler(async (req, res) => {
         }
       } catch (referralError) {
         console.error('⚠️ Error processing referral rewards:', referralError.message);
+        console.error(referralError.stack);
       }
 
 

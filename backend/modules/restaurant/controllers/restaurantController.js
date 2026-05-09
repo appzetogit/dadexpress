@@ -9,6 +9,21 @@ import asyncHandler from '../../../shared/middleware/asyncHandler.js';
 import mongoose from 'mongoose';
 
 /**
+ * Calculate distance between two points (Haversine formula)
+ */
+const calculateDistance = (lat1, lng1, lat2, lng2) => {
+  const R = 6371; // Earth's radius in km
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLng = (lng2 - lng1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
+
+/**
  * Check if a point is within a zone polygon using ray casting algorithm
  * @param {number} lat - Latitude
  * @param {number} lng - Longitude
@@ -98,17 +113,7 @@ export const getRestaurants = async (req, res) => {
   /**
    * Calculate distance between two points (Haversine formula)
    */
-  const calculateDistance = (lat1, lng1, lat2, lng2) => {
-    const R = 6371; // Earth's radius in km
-    const dLat = (lat2 - lat1) * (Math.PI / 180);
-    const dLng = (lng2 - lng1) * (Math.PI / 180);
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
-      Math.sin(dLng / 2) * Math.sin(dLng / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-  };
+  // Calculate distance between two points moved to top for shared use
 
   try {
     const {
@@ -143,8 +148,11 @@ export const getRestaurants = async (req, res) => {
       }
     }
 
-    // Build query
-    const query = { isActive: true };
+    // Build query - Only show active AND approved restaurants
+    const query = { 
+      isActive: true,
+      approvedAt: { $ne: null }
+    };
 
     // Dietary filter
     if (dietary) {
@@ -292,8 +300,23 @@ export const getRestaurants = async (req, res) => {
       const coords = getRestaurantCoords(restaurantDoc);
       if (!coords) return false;
       
-      // Strict polygon check (removed 0.5km buffer which caused leaks)
-      return isPointInZone(coords.lat, coords.lng, zoneDoc.coordinates);
+      // 1. Strict polygon check
+      if (isPointInZone(coords.lat, coords.lng, zoneDoc.coordinates)) return true;
+
+      // 2. Buffer check (1.5km margin to handle edge cases and slightly inaccurate polygons)
+      // This matches the detection logic in zoneController to prevent "Service not available" loops.
+      const BUFFER_DISTANCE = 1.5; 
+      for (const vertex of zoneDoc.coordinates) {
+        const vLat = vertex.latitude || vertex.lat;
+        const vLng = vertex.longitude || vertex.lng;
+        if (vLat && vLng) {
+          if (calculateDistance(coords.lat, coords.lng, vLat, vLng) <= BUFFER_DISTANCE) {
+            return true;
+          }
+        }
+      }
+      
+      return false;
     };
 
     // Fetch restaurants

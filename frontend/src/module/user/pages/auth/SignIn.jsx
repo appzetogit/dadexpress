@@ -109,7 +109,10 @@ export default function SignIn() {
         debugLog(`[PUSH-NOTIFICATION] Sending FCM token for user Google login from ${source}:`, fcmToken);
       }
 
-      const response = await authAPI.firebaseGoogleLogin(idToken, "user", fcmToken, "web")
+      // Get referral code from localStorage
+      const referralCode = localStorage.getItem("referralCode")
+
+      const response = await authAPI.firebaseGoogleLogin(idToken, "user", fcmToken, "web", referralCode)
       const data = response?.data?.data || {}
 
       debugLog(`✅ Backend response from ${source}:`, {
@@ -531,8 +534,10 @@ export default function SignIn() {
       if (idToken && !appleLoginSuccess) {
         // Get FCM token
         const fcmToken = await requestFcmToken();
+        // Get referral code from localStorage
+        const referralCode = localStorage.getItem("referralCode")
         debugLog("🚀 Calling backend appleLogin with idToken...");
-        const responseApi = await authAPI.appleLogin(idToken, "user", fullName, fcmToken, "web");
+        const responseApi = await authAPI.appleLogin(idToken, "user", fullName, fcmToken, "web", referralCode);
         const data = responseApi?.data?.data || {};
 
         if (data.accessToken && data.user) {

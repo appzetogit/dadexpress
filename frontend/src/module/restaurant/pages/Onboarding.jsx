@@ -823,8 +823,8 @@ export default function RestaurantOnboarding() {
           referralCode: localData.step4.referralCode || "",
         })
       }
-      // Only set step from localStorage if URL doesn't have a step parameter
-      if (localData.currentStep && !stepParam) {
+      // Only set step from localStorage if it exists. Local progress takes priority over URL parameter during reloads.
+      if (localData.currentStep) {
         setStep(localData.currentStep)
       }
 

@@ -68,12 +68,9 @@ export default function RestaurantLogin() {
 
   const normalizeRestaurantSessionData = (restaurantData) => {
     if (!restaurantData || typeof restaurantData !== "object") return restaurantData
-    if (restaurantData.isProfileCompleted === true) return restaurantData
+    if (restaurantData.isProfileCompleted === true) return restaurantData;
     if (restaurantData?.isActive === true) {
-      return { ...restaurantData, isProfileCompleted: true }
-    }
-    if (restaurantData?.signupMethod === "google" || !!restaurantData?.googleId) {
-      return { ...restaurantData, isProfileCompleted: true }
+      return { ...restaurantData, isProfileCompleted: true };
     }
 
     const completedSteps = Number(restaurantData?.onboarding?.completedSteps)
@@ -84,7 +81,7 @@ export default function RestaurantLogin() {
       ? completedSteps >= 4
       : (
         !hasOnboardingObject &&
-        (restaurantData?.isActive === true || restaurantData?.signupMethod === "google")
+        (restaurantData?.isActive === true)
       )
 
     return { ...restaurantData, isProfileCompleted }

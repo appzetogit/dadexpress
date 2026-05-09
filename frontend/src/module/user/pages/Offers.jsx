@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { restaurantAPI } from "@/lib/api"
 import { toast } from "sonner"
+import { useLocation } from "../hooks/useLocation"
+import { useZone } from "../hooks/useZone"
 
 // Import banner image
 import offerBanner from "@/assets/offerpagebanner.png"
@@ -17,13 +19,16 @@ export default function Offers() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
+  const userLocation = useLocation()
+  const { zoneId } = useZone(userLocation)
+
   // Fetch offers from API
   useEffect(() => {
     const fetchOffers = async () => {
       try {
         setLoading(true)
         setError(null)
-        const response = await restaurantAPI.getPublicOffers()
+        const response = await restaurantAPI.getPublicOffers({ zoneId })
         const data = response?.data?.data
         
         if (data) {
@@ -42,7 +47,7 @@ export default function Offers() {
     }
 
     fetchOffers()
-  }, [])
+  }, [zoneId])
 
   return (
     <div className="min-h-screen bg-white dark:bg-[#0a0a0a]">

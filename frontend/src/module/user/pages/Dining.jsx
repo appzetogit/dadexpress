@@ -12,6 +12,7 @@ import { useProfile } from "../context/ProfileContext"
 import { diningAPI } from "@/lib/api"
 import api from "@/lib/api"
 import PageNavbar from "../components/PageNavbar"
+import { useZone } from "../hooks/useZone"
 import OptimizedImage from "@/components/OptimizedImage"
 import quickSpicyLogo from "@/assets/quicky-spicy-logo.png"
 // Using placeholders for dining card images
@@ -68,6 +69,7 @@ export default function Dining() {
   const { openSearch, closeSearch, setSearchValue } = useSearchOverlay()
   const { openLocationSelector } = useLocationSelector()
   const { location, loading: locationLoading, isManualMode } = useLocationHook()
+  const { zoneId } = useZone(location)
   const { addFavorite, removeFavorite, isFavorite } = useProfile()
 
   const [categories, setCategories] = useState([])
@@ -116,9 +118,9 @@ export default function Dining() {
       try {
         const [cats, limes, tries, rests, offers] = await Promise.all([
           diningAPI.getCategories(),
-          diningAPI.getOfferBanners(),
+          diningAPI.getOfferBanners(zoneId ? { zoneId } : (location?.city ? { city: location.city } : {})),
           diningAPI.getStories(),
-          diningAPI.getRestaurants(location?.city ? { city: location.city } : {}),
+          diningAPI.getRestaurants(zoneId ? { zoneId } : (location?.city ? { city: location.city } : {})),
           diningAPI.getBankOffers()
         ])
 
@@ -136,7 +138,7 @@ export default function Dining() {
       }
     }
     fetchDiningData()
-  }, [location?.city])
+  }, [location?.city, zoneId])
 
   const toggleFilter = (filterId) => {
     setActiveFilters(prev => {

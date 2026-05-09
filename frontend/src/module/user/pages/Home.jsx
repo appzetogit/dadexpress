@@ -1231,6 +1231,14 @@ export default function Home() {
         return
       }
       params.zoneId = resolvedZoneId
+      
+      // Pass coordinates to backend for dynamic distance calculation
+      const lat = activeLocation?.latitude || activeLocation?.lat || currentLocation?.latitude
+      const lng = activeLocation?.longitude || activeLocation?.lng || currentLocation?.longitude
+      if (lat && lng) {
+        params.latitude = lat
+        params.longitude = lng
+      }
 
       const selectedAddressZoneId = getAddressZoneId(selectedAddress)
       if (selectedAddress && selectedAddressZoneId && selectedAddressZoneId !== params.zoneId) {

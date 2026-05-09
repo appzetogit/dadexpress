@@ -8,6 +8,7 @@ import { useLocationSelector } from "../components/UserLayout"
 import { useLocation as useLocationHook } from "../hooks/useLocation"
 import { useProfile } from "../context/ProfileContext"
 import { restaurantAPI } from "@/lib/api"
+import { useZone } from "../hooks/useZone"
 
 export default function DiningCategory() {
   const { category } = useParams()
@@ -24,7 +25,8 @@ export default function DiningCategory() {
   const filterSectionRefs = useRef({})
   const rightContentRef = useRef(null)
   const { openLocationSelector } = useLocationSelector()
-  const { location } = useLocationHook()
+  const { location, loading: locationLoading } = useLocationHook()
+  const { zoneId } = useZone(location)
   const { addFavorite, removeFavorite, isFavorite } = useProfile()
   const cityName = location?.city || "Select"
 
@@ -33,7 +35,7 @@ export default function DiningCategory() {
     const fetchRestaurants = async () => {
       try {
         setIsLoading(true)
-        const response = await restaurantAPI.getRestaurants()
+        const response = await restaurantAPI.getRestaurants(zoneId ? { zoneId } : (location?.city ? { city: location.city } : {}))
         if (response.data && response.data.success) {
           // Map backend data to UI format
           const mappedData = (response.data.data.restaurants || response.data.data || [])
@@ -63,7 +65,7 @@ export default function DiningCategory() {
       }
     }
     fetchRestaurants()
-  }, [])
+  }, [location?.city, zoneId])
 
   // Category headings mapping
   const categoryHeadings = {

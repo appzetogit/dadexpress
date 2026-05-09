@@ -1070,10 +1070,14 @@ export const getRestaurants = asyncHandler(async (req, res) => {
     // Status filter
     if (status === "inactive") {
       query.isActive = false;
+      query.approvedAt = { $ne: null }; // Must be approved but disabled
     } else if (status === "active") {
       query.isActive = true;
+      query.approvedAt = { $ne: null }; // Must be approved and active
     } else {
-      // Default: Show ALL restaurants (both active and inactive)
+      // Default: Show ALL APPROVED restaurants (both active and inactive)
+      // Exclude restaurants that haven't been approved yet (joining requests)
+      query.approvedAt = { $ne: null };
     }
 
     console.log("ðŸ” Admin Restaurants List Query:", {
@@ -1368,7 +1372,7 @@ export const getRestaurantJoinRequests = asyncHandler(async (req, res) => {
     if (status === "pending") {
       // Pending = onboarding completed, not yet approved, and not rejected
       query.$and = [
-        { "onboarding.completedSteps": { $gte: 1 } },
+        { "onboarding.completedSteps": { $gte: 0 } },
         {
           $or: [{ approvedAt: { $exists: false } }, { approvedAt: null }],
         },
@@ -2625,8 +2629,14 @@ export const updateOffer = asyncHandler(async (req, res) => {
     }
   }
 
-  if (updateData.minOrderValue !== undefined) offer.minOrderValue = parseFloat(updateData.minOrderValue);
-  if (updateData.maxDiscountLimit !== undefined) offer.maxLimit = parseFloat(updateData.maxDiscountLimit);
+  if (updateData.minOrderValue !== undefined) {
+    const val = parseFloat(updateData.minOrderValue);
+    offer.minOrderValue = isNaN(val) ? 0 : val;
+  }
+  if (updateData.maxDiscountLimit !== undefined) {
+    const val = parseFloat(updateData.maxDiscountLimit);
+    offer.maxLimit = isNaN(val) ? null : val;
+  }
   if (updateData.startDate) offer.startDate = new Date(updateData.startDate);
   if (updateData.endDate) offer.endDate = new Date(updateData.endDate);
   if (updateData.userScope) offer.customerGroup = updateData.userScope === "first-time" ? "new" : "all";

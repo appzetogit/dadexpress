@@ -8,6 +8,8 @@ import AnimatedPage from "../components/AnimatedPage"
 import { useSearchOverlay, useLocationSelector } from "../components/UserLayout"
 import { useLocation as useLocationHook } from "../hooks/useLocation"
 import { useProfile } from "../context/ProfileContext"
+import { diningAPI } from "@/lib/api"
+import { useZone } from "../hooks/useZone"
 // Using placeholder for upto 50 off banner
 const upto50off = "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=400&h=200&fit=crop"
 
@@ -110,10 +112,30 @@ export default function DiningExplore50() {
   const rightContentRef = useRef(null)
   const { openSearch, closeSearch, setSearchValue } = useSearchOverlay()
   const { openLocationSelector } = useLocationSelector()
-  const { location, loading } = useLocationHook()
+  const { location, loading: locationLoading } = useLocationHook()
+  const { zoneId } = useZone(location)
   const { addFavorite, removeFavorite, isFavorite } = useProfile()
+  const [restaurantList, setRestaurantList] = useState([])
+  const [fetching, setFetching] = useState(true)
   const cityName = location?.city || "Select"
   const stateName = location?.state || "Location"
+
+  useEffect(() => {
+    const fetchRestaurants = async () => {
+      try {
+        setFetching(true)
+        const response = await diningAPI.getRestaurants(zoneId ? { zoneId } : (location?.city ? { city: location.city } : {}))
+        if (response.data.success) {
+          setRestaurantList(response.data.data)
+        }
+      } catch (error) {
+        console.error("Failed to fetch dining restaurants", error)
+      } finally {
+        setFetching(false)
+      }
+    }
+    fetchRestaurants()
+  }, [location?.city, zoneId])
 
   const toggleFilter = (filterId) => {
     setActiveFilters(prev => {
@@ -128,7 +150,7 @@ export default function DiningExplore50() {
   }
 
   const filteredRestaurants = useMemo(() => {
-    let filtered = [...popularRestaurants]
+    let filtered = [...restaurantList]
 
     if (activeFilters.has('delivery-under-30')) {
       filtered = filtered.filter(r => {
@@ -187,7 +209,7 @@ export default function DiningExplore50() {
     }
 
     return filtered
-  }, [activeFilters, selectedCuisine, sortBy])
+  }, [activeFilters, selectedCuisine, sortBy, restaurantList])
 
   const handleLocationClick = useCallback(() => {
     openLocationSelector()
@@ -338,9 +360,14 @@ export default function DiningExplore50() {
 
             {/* Restaurant Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5 md:gap-6">
-              {filteredRestaurants.map((restaurant, index) => {
-                const restaurantSlug = restaurant.name.toLowerCase().replace(/\s+/g, "-")
-                const favorite = isFavorite(restaurantSlug)
+              {fetching ? (
+                <div className="col-span-full py-20 text-center font-bold text-gray-500">Loading restaurants...</div>
+              ) : filteredRestaurants.length > 0 ? (
+                filteredRestaurants.map((restaurant, index) => {
+                  const restaurantSlug = restaurant.slug || restaurant.name.toLowerCase().replace(/\s+/g, "-")
+                  const favorite = isFavorite(restaurantSlug)
+                  
+                  const restaurantImage = restaurant.image || (restaurant.profileImage && restaurant.profileImage.url) || "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&h=600&fit=crop"
 
                 const handleToggleFavorite = (e) => {
                   e.preventDefault()
@@ -366,12 +393,12 @@ export default function DiningExplore50() {
                       {/* Image Section */}
                       <div className="relative h-48 sm:h-56 md:h-60 w-full overflow-hidden rounded-t-2xl">
                         <img
-                          src={restaurant.image}
+                          src={restaurantImage}
                           alt={restaurant.name}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                           onError={(e) => {
                             e.target.src = "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&h=600&fit=crop"
-                          }} nav
+                          }}
                         />
 
                         {/* Featured Dish Badge - Top Left */}
@@ -440,8 +467,11 @@ export default function DiningExplore50() {
                       </CardContent>
                     </Card>
                   </Link>
-                )
-              })}
+                  )
+                })
+              ) : (
+                <div className="col-span-full py-20 text-center font-bold text-gray-500">No restaurants found in this area.</div>
+              )}
             </div>
           </div>
         </div>

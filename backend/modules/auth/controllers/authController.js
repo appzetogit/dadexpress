@@ -1158,10 +1158,11 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
     }
 
     // Final common steps
-    if (!user.isActive) {
+    // Auto-activate only for regular users. Restaurants/Delivery need manual approval or onboarding completion.
+    if (!user.isActive && user.role === 'user') {
       user.isActive = true;
       await user.save();
-      logger.info('Auto-activated account', { userId: user._id });
+      logger.info('Auto-activated user account', { userId: user._id });
     }
 
     const tokens = jwtService.generateTokens({
@@ -1446,6 +1447,16 @@ export const appleLogin = asyncHandler(async (req, res) => {
         await user.save();
       }
     } else {
+      // Handle referral code for new user registration
+      const { referralCode } = req.body;
+      let referredBy = null;
+      if (referralCode && userRole === 'user') {
+        const referrer = await User.findOne({ referralCode, role: 'user' });
+        if (referrer) {
+          referredBy = referrer._id;
+        }
+      }
+
       // Create new user
       const userData = {
         name: providedName || email.split('@')[0],
@@ -1455,10 +1466,33 @@ export const appleLogin = asyncHandler(async (req, res) => {
         role: userRole,
         signupMethod: "apple",
         isActive: true,
+        referredBy,
         platform: req.body.platform || 'web'
       };
 
       user = await User.create(userData);
+
+      // Finalize referral tracking
+      if (user.referredBy) {
+        await User.findByIdAndUpdate(user.referredBy, {
+          $inc: { 'referralStats.invited': 1, 'referralStats.pending': 1 }
+        });
+
+        const { default: BusinessSettings } = await import('../../admin/models/BusinessSettings.js');
+        const settings = await BusinessSettings.getSettings();
+
+        const { default: ReferralLog } = await import('../../admin/models/ReferralLog.js');
+        const expiryDate = new Date();
+        expiryDate.setDate(expiryDate.getDate() + (settings?.referral?.expiryDays || 30));
+
+        await ReferralLog.create({
+          referrer: user.referredBy,
+          referee: user._id,
+          status: 'pending',
+          expiryDate
+        });
+      }
+
       logger.info(`New user registered via Apple: ${user._id}`, { email, userId: user._id });
     }
 

@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from "react"
-import { Search, Plus } from "lucide-react"
+import { Search, Plus, Trash2 } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { adminAPI } from "@/lib/api"
+import { toast } from "sonner"
 
 export default function Coupons() {
   const navigate = useNavigate()
@@ -12,6 +13,21 @@ export default function Coupons() {
 
   const handleAddCouponClick = () => {
     navigate("/admin/coupons/new")
+  }
+
+  const handleDelete = async (offerId) => {
+    try {
+      const response = await adminAPI.deleteOffer(offerId)
+      if (response.data?.success) {
+        setOffers((prev) => prev.filter((o) => (o.offerId || o._id) !== offerId))
+        toast.success("Offer deleted successfully")
+      } else {
+        toast.error(response.data?.message || "Failed to delete offer")
+      }
+    } catch (err) {
+      console.error("Error deleting offer:", err)
+      toast.error("Something went wrong while deleting")
+    }
   }
 
   const getUserScopeLabel = (offer) => {
@@ -254,13 +270,23 @@ export default function Coupons() {
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={() => navigate("/admin/coupons/new", { state: { offer } })}
-                          className="px-4 py-2 rounded-lg text-sm font-medium bg-slate-100 text-slate-800 hover:bg-slate-200 transition-colors"
-                        >
-                          Edit
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => navigate("/admin/coupons/new", { state: { offer } })}
+                            className="px-4 py-2 rounded-lg text-sm font-medium bg-slate-100 text-slate-800 hover:bg-slate-200 transition-colors"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(offer.offerId || offer._id)}
+                            className="p-2 rounded-lg text-red-600 bg-red-50 hover:bg-red-100 transition-colors"
+                            title="Delete Offer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

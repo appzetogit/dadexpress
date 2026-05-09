@@ -39,13 +39,10 @@ const computeIsProfileCompleted = (restaurant) => {
   // Fallback for legacy records or restaurants without onboarding data:
   // Active restaurants should land on dashboard.
   if (restaurant?.isActive === true) return true;
-  // Google sign-in restaurants should not be forced back to onboarding.
-  if (restaurant?.signupMethod === 'google' || !!restaurant?.googleId) return true;
 
   // Backward compatibility for legacy records:
   if (restaurant?.onboarding === undefined || restaurant?.onboarding === null) {
     if (restaurant?.isActive === true) return true;
-    if (restaurant?.signupMethod === 'google') return true;
   }
 
   return false;
@@ -771,24 +768,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
     );
 
     // Return access token and restaurant info
-    let isProfileCompleted = computeIsProfileCompleted(restaurant);
-
-    // Permanent safeguard:
-    // If this is phone OTP login for an already registered restaurant,
-    // always land on dashboard (not onboarding).
-    const shouldForceDashboardForRegisteredPhoneLogin =
-      purpose === 'login' &&
-      !!normalizedPhone &&
-      existingRestaurantFoundForLogin === true &&
-      createdNewRestaurantInLoginFlow === false;
-
-    if (shouldForceDashboardForRegisteredPhoneLogin && isProfileCompleted !== true) {
-      isProfileCompleted = true;
-      if (restaurant.isProfileCompleted !== true) {
-        restaurant.isProfileCompleted = true;
-        await restaurant.save();
-      }
-    }
+    const isProfileCompleted = computeIsProfileCompleted(restaurant);
 
     return successResponse(res, 200, 'Authentication successful', {
       accessToken: tokens.accessToken,
@@ -1363,9 +1343,8 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
         profileImage: picture ? { url: picture } : null,
         ownerName: name.trim(),
         ownerEmail: email.toLowerCase().trim(),
-        // Auto-activate restaurants created via Google sign-in
-        isActive: true,
-        approvedAt: new Date(), // Set approval timestamp for Google sign-in restaurants
+        // NEW restaurants must go through onboarding and admin approval, regardless of signup method.
+        isActive: false,
         fcmToken: req.body.fcmToken || null,
         platform: req.body.platform || 'web'
       };
@@ -1464,20 +1443,8 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
       }
     }
 
-    // Auto-activate on Google sign-in (new or existing account).
-    // Keep this scoped to Firebase Google flow only.
-    if (!restaurant.isActive || !restaurant.approvedAt) {
-      restaurant.isActive = true;
-      if (!restaurant.approvedAt) {
-        restaurant.approvedAt = new Date();
-      }
-      await restaurant.save();
-      logger.info('Auto-activated restaurant account upon Google login', { 
-        restaurantId: restaurant._id,
-        isActive: restaurant.isActive,
-        approvedAt: restaurant.approvedAt
-      });
-    }
+    // NEW restaurants must go through onboarding and admin approval, regardless of signup method.
+    // Auto-activation removed to ensure join requests appear in admin panel correctly.
 
     // Generate JWT tokens for our app (email may be null for phone signups)
     const tokens = jwtService.generateTokens({

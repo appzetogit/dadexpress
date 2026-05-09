@@ -28,8 +28,6 @@ const computeIsProfileCompletedFallback = (restaurant) => {
   if (restaurant.isProfileCompleted === true) return true;
   // Active restaurants should stay on dashboard in legacy data scenarios.
   if (restaurant?.isActive === true) return true;
-  // Keep Google login flow on home dashboard instead of onboarding.
-  if (restaurant?.signupMethod === "google" || !!restaurant?.googleId) return true;
 
   const completedSteps = restaurant?.onboarding?.completedSteps;
   if (typeof completedSteps === "number") return completedSteps >= 4;
@@ -37,7 +35,6 @@ const computeIsProfileCompletedFallback = (restaurant) => {
   // Backward compatibility for old/stale records where DB default false is persisted.
   if (restaurant?.onboarding === undefined || restaurant?.onboarding === null) {
     if (restaurant?.isActive === true) return true;
-    if (restaurant?.signupMethod === "google") return true;
   }
 
   return false;

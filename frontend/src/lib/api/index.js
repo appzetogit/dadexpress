@@ -115,24 +115,32 @@ export const authAPI = {
   },
 
   // Login/Register via Firebase Google ID token
-  firebaseGoogleLogin: (idToken, role = "restaurant", fcmToken = null, platform = "web") => {
-    return apiClient.post(API_ENDPOINTS.AUTH.FIREBASE_GOOGLE_LOGIN, {
+  firebaseGoogleLogin: (idToken, role = "restaurant", fcmToken = null, platform = "web", referralCode = null) => {
+    const payload = {
       idToken,
       role,
       fcmToken,
       platform,
-    });
+    };
+    if (referralCode != null && String(referralCode).trim() !== "") {
+      payload.referralCode = String(referralCode).trim().toUpperCase();
+    }
+    return apiClient.post(API_ENDPOINTS.AUTH.FIREBASE_GOOGLE_LOGIN, payload);
   },
 
   // Login/Register via Apple ID token
-  appleLogin: (idToken, role = "user", name = null, fcmToken = null, platform = "web") => {
-    return apiClient.post(API_ENDPOINTS.AUTH.APPLE_LOGIN, {
+  appleLogin: (idToken, role = "user", name = null, fcmToken = null, platform = "web", referralCode = null) => {
+    const payload = {
       idToken,
       role,
       name,
       fcmToken,
       platform,
-    });
+    };
+    if (referralCode != null && String(referralCode).trim() !== "") {
+      payload.referralCode = String(referralCode).trim().toUpperCase();
+    }
+    return apiClient.post(API_ENDPOINTS.AUTH.APPLE_LOGIN, payload);
   },
 
   // Refresh token
@@ -695,8 +703,8 @@ export const restaurantAPI = {
     );
   },
   // Get public offers (for user offers page)
-  getPublicOffers: () => {
-    return apiClient.get(API_ENDPOINTS.RESTAURANT.OFFERS_PUBLIC);
+  getPublicOffers: (params = {}) => {
+    return apiClient.get(API_ENDPOINTS.RESTAURANT.OFFERS_PUBLIC, { params });
   },
 
   // Get restaurant by owner (for restaurant module)
@@ -2279,8 +2287,8 @@ export const diningAPI = {
   },
 
   // Get offer banners (used as limelight in Dining.jsx)
-  getOfferBanners: () => {
-    return apiClient.get(API_ENDPOINTS.DINING.OFFER_BANNERS);
+  getOfferBanners: (params = {}) => {
+    return apiClient.get(API_ENDPOINTS.DINING.OFFER_BANNERS, { params });
   },
 
   // Get dining stories
