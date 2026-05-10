@@ -343,117 +343,92 @@ export const getCouponsByItemIdPublic = asyncHandler(async (req, res) => {
       ];
     }
 
-    const restaurant = await Restaurant.findOne(restaurantQuery).select('_id isActive').lean();
+    console.log(`[COUPONS-PUBLIC] Querying restaurant with:`, JSON.stringify(restaurantQuery));
+    const restaurant = await Restaurant.findOne(restaurantQuery).select('_id isActive name restaurantId slug').lean();
 
     if (restaurant) {
-      // CRITICAL: Be consistent with getPublicOffers - only hide if explicitly false
-      if (restaurant.isActive === false) {
-        console.log(`[COUPONS-PUBLIC] Restaurant found but explicitly inactive: ${restaurantId}`);
-        return successResponse(res, 200, 'Restaurant is currently inactive', {
-          coupons: [],
-          total: 0,
-        });
-      }
       restaurantObjectId = restaurant._id;
-      console.log(`[COUPONS-PUBLIC] Found restaurant with _id: ${restaurantObjectId}`);
+      console.log(`[COUPONS-PUBLIC] Found restaurant: ${restaurant.name} (_id: ${restaurantObjectId}, active: ${restaurant.isActive})`);
     } else {
-      console.log(`[COUPONS-PUBLIC] Restaurant not found for ID: ${restaurantId}`);
-      return successResponse(res, 200, 'No coupons found', {
-        coupons: [],
-        total: 0,
-      });
+      console.log(`[COUPONS-PUBLIC] Restaurant NOT found for ID: ${restaurantId}`);
+      // Try fallback if restaurantId looks like an ObjectId
+      if (mongoose.Types.ObjectId.isValid(restaurantId) && restaurantId.length === 24) {
+        restaurantObjectId = new mongoose.Types.ObjectId(restaurantId);
+        console.log(`[COUPONS-PUBLIC] Using restaurantId as fallback ObjectId: ${restaurantObjectId}`);
+      } else {
+        return successResponse(res, 200, 'Restaurant not found', { coupons: [], total: 0 });
+      }
     }
   } catch (error) {
     console.error(`[COUPONS-PUBLIC] Error finding restaurant:`, error);
     return errorResponse(res, 500, `Error finding restaurant: ${error.message}`);
   }
 
-  const offerSelectPublic =
-    'items discountType minOrderValue maxLimit startDate endDate status customerGroup';
-
-  // Support variation item IDs (e.g., "itemId-variation") by also checking base itemId
   const baseItemId = itemId.includes('-') ? itemId.split('-')[0] : itemId;
+  console.log(`[COUPONS-PUBLIC] Item search: itemId=${itemId}, baseItemId=${baseItemId}, now=${now.toISOString()}`);
 
-  const itemSpecificOffers = await Offer.find({
+  // Find all offers for this restaurant (including inactive ones for debugging)
+  const allOffers = await Offer.find({
     restaurant: restaurantObjectId,
-    status: 'active',
-    $or: [
-      { 'items.itemId': itemId },
-      { 'items.itemId': baseItemId }
-    ],
-  })
-    .select(offerSelectPublic)
-    .lean();
+  }).lean();
 
-  const generalOffers = await Offer.find({
-    restaurant: restaurantObjectId,
-    status: 'active',
-    items: {
-      $elemMatch: {
-        couponCode: { $exists: true, $nin: [null, ''] },
-        $or: [
-          { itemId: { $exists: false } },
-          { itemId: null },
-          { itemId: '' },
-        ],
-      },
-    },
-  })
-    .select(offerSelectPublic)
-    .lean();
-
-  const offerById = new Map();
-  [...itemSpecificOffers, ...generalOffers].forEach((o) => {
-    offerById.set(String(o._id), o);
-  });
-  const allOffers = Array.from(offerById.values());
-
-  console.log(
-    `[COUPONS-PUBLIC] Found ${allOffers.length} active offers (item + restaurant-wide) for itemId ${itemId} for restaurant ${restaurantId}`,
-  );
-
-  // Filter by date validity
-  const validOffers = allOffers.filter(offer => {
-    const startDate = offer.startDate ? new Date(offer.startDate) : null;
-    const endDate = offer.endDate ? new Date(offer.endDate) : null;
-    
-    const startValid = !startDate || startDate <= now;
-    const endValid = !endDate || endDate >= now;
-    
-    return startValid && endValid;
-  });
-
-  console.log(`[COUPONS-PUBLIC] Found ${validOffers.length} valid offers after date filtering`);
+  console.log(`[COUPONS-PUBLIC] Total offers found in DB for this restaurant: ${allOffers.length}`);
 
   const isGeneralCouponItem = (item) =>
     item == null ||
     item.itemId == null ||
     item.itemId === '' ||
-    String(item.itemId).toUpperCase() === 'N/A';
+    String(item.itemId).toUpperCase() === 'N/A' ||
+    String(item.itemId).toLowerCase() === 'all';
 
   const coupons = [];
-  validOffers.forEach(offer => {
+  const seenCodes = new Set();
+
+  allOffers.forEach(offer => {
+    // Detailed logging for each offer
+    const isStatusActive = offer.status === 'active';
+    const startDate = offer.startDate ? new Date(offer.startDate) : null;
+    const endDate = offer.endDate ? new Date(offer.endDate) : null;
+    
+    // TIMEZONE BUFFER: Allow coupons starting within the next 24 hours 
+    // to account for server/client timezone differences (e.g. UTC vs IST)
+    const startValid = !startDate || startDate <= new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const endValid = !endDate || endDate >= now;
+
+    console.log(`[COUPONS-PUBLIC] Checking Offer ${offer._id}: status=${offer.status}, start=${startDate?.toISOString()}, end=${endDate?.toISOString()}, active=${isStatusActive}, datesValid=${startValid && endValid}`);
+
+    if (!isStatusActive) return;
+    if (!startValid || !endValid) return;
+
     offer.items.forEach(item => {
       const general = isGeneralCouponItem(item);
-      // Support matching baseItemId for variations
-      if (general || item.itemId === itemId || item.itemId === baseItemId) {
-        coupons.push({
-          couponCode: item.couponCode,
-          discountPercentage: item.discountPercentage,
-          originalPrice: item.originalPrice,
-          discountedPrice: item.discountedPrice,
-          minOrderValue: offer.minOrderValue || 0,
-          discountType: offer.discountType,
-          startDate: offer.startDate,
-          endDate: offer.endDate,
-          maxLimit: offer.maxLimit,
-          isGeneral: general,
-        });
+      const itemMatch = String(item.itemId) === String(itemId) || String(item.itemId) === String(baseItemId);
+      
+      console.log(`[COUPONS-PUBLIC]   - Item: code=${item.couponCode}, itemId=${item.itemId}, general=${general}, itemMatch=${itemMatch}`);
+
+      if (general || itemMatch) {
+        if (!seenCodes.has(item.couponCode)) {
+          coupons.push({
+            couponCode: item.couponCode,
+            discountPercentage: Number(item.discountPercentage) || 0,
+            originalPrice: item.originalPrice,
+            discountedPrice: item.discountedPrice,
+            minOrderValue: offer.minOrderValue || 0,
+            discountType: offer.discountType,
+            startDate: offer.startDate,
+            endDate: offer.endDate,
+            maxLimit: offer.maxLimit,
+            isGeneral: general,
+            offerName: offer.name || offer.goalId,
+          });
+          seenCodes.add(item.couponCode);
+          console.log(`[COUPONS-PUBLIC]   ✅ Added coupon: ${item.couponCode}`);
+        }
       }
     });
   });
 
-  console.log(`[COUPONS-PUBLIC] Returning ${coupons.length} coupons for itemId ${itemId}`);
+  console.log(`[COUPONS-PUBLIC] Final returning count: ${coupons.length}`);
 
   return successResponse(res, 200, 'Coupons retrieved successfully', {
     coupons,

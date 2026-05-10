@@ -553,6 +553,12 @@ export default function Cart() {
       couponsRequestKeyRef.current = requestKey
       couponsInFlightRef.current = true
 
+      console.log('🛒 [CART-COUPONS] fetchCouponsForCartItems triggered', {
+        cartLength: cart.length,
+        restaurantId,
+        requestKey
+      })
+
       debugLog(`[CART-COUPONS] Fetching coupons for ${cart.length} items in cart`)
       setLoadingCoupons(true)
 
@@ -586,6 +592,7 @@ export default function Cart() {
           itemsNeedingFetch.map(async (cartItem) => {
             debugLog(`[CART-COUPONS] Fetching coupons for itemId: ${cartItem.id}, name: ${cartItem.name}`)
             const response = await restaurantAPI.getCouponsByItemIdPublic(restaurantId, cartItem.id)
+            console.log(`🛒 [CART-COUPONS] Response for itemId: ${cartItem.id}`, response?.data)
             const coupons = response?.data?.success && response?.data?.data?.coupons
               ? response.data.data.coupons
               : []
