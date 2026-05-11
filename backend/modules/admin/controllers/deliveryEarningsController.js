@@ -266,10 +266,11 @@ export const getDeliveryEarnings = asyncHandler(async (req, res) => {
 
     // Calculate summary
     const totalEarnings = allEarnings.reduce((sum, e) => sum + (e.amount || 0), 0);
+    const totalDeliveryCharges = allEarnings.reduce((sum, e) => sum + (e.deliveryFee || 0), 0);
     const totalOrders = allEarnings.length;
     const uniqueDeliveryPartners = new Set(allEarnings.map(e => e.deliveryPartnerId?.toString()).filter(Boolean)).size;
 
-    console.log(`✅ Summary: Total earnings: ₹${totalEarnings}, Total orders: ${totalOrders}, Unique delivery partners: ${uniqueDeliveryPartners}`);
+    console.log(`✅ Summary: Total earnings: ₹${totalEarnings}, Total delivery charges: ₹${totalDeliveryCharges}, Total orders: ${totalOrders}, Unique delivery partners: ${uniqueDeliveryPartners}`);
 
     // Pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -285,6 +286,7 @@ export const getDeliveryEarnings = asyncHandler(async (req, res) => {
         endDate: endDate ? endDate.toISOString() : null,
         totalDeliveryPartners: uniqueDeliveryPartners,
         totalEarnings,
+        totalDeliveryCharges,
         totalOrders
       },
       pagination: {

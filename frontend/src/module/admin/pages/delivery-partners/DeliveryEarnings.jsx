@@ -29,7 +29,8 @@ export default function DeliveryEarnings() {
   const [summary, setSummary] = useState({
     totalDeliveryPartners: 0,
     totalEarnings: 0,
-    totalOrders: 0
+    totalOrders: 0,
+    totalDeliveryCharges: 0
   })
   const [filters, setFilters] = useState({
     period: 'all',
@@ -228,7 +229,7 @@ export default function DeliveryEarnings() {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-4">
           <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -240,6 +241,18 @@ export default function DeliveryEarnings() {
               </div>
             </div>
           </div>
+            <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-600 mb-1">Total Delivery Charges</p>
+                <p className="text-2xl font-bold text-blue-600">{formatCurrency(summary.totalDeliveryCharges || 0)}</p>
+              </div>
+              <div className="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center">
+                <DollarSign className="w-6 h-6 text-blue-600" />
+              </div>
+            </div>
+          </div>
+
           <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -375,6 +388,7 @@ export default function DeliveryEarnings() {
                   <th className="px-4 py-3 text-left text-xs font-bold text-slate-700 uppercase">Phone</th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-slate-700 uppercase">Order ID</th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-slate-700 uppercase">Restaurant</th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-slate-700 uppercase">Del. Charge</th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-slate-700 uppercase">Earning</th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-slate-700 uppercase">Order Total</th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-slate-700 uppercase">Status</th>
@@ -409,6 +423,9 @@ export default function DeliveryEarnings() {
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-700">
                         {earning.restaurantName || 'N/A'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-700 font-medium">
+                        {formatCurrency(earning.deliveryFee)}
                       </td>
                       <td className="px-4 py-3 text-sm font-semibold text-green-600">
                         {formatCurrency(earning.amount)}

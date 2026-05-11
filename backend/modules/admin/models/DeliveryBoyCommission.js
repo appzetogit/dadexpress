@@ -166,7 +166,13 @@ deliveryBoyCommissionSchema.statics.calculateCommission = async function(distanc
   // Calculate commission
   // IMPORTANT: Base payout is ALWAYS given to delivery boy
   let basePayout = applicableRule.basePayout;
-  let distanceCommission = 0;
+    // SAFETY CAP: Prevent astronomical earnings due to GPS glitches or Null Island (0,0) coordinates
+    if (distance > 100) {
+      console.warn(`⚠️ Astronomical distance detected (${distance} km). Capping to 100km for safety.`);
+      distance = 100;
+    }
+
+    let distanceCommission = 0;
   
   // Per km commission logic based on user requirement:
   // - Base payout: ₹10 (always given)
