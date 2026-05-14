@@ -204,8 +204,8 @@ export default function Cart() {
   // Priority: restaurantData > cart[0].restaurantId
   // DO NOT use cart[0].restaurant as slug fallback - it creates wrong slugs
   const restaurantId = cart.length > 0
-    ? (restaurantData?._id || restaurantData?.restaurantId || cart[0]?.restaurantId || null)
-    : null
+    ? (restaurantData?._id?.toString() || restaurantData?.restaurantId || cart[0]?.restaurantId || null)
+    : null;
 
   // Stable restaurant ID for addons fetch (memoized to prevent dependency array issues)
   // Prefer restaurantData IDs (more reliable) over slug from cart
@@ -1823,8 +1823,10 @@ export default function Cart() {
                   </div>
                 ) : (
                   <div className="flex items-center gap-2 md:gap-3">
-                    <Percent className="h-4 w-4 md:h-5 md:w-5 text-gray-600 dark:text-gray-400" />
-                    <p className="text-sm md:text-base text-gray-500 dark:text-gray-400">No coupons available</p>
+                    <Percent className="h-4 w-4 md:h-5 md:w-5 text-blue-600 dark:text-blue-400" />
+                    <p className="text-sm md:text-base text-blue-600 dark:text-blue-400 font-medium">
+                      {restaurantData?.offer || "No coupons available"}
+                    </p>
                   </div>
                 )}
 
