@@ -390,9 +390,12 @@ export default function RestaurantDetails() {
 
   // Helper function to update item quantity in both local state and cart
   const updateItemQuantity = (item, newQuantity, event = null) => {
+    // Determine the correct ID to use (base ID or variation-specific ID)
+    const finalId = selectedVariation ? `${item.id}-${selectedVariation.name}` : item.id
+
     // If item has variations and we are adding it (not updating existing in modal)
     // and it's not already in specialized detail view
-    if (newQuantity > (quantities[item.id] || 0) && item.variations && item.variations.length > 0 && !showItemDetail) {
+    if (newQuantity > (quantities[finalId] || 0) && item.variations && item.variations.length > 0 && !showItemDetail) {
       setSelectedItem(item)
       setSelectedVariation(item.variations[0]) // Default to first variation
       setShowItemDetail(true)
@@ -412,13 +415,10 @@ export default function RestaurantDetails() {
       return;
     }
 
-    // Note: We don't block cart operations based on restaurant availability
-    // Only block if user is out of service zone
-
     // Update local state
     setQuantities((prev) => ({
       ...prev,
-      [item.id]: newQuantity,
+      [finalId]: newQuantity,
     }))
 
     // CRITICAL: Validate restaurant data before adding to cart
@@ -441,18 +441,7 @@ export default function RestaurantDetails() {
       return;
     }
 
-    // Log for debugging
-    console.log('🛒 Adding item to cart:', {
-      itemName: item.name,
-      restaurantName: restaurant.name,
-      restaurantId: validRestaurantId,
-      restaurant_id: restaurant._id,
-      restaurant_restaurantId: restaurant.restaurantId
-    });
-
     // Prepare cart item with all required properties
-    // If a variation is selected, update ID, name and price
-    const finalId = selectedVariation ? `${item.id}-${selectedVariation.name}` : item.id
     const finalName = selectedVariation ? `${item.name} (${selectedVariation.name})` : item.name
     const finalPrice = selectedVariation ? selectedVariation.price : item.price
 
@@ -461,99 +450,77 @@ export default function RestaurantDetails() {
       name: finalName,
       price: finalPrice,
       image: item.image,
-      restaurant: restaurant.name, // Use restaurant.name directly (already validated)
-      restaurantId: validRestaurantId, // Use validated restaurantId
+      restaurant: restaurant.name,
+      restaurantId: validRestaurantId,
       description: item.description,
       originalPrice: item.originalPrice || finalPrice,
-      isVeg: item.foodType === 'Veg' || item.isVeg === true, // Correctly determine isVeg
+      isVeg: item.foodType === 'Veg' || item.isVeg === true,
       variation: selectedVariation ? selectedVariation.name : null
     }
 
     // Get source position for animation from event target
-    // Prefer currentTarget (the button) over target (might be icon inside button)
     let sourcePosition = null
     if (event) {
-      // Use currentTarget (the button element) for accurate button position
-      // If currentTarget is not available, try to find the button element
       let buttonElement = event.currentTarget
       if (!buttonElement && event.target) {
-        // If we clicked on an icon inside, find the closest button
         buttonElement = event.target.closest('button') || event.target
       }
 
       if (buttonElement) {
-        // Store button reference and current viewport position
-        // We'll recalculate position right before animation to account for scroll
         const rect = buttonElement.getBoundingClientRect()
         const scrollX = window.pageXOffset || window.scrollX || 0
         const scrollY = window.pageYOffset || window.scrollY || 0
 
-        // Store both viewport position and scroll at capture time
-        // This allows us to adjust for scroll changes later
         sourcePosition = {
-          // Viewport-relative position at capture time
           viewportX: rect.left + rect.width / 2,
           viewportY: rect.top + rect.height / 2,
-          // Scroll position at capture time
           scrollX: scrollX,
           scrollY: scrollY,
-          // Store button identifier to potentially find it again
-          itemId: item.id,
+          itemId: finalId,
         }
       }
     }
 
     // Update cart context
     if (newQuantity <= 0) {
-      // Pass sourcePosition and product info for removal animation
       const productInfo = {
-        id: item.id,
-        name: item.name,
+        id: finalId,
+        name: finalName,
         imageUrl: item.image,
       }
-      removeFromCart(item.id, sourcePosition, productInfo)
+      removeFromCart(finalId, sourcePosition, productInfo)
     } else {
-      const existingCartItem = getCartItem(item.id)
+      const existingCartItem = getCartItem(finalId)
       if (existingCartItem) {
-        // Prepare product info for animation
         const productInfo = {
-          id: item.id,
-          name: item.name,
+          id: finalId,
+          name: finalName,
           imageUrl: item.image,
         }
 
-        // If incrementing quantity, trigger add animation with sourcePosition
         if (newQuantity > existingCartItem.quantity && sourcePosition) {
           try {
             addToCart(cartItem, sourcePosition)
             if (newQuantity > existingCartItem.quantity + 1) {
-              updateQuantity(item.id, newQuantity)
+              updateQuantity(finalId, newQuantity)
             }
           } catch (error) {
-            // Handle restaurant mismatch error
             console.error('❌ Error adding item to cart:', error);
             toast.error(error.message || 'Cannot add item from different restaurant. Please clear cart first.');
-            return; // Don't update quantity if add failed
+            return;
           }
-        }
-        // If decreasing quantity, trigger removal animation with sourcePosition
-        else if (newQuantity < existingCartItem.quantity && sourcePosition) {
-          updateQuantity(item.id, newQuantity, sourcePosition, productInfo)
-        }
-        // Otherwise just update quantity without animation
-        else {
-          updateQuantity(item.id, newQuantity)
+        } else if (newQuantity < existingCartItem.quantity && sourcePosition) {
+          updateQuantity(finalId, newQuantity, sourcePosition, productInfo)
+        } else {
+          updateQuantity(finalId, newQuantity)
         }
       } else {
-        // Add to cart first (adds with quantity 1), then update to desired quantity
-        // Pass sourcePosition when adding a new item
         try {
           addToCart(cartItem, sourcePosition)
           if (newQuantity > 1) {
-            updateQuantity(item.id, newQuantity)
+            updateQuantity(finalId, newQuantity)
           }
         } catch (error) {
-          // Handle restaurant mismatch error
           console.error('❌ Error adding item to cart:', error);
           toast.error(error.message || 'Cannot add item from different restaurant. Please clear cart first.');
         }
