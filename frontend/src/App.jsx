@@ -178,16 +178,16 @@ export default function App() {
           />
 
 
-          <Route path="/usermain" element={<HomePage />} />
-          <Route path="/usermain/categories" element={<CategoriesPage />} />
-          <Route path="/usermain/category/:categoryName" element={<CategoryFoodsPage />} />
-          <Route path="/usermain/food/:id" element={<FoodDetailPage />} />
-          <Route path="/usermain/cart" element={<CartPage />} />
-          <Route path="/usermain/checkout" element={<CheckoutPage />} />
-          <Route path="/usermain/payment" element={<PaymentPage />} />
-          <Route path="/usermain/orders" element={<OrdersPage />} />
-          <Route path="/usermain/orders/:orderId" element={<OrderDetailsPage />} />
-          <Route path="/usermain/wishlist" element={<WishlistPage />} />
+          <Route path="/usermain" element={<ProtectedRoute requiredRole="user" loginPath="/auth/sign-in"><HomePage /></ProtectedRoute>} />
+          <Route path="/usermain/categories" element={<ProtectedRoute requiredRole="user" loginPath="/auth/sign-in"><CategoriesPage /></ProtectedRoute>} />
+          <Route path="/usermain/category/:categoryName" element={<ProtectedRoute requiredRole="user" loginPath="/auth/sign-in"><CategoryFoodsPage /></ProtectedRoute>} />
+          <Route path="/usermain/food/:id" element={<ProtectedRoute requiredRole="user" loginPath="/auth/sign-in"><FoodDetailPage /></ProtectedRoute>} />
+          <Route path="/usermain/cart" element={<ProtectedRoute requiredRole="user" loginPath="/auth/sign-in"><CartPage /></ProtectedRoute>} />
+          <Route path="/usermain/checkout" element={<ProtectedRoute requiredRole="user" loginPath="/auth/sign-in"><CheckoutPage /></ProtectedRoute>} />
+          <Route path="/usermain/payment" element={<ProtectedRoute requiredRole="user" loginPath="/auth/sign-in"><PaymentPage /></ProtectedRoute>} />
+          <Route path="/usermain/orders" element={<ProtectedRoute requiredRole="user" loginPath="/auth/sign-in"><OrdersPage /></ProtectedRoute>} />
+          <Route path="/usermain/orders/:orderId" element={<ProtectedRoute requiredRole="user" loginPath="/auth/sign-in"><OrderDetailsPage /></ProtectedRoute>} />
+          <Route path="/usermain/wishlist" element={<ProtectedRoute requiredRole="user" loginPath="/auth/sign-in"><WishlistPage /></ProtectedRoute>} />
 
           {/* Restaurant Protected Routes - Old Routes */}
           <Route

@@ -2338,13 +2338,13 @@ export const diningAPI = {
 // Export hero banner API helper functions
 export const heroBannerAPI = {
   // Get Top 10 restaurants (public)
-  getTop10Restaurants: () => {
-    return apiClient.get(API_ENDPOINTS.HERO_BANNER.TOP_10_PUBLIC);
+  getTop10Restaurants: (params = {}) => {
+    return apiClient.get(API_ENDPOINTS.HERO_BANNER.TOP_10_PUBLIC, { params });
   },
 
   // Get Gourmet restaurants (public)
-  getGourmetRestaurants: () => {
-    return apiClient.get(API_ENDPOINTS.HERO_BANNER.GOURMET_PUBLIC);
+  getGourmetRestaurants: (params = {}) => {
+    return apiClient.get(API_ENDPOINTS.HERO_BANNER.GOURMET_PUBLIC, { params });
   },
 };
 

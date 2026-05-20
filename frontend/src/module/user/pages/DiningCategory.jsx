@@ -7,7 +7,7 @@ import AnimatedPage from "../components/AnimatedPage"
 import { useLocationSelector } from "../components/UserLayout"
 import { useLocation as useLocationHook } from "../hooks/useLocation"
 import { useProfile } from "../context/ProfileContext"
-import { restaurantAPI } from "@/lib/api"
+import { diningAPI } from "@/lib/api"
 import { useZone } from "../hooks/useZone"
 
 export default function DiningCategory() {
@@ -25,8 +25,9 @@ export default function DiningCategory() {
   const filterSectionRefs = useRef({})
   const rightContentRef = useRef(null)
   const { openLocationSelector } = useLocationSelector()
-  const { location, loading: locationLoading } = useLocationHook()
-  const { zoneId } = useZone(location)
+  const locationState = useLocationHook()
+  const { location, loading: locationLoading } = locationState
+  const { zoneId } = useZone(locationState)
   const { addFavorite, removeFavorite, isFavorite } = useProfile()
   const cityName = location?.city || "Select"
 
@@ -35,24 +36,24 @@ export default function DiningCategory() {
     const fetchRestaurants = async () => {
       try {
         setIsLoading(true)
-        const response = await restaurantAPI.getRestaurants(zoneId ? { zoneId } : (location?.city ? { city: location.city } : {}))
+        const response = await diningAPI.getRestaurants(zoneId ? { zoneId } : (location?.city ? { city: location.city } : {}))
         if (response.data && response.data.success) {
           // Map backend data to UI format
-          const mappedData = (response.data.data.restaurants || response.data.data || [])
+          const mappedData = (response.data.data || [])
             .filter(r => r.diningSettings?.isEnabled !== false)
             .map(r => ({
               id: r._id || r.id,
               name: r.name,
-              rating: r.rating || r.avgRating || 0,
-              location: r.location?.addressLine1 || r.address || "Indore",
-              distance: "2.5 km", // Placeholder as we don't have user geo-coords to calc
-              cuisine: Array.isArray(r.cuisines) ? r.cuisines[0] : (r.cuisine || "Multi-cuisine"),
+              rating: r.rating || 0,
+              location: r.location || "Indore",
+              distance: r.distance || "2.5 km",
+              cuisine: r.cuisine || "Multi-cuisine",
               price: r.costForTwo ? `₹${r.costForTwo} for two` : "Price not available",
               image: r.coverImage || r.profileImage?.url || r.logo || "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&h=600&fit=crop",
               offer: r.discount ? `Flat ${r.discount}% OFF` : "Great Offers",
-              deliveryTime: r.deliveryTime ? `${r.deliveryTime} mins` : "30-40 mins",
-              featuredDish: "Special", // Placeholder
-              featuredPrice: 250, // Placeholder
+              deliveryTime: r.deliveryTime || "30-40 mins",
+              featuredDish: r.featuredDish || "Special",
+              featuredPrice: r.featuredPrice || 250,
               diningType: r.diningSettings?.diningType,
             }))
           setRestaurants(mappedData)

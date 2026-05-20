@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { heroBannerAPI } from "@/lib/api"
 import { toast } from "sonner"
+import { useLocation } from "../hooks/useLocation"
+import { useZone } from "../hooks/useZone"
 
 // Import banner
 import gourmetBanner from "@/assets/groumetpagebanner.png"
@@ -16,13 +18,22 @@ export default function Gourmet() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
+  const userLocation = useLocation()
+  const { zoneId, zoneStatus } = useZone(userLocation)
+
   // Fetch Gourmet restaurants from API
   useEffect(() => {
     const fetchGourmetRestaurants = async () => {
+      if (zoneStatus === 'loading') return;
+      if (!zoneId) {
+        setGourmetRestaurants([]);
+        setLoading(false);
+        return;
+      }
       try {
         setLoading(true)
         setError(null)
-        const response = await heroBannerAPI.getGourmetRestaurants()
+        const response = await heroBannerAPI.getGourmetRestaurants({ zoneId })
         const data = response?.data?.data
 
         if (data && data.restaurants) {
@@ -42,7 +53,7 @@ export default function Gourmet() {
     }
 
     fetchGourmetRestaurants()
-  }, [])
+  }, [zoneId, zoneStatus])
 
   const toggleFavorite = (id) => {
     setFavorites(prev => {

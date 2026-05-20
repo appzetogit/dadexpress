@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { heroBannerAPI } from "@/lib/api"
 import { toast } from "sonner"
+import { useLocation } from "../hooks/useLocation"
+import { useZone } from "../hooks/useZone"
 
 // Import banner
 import top10Banner from "@/assets/top10pagebanner.png"
@@ -16,13 +18,22 @@ export default function Top10() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
+  const userLocation = useLocation()
+  const { zoneId, zoneStatus } = useZone(userLocation)
+
   // Fetch Top 10 restaurants from API
   useEffect(() => {
     const fetchTop10Restaurants = async () => {
+      if (zoneStatus === 'loading') return;
+      if (!zoneId) {
+        setTop10Restaurants([]);
+        setLoading(false);
+        return;
+      }
       try {
         setLoading(true)
         setError(null)
-        const response = await heroBannerAPI.getTop10Restaurants()
+        const response = await heroBannerAPI.getTop10Restaurants({ zoneId })
         const data = response?.data?.data
 
         if (data && data.restaurants) {
@@ -42,7 +53,7 @@ export default function Top10() {
     }
 
     fetchTop10Restaurants()
-  }, [])
+  }, [zoneId, zoneStatus])
 
   const toggleFavorite = (id) => {
     setFavorites(prev => {

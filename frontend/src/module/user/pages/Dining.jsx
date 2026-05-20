@@ -68,8 +68,9 @@ export default function Dining() {
   const rightContentRef = useRef(null)
   const { openSearch, closeSearch, setSearchValue } = useSearchOverlay()
   const { openLocationSelector } = useLocationSelector()
-  const { location, loading: locationLoading, isManualMode } = useLocationHook()
-  const { zoneId } = useZone(location)
+  const locationState = useLocationHook()
+  const { location, loading: locationLoading, isManualMode } = locationState
+  const { zoneId } = useZone(locationState)
   const { addFavorite, removeFavorite, isFavorite } = useProfile()
 
   const [categories, setCategories] = useState([])

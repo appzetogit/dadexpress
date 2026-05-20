@@ -112,8 +112,9 @@ export default function DiningExplore50() {
   const rightContentRef = useRef(null)
   const { openSearch, closeSearch, setSearchValue } = useSearchOverlay()
   const { openLocationSelector } = useLocationSelector()
-  const { location, loading: locationLoading } = useLocationHook()
-  const { zoneId } = useZone(location)
+  const locationState = useLocationHook()
+  const { location, loading: locationLoading } = locationState
+  const { zoneId } = useZone(locationState)
   const { addFavorite, removeFavorite, isFavorite } = useProfile()
   const [restaurantList, setRestaurantList] = useState([])
   const [fetching, setFetching] = useState(true)

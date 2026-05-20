@@ -20,11 +20,19 @@ export default function Offers() {
   const [error, setError] = useState(null)
 
   const userLocation = useLocation()
-  const { zoneId } = useZone(userLocation)
+  const { zoneId, zoneStatus } = useZone(userLocation)
 
   // Fetch offers from API
   useEffect(() => {
     const fetchOffers = async () => {
+      if (zoneStatus === 'loading') return;
+      if (!zoneId) {
+        setOffers([]);
+        setGroupedOffers({});
+        setGroupedByRestaurant([]);
+        setLoading(false);
+        return;
+      }
       try {
         setLoading(true)
         setError(null)
@@ -47,7 +55,7 @@ export default function Offers() {
     }
 
     fetchOffers()
-  }, [zoneId])
+  }, [zoneId, zoneStatus])
 
   return (
     <div className="min-h-screen bg-white dark:bg-[#0a0a0a]">

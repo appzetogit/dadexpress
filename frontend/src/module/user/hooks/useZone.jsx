@@ -1,11 +1,20 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { zoneAPI } from '@/lib/api'
+import { useProfile } from '../context/ProfileContext'
+
 
 /**
  * Hook to detect and manage user's zone based on location
  * Automatically detects zone when location is available
  */
-export function useZone(location) {
+export function useZone(locationInput) {
+  const { addresses = [] } = useProfile()
+  // Normalize the input: if locationInput is the object returned from useLocation() hook
+  // which contains a "location" property, extract that. Otherwise use locationInput.
+  const location = locationInput && typeof locationInput === 'object' && ('location' in locationInput)
+    ? locationInput.location
+    : locationInput;
+
   const [zoneId, setZoneId] = useState(null)
   const [zoneStatus, setZoneStatus] = useState('loading') // 'loading' | 'IN_SERVICE' | 'OUT_OF_SERVICE'
   const [zone, setZone] = useState(null)
@@ -13,10 +22,43 @@ export function useZone(location) {
   const [error, setError] = useState(null)
   const prevCoordsRef = useRef({ latitude: null, longitude: null })
 
+  // Listen to manual address selection changes reactively
+  const [selectedAddressState, setSelectedAddressState] = useState(() => {
+    const selectedRaw = localStorage.getItem("selectedDeliveryAddress")
+    try {
+      return selectedRaw ? JSON.parse(selectedRaw) : null
+    } catch {
+      return null
+    }
+  })
+
+  useEffect(() => {
+    const handler = () => {
+      const selectedRaw = localStorage.getItem("selectedDeliveryAddress")
+      try {
+        setSelectedAddressState(selectedRaw ? JSON.parse(selectedRaw) : null)
+      } catch {
+        setSelectedAddressState(null)
+      }
+    }
+    window.addEventListener('delivery-address-selected', handler)
+    return () => {
+      window.removeEventListener('delivery-address-selected', handler)
+    }
+  }, [])
+
+  const isManualMode = !!(locationInput?.isManualMode || (selectedAddressState?.mode === 'saved' && selectedAddressState?.addressId))
+
   const toNumber = (value) => {
     const parsed = Number(value)
     return Number.isFinite(parsed) ? parsed : null
   }
+
+  const getManualAddressDetails = useCallback(() => {
+    if (!isManualMode || !selectedAddressState?.addressId) return null
+    const matched = addresses.find(addr => String(addr.id || addr._id) === String(selectedAddressState.addressId))
+    return matched || null
+  }, [isManualMode, selectedAddressState?.addressId, addresses])
 
   const calculateDistanceKm = (lat1, lng1, lat2, lng2) => {
     const R = 6371
@@ -113,8 +155,61 @@ export function useZone(location) {
     }
   }, [])
 
-  // Auto-detect zone when location changes
+  // Auto-detect zone when location changes or manual address selection changes
   useEffect(() => {
+    const manualAddress = getManualAddressDetails()
+    
+    // Extract manual details if available
+    let manualLat = null
+    let manualLng = null
+    let manualZoneId = null
+    let manualZone = null
+    
+    if (manualAddress) {
+      const coords = Array.isArray(manualAddress.location?.coordinates)
+        ? manualAddress.location.coordinates
+        : null
+      manualLng = toNumber(coords?.[0] ?? manualAddress.longitude ?? manualAddress.lng)
+      manualLat = toNumber(coords?.[1] ?? manualAddress.latitude ?? manualAddress.lat)
+      manualZoneId = manualAddress.zoneId || manualAddress.zone?._id || manualAddress.zone?.id || null
+      manualZone = manualAddress.zone || null
+    }
+
+    const activeLat = isManualMode ? manualLat : location?.latitude
+    const activeLng = isManualMode ? manualLng : location?.longitude
+
+    if (isManualMode) {
+      if (activeLat && activeLng) {
+        // Saved/manual addresses can carry stale zoneId data.
+        // Always prefer fresh polygon detection from the selected address coordinates.
+        const coordThreshold = 0.0001
+        const coordsChanged = 
+          !prevCoordsRef.current.latitude ||
+          !prevCoordsRef.current.longitude ||
+          Math.abs(prevCoordsRef.current.latitude - activeLat) > coordThreshold ||
+          Math.abs(prevCoordsRef.current.longitude - activeLng) > coordThreshold
+
+        if (coordsChanged) {
+          prevCoordsRef.current = { latitude: activeLat, longitude: activeLng }
+          detectZone(activeLat, activeLng)
+        }
+        return
+      } else if (manualZoneId) {
+        // Fall back to persisted zone only when the address has no usable coordinates.
+        setZoneId(manualZoneId)
+        setZone(manualZone)
+        setZoneStatus('IN_SERVICE')
+        setLoading(false)
+        setError(null)
+        return
+      } else {
+        // We are in manual mode but address details/coordinates are loading or not available yet
+        setZoneStatus('loading')
+        return
+      }
+    }
+
+    // --- GPS MODE / NON-MANUAL MODE ---
     const lat = location?.latitude
     const lng = location?.longitude
 
@@ -179,16 +274,28 @@ export function useZone(location) {
         }
       }
     }
-  }, [location?.latitude, location?.longitude, detectZone])
+  }, [location?.latitude, location?.longitude, detectZone, isManualMode, getManualAddressDetails, locationInput?.isManualMode])
 
   // Manual refresh zone
   const refreshZone = useCallback(() => {
-    const lat = location?.latitude
-    const lng = location?.longitude
-    if (lat && lng) {
-      detectZone(lat, lng)
+    let activeLat = location?.latitude
+    let activeLng = location?.longitude
+
+    if (isManualMode) {
+      const manualAddress = getManualAddressDetails()
+      if (manualAddress) {
+        const coords = Array.isArray(manualAddress.location?.coordinates)
+          ? manualAddress.location.coordinates
+          : null
+        activeLng = toNumber(coords?.[0] ?? manualAddress.longitude ?? manualAddress.lng)
+        activeLat = toNumber(coords?.[1] ?? manualAddress.latitude ?? manualAddress.lat)
+      }
     }
-  }, [location?.latitude, location?.longitude, detectZone])
+
+    if (activeLat && activeLng) {
+      detectZone(activeLat, activeLng)
+    }
+  }, [location?.latitude, location?.longitude, detectZone, isManualMode, getManualAddressDetails])
 
   return {
     zoneId,
