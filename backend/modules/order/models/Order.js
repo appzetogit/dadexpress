@@ -377,4 +377,28 @@ orderSchema.pre('save', async function() {
   }
 });
 
+// Post-save hook to process referral rewards on direct model save
+orderSchema.post('save', async function(doc) {
+  if (doc.status === 'delivered') {
+    try {
+      const { default: referralService } = await import('../../../shared/services/referralService.js');
+      await referralService.processOrderReferral(doc);
+    } catch (err) {
+      console.error('❌ [ORDER-MODEL] Error triggering referral rewards on save:', err.message);
+    }
+  }
+});
+
+// Post-findOneAndUpdate hook to process referral rewards on findOneAndUpdate status change (like findByIdAndUpdate)
+orderSchema.post('findOneAndUpdate', async function(doc) {
+  if (doc && doc.status === 'delivered') {
+    try {
+      const { default: referralService } = await import('../../../shared/services/referralService.js');
+      await referralService.processOrderReferral(doc);
+    } catch (err) {
+      console.error('❌ [ORDER-MODEL] Error triggering referral rewards on findOneAndUpdate:', err.message);
+    }
+  }
+});
+
 export default mongoose.models.Order || mongoose.model('Order', orderSchema);

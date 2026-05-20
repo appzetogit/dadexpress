@@ -446,24 +446,25 @@ export const getPublicOffers = asyncHandler(async (req, res) => {
 
     const query = { status: 'active' };
 
-    // If zoneId is provided, filter restaurants by zone first
+    // Filter restaurants by zone strictly (default to empty list if zoneId is missing or invalid)
+    let restaurantIdsInZone = [];
     if (zoneId && mongoose.Types.ObjectId.isValid(zoneId)) {
       const userZone = await Zone.findById(zoneId).lean();
       if (userZone && userZone.coordinates) {
         // Find all active restaurants
         const allRestaurants = await Restaurant.find({ isActive: true }).select('location').lean();
         // Filter those inside the zone
-        const restaurantIdsInZone = allRestaurants
+        restaurantIdsInZone = allRestaurants
           .filter(r => {
             const lat = r.location?.latitude || (Array.isArray(r.location?.coordinates) ? r.location.coordinates[1] : null);
             const lng = r.location?.longitude || (Array.isArray(r.location?.coordinates) ? r.location.coordinates[0] : null);
             return isPointInZone(lat, lng, userZone.coordinates);
           })
           .map(r => r._id);
-        
-        query.restaurant = { $in: restaurantIdsInZone };
       }
     }
+    
+    query.restaurant = { $in: restaurantIdsInZone };
     
     // Find active offers based on our query
     const offers = await Offer.find(query)

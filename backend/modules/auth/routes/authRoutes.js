@@ -47,7 +47,8 @@ const verifyOTPSchema = Joi.object({
   role: Joi.string().valid('user', 'restaurant', 'delivery', 'admin').default('user'),
   password: Joi.string().min(6).max(100).optional(),
   fcmToken: Joi.string().optional().allow(null, ''),
-  platform: Joi.string().valid('web', 'ios', 'android', 'app').optional().default('web')
+  platform: Joi.string().valid('web', 'ios', 'android', 'app').optional().default('web'),
+  referralCode: Joi.string().trim().max(40).optional().allow(null, '')
 }).or('phone', 'email');
 
 const registerSchema = Joi.object({
@@ -57,7 +58,8 @@ const registerSchema = Joi.object({
   phone: Joi.string().optional().pattern(/^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/),
   role: Joi.string().valid('user', 'restaurant', 'delivery', 'admin').default('user'),
   fcmToken: Joi.string().optional().allow(null, ''),
-  platform: Joi.string().valid('web', 'ios', 'android', 'app').optional().default('web')
+  platform: Joi.string().valid('web', 'ios', 'android', 'app').optional().default('web'),
+  referralCode: Joi.string().trim().max(40).optional().allow(null, '')
 });
 
 const loginSchema = Joi.object({

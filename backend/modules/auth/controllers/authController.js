@@ -220,7 +220,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       // Handle referral code
       const { referralCode } = req.body;
       if (referralCode && userRole === 'user') {
-        const referrer = await User.findOne({ referralCode, role: 'user' });
+        const referrer = await User.findOne({ referralCode: referralCode.trim().toUpperCase(), role: 'user' });
         if (referrer) {
           userData.referredBy = referrer._id;
         }
@@ -411,7 +411,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         // Handle referral code for auto-registration
         const { referralCode } = req.body;
         if (referralCode && userRole === 'user') {
-          const referrer = await User.findOne({ referralCode, role: 'user' });
+          const referrer = await User.findOne({ referralCode: referralCode.trim().toUpperCase(), role: 'user' });
           if (referrer) {
             userData.referredBy = referrer._id;
           }
@@ -653,7 +653,7 @@ export const register = asyncHandler(async (req, res) => {
   const { referralCode } = req.body;
   let referredBy = null;
   if (referralCode && userRole === 'user') {
-    const referrer = await User.findOne({ referralCode, role: 'user' });
+    const referrer = await User.findOne({ referralCode: referralCode.trim().toUpperCase(), role: 'user' });
     if (referrer) {
       referredBy = referrer._id;
     }
@@ -1075,7 +1075,7 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
       const { referralCode } = req.body;
       let referredBy = null;
       if (referralCode && userRole === 'user') {
-        const referrer = await User.findOne({ referralCode, role: 'user' });
+        const referrer = await User.findOne({ referralCode: referralCode.trim().toUpperCase(), role: 'user' });
         if (referrer) {
           referredBy = referrer._id;
         }
@@ -1451,7 +1451,7 @@ export const appleLogin = asyncHandler(async (req, res) => {
       const { referralCode } = req.body;
       let referredBy = null;
       if (referralCode && userRole === 'user') {
-        const referrer = await User.findOne({ referralCode, role: 'user' });
+        const referrer = await User.findOne({ referralCode: referralCode.trim().toUpperCase(), role: 'user' });
         if (referrer) {
           referredBy = referrer._id;
         }

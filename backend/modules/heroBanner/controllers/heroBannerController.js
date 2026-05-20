@@ -12,6 +12,33 @@ import { successResponse, errorResponse } from '../../../shared/utils/response.j
 import { uploadToCloudinary } from '../../../shared/utils/cloudinaryService.js';
 import { cloudinary } from '../../../config/cloudinary.js';
 import mongoose from 'mongoose';
+import Zone from '../../admin/models/Zone.js';
+
+/**
+ * Check if a point is within a zone polygon using ray casting algorithm
+ */
+function isPointInZone(lat, lng, zoneCoordinates) {
+  if (lat == null || lng == null) return false;
+  if (!zoneCoordinates || zoneCoordinates.length < 3) return false;
+  
+  let inside = false;
+  for (let i = 0, j = zoneCoordinates.length - 1; i < zoneCoordinates.length; j = i++) {
+    const coordI = zoneCoordinates[i];
+    const coordJ = zoneCoordinates[j];
+    
+    const xi = typeof coordI === 'object' ? (coordI.latitude || coordI.lat) : null;
+    const yi = typeof coordI === 'object' ? (coordI.longitude || coordI.lng) : null;
+    const xj = typeof coordJ === 'object' ? (coordJ.latitude || coordJ.lat) : null;
+    const yj = typeof coordJ === 'object' ? (coordJ.longitude || coordJ.lng) : null;
+    
+    if (xi === null || yi === null || xj === null || yj === null) continue;
+    
+    const intersect = ((yi > lng) !== (yj > lng)) && 
+                     (lat < (xj - xi) * (lng - yi) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
 
 /**
  * Get all active hero banners (public endpoint)
@@ -1305,10 +1332,30 @@ export const getAllTop10Restaurants = async (req, res) => {
  */
 export const getTop10Restaurants = async (req, res) => {
   try {
-    const restaurants = await Top10Restaurant.find({ isActive: true })
-      .populate('restaurant', 'name restaurantId slug profileImage coverImages menuImages rating estimatedDeliveryTime distance offer featuredDish featuredPrice cuisines priceRange')
+    const { zoneId } = req.query;
+    console.log('[TOP-10] PUBLIC API REQUEST - zoneId:', zoneId);
+    let restaurantIdsInZone = [];
+    if (zoneId && mongoose.Types.ObjectId.isValid(zoneId)) {
+      const userZone = await Zone.findById(zoneId).lean();
+      if (userZone && userZone.coordinates) {
+        const allRestaurants = await Restaurant.find({ isActive: true }).select('location').lean();
+        restaurantIdsInZone = allRestaurants
+          .filter(r => {
+            const lat = r.location?.latitude || (Array.isArray(r.location?.coordinates) ? r.location.coordinates[1] : null);
+            const lng = r.location?.longitude || (Array.isArray(r.location?.coordinates) ? r.location.coordinates[0] : null);
+            return isPointInZone(lat, lng, userZone.coordinates);
+          })
+          .map(r => r._id.toString());
+        console.log('[TOP-10] restaurantIdsInZone:', restaurantIdsInZone);
+      }
+    }
+
+    let restaurants = await Top10Restaurant.find({ isActive: true })
+      .populate('restaurant', 'name restaurantId slug profileImage coverImages menuImages rating estimatedDeliveryTime distance offer featuredDish featuredPrice cuisines priceRange location')
       .sort({ rank: 1, order: 1 })
       .lean();
+
+    restaurants = restaurants.filter(r => r.restaurant && restaurantIdsInZone.includes(r.restaurant._id.toString()));
 
     // Fetch menu items for each restaurant
     const restaurantsWithMenu = await Promise.all(restaurants.map(async (r) => {
@@ -1578,10 +1625,30 @@ export const getAllGourmetRestaurants = async (req, res) => {
  */
 export const getGourmetRestaurants = async (req, res) => {
   try {
-    const restaurants = await GourmetRestaurant.find({ isActive: true })
-      .populate('restaurant', 'name restaurantId slug profileImage coverImages menuImages rating estimatedDeliveryTime distance offer featuredDish featuredPrice cuisines priceRange')
+    const { zoneId } = req.query;
+    console.log('[GOURMET] PUBLIC API REQUEST - zoneId:', zoneId);
+    let restaurantIdsInZone = [];
+    if (zoneId && mongoose.Types.ObjectId.isValid(zoneId)) {
+      const userZone = await Zone.findById(zoneId).lean();
+      if (userZone && userZone.coordinates) {
+        const allRestaurants = await Restaurant.find({ isActive: true }).select('location').lean();
+        restaurantIdsInZone = allRestaurants
+          .filter(r => {
+            const lat = r.location?.latitude || (Array.isArray(r.location?.coordinates) ? r.location.coordinates[1] : null);
+            const lng = r.location?.longitude || (Array.isArray(r.location?.coordinates) ? r.location.coordinates[0] : null);
+            return isPointInZone(lat, lng, userZone.coordinates);
+          })
+          .map(r => r._id.toString());
+        console.log('[GOURMET] restaurantIdsInZone:', restaurantIdsInZone);
+      }
+    }
+
+    let restaurants = await GourmetRestaurant.find({ isActive: true })
+      .populate('restaurant', 'name restaurantId slug profileImage coverImages menuImages rating estimatedDeliveryTime distance offer featuredDish featuredPrice cuisines priceRange location')
       .sort({ order: 1, createdAt: -1 })
       .lean();
+
+    restaurants = restaurants.filter(r => r.restaurant && restaurantIdsInZone.includes(r.restaurant._id.toString()));
 
     // Fetch menu items for each restaurant
     const restaurantsWithMenu = await Promise.all(restaurants.map(async (r) => {

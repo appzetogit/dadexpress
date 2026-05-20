@@ -287,16 +287,16 @@ export const getOfferBanners = async (req, res) => {
 
     if (zoneId) {
       const zone = await Zone.findById(zoneId);
-      if (zone && zone.coordinates && zone.coordinates.coordinates) {
-        const polygon = zone.coordinates.coordinates[0];
+      if (zone && Array.isArray(zone.coordinates) && zone.coordinates.length >= 3) {
         banners = banners.filter(banner => {
-          if (!banner.restaurant || !banner.restaurant.location || !banner.restaurant.location.coordinates) {
+          const restaurantCoords = banner.restaurant?.location?.coordinates;
+          if (!banner.restaurant || !Array.isArray(restaurantCoords) || restaurantCoords.length < 2) {
             return false;
           }
           return isPointInZone(
-            banner.restaurant.location.coordinates[1],
-            banner.restaurant.location.coordinates[0],
-            polygon
+            restaurantCoords[1],
+            restaurantCoords[0],
+            zone.coordinates
           );
         });
       }
