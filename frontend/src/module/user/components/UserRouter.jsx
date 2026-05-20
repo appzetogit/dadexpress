@@ -106,19 +106,15 @@ export default function UserRouter() {
           {/* Home & Discovery */}
           <Route
             path="/"
-            element={
-              <ProtectedRoute requiredRole="user" loginPath="/auth/sign-in">
-                <Home />
-              </ProtectedRoute>
-            }
+            element={<Home />}
           />
-          <Route path="/dining" element={<ProtectedRoute requiredRole="user" loginPath="/auth/sign-in"><Dining /></ProtectedRoute>} />
-          <Route path="/dining/restaurants" element={<ProtectedRoute requiredRole="user" loginPath="/auth/sign-in"><DiningRestaurants /></ProtectedRoute>} />
-          <Route path="/dining/:category" element={<ProtectedRoute requiredRole="user" loginPath="/auth/sign-in"><DiningCategory /></ProtectedRoute>} />
-          <Route path="/dining/explore/upto50" element={<ProtectedRoute requiredRole="user" loginPath="/auth/sign-in"><DiningExplore50 /></ProtectedRoute>} />
-          <Route path="/dining/explore/near-rated" element={<ProtectedRoute requiredRole="user" loginPath="/auth/sign-in"><DiningExploreNear /></ProtectedRoute>} />
-          <Route path="/dining/coffee" element={<ProtectedRoute requiredRole="user" loginPath="/auth/sign-in"><Coffee /></ProtectedRoute>} />
-          <Route path="/dining/:diningType/:slug" element={<ProtectedRoute requiredRole="user" loginPath="/auth/sign-in"><DiningRestaurantDetails /></ProtectedRoute>} />
+          <Route path="/dining" element={<Dining />} />
+          <Route path="/dining/restaurants" element={<DiningRestaurants />} />
+          <Route path="/dining/:category" element={<DiningCategory />} />
+          <Route path="/dining/explore/upto50" element={<DiningExplore50 />} />
+          <Route path="/dining/explore/near-rated" element={<DiningExploreNear />} />
+          <Route path="/dining/coffee" element={<Coffee />} />
+          <Route path="/dining/:diningType/:slug" element={<DiningRestaurantDetails />} />
           <Route
             path="/dining/book/:slug"
             element={
@@ -151,12 +147,12 @@ export default function UserRouter() {
               </ProtectedRoute>
             }
           />
-          <Route path="/under-250" element={<ProtectedRoute requiredRole="user" loginPath="/auth/sign-in"><Under250 /></ProtectedRoute>} />
-          <Route path="/category/:category" element={<ProtectedRoute requiredRole="user" loginPath="/auth/sign-in"><CategoryPage /></ProtectedRoute>} />
-          <Route path="/restaurants" element={<ProtectedRoute requiredRole="user" loginPath="/auth/sign-in"><Restaurants /></ProtectedRoute>} />
-          <Route path="/restaurants/:slug" element={<ProtectedRoute requiredRole="user" loginPath="/auth/sign-in"><RestaurantDetails /></ProtectedRoute>} />
-          <Route path="/search" element={<ProtectedRoute requiredRole="user" loginPath="/auth/sign-in"><SearchResults /></ProtectedRoute>} />
-          <Route path="/product/:id" element={<ProtectedRoute requiredRole="user" loginPath="/auth/sign-in"><ProductDetail /></ProtectedRoute>} />
+          <Route path="/under-250" element={<Under250 />} />
+          <Route path="/category/:category" element={<CategoryPage />} />
+          <Route path="/restaurants" element={<Restaurants />} />
+          <Route path="/restaurants/:slug" element={<RestaurantDetails />} />
+          <Route path="/search" element={<SearchResults />} />
+          <Route path="/product/:id" element={<ProductDetail />} />
 
           {/* Cart - Protected */}
           <Route
@@ -211,16 +207,16 @@ export default function UserRouter() {
           />
 
           {/* Offers */}
-          <Route path="/offers" element={<ProtectedRoute requiredRole="user" loginPath="/auth/sign-in"><Offers /></ProtectedRoute>} />
+          <Route path="/offers" element={<Offers />} />
 
           {/* Gourmet */}
-          <Route path="/gourmet" element={<ProtectedRoute requiredRole="user" loginPath="/auth/sign-in"><Gourmet /></ProtectedRoute>} />
+          <Route path="/gourmet" element={<Gourmet />} />
 
           {/* Top 10 */}
-          <Route path="/top-10" element={<ProtectedRoute requiredRole="user" loginPath="/auth/sign-in"><Top10 /></ProtectedRoute>} />
+          <Route path="/top-10" element={<Top10 />} />
 
           {/* Collections */}
-          <Route path="/collections" element={<ProtectedRoute requiredRole="user" loginPath="/auth/sign-in"><Collections /></ProtectedRoute>} />
+          <Route path="/collections" element={<Collections />} />
           <Route
             path="/collections/:id"
             element={
@@ -231,7 +227,7 @@ export default function UserRouter() {
           />
 
           {/* Gift Cards */}
-          <Route path="/gift-card" element={<ProtectedRoute requiredRole="user" loginPath="/auth/sign-in"><GiftCards /></ProtectedRoute>} />
+          <Route path="/gift-card" element={<GiftCards />} />
           <Route
             path="/gift-card/checkout"
             element={
@@ -390,8 +386,8 @@ export default function UserRouter() {
           <Route path="/auth/callback" element={<AuthRedirect module="user"><AuthCallback /></AuthRedirect>} />
 
           {/* Help */}
-          <Route path="/help" element={<ProtectedRoute requiredRole="user" loginPath="/auth/sign-in"><Help /></ProtectedRoute>} />
-          <Route path="/help/orders/:orderId" element={<ProtectedRoute requiredRole="user" loginPath="/auth/sign-in"><OrderHelp /></ProtectedRoute>} />
+          <Route path="/help" element={<Help />} />
+          <Route path="/help/orders/:orderId" element={<OrderHelp />} />
           <Route
             path="/help/orders/:orderId/chat"
             element={
