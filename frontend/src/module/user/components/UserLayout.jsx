@@ -1,5 +1,6 @@
-import { Outlet, useLocation } from "react-router-dom"
+import { Outlet, useLocation, Navigate } from "react-router-dom"
 import { useEffect, useState, createContext, useContext, lazy, Suspense } from "react"
+import { isModuleAuthenticated } from "@/lib/utils/auth"
 import { ProfileProvider } from "../context/ProfileContext"
 
 import { CartProvider } from "../context/CartContext"
@@ -114,6 +115,15 @@ export default function UserLayout() {
     location.pathname === "/auth/sign-in" ||
     location.pathname.startsWith("/auth/") ||
     location.pathname.startsWith("/user/auth/")
+
+  // Guard: if user is not logged in AND has not explicitly pressed Skip,
+  // redirect to login screen. sessionStorage clears on tab/app close so
+  // every fresh launch will show login for unauthenticated users.
+  const isAuthenticated = isModuleAuthenticated("user")
+  const guestBrowsing = sessionStorage.getItem("guest_browsing") === "true"
+  if (!isAuthenticated && !guestBrowsing && !isUserAuthRoute) {
+    return <Navigate to="/auth/sign-in" replace />
+  }
 
   useEffect(() => {
     // Reset scroll to top whenever location changes (pathname, search, or hash)

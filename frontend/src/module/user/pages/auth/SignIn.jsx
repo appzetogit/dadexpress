@@ -126,6 +126,8 @@ export default function SignIn() {
 
       if (accessToken && appUser) {
         setAuthData("user", accessToken, appUser)
+        // Clear guest browsing flag — user is now logged in
+        sessionStorage.removeItem("guest_browsing")
         window.dispatchEvent(new Event("userAuthChanged"))
 
         // Clear any URL hash or params
@@ -471,6 +473,8 @@ export default function SignIn() {
         if (token && user) {
           appleLoginSuccess = true;
           setAuthData("user", token, user);
+          // Clear guest browsing flag — user is now logged in
+          sessionStorage.removeItem("guest_browsing");
           window.dispatchEvent(new Event("userAuthChanged"));
           debugLog("✅ Apple login successful via postMessage, navigating to /user");
           navigate("/user", { replace: true });
@@ -542,6 +546,8 @@ export default function SignIn() {
 
         if (data.accessToken && data.user) {
           setAuthData("user", data.accessToken, data.user);
+          // Clear guest browsing flag — user is now logged in
+          sessionStorage.removeItem("guest_browsing");
           window.dispatchEvent(new Event("userAuthChanged"));
           debugLog("✅ Apple login successful, navigating to /user");
           navigate("/user", { replace: true });
@@ -609,7 +615,10 @@ export default function SignIn() {
       <div className="bg-white dark:bg-[#1a1a1a] p-4 sm:p-5 md:p-6 lg:p-8 xl:p-10 flex-1 md:w-1/2 md:flex md:items-center md:justify-center md:h-screen">
         {/* Skip Button - Fixed at top right of the page */}
         <button
-          onClick={() => navigate("/")}
+          onClick={() => {
+            sessionStorage.setItem("guest_browsing", "true")
+            navigate("/")
+          }}
           className="absolute top-4 right-4 md:top-8 md:right-8 text-xs md:text-sm font-extrabold text-[#EB590E] hover:text-[#D94F0C] transition-all bg-[#FFF5EF]/90 backdrop-blur-sm px-4 py-1.5 md:px-6 md:py-2.5 rounded-full shadow-lg hover:shadow-xl active:scale-95 z-[100] flex items-center gap-2 border border-[#FFD8C2]"
         >
           Skip

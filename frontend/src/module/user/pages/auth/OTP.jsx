@@ -211,6 +211,8 @@ export default function OTP() {
 
       // Clear auth data from sessionStorage
       sessionStorage.removeItem("userAuthData")
+      // Clear guest browsing flag — user is now logged in
+      sessionStorage.removeItem("guest_browsing")
 
       // Replace old token with new one (handles cross-module login)
       setUserAuthData("user", accessToken, user)
@@ -284,6 +286,8 @@ export default function OTP() {
 
       // Clear auth data from sessionStorage
       sessionStorage.removeItem("userAuthData")
+      // Clear guest browsing flag — user is now logged in
+      sessionStorage.removeItem("guest_browsing")
 
       // Replace old token with new one (handles cross-module login)
       setUserAuthData("user", accessToken, user)
