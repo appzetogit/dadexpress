@@ -457,7 +457,7 @@ export const acceptOrder = asyncHandler(async (req, res) => {
               freshOrder.assignmentInfo = {
                 priorityNotifiedAt: new Date(),
                 priorityDeliveryPartnerIds: deliveryPartnerIds,
-                assignedBy: 'auto_accept',
+                assignedBy: 'nearest_available',
                 assignedAt: new Date(),
                 notificationPhase: 'priority'
               };
@@ -487,7 +487,7 @@ export const acceptOrder = asyncHandler(async (req, res) => {
                 freshOrder.assignmentInfo = {
                   priorityNotifiedAt: new Date(),
                   priorityDeliveryPartnerIds: deliveryPartnerIds,
-                  assignedBy: 'auto_accept_expanded',
+                  assignedBy: 'nearest_available',
                   assignedAt: new Date(),
                   notificationPhase: 'expanded'
                 };
@@ -838,7 +838,7 @@ export const markOrderPreparing = asyncHandler(async (req, res) => {
           freshOrder.assignmentInfo = {
             priorityNotifiedAt: new Date(),
             priorityDeliveryPartnerIds: deliveryPartnerIds,
-            assignedBy: 'auto_preparing',
+            assignedBy: 'nearest_available',
             assignedAt: new Date(),
             notificationPhase: 'priority'
           };
@@ -874,7 +874,7 @@ export const markOrderPreparing = asyncHandler(async (req, res) => {
             freshOrder.assignmentInfo = {
               priorityNotifiedAt: new Date(),
               priorityDeliveryPartnerIds: deliveryPartnerIds,
-              assignedBy: 'auto_preparing_expanded',
+              assignedBy: 'nearest_available',
               assignedAt: new Date(),
               notificationPhase: 'expanded'
             };
