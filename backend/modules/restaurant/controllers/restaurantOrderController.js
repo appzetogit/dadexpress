@@ -323,8 +323,13 @@ export const acceptOrder = asyncHandler(async (req, res) => {
     }
 
     // If order is already in 'preparing' state (e.g. from a double-click on frontend)
+    // But if no delivery partner assigned, still try to notify delivery boys
     if (order.status === 'preparing') {
-      return successResponse(res, 200, 'Order successfully accepted (already preparing)', { order });
+      if (order.deliveryPartnerId) {
+        return successResponse(res, 200, 'Order successfully accepted (already preparing)', { order });
+      }
+      // Order is preparing but no delivery partner - fall through to notify delivery boys
+      console.log(`ℹ️ Order ${order.orderId} already preparing but no delivery partner assigned. Will notify delivery boys.`);
     }
 
     // CRITICAL: Prevent accepting online orders that are not paid
@@ -334,22 +339,28 @@ export const acceptOrder = asyncHandler(async (req, res) => {
 
     // Allow accepting orders with status 'pending' or 'confirmed'
     // 'confirmed' status means payment is verified, restaurant can still accept
-    if (!['pending', 'confirmed'].includes(order.status)) {
+    // 'preparing' is also allowed if we fell through from above (no delivery partner assigned)
+    if (!['pending', 'confirmed', 'preparing'].includes(order.status)) {
       return errorResponse(res, 400, `Order cannot be accepted. Current status: ${order.status}`);
     }
 
     // When restaurant accepts order, it means they're starting to prepare it
     // So set status to 'preparing' and mark as confirmed if it was pending
-    if (order.status === 'pending') {
-      order.tracking.confirmed = { status: true, timestamp: new Date() };
+    // Skip if already preparing (fell through from above)
+    const wasAlreadyPreparing = order.status === 'preparing';
+    
+    if (!wasAlreadyPreparing) {
+      if (order.status === 'pending') {
+        order.tracking.confirmed = { status: true, timestamp: new Date() };
+      }
+
+      // Set status to 'preparing' when restaurant accepts
+      order.status = 'preparing';
+      order.tracking.preparing = { status: true, timestamp: new Date() };
     }
 
-    // Set status to 'preparing' when restaurant accepts
-    order.status = 'preparing';
-    order.tracking.preparing = { status: true, timestamp: new Date() };
-
     // Handle preparation time update from restaurant
-    if (preparationTime) {
+    if (preparationTime && !wasAlreadyPreparing) {
       const restaurantPrepTime = parseInt(preparationTime, 10);
       const initialPrepTime = order.preparationTime || 0;
       
@@ -388,23 +399,25 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       });
     }
 
-    await order.save();
+    if (!wasAlreadyPreparing) {
+      await order.save();
 
-    // Trigger ETA recalculation for restaurant accepted event
-    try {
-      const etaEventService = (await import('../../order/services/etaEventService.js')).default;
-      await etaEventService.handleRestaurantAccepted(order._id.toString(), new Date());
-      console.log(`✅ ETA updated after restaurant accepted order ${order.orderId}`);
-    } catch (etaError) {
-      console.error('Error updating ETA after restaurant accept:', etaError);
-      // Continue even if ETA update fails
-    }
+      // Trigger ETA recalculation for restaurant accepted event
+      try {
+        const etaEventService = (await import('../../order/services/etaEventService.js')).default;
+        await etaEventService.handleRestaurantAccepted(order._id.toString(), new Date());
+        console.log(`✅ ETA updated after restaurant accepted order ${order.orderId}`);
+      } catch (etaError) {
+        console.error('Error updating ETA after restaurant accept:', etaError);
+        // Continue even if ETA update fails
+      }
 
-    // Notify about status update
-    try {
-      await notifyRestaurantOrderUpdate(order._id.toString(), 'preparing');
-    } catch (notifError) {
-      console.error('Error sending notification:', notifError);
+      // Notify about status update
+      try {
+        await notifyRestaurantOrderUpdate(order._id.toString(), 'preparing');
+      } catch (notifError) {
+        console.error('Error sending notification:', notifError);
+      }
     }
 
     // Notify delivery partners about new order (same logic as resend for reliability)
