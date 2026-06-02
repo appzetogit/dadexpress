@@ -2481,10 +2481,11 @@ export default function Home() {
                 />
               ))}
             </div>
-            {!isLoadingFilterResults && !loadingRestaurants && !zoneLoading && !zoneResolveLoading && !profileLoading && !isAddressLoading &&
+            {((localStorage.getItem("user_authenticated") !== "true" && !localStorage.getItem("user_accessToken")) || 
+              (!isLoadingFilterResults && !loadingRestaurants && !zoneLoading && !zoneResolveLoading && !profileLoading && !isAddressLoading &&
               !(selectedAddress && !resolvedZoneId && !selectedAddressOutOfService) &&
               !(selectedDeliveryAddress && !selectedAddress) &&
-              filteredRestaurants.length === 0 && (
+              filteredRestaurants.length === 0)) && (
                 <div className="mt-4 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-[#1a1a1a] p-4 text-sm text-gray-700 dark:text-gray-300">
                   {emptyRestaurantsMessage}
                 </div>
