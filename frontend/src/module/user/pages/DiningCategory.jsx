@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
-import { MapPin, ChevronDown, SlidersHorizontal, Star, X, ArrowDownUp, Timer, IndianRupee, UtensilsCrossed, BadgePercent, Clock, Bookmark, ArrowLeft } from "lucide-react"
+import { MapPin, SlidersHorizontal, Star, Bookmark, Clock, ArrowLeft, BadgePercent, ArrowDownUp, Timer, IndianRupee, UtensilsCrossed } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import AnimatedPage from "../components/AnimatedPage"
@@ -27,16 +27,53 @@ export default function DiningCategory() {
   const { openLocationSelector } = useLocationSelector()
   const locationState = useLocationHook()
   const { location, loading: locationLoading } = locationState
-  const { zoneId } = useZone(locationState)
+  const { zoneId, zoneStatus } = useZone(locationState)
   const { addFavorite, removeFavorite, isFavorite } = useProfile()
   const cityName = location?.city || "Select"
 
+  // Helper: extract best city string from available sources
+  const getActiveCity = useCallback(() => {
+    // 1. Direct location.city
+    if (location?.city) return location.city
+    // 2. Zone serviceLocation or name  
+    const cachedZone = localStorage.getItem('userZone')
+    if (cachedZone) {
+      try {
+        const z = JSON.parse(cachedZone)
+        if (z?.serviceLocation) return z.serviceLocation
+        if (z?.name) return z.name
+      } catch { /* ignore */ }
+    }
+    // 3. From saved selected delivery address
+    const savedAddr = localStorage.getItem('selectedDeliveryAddress')
+    if (savedAddr) {
+      try {
+        const a = JSON.parse(savedAddr)
+        if (a?.city) return a.city
+        if (a?.address?.city) return a.address.city
+      } catch { /* ignore */ }
+    }
+    return null
+  }, [location?.city])
+
   // Fetch restaurants
   useEffect(() => {
+    // Wait for zone detection to complete before fetching
+    if (zoneStatus === 'loading') return
+
     const fetchRestaurants = async () => {
       try {
         setIsLoading(true)
-        const response = await diningAPI.getRestaurants(zoneId ? { zoneId } : (location?.city ? { city: location.city } : {}))
+        const activeCity = getActiveCity()
+        let params = {}
+        if (zoneId) {
+          params.zoneId = zoneId
+          if (activeCity) params.city = activeCity
+        } else if (activeCity) {
+          params.city = activeCity
+        }
+        console.log('[DiningCategory] Fetching with params:', params)
+        const response = await diningAPI.getRestaurants(params)
         if (response.data && response.data.success) {
           // Map backend data to UI format
           const mappedData = (response.data.data || [])
@@ -66,7 +103,8 @@ export default function DiningCategory() {
       }
     }
     fetchRestaurants()
-  }, [location?.city, zoneId])
+  }, [location?.city, zoneId, zoneStatus, getActiveCity])
+
 
   // Category headings mapping
   const categoryHeadings = {
@@ -146,9 +184,25 @@ export default function DiningCategory() {
 
     // Apply Category Filter from URL
     if (category) {
+      const catLower = category.toLowerCase().replace(/-/g, ' ');
       filtered = filtered.filter(r => {
         const typeSlug = (r.diningType || "").toLowerCase().replace(/\s+/g, '-');
-        return typeSlug === category.toLowerCase();
+        if (typeSlug === category.toLowerCase()) return true;
+
+        // Also check if category matches cuisine
+        const cuisineLower = (r.cuisine || "").toLowerCase();
+        if (cuisineLower.includes(catLower)) return true;
+
+        // Custom smart mapping for common terms
+        if (catLower === 'premium' && (typeSlug.includes('fine') || typeSlug.includes('premium') || typeSlug.includes('luxury'))) return true;
+        if (catLower === 'casual' && (typeSlug.includes('casual') || typeSlug.includes('family') || typeSlug.includes('cafe'))) return true;
+        if (catLower === 'pure veg' && (cuisineLower.includes('veg') || cuisineLower.includes('vegetarian'))) return true;
+        if (catLower === 'north indian' && (cuisineLower.includes('north indian') || cuisineLower.includes('indian'))) return true;
+        if (catLower === 'south indian' && cuisineLower.includes('south indian')) return true;
+        if (catLower === 'fast food' && (cuisineLower.includes('fast') || cuisineLower.includes('burger') || cuisineLower.includes('pizza') || cuisineLower.includes('sandwich'))) return true;
+        if (catLower === 'chinese' && (cuisineLower.includes('chinese') || cuisineLower.includes('asian') || cuisineLower.includes('momos'))) return true;
+
+        return false;
       });
     }
 
@@ -209,7 +263,6 @@ export default function DiningCategory() {
         <div className="max-w-7xl mx-auto">
           {/* Category Heading */}
           <div className="mb-2">
-
             <div className="mb-2">
               <div className="flex items-center justify-center mb-2">
                 <h3 className="px-3 text-sm font-semibold text-gray-500 uppercase tracking-wide text-center">
@@ -644,5 +697,3 @@ export default function DiningCategory() {
     </AnimatedPage>
   )
 }
-
-

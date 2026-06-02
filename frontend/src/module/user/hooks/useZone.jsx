@@ -82,6 +82,11 @@ export function useZone(locationInput) {
       return
     }
 
+    // Immediately mark as loading and clear old zoneId to prevent stale zone data
+    // being used while we wait for the new zone detection API call
+    setZoneStatus('loading')
+    setZoneId(null)
+
     try {
       setLoading(true)
       setError(null)
@@ -120,36 +125,6 @@ export function useZone(locationInput) {
       setZoneStatus('OUT_OF_SERVICE')
       setZoneId(null)
       setZone(null)
-      
-      // Try to use cached zone only when current coordinates are unavailable
-      // OR when current location is very close to cached-detection location.
-      const cachedZoneId = localStorage.getItem('userZoneId')
-      const cachedCoordsRaw = localStorage.getItem('userZoneDetectedCoords')
-      const currentLat = toNumber(lat)
-      const currentLng = toNumber(lng)
-      let canUseCachedZone = !currentLat || !currentLng
-
-      if (!canUseCachedZone && cachedCoordsRaw) {
-        try {
-          const parsed = JSON.parse(cachedCoordsRaw)
-          const cachedLat = toNumber(parsed?.latitude)
-          const cachedLng = toNumber(parsed?.longitude)
-          if (cachedLat && cachedLng) {
-            const distance = calculateDistanceKm(currentLat, currentLng, cachedLat, cachedLng)
-            // Reuse cached zone only if user is still near the previous detected location.
-            canUseCachedZone = distance <= 1
-          }
-        } catch (_parseError) {
-          canUseCachedZone = false
-        }
-      }
-
-      if (cachedZoneId && canUseCachedZone) {
-        const cachedZone = localStorage.getItem('userZone')
-        setZoneId(cachedZoneId)
-        setZone(cachedZone ? JSON.parse(cachedZone) : null)
-        setZoneStatus('IN_SERVICE')
-      }
     } finally {
       setLoading(false)
     }
@@ -228,50 +203,15 @@ export function useZone(locationInput) {
         detectZone(lat, lng)
       }
     } else {
-      // Try to use cached zone if location not available
-      const cachedZoneId = localStorage.getItem('userZoneId')
-      const cachedCoordsRaw = localStorage.getItem('userZoneDetectedCoords')
-      
-      let canUseCachedZone = false
-      if (cachedZoneId && cachedCoordsRaw) {
-        try {
-          const parsed = JSON.parse(cachedCoordsRaw)
-          const cachedLat = toNumber(parsed?.latitude)
-          const cachedLng = toNumber(parsed?.longitude)
-          const currentLat = toNumber(lat)
-          const currentLng = toNumber(lng)
-          
-          if (!currentLat || !currentLng) {
-            // If we don't have current coords at all, we might be in initial load.
-            // Check if cache is recent (e.g. < 24h)
-            const detectedAt = parsed?.detectedAt || 0
-            const isRecent = (Date.now() - detectedAt) < 24 * 60 * 60 * 1000
-            canUseCachedZone = isRecent
-          } else {
-            const distance = calculateDistanceKm(currentLat, currentLng, cachedLat, cachedLng)
-            canUseCachedZone = distance <= 1
-          }
-        } catch (_err) {
-          canUseCachedZone = false
-        }
-      }
-
-      if (cachedZoneId && canUseCachedZone) {
-        const cachedZone = localStorage.getItem('userZone')
-        setZoneId(cachedZoneId)
-        setZone(cachedZone ? JSON.parse(cachedZone) : null)
-        setZoneStatus('IN_SERVICE')
+      // If location is truly null/undefined (not just empty strings), 
+      // we might still be waiting for useLocation to initialize.
+      // Only set OUT_OF_SERVICE if we have location object but no coords.
+      if (location === null) {
+         setZoneStatus('loading')
       } else {
-        // If location is truly null/undefined (not just empty strings), 
-        // we might still be waiting for useLocation to initialize.
-        // Only set OUT_OF_SERVICE if we have location object but no coords.
-        if (location === null) {
-           setZoneStatus('loading')
-        } else {
-           setZoneStatus('OUT_OF_SERVICE')
-           setZoneId(null)
-           setZone(null)
-        }
+         setZoneStatus('OUT_OF_SERVICE')
+         setZoneId(null)
+         setZone(null)
       }
     }
   }, [location?.latitude, location?.longitude, detectZone, isManualMode, getManualAddressDetails, locationInput?.isManualMode])

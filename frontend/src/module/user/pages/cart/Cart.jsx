@@ -1777,58 +1777,52 @@ export default function Cart() {
               )}
 
               {/* Coupon Section */}
-              <div className="bg-white dark:bg-[#1a1a1a] px-4 md:px-6 py-3 md:py-4 rounded-lg md:rounded-xl">
-                {appliedCoupon ? (
-                  <div className="flex items-center justify-between bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800 rounded-lg md:rounded-xl p-3 md:p-4">
-                    <div className="flex items-center gap-2 md:gap-3">
-                      <Tag className="h-4 w-4 md:h-5 md:w-5 text-[#EB590E] dark:text-[#EB590E]" />
-                      <div>
-                        <p className="text-sm md:text-base font-medium text-orange-800 dark:text-orange-200">'{appliedCoupon.code}' applied</p>
-                        <p className="text-xs md:text-sm text-[#EB590E] dark:text-[#EB590E]">You saved ₹{discount}</p>
-                      </div>
-                    </div>
-                    <button onClick={handleRemoveCoupon} className="text-gray-500 dark:text-gray-400 text-xs md:text-sm font-medium">Remove</button>
-                  </div>
-                ) : loadingCoupons ? (
-                  <div className="flex items-center gap-2 md:gap-3">
-                    <Percent className="h-4 w-4 md:h-5 md:w-5 text-gray-600 dark:text-gray-400" />
-                    <p className="text-sm md:text-base text-gray-500 dark:text-gray-400">Loading coupons...</p>
-                  </div>
-                ) : couponsForUi.length > 0 ? (
-                  <div>
-                    <div className="flex items-center justify-between">
+              {(appliedCoupon || loadingCoupons || couponsForUi.length > 0) && (
+                <div className="bg-white dark:bg-[#1a1a1a] px-4 md:px-6 py-3 md:py-4 rounded-lg md:rounded-xl">
+                  {appliedCoupon ? (
+                    <div className="flex items-center justify-between bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800 rounded-lg md:rounded-xl p-3 md:p-4">
                       <div className="flex items-center gap-2 md:gap-3">
-                        <Percent className="h-4 w-4 md:h-5 md:w-5 text-gray-600 dark:text-gray-400" />
+                        <Tag className="h-4 w-4 md:h-5 md:w-5 text-[#EB590E] dark:text-[#EB590E]" />
                         <div>
-                          <p className="text-sm md:text-base font-medium text-gray-800 dark:text-gray-200">
-                            Save ₹{couponsForUi[0].discount} with '{couponsForUi[0].code}'
-                          </p>
-                          {couponsForUi.length > 1 && (
-                            <button onClick={() => setShowCoupons(!showCoupons)} className="text-xs md:text-sm text-blue-600 dark:text-blue-400 font-medium">
-                              View all coupons →
-                            </button>
-                          )}
+                          <p className="text-sm md:text-base font-medium text-orange-800 dark:text-orange-200">'{appliedCoupon.code}' applied</p>
+                          <p className="text-xs md:text-sm text-[#EB590E] dark:text-[#EB590E]">You saved ₹{discount}</p>
                         </div>
                       </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 md:h-8 text-xs md:text-sm border-[#EB590E] dark:border-[#EB590E]/50 text-[#EB590E] dark:text-[#EB590E] hover:bg-orange-50 dark:hover:bg-orange-900/20"
-                        onClick={() => handleApplyCoupon(couponsForUi[0])}
-                        disabled={subtotal < couponsForUi[0].minOrder}
-                      >
-                        {subtotal < couponsForUi[0].minOrder ? `Min ₹${couponsForUi[0].minOrder}` : 'APPLY'}
-                      </Button>
+                      <button onClick={handleRemoveCoupon} className="text-gray-500 dark:text-gray-400 text-xs md:text-sm font-medium">Remove</button>
                     </div>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 md:gap-3">
-                    <Percent className="h-4 w-4 md:h-5 md:w-5 text-blue-600 dark:text-blue-400" />
-                    <p className="text-sm md:text-base text-blue-600 dark:text-blue-400 font-medium">
-                      {restaurantData?.offer || "No coupons available"}
-                    </p>
-                  </div>
-                )}
+                  ) : loadingCoupons ? (
+                    <div className="flex items-center gap-2 md:gap-3">
+                      <Percent className="h-4 w-4 md:h-5 md:w-5 text-gray-600 dark:text-gray-400" />
+                      <p className="text-sm md:text-base text-gray-500 dark:text-gray-400">Loading coupons...</p>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 md:gap-3">
+                          <Percent className="h-4 w-4 md:h-5 md:w-5 text-gray-600 dark:text-gray-400" />
+                          <div>
+                            <p className="text-sm md:text-base font-medium text-gray-800 dark:text-gray-200">
+                              Save ₹{couponsForUi[0].discount} with '{couponsForUi[0].code}'
+                            </p>
+                            {couponsForUi.length > 1 && (
+                              <button onClick={() => setShowCoupons(!showCoupons)} className="text-xs md:text-sm text-blue-600 dark:text-blue-400 font-medium">
+                                View all coupons →
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 md:h-8 text-xs md:text-sm border-[#EB590E] dark:border-[#EB590E]/50 text-[#EB590E] dark:text-[#EB590E] hover:bg-orange-50 dark:hover:bg-orange-900/20"
+                          onClick={() => handleApplyCoupon(couponsForUi[0])}
+                          disabled={subtotal < couponsForUi[0].minOrder}
+                        >
+                          {subtotal < couponsForUi[0].minOrder ? `Min ₹${couponsForUi[0].minOrder}` : 'APPLY'}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
 
                 {/* Coupons List */}
                 {showCoupons && !appliedCoupon && couponsForUi.length > 0 && (
@@ -1853,6 +1847,7 @@ export default function Cart() {
                   </div>
                 )}
               </div>
+            )}
 
               {/* Delivery Time */}
               <div className="bg-white dark:bg-[#1a1a1a] px-4 md:px-6 py-3 md:py-4 rounded-lg md:rounded-xl">

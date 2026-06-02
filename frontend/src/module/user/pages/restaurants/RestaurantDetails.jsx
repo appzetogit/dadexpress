@@ -937,24 +937,26 @@ export default function RestaurantDetails() {
 
   // Highlight offers/texts for the blue offer line
   const highlightOffers = [
-    "Upto 50% OFF",
+    restaurant?.offer || "",
     restaurant?.offerText || "",
     ...(Array.isArray(restaurant?.offers) ? restaurant.offers.map((offer) => offer?.title || "") : []),
-  ]
+  ].filter(Boolean)
 
   // Auto-rotate images every 3 seconds
   useEffect(() => {
+    const offersLength = Array.isArray(restaurant?.offers) ? restaurant.offers.length : 0
+    if (offersLength === 0) return
+
     const interval = setInterval(() => {
-      setCurrentImageIndex((prev) => {
-        const offersLength = Array.isArray(restaurant?.offers) ? restaurant.offers.length : 1
-        return (prev + 1) % offersLength
-      })
+      setCurrentImageIndex((prev) => (prev + 1) % offersLength)
     }, 3000)
     return () => clearInterval(interval)
   }, [restaurant?.offers?.length || 0])
 
   // Auto-rotate highlight offer text every 2 seconds
   useEffect(() => {
+    if (highlightOffers.length === 0) return
+
     const interval = setInterval(() => {
       setHighlightIndex((prev) => (prev + 1) % highlightOffers.length)
     }, 2000)
@@ -1136,25 +1138,27 @@ export default function RestaurantDetails() {
           </div>
 
           {/* Offers */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm overflow-hidden">
-              <Tag className="h-4 w-4 text-[#EB590E]" />
-              <div className="relative h-5 overflow-hidden">
-                <AnimatePresence mode="wait">
-                  <motion.span
-                    key={highlightIndex}
-                    initial={{ y: 16, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    exit={{ y: -16, opacity: 0 }}
-                    transition={{ duration: 0.3 }}
-                    className="text-[#EB590E] font-medium inline-block"
-                  >
-                    {highlightOffers[highlightIndex]}
-                  </motion.span>
-                </AnimatePresence>
+          {highlightOffers.length > 0 && (
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm overflow-hidden">
+                <Tag className="h-4 w-4 text-[#EB590E]" />
+                <div className="relative h-5 overflow-hidden">
+                  <AnimatePresence mode="wait">
+                    <motion.span
+                      key={highlightIndex}
+                      initial={{ y: 16, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      exit={{ y: -16, opacity: 0 }}
+                      transition={{ duration: 0.3 }}
+                      className="text-[#EB590E] font-medium inline-block"
+                    >
+                      {highlightOffers[highlightIndex]}
+                    </motion.span>
+                  </AnimatePresence>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Filter/Category Buttons */}
           <div className="border-y border-gray-200 py-3 -mx-4 px-4 overflow-x-auto scrollbar-hide">

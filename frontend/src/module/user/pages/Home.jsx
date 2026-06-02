@@ -1688,6 +1688,12 @@ export default function Home() {
   }, [calculatedRestaurants, activeFilters, selectedCuisine, sortBy])
 
   const emptyRestaurantsMessage = useMemo(() => {
+    // Check if guest (skipped login)
+    const isGuest = localStorage.getItem("user_authenticated") !== "true" && !localStorage.getItem("user_accessToken")
+    if (isGuest) {
+      return "Service currently unavailable in this area 📍"
+    }
+
     // Priority 1: Loading / Resolving states
     // Added check for selectedDeliveryAddress to wait if we have a saved selection but hasn't resolved to full address yet
     // Also added check for zone ID synchronization to prevent flash of empty state
@@ -2429,7 +2435,7 @@ export default function Home() {
           <div className="relative">
             {/* Loading Overlay */}
             <AnimatePresence>
-              {(isLoadingFilterResults || loadingRestaurants) && (
+              {(isLoadingFilterResults || loadingRestaurants) && (localStorage.getItem("user_authenticated") === "true" || localStorage.getItem("user_accessToken")) && (
                 <motion.div
                   className="absolute inset-0 bg-white/80 dark:bg-[#1a1a1a]/80 backdrop-blur-sm z-10 flex items-center justify-center rounded-lg min-h-[400px]"
                   initial={{ opacity: 0 }}
@@ -2444,7 +2450,7 @@ export default function Home() {
                 </motion.div>
               )}
             </AnimatePresence>
-            <div className={`space-y-12 md:space-y-16 pt-1 sm:pt-1.5 lg:pt-2 ${isLoadingFilterResults || loadingRestaurants ? 'opacity-50' : 'opacity-100'} transition-opacity duration-300`}>
+            <div className={`space-y-12 md:space-y-16 pt-1 sm:pt-1.5 lg:pt-2 ${(isLoadingFilterResults || loadingRestaurants) && (localStorage.getItem("user_authenticated") === "true" || localStorage.getItem("user_accessToken")) ? 'opacity-50' : 'opacity-100'} transition-opacity duration-300`}>
               {filteredRestaurants.map((restaurant) => (
                 <RestaurantItem
                   key={restaurant.id}

@@ -33,21 +33,21 @@ const calculateDistance = (lat1, lng1, lat2, lng2) => {
  */
 function isPointInZone(lat, lng, zoneCoordinates) {
   if (!zoneCoordinates || zoneCoordinates.length < 3) return false;
-  
+
   let inside = false;
   for (let i = 0, j = zoneCoordinates.length - 1; i < zoneCoordinates.length; j = i++) {
     const coordI = zoneCoordinates[i];
     const coordJ = zoneCoordinates[j];
-    
+
     const xi = typeof coordI === 'object' ? (coordI.latitude || coordI.lat) : null;
     const yi = typeof coordI === 'object' ? (coordI.longitude || coordI.lng) : null;
     const xj = typeof coordJ === 'object' ? (coordJ.latitude || coordJ.lat) : null;
     const yj = typeof coordJ === 'object' ? (coordJ.longitude || coordJ.lng) : null;
-    
+
     if (xi === null || yi === null || xj === null || yj === null) continue;
-    
-    const intersect = ((yi > lng) !== (yj > lng)) && 
-                     (lat < (xj - xi) * (lng - yi) / (yj - yi) + xi);
+
+    const intersect = ((yi > lng) !== (yj > lng)) &&
+      (lat < (xj - xi) * (lng - yi) / (yj - yi) + xi);
     if (intersect) inside = !inside;
   }
   return inside;
@@ -57,47 +57,138 @@ function isPointInZone(lat, lng, zoneCoordinates) {
 export const getRestaurants = async (req, res) => {
   try {
     const { city, zoneId } = req.query;
+    console.log(`[DINING] getRestaurants called → zoneId=${zoneId || 'NULL'} | city=${city || 'NULL'}`);
     let query = { "diningSettings.isEnabled": true };
 
-    // Simple city filter
-    if (city) {
+    // Apply city filter ONLY if zoneId is not provided
+    if (city && !zoneId) {
       query.location = { $regex: city, $options: "i" };
     }
 
-    let restaurants = await DiningRestaurant.find(query);
+    const restaurants = await DiningRestaurant.find(query);
 
-    // If zoneId is provided, filter by polygon
+    let combinedRestaurants = [];
+
+    // Add raw objects from DiningRestaurant
+    restaurants.forEach(r => {
+      const rObj = typeof r.toObject === 'function' ? r.toObject() : r;
+      // Normalise coordinates if they were seeded in GeoJSON coordinates array format
+      let lat = rObj.coordinates?.latitude;
+      let lng = rObj.coordinates?.longitude;
+      if (!lat || !lng) {
+        const coords = rObj.coordinates?.coordinates || rObj.coordinates;
+        if (Array.isArray(coords) && coords.length >= 2) {
+          lng = coords[0];
+          lat = coords[1];
+        }
+      }
+      rObj.coordinates = { latitude: lat, longitude: lng };
+      combinedRestaurants.push(rObj);
+    });
+
+    // Map and add raw objects from main Restaurant collection
+    const mainQuery = { isActive: true };
+    if (city && !zoneId) {
+      mainQuery["location.city"] = { $regex: city, $options: "i" };
+    }
+    const mainRestaurants = await Restaurant.find(mainQuery).lean();
+    mainRestaurants.forEach(r => {
+      const lat = r.location?.latitude || (Array.isArray(r.location?.coordinates) ? r.location.coordinates[1] : null);
+      const lng = r.location?.longitude || (Array.isArray(r.location?.coordinates) ? r.location.coordinates[0] : null);
+
+      // Avoid duplicate restaurants if slug matches one already in DiningRestaurant
+      if (combinedRestaurants.some(exist => exist.slug === r.slug)) {
+        return;
+      }
+
+      combinedRestaurants.push({
+        _id: r._id,
+        name: r.name,
+        rating: r.rating || 4.5,
+        location: r.location?.area || r.location?.city || "",
+        locationCity: r.location?.city || "",
+        distance: r.distance || "1.2 km",
+        cuisine: (r.cuisines && r.cuisines.length > 0) ? r.cuisines[0] : "Multi-cuisine",
+        price: `₹${r.costForTwo || 1400} for two`,
+        image: r.profileImage?.url || "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&h=600&fit=crop",
+        offer: r.offer || "",
+        deliveryTime: r.estimatedDeliveryTime || "25-30 mins",
+        featuredDish: r.featuredDish || "Pasta",
+        featuredPrice: r.featuredPrice || 249,
+        slug: r.slug,
+        coordinates: {
+          latitude: lat,
+          longitude: lng
+        },
+        diningSettings: {
+          isEnabled: true,
+          maxGuests: r.diningSettings?.maxGuests || 6,
+          diningType: r.diningSettings?.diningType || "family-dining"
+        }
+      });
+    });
+
+
+
+    // If zoneId is provided, filter strictly by zone polygon
     if (zoneId && mongoose.Types.ObjectId.isValid(zoneId)) {
       const userZone = await Zone.findById(zoneId).lean();
-      if (userZone && userZone.coordinates) {
-        restaurants = restaurants.filter(r => {
+      console.log(`[DINING] Zone lookup: ${userZone ? userZone.name : 'NOT FOUND'} | coords: ${userZone?.coordinates?.length || 0}`);
+      if (userZone && userZone.coordinates && userZone.coordinates.length >= 3) {
+        combinedRestaurants = combinedRestaurants.filter(r => {
           const lat = r.coordinates?.latitude;
           const lng = r.coordinates?.longitude;
-          if (lat && lng) {
-            // 1. Strict polygon check
-            if (isPointInZone(lat, lng, userZone.coordinates)) return true;
 
-            // 2. Buffer check (1.5km margin)
-            const BUFFER_DISTANCE = 1.5;
-            for (const vertex of userZone.coordinates) {
-              const vLat = vertex.latitude || vertex.lat;
-              const vLng = vertex.longitude || vertex.lng;
-              if (vLat && vLng) {
-                if (calculateDistance(lat, lng, vLat, vLng) <= BUFFER_DISTANCE) {
-                  return true;
-                }
+          // If restaurant has no coordinates, exclude it when zone filtering is active
+          if (!lat || !lng) {
+            console.log(`  [EXCLUDE no-coords] ${r.name}`);
+            return false;
+          }
+
+          // 1. Strict polygon check
+          if (isPointInZone(lat, lng, userZone.coordinates)) {
+            console.log(`  [INCLUDE polygon] ${r.name}`);
+            return true;
+          }
+
+          // 2. Buffer check (1.5km margin around zone boundary vertices)
+          const BUFFER_DISTANCE = 1.5;
+          for (const vertex of userZone.coordinates) {
+            const vLat = vertex.latitude || vertex.lat;
+            const vLng = vertex.longitude || vertex.lng;
+            if (vLat && vLng) {
+              if (calculateDistance(lat, lng, vLat, vLng) <= BUFFER_DISTANCE) {
+                console.log(`  [INCLUDE buffer] ${r.name}`);
+                return true;
               }
             }
           }
+
+          console.log(`  [EXCLUDE outside] ${r.name} lat=${lat} lng=${lng}`);
           return false;
         });
+      } else {
+        console.log(`[DINING] Zone not found or no coordinates → skipping zone filter`);
       }
+    } else if (city) {
+      // No zoneId but city provided: filter by city name in location string for DiningRestaurant entries
+      combinedRestaurants = combinedRestaurants.filter(r => {
+        if (r.locationCity) {
+          return r.locationCity.toLowerCase().includes(city.toLowerCase());
+        }
+        return r.location && r.location.toLowerCase().includes(city.toLowerCase());
+      });
+    } else {
+      // No zoneId and no city provided - return all restaurants instead of empty
+      console.log(`[DINING] WARNING: No zoneId and no city provided - returning ALL restaurants!`);
+      // We don't filter combinedRestaurants
     }
+    console.log(`[DINING] After filter: ${combinedRestaurants.length} restaurants`);
+
 
     // Fetch menuItems for each dining restaurant by matching slug in main Restaurant+Menu
     const restaurantsWithMenu = await Promise.all(
-      restaurants.map(async (r) => {
-        const rObj = r.toObject();
+      combinedRestaurants.map(async (r) => {
         const menuItems = [];
 
         // Try to find corresponding main Restaurant by slug
@@ -146,7 +237,7 @@ export const getRestaurants = async (req, res) => {
           }
         }
 
-        return { ...rObj, menuItems };
+        return { ...r, menuItems };
       })
     );
 
@@ -280,7 +371,7 @@ export const getOfferBanners = async (req, res) => {
   try {
     const { zoneId, city } = req.query;
     let query = { isActive: true };
-    
+
     let banners = await DiningOfferBanner.find(query)
       .populate("restaurant", "name location")
       .sort({ createdAt: -1 });
