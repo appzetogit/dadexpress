@@ -173,9 +173,11 @@ export default function Under250() {
   useEffect(() => {
     let isMounted = true;
     const fetchRestaurantsUnder250 = async () => {
-      // If we don't have a zoneId and location is still loading, wait a bit
-      // But if we've been loading for more than 5s without a zone, show empty to stop spinner
+      if (zoneStatus === 'loading' || loadingLocation) return;
+
       if (!zoneId) {
+        setUnder250Restaurants([])
+        setLoadingRestaurants(false)
         return
       }
 
@@ -198,7 +200,7 @@ export default function Under250() {
 
     fetchRestaurantsUnder250()
     return () => { isMounted = false }
-  }, [zoneId, loadingLocation]) // Added loadingLocation to re-check if zoneId is still missing after location loads
+  }, [zoneId, zoneStatus, loadingLocation])
 
   // Fetch categories from admin API
   useEffect(() => {
