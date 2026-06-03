@@ -45,7 +45,6 @@ export default function Under250() {
   const [loadingBanner, setLoadingBanner] = useState(true)
   const [under250Restaurants, setUnder250Restaurants] = useState([])
   const [loadingRestaurants, setLoadingRestaurants] = useState(true)
-  const [wasInServiceOnce, setWasInServiceOnce] = useState(false)
 
   const sortOptions = [
     { id: null, label: 'Relevance' },
@@ -386,22 +385,13 @@ export default function Under250() {
     })
   }
 
-  // Track if we were ever in service - once in service, don't show grayscale
-  // This prevents GPS jitter from causing intermittent black/white screen
-  useEffect(() => {
-    if (isInService) {
-      setWasInServiceOnce(true)
-    }
-  }, [isInService])
-
-  // Only show grayscale if:
-  // 1. User is truly out of service AND
-  // 2. We never loaded restaurants successfully (wasInServiceOnce = false)
-  const shouldShowGrayscale = isOutOfService && !wasInServiceOnce
+  // Only disable Add buttons when user is out of service zone
+  // NOTE: We do NOT apply page-level grayscale anymore to prevent black/white screen flicker
+  const canAddToCart = !isOutOfService
 
   return (
 
-    <div className={`relative min-h-screen bg-white dark:bg-[#0a0a0a] ${shouldShowGrayscale ? 'grayscale opacity-75' : ''}`}>
+    <div className="relative min-h-screen bg-white dark:bg-[#0a0a0a]">
       {/* Mobile Navbar - Sticky & Hidden on Desktop */}
       <div className="sticky top-0 z-40 w-full bg-white dark:bg-[#0a0a0a] shadow-sm md:hidden">
         <div className="relative z-50 pt-2 sm:pt-3 pb-2">
