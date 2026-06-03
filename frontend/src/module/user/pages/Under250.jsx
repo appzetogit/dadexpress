@@ -681,14 +681,14 @@ export default function Under250() {
                                   <Button
                                     variant={"outline"}
                                     size="sm"
-                                    disabled={shouldShowGrayscale}
-                                    className={`h-7 md:h-8 lg:h-9 px-3 md:px-4 lg:px-5 text-xs md:text-sm lg:text-base ${shouldShowGrayscale
+                                    disabled={isOutOfService}
+                                    className={`h-7 md:h-8 lg:h-9 px-3 md:px-4 lg:px-5 text-xs md:text-sm lg:text-base ${isOutOfService
                                       ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 border-gray-300 dark:border-gray-700 cursor-not-allowed opacity-50'
                                       : 'bg-[#FFF2EB] text-[#EB590E] border-[#EB590E] hover:bg-[#EB590E] hover:text-white'
                                       }`}
                                     onClick={(e) => {
                                       e.stopPropagation()
-                                      if (!shouldShowGrayscale) {
+                                      if (!isOutOfService) {
                                         handleItemClick(item, restaurant)
                                       }
                                     }}
