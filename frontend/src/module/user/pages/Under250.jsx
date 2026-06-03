@@ -45,6 +45,7 @@ export default function Under250() {
   const [loadingBanner, setLoadingBanner] = useState(true)
   const [under250Restaurants, setUnder250Restaurants] = useState([])
   const [loadingRestaurants, setLoadingRestaurants] = useState(true)
+  const [wasInServiceOnce, setWasInServiceOnce] = useState(false)
 
   const sortOptions = [
     { id: null, label: 'Relevance' },
@@ -385,8 +386,18 @@ export default function Under250() {
     })
   }
 
-  // Check if should show grayscale (only when user is out of service)
-  const shouldShowGrayscale = isOutOfService
+  // Track if we were ever in service - once in service, don't show grayscale
+  // This prevents GPS jitter from causing intermittent black/white screen
+  useEffect(() => {
+    if (isInService) {
+      setWasInServiceOnce(true)
+    }
+  }, [isInService])
+
+  // Only show grayscale if:
+  // 1. User is truly out of service AND
+  // 2. We never loaded restaurants successfully (wasInServiceOnce = false)
+  const shouldShowGrayscale = isOutOfService && !wasInServiceOnce
 
   return (
 
