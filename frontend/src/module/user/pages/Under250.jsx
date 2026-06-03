@@ -22,7 +22,7 @@ import { isModuleAuthenticated } from "@/lib/utils/auth"
 
 export default function Under250() {
   const { location, loading: loadingLocation, isManualMode } = useLocation()
-  
+
   // OPTIMIZATION: Don't pass null during loading if we want to use cached zoneId for immediate fetch
   // This allows the page to start loading restaurants even while GPS is still resolving
   const { zoneId, zoneStatus, isInService, isOutOfService } = useZone(location)
@@ -176,7 +176,6 @@ export default function Under250() {
       if (zoneStatus === 'loading' || loadingLocation) return;
 
       if (!zoneId) {
-        setUnder250Restaurants([])
         setLoadingRestaurants(false)
         return
       }
@@ -217,24 +216,11 @@ export default function Under250() {
           }))
           setCategories(adminCategories)
         } else {
-          // Fallback to default categories if API fails
-          const defaultCategories = [
-            { id: 1, name: "Biryani", image: foodImages[0] },
-            { id: 2, name: "Cake", image: foodImages[1] },
-            { id: 3, name: "Chhole Bhature", image: foodImages[2] },
-            { id: 4, name: "Chicken Tanduri", image: foodImages[3] },
-          ]
-          setCategories(defaultCategories)
+          setCategories([])
         }
       } catch (error) {
         console.error('Error fetching categories:', error)
-        // Fallback to default categories on error
-        const defaultCategories = [
-          { id: 1, name: "Biryani", image: foodImages[0] },
-          { id: 2, name: "Cake", image: foodImages[1] },
-          { id: 3, name: "Chhole Bhature", image: foodImages[2] },
-        ]
-        setCategories(defaultCategories)
+        setCategories([])
       } finally {
         setLoadingCategories(false)
       }
@@ -436,7 +422,7 @@ export default function Under250() {
                 />
               </motion.div>
             </AnimatePresence>
-            
+
             {/* Pagination Indicators */}
             {bannerImages.length > 1 && (
               <div className="absolute bottom-2 md:bottom-4 left-1/2 -translate-x-1/2 flex space-x-2 z-10 bg-black/30 px-3 py-1.5 rounded-full backdrop-blur-sm">
@@ -444,11 +430,10 @@ export default function Under250() {
                   <button
                     key={index}
                     onClick={() => setCurrentBannerIndex(index)}
-                    className={`h-1.5 md:h-2 rounded-full transition-all duration-300 ${
-                      index === currentBannerIndex
-                        ? 'w-4 md:w-6 bg-white'
-                        : 'w-1.5 md:w-2 bg-white/50 hover:bg-white/75'
-                    }`}
+                    className={`h-1.5 md:h-2 rounded-full transition-all duration-300 ${index === currentBannerIndex
+                      ? 'w-4 md:w-6 bg-white'
+                      : 'w-1.5 md:w-2 bg-white/50 hover:bg-white/75'
+                      }`}
                   />
                 ))}
               </div>
@@ -566,8 +551,8 @@ export default function Under250() {
         ) : sortedAndFilteredRestaurants.length === 0 ? (
           <div className="flex justify-center items-center py-12 px-6 text-center">
             <div className="text-gray-500 dark:text-gray-400">
-              {!zoneId 
-                ? "Please select a location to see restaurants in your area." 
+              {!zoneId
+                ? "Please select a location to see restaurants in your area."
                 : under250Restaurants.length === 0
                   ? "No restaurants with dishes under ₹250 found in your zone."
                   : "No restaurants match the selected filters."}
@@ -653,13 +638,13 @@ export default function Under250() {
                                 transition={{ duration: 0.3 }}
                               />
                               {/* Veg/Non-veg Indicator */}
-                                <motion.div
-                                  className={`absolute top-2 left-2 md:top-3 md:left-3 h-4 w-4 md:h-5 md:w-5 lg:h-6 lg:w-6 rounded border-2 ${item.isVeg || item.foodType === 'Veg' ? 'border-green-600' : 'border-red-600'} bg-white flex items-center justify-center z-10`}
-                                  whileHover={{ scale: 1.2, rotate: 5 }}
-                                  transition={{ duration: 0.2 }}
-                                >
-                                  <div className={`h-2 w-2 md:h-2.5 md:w-2.5 lg:h-3 lg:w-3 rounded-full ${item.isVeg || item.foodType === 'Veg' ? 'bg-green-600' : 'bg-red-600'}`} />
-                                </motion.div>
+                              <motion.div
+                                className={`absolute top-2 left-2 md:top-3 md:left-3 h-4 w-4 md:h-5 md:w-5 lg:h-6 lg:w-6 rounded border-2 ${item.isVeg || item.foodType === 'Veg' ? 'border-green-600' : 'border-red-600'} bg-white flex items-center justify-center z-10`}
+                                whileHover={{ scale: 1.2, rotate: 5 }}
+                                transition={{ duration: 0.2 }}
+                              >
+                                <div className={`h-2 w-2 md:h-2.5 md:w-2.5 lg:h-3 lg:w-3 rounded-full ${item.isVeg || item.foodType === 'Veg' ? 'bg-green-600' : 'bg-red-600'}`} />
+                              </motion.div>
                             </div>
 
                             {/* Item Details */}
