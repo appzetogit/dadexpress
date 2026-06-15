@@ -969,14 +969,49 @@ export default function RestaurantDetails() {
   // Show loading state
   if (loadingRestaurant) {
     return (
-      <AnimatedPage>
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-4">
-            <Loader2 className="h-8 w-8 text-[#EB590E] animate-spin" />
-            <span className="text-sm text-gray-600">Loading restaurant...</span>
+      <div className="min-h-screen bg-gray-50 dark:bg-[#0a0a0a] flex flex-col">
+        {/* Header Skeleton */}
+        <div className="px-4 md:px-8 pt-3 md:pt-4 pb-2 bg-white dark:bg-[#1a1a1a] flex justify-between items-center max-w-7xl mx-auto w-full">
+          <div className="h-10 w-10 bg-gray-200 dark:bg-gray-800 rounded-full animate-pulse" />
+          <div className="flex gap-3">
+            <div className="h-10 w-24 bg-gray-200 dark:bg-gray-800 rounded-full animate-pulse" />
+            <div className="h-10 w-10 bg-gray-200 dark:bg-gray-800 rounded-full animate-pulse" />
           </div>
         </div>
-      </AnimatedPage>
+
+        {/* Restaurant Info Skeleton */}
+        <div className="bg-white dark:bg-[#1a1a1a] rounded-t-3xl pt-6 pb-4 px-4 md:px-8 space-y-4 max-w-7xl mx-auto w-full relative z-10 -mt-2">
+          <div className="flex justify-between items-start">
+            <div className="h-8 w-48 bg-gray-200 dark:bg-gray-800 rounded animate-pulse" />
+            <div className="h-6 w-12 bg-gray-200 dark:bg-gray-800 rounded animate-pulse" />
+          </div>
+          <div className="h-4 w-64 bg-gray-200 dark:bg-gray-800 rounded animate-pulse" />
+          <div className="h-4 w-32 bg-gray-200 dark:bg-gray-800 rounded animate-pulse" />
+          
+          {/* Filters Skeleton */}
+          <div className="flex gap-2 pt-4 border-t border-gray-100 dark:border-gray-800">
+            <div className="h-8 w-20 bg-gray-200 dark:bg-gray-800 rounded-full animate-pulse" />
+            <div className="h-8 w-20 bg-gray-200 dark:bg-gray-800 rounded-full animate-pulse" />
+            <div className="h-8 w-20 bg-gray-200 dark:bg-gray-800 rounded-full animate-pulse" />
+          </div>
+        </div>
+
+        {/* Menu Items Skeleton */}
+        <div className="flex-1 bg-white dark:bg-[#1a1a1a] px-4 md:px-8 py-6 space-y-6 max-w-7xl mx-auto w-full">
+          <div className="h-6 w-40 bg-gray-200 dark:bg-gray-800 rounded animate-pulse" />
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="flex gap-4 p-4 border-b border-gray-100 dark:border-gray-800">
+              <div className="flex-1 space-y-3">
+                <div className="h-4 w-4 bg-gray-200 dark:bg-gray-800 rounded animate-pulse" />
+                <div className="h-5 w-3/4 bg-gray-200 dark:bg-gray-800 rounded animate-pulse" />
+                <div className="h-4 w-16 bg-gray-200 dark:bg-gray-800 rounded animate-pulse" />
+                <div className="h-3 w-full bg-gray-200 dark:bg-gray-800 rounded animate-pulse mt-2" />
+              </div>
+              <div className="w-32 h-32 bg-gray-200 dark:bg-gray-800 rounded-2xl animate-pulse" />
+            </div>
+          ))}
+        </div>
+      </div>
     )
   }
 
