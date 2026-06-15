@@ -241,9 +241,11 @@ export default function RestaurantDetails() {
             const menuSections = apiRestaurant.__shortcutMenu.sections || []
             const recommendedItems = []
             menuSections.forEach(s => {
-              (s.items || []).forEach(i => { if (i.isRecommended && i.isAvailable !== false) recommendedItems.push(i) });
+              if (!s) return;
+              (s.items || []).forEach(i => { if (i && i.isRecommended && i.isAvailable !== false) recommendedItems.push(i) });
               (s.subsections || []).forEach(sub => {
-                (sub.items || []).forEach(i => { if (i.isRecommended && i.isAvailable !== false) recommendedItems.push(i) });
+                if (!sub) return;
+                (sub.items || []).forEach(i => { if (i && i.isRecommended && i.isAvailable !== false) recommendedItems.push(i) });
               });
             })
             transformedRestaurant.menuSections = [{ name: "Recommended for you", items: recommendedItems, subsections: [] }, ...menuSections]
@@ -556,14 +558,14 @@ export default function RestaurantDetails() {
       const clonedSection = {
         ...section,
         name: sectionTitle, // normalized name
-        items: (section.items || []).map(item => ({
+        items: (section.items || []).filter(item => item != null).map(item => ({
           ...item,
           name: item.name?.toLowerCase().includes("size") ? item.name.replace(/size/gi, "").trim() : item.name
         })),
-        subsections: (section.subsections || []).map(sub => ({
+        subsections: (section.subsections || []).filter(sub => sub != null).map(sub => ({
           ...sub,
           name: sub.name || sub.title || 'Subsection',
-          items: (sub.items || []).map(item => ({
+          items: (sub.items || []).filter(item => item != null).map(item => ({
             ...item,
             name: item.name?.toLowerCase().includes("size") ? item.name.replace(/size/gi, "").trim() : item.name
           }))
