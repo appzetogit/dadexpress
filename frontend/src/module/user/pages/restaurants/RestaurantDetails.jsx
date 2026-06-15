@@ -376,12 +376,14 @@ export default function RestaurantDetails() {
 
     const cartQuantities = {}
     cart.forEach((item) => {
-      if (item.restaurant === restaurant.name) {
+      if (item && item.restaurant === restaurant.name) {
+        if (!item.id) return; // Skip corrupted cart items without ID
         // Individual variation quantity
         cartQuantities[item.id] = item.quantity || 0
         
         // Aggregate quantity for the base item (across all variations)
-        const baseId = item.id.includes('-') ? item.id.split('-')[0] : item.id
+        const itemIdStr = String(item.id);
+        const baseId = itemIdStr.includes('-') ? itemIdStr.split('-')[0] : item.id
         const totalKey = `${baseId}_total`
         cartQuantities[totalKey] = (cartQuantities[totalKey] || 0) + (item.quantity || 0)
       }
@@ -2110,7 +2112,7 @@ export default function RestaurantDetails() {
                   <div className="flex-1 overflow-y-auto px-4 py-3">
                     {restaurant?.outlets && Array.isArray(restaurant.outlets) && restaurant.outlets.length > 0 ? (
                       <div className="space-y-2">
-                        {restaurant.outlets.map((outlet) => (
+                        {(restaurant.outlets || []).filter(o => o != null).map((outlet) => (
                           <div
                             key={outlet?.id || Math.random()}
                             className="p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#2a2a2a]"
@@ -2434,7 +2436,7 @@ export default function RestaurantDetails() {
                           Select Size
                         </h3>
                         <div className="space-y-2">
-                          {selectedItem.variations.map((v, i) => (
+                          {(selectedItem.variations || []).filter(v => v != null).map((v, i) => (
                             <button
                               key={i}
                               onClick={() => setSelectedVariation(v)}
@@ -2727,7 +2729,7 @@ export default function RestaurantDetails() {
                           Restaurant coupons
                         </h3>
                         <div className="space-y-3">
-                          {restaurant.restaurantOffers.coupons.map((coupon) => {
+                          {(restaurant.restaurantOffers.coupons || []).filter(c => c != null).map((coupon) => {
                             const isExpanded = expandedCoupons.has(coupon.id)
                             return (
                               <div
