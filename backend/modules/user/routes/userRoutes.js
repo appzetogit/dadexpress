@@ -13,7 +13,7 @@ import {
 } from '../controllers/userController.js';
 import { updateFcmToken } from '../../auth/controllers/authController.js';
 import { authenticate } from '../../auth/middleware/auth.js';
-import { uploadMiddleware } from '../../../shared/utils/cloudinaryService.js';
+import { uploadMiddleware } from '../../../shared/services/storageService.js';
 import userWalletRoutes from './userWalletRoutes.js';
 import complaintRoutes from './complaintRoutes.js';
 import referralRoutes from './referralRoutes.js';

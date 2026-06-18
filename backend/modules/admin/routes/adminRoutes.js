@@ -252,7 +252,7 @@ import {
 } from "../../user/controllers/referralController.js";
 import zoneRoutes from "./zoneRoutes.js";
 import { authenticateAdmin } from "../middleware/adminAuth.js";
-import { uploadMiddleware } from "../../../shared/utils/cloudinaryService.js";
+import { uploadMiddleware } from "../../../shared/services/storageService.js";
 
 const router = express.Router();
 

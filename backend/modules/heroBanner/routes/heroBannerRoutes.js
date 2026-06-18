@@ -1,5 +1,5 @@
 import express from 'express';
-import { uploadMiddleware } from '../../../shared/utils/cloudinaryService.js';
+import { uploadMiddleware } from '../../../shared/services/storageService.js';
 import { authenticateAdmin } from '../../../modules/admin/middleware/adminAuth.js';
 import {
   getHeroBanners,

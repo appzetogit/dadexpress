@@ -1,7 +1,7 @@
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import User from '../../auth/models/User.js';
-import { uploadToCloudinary } from '../../../shared/utils/cloudinaryService.js';
+import { uploadImage } from '../../../shared/services/storageService.js';
 import axios from 'axios';
 import winston from 'winston';
 import { syncUserRealtime } from '../../delivery/services/firebaseTrackingService.js';
@@ -228,7 +228,7 @@ const resolveLocationFromGoogleMaps = async (latitude, longitude) => {
 
     const result = data.results[0];
     const addressComponents = result.address_components || [];
-    
+
     let city = "";
     let state = "";
     let area = "";
@@ -338,36 +338,36 @@ export const updateUserProfile = asyncHandler(async (req, res) => {
     if (name !== undefined && name !== null) {
       user.name = name.trim();
     }
-    
+
     if (email !== undefined && email !== null && email.trim() !== '') {
       // Check if email already exists for another user
-      const existingUser = await User.findOne({ 
+      const existingUser = await User.findOne({
         email: email.toLowerCase().trim(),
         _id: { $ne: user._id },
         role: 'user'
       });
-      
+
       if (existingUser) {
         return errorResponse(res, 400, 'Email already in use');
       }
-      
+
       user.email = email.toLowerCase().trim();
     }
-    
+
     if (phone !== undefined && phone !== null) {
       // Check if phone already exists for another user
       if (phone.trim() !== '') {
-        const existingUser = await User.findOne({ 
+        const existingUser = await User.findOne({
           phone: phone.trim(),
           _id: { $ne: user._id },
           role: 'user'
         });
-        
+
         if (existingUser) {
           return errorResponse(res, 400, 'Phone number already in use');
         }
       }
-      
+
       user.phone = phone ? phone.trim() : null;
     }
 
@@ -420,15 +420,11 @@ export const uploadProfileImage = asyncHandler(async (req, res) => {
       return errorResponse(res, 404, 'User not found');
     }
 
-    // Upload to Cloudinary
+    // Upload locally using storageService
     const folder = 'appzeto/user-profiles';
-    const result = await uploadToCloudinary(req.file.buffer, {
+    const result = await uploadImage(req.file.buffer, {
       folder,
-      resource_type: 'image',
-      transformation: [
-        { width: 400, height: 400, crop: 'fill', gravity: 'face' },
-        { quality: 'auto' }
-      ]
+      resource_type: 'image'
     });
 
     // Update user profile image
@@ -452,19 +448,19 @@ export const uploadProfileImage = asyncHandler(async (req, res) => {
 /**
  * Update user current location (Live Location Tracking)
  * PUT /api/user/location
- * 
+ *
  * This endpoint handles both regular location updates and live location tracking.
  * It stores complete address information including POI, building, floor, area, city, state, pincode.
  */
 export const updateUserLocation = asyncHandler(async (req, res) => {
   try {
-    const { 
-      latitude, 
-      longitude, 
-      address, 
-      city, 
-      state, 
-      area, 
+    const {
+      latitude,
+      longitude,
+      address,
+      city,
+      state,
+      area,
       formattedAddress,
       accuracy,
       postalCode,
@@ -520,9 +516,9 @@ export const updateUserLocation = asyncHandler(async (req, res) => {
     const isPlaceholder = (text) => {
       if (!text) return true;
       const t = text.trim();
-      return /^-?\d+\.\d+,\s*-?\d+\.\d+$/.test(t) || 
-             t.toLowerCase() === 'current location' || 
-             t.toLowerCase() === 'select location';
+      return /^-?\d+\.\d+,\s*-?\d+\.\d+$/.test(t) ||
+        t.toLowerCase() === 'current location' ||
+        t.toLowerCase() === 'select location';
     };
 
     const locationUpdate = {
@@ -854,7 +850,9 @@ export const deleteUserAddress = asyncHandler(async (req, res) => {
     logger.error(`Error deleting address: ${error.message}`, { error: error.stack });
     return errorResponse(res, 500, 'Failed to delete address');
   }
-});/**
+});
+
+/**
  * Delete user account
  * DELETE /api/user/profile
  */

@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import { uploadMiddleware } from '../../../shared/utils/cloudinaryService.js';
+import { uploadMiddleware } from '../../../shared/services/storageService.js';
 import { uploadSingleMedia } from '../controllers/uploadController.js';
 import jwtService from '../../auth/services/jwtService.js';
 import User from '../../auth/models/User.js';

@@ -9,8 +9,7 @@ import GourmetRestaurant from '../models/GourmetRestaurant.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
 import Menu from '../../restaurant/models/Menu.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
-import { uploadToCloudinary } from '../../../shared/utils/cloudinaryService.js';
-import { cloudinary } from '../../../config/cloudinary.js';
+import { uploadImage, deleteImage } from '../../../shared/services/storageService.js';
 import mongoose from 'mongoose';
 import Zone from '../../admin/models/Zone.js';
 
@@ -91,9 +90,9 @@ export const createHeroBanner = async (req, res) => {
       return errorResponse(res, 400, 'No image file provided');
     }
 
-    // Upload to Cloudinary
+    // Upload to local storage
     const folder = 'appzeto/hero-banners';
-    const result = await uploadToCloudinary(req.file.buffer, {
+    const result = await uploadImage(req.file.buffer, {
       folder,
       resource_type: 'image'
     });
@@ -161,8 +160,8 @@ export const createMultipleHeroBanners = async (req, res) => {
     for (let i = 0; i < req.files.length; i++) {
       const file = req.files[i];
       try {
-        // Upload to Cloudinary
-        const result = await uploadToCloudinary(file.buffer, {
+        // Upload to local storage
+        const result = await uploadImage(file.buffer, {
           folder,
           resource_type: 'image'
         });
@@ -224,12 +223,12 @@ export const deleteHeroBanner = async (req, res) => {
       return errorResponse(res, 404, 'Hero banner not found');
     }
 
-    // Delete from Cloudinary
+    // Delete from local storage
     try {
-      await cloudinary.uploader.destroy(banner.cloudinaryPublicId);
-    } catch (cloudinaryError) {
-      console.error('Error deleting from Cloudinary:', cloudinaryError);
-      // Continue with database deletion even if Cloudinary deletion fails
+      await deleteImage(banner.cloudinaryPublicId);
+    } catch (error) {
+      console.error('Error deleting from local storage:', error);
+      // Continue with database deletion even if deletion fails
     }
 
     // Delete from database
@@ -410,9 +409,9 @@ export const createLandingCategory = async (req, res) => {
     // Generate slug from label
     const slug = label.toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
 
-    // Upload to Cloudinary
+    // Upload to local storage
     const folder = 'appzeto/landing/categories';
-    const result = await uploadToCloudinary(req.file.buffer, {
+    const result = await uploadImage(req.file.buffer, {
       folder,
       resource_type: 'image'
     });
@@ -465,11 +464,11 @@ export const deleteLandingCategory = async (req, res) => {
       return errorResponse(res, 404, 'Category not found');
     }
 
-    // Delete from Cloudinary
+    // Delete from local storage
     try {
-      await cloudinary.uploader.destroy(category.cloudinaryPublicId);
-    } catch (cloudinaryError) {
-      console.error('Error deleting from Cloudinary:', cloudinaryError);
+      await deleteImage(category.cloudinaryPublicId);
+    } catch (error) {
+      console.error('Error deleting from local storage:', error);
     }
 
     // Delete from database
@@ -571,9 +570,9 @@ export const createLandingExploreMore = async (req, res) => {
       return errorResponse(res, 400, 'No image file provided');
     }
 
-    // Upload to Cloudinary
+    // Upload to local storage
     const folder = 'appzeto/landing/explore-more';
-    const result = await uploadToCloudinary(req.file.buffer, {
+    const result = await uploadImage(req.file.buffer, {
       folder,
       resource_type: 'image'
     });
@@ -631,15 +630,15 @@ export const updateLandingExploreMore = async (req, res) => {
     if (req.file) {
       // Upload new image
       const folder = 'appzeto/landing/explore-more';
-      const result = await uploadToCloudinary(req.file.buffer, {
+      const result = await uploadImage(req.file.buffer, {
         folder,
         resource_type: 'image'
       });
 
-      // Delete old image from Cloudinary
+      // Delete old image from local storage
       if (item.cloudinaryPublicId) {
         try {
-          await cloudinary.uploader.destroy(item.cloudinaryPublicId);
+          await deleteImage(item.cloudinaryPublicId);
         } catch (error) {
           console.error('Error deleting old image:', error);
         }
@@ -676,11 +675,11 @@ export const deleteLandingExploreMore = async (req, res) => {
       return errorResponse(res, 404, 'Explore more item not found');
     }
 
-    // Delete from Cloudinary
+    // Delete from local storage
     try {
-      await cloudinary.uploader.destroy(item.cloudinaryPublicId);
-    } catch (cloudinaryError) {
-      console.error('Error deleting from Cloudinary:', cloudinaryError);
+      await deleteImage(item.cloudinaryPublicId);
+    } catch (error) {
+      console.error('Error deleting from local storage:', error);
     }
 
     // Delete from database
@@ -843,9 +842,9 @@ export const createUnder250Banner = async (req, res) => {
       return errorResponse(res, 400, 'No image file provided');
     }
 
-    // Upload to Cloudinary
+    // Upload to local storage
     const folder = 'appzeto/under-250-banners';
-    const result = await uploadToCloudinary(req.file.buffer, {
+    const result = await uploadImage(req.file.buffer, {
       folder,
       resource_type: 'image'
     });
@@ -913,8 +912,8 @@ export const createMultipleUnder250Banners = async (req, res) => {
     for (let i = 0; i < req.files.length; i++) {
       const file = req.files[i];
       try {
-        // Upload to Cloudinary
-        const result = await uploadToCloudinary(file.buffer, {
+        // Upload to local storage
+        const result = await uploadImage(file.buffer, {
           folder,
           resource_type: 'image'
         });
@@ -976,12 +975,12 @@ export const deleteUnder250Banner = async (req, res) => {
       return errorResponse(res, 404, 'Under 250 banner not found');
     }
 
-    // Delete from Cloudinary
+    // Delete from local storage
     try {
-      await cloudinary.uploader.destroy(banner.cloudinaryPublicId);
-    } catch (cloudinaryError) {
-      console.error('Error deleting from Cloudinary:', cloudinaryError);
-      // Continue with database deletion even if Cloudinary deletion fails
+      await deleteImage(banner.cloudinaryPublicId);
+    } catch (error) {
+      console.error('Error deleting from local storage:', error);
+      // Continue with database deletion even if deletion fails
     }
 
     // Delete from database
@@ -1099,9 +1098,9 @@ export const createDiningBanner = async (req, res) => {
       return errorResponse(res, 400, 'No image file provided');
     }
 
-    // Upload to Cloudinary
+    // Upload to local storage
     const folder = 'appzeto/dining-banners';
-    const result = await uploadToCloudinary(req.file.buffer, {
+    const result = await uploadImage(req.file.buffer, {
       folder,
       resource_type: 'image'
     });
@@ -1169,8 +1168,8 @@ export const createMultipleDiningBanners = async (req, res) => {
     for (let i = 0; i < req.files.length; i++) {
       const file = req.files[i];
       try {
-        // Upload to Cloudinary
-        const result = await uploadToCloudinary(file.buffer, {
+        // Upload to local storage
+        const result = await uploadImage(file.buffer, {
           folder,
           resource_type: 'image'
         });
@@ -1232,12 +1231,12 @@ export const deleteDiningBanner = async (req, res) => {
       return errorResponse(res, 404, 'Dining banner not found');
     }
 
-    // Delete from Cloudinary
+    // Delete from local storage
     try {
-      await cloudinary.uploader.destroy(banner.cloudinaryPublicId);
-    } catch (cloudinaryError) {
-      console.error('Error deleting from Cloudinary:', cloudinaryError);
-      // Continue with database deletion even if Cloudinary deletion fails
+      await deleteImage(banner.cloudinaryPublicId);
+    } catch (error) {
+      console.error('Error deleting from local storage:', error);
+      // Continue with database deletion even if deletion fails
     }
 
     // Delete from database

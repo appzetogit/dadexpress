@@ -1,6 +1,6 @@
 import axios from "axios";
 import { toast } from "sonner";
-import { API_BASE_URL } from "./config.js";
+import { API_BASE_URL, BACKEND_BASE_URL } from "./config.js";
 import { decodeToken, getRoleFromToken } from "../utils/auth.js";
 
 const safeStorage = {
@@ -736,12 +736,37 @@ apiClient.interceptors.request.use(
   },
 );
 
+// Helper to rewrite relative paths starting with /uploads/ to absolute backend paths
+function rewriteRelativePaths(obj) {
+  if (!obj) return obj;
+  if (typeof obj === "string") {
+    if (obj.startsWith("/uploads/") || obj.startsWith("/images/")) {
+      return `${BACKEND_BASE_URL}${obj}`;
+    }
+    return obj;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(item => rewriteRelativePaths(item));
+  }
+  if (typeof obj === "object") {
+    for (const key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        obj[key] = rewriteRelativePaths(obj[key]);
+      }
+    }
+  }
+  return obj;
+}
+
 /**
  * Response Interceptor
  * Handles token refresh and error responses
  */
 apiClient.interceptors.response.use(
   (response) => {
+    if (response && response.data) {
+      response.data = rewriteRelativePaths(response.data);
+    }
     const traceEnabled = isApiTraceEnabled();
     const meta = response?.config?.__trace;
     if (traceEnabled && meta) {

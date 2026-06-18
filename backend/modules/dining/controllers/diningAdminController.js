@@ -3,8 +3,7 @@ import DiningOfferBanner from '../models/DiningOfferBanner.js';
 import DiningStory from '../models/DiningStory.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
-import { uploadToCloudinary } from '../../../shared/utils/cloudinaryService.js';
-import { cloudinary } from '../../../config/cloudinary.js';
+import { uploadImage, deleteImage } from '../../../shared/services/storageService.js';
 
 // ==================== DINING CATEGORIES ====================
 
@@ -24,7 +23,7 @@ export const createDiningCategory = async (req, res) => {
         if (!name) return errorResponse(res, 400, 'Name is required');
         if (!req.file) return errorResponse(res, 400, 'Image is required');
 
-        const result = await uploadToCloudinary(req.file.buffer, {
+        const result = await uploadImage(req.file.buffer, {
             folder: 'appzeto/dining/categories',
             resource_type: 'image'
         });
@@ -51,9 +50,9 @@ export const deleteDiningCategory = async (req, res) => {
         if (!category) return errorResponse(res, 404, 'Category not found');
 
         try {
-            await cloudinary.uploader.destroy(category.cloudinaryPublicId);
+            await deleteImage(category.cloudinaryPublicId);
         } catch (err) {
-            console.error('Error deleting from Cloudinary:', err);
+            console.error('Error deleting from storage:', err);
         }
 
         await DiningCategory.findByIdAndDelete(id);
@@ -87,7 +86,7 @@ export const createDiningOfferBanner = async (req, res) => {
         }
         if (!req.file) return errorResponse(res, 400, 'Image is required');
 
-        const result = await uploadToCloudinary(req.file.buffer, {
+        const result = await uploadImage(req.file.buffer, {
             folder: 'appzeto/dining/offers',
             resource_type: 'image'
         });
@@ -119,9 +118,9 @@ export const deleteDiningOfferBanner = async (req, res) => {
         if (!banner) return errorResponse(res, 404, 'Banner not found');
 
         try {
-            await cloudinary.uploader.destroy(banner.cloudinaryPublicId);
+            await deleteImage(banner.cloudinaryPublicId);
         } catch (err) {
-            console.error('Error deleting from Cloudinary:', err);
+            console.error('Error deleting from storage:', err);
         }
 
         await DiningOfferBanner.findByIdAndDelete(id);
@@ -146,12 +145,12 @@ export const updateDiningOfferBanner = async (req, res) => {
 
         if (req.file) {
             try {
-                await cloudinary.uploader.destroy(banner.cloudinaryPublicId);
+                await deleteImage(banner.cloudinaryPublicId);
             } catch (err) {
-                console.error('Error deleting old image from Cloudinary:', err);
+                console.error('Error deleting old image from storage:', err);
             }
 
-            const result = await uploadToCloudinary(req.file.buffer, {
+            const result = await uploadImage(req.file.buffer, {
                 folder: 'appzeto/dining/offers',
                 resource_type: 'image'
             });
@@ -200,7 +199,7 @@ export const createDiningStory = async (req, res) => {
         if (!name) return errorResponse(res, 400, 'Name is required');
         if (!req.file) return errorResponse(res, 400, 'Image is required');
 
-        const result = await uploadToCloudinary(req.file.buffer, {
+        const result = await uploadImage(req.file.buffer, {
             folder: 'appzeto/dining/stories',
             resource_type: 'image'
         });
@@ -227,9 +226,9 @@ export const deleteDiningStory = async (req, res) => {
         if (!story) return errorResponse(res, 404, 'Story not found');
 
         try {
-            await cloudinary.uploader.destroy(story.cloudinaryPublicId);
+            await deleteImage(story.cloudinaryPublicId);
         } catch (err) {
-            console.error('Error deleting from Cloudinary:', err);
+            console.error('Error deleting from storage:', err);
         }
 
         await DiningStory.findByIdAndDelete(id);
@@ -252,12 +251,12 @@ export const updateDiningStory = async (req, res) => {
 
         if (req.file) {
             try {
-                await cloudinary.uploader.destroy(story.cloudinaryPublicId);
+                await deleteImage(story.cloudinaryPublicId);
             } catch (err) {
-                console.error('Error deleting old image from Cloudinary:', err);
+                console.error('Error deleting old image from storage:', err);
             }
 
-            const result = await uploadToCloudinary(req.file.buffer, {
+            const result = await uploadImage(req.file.buffer, {
                 folder: 'appzeto/dining/stories',
                 resource_type: 'image'
             });

@@ -1,7 +1,7 @@
 import StaffManagement from '../models/StaffManagement.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import asyncHandler from '../../../shared/middleware/asyncHandler.js';
-import { uploadToCloudinary } from '../../../shared/utils/cloudinaryService.js';
+import { uploadImage } from '../../../shared/services/storageService.js';
 import { normalizePhoneNumber, buildPhoneInQuery } from '../../../shared/utils/phoneUtils.js';
 
 /**
@@ -59,12 +59,9 @@ export const addStaff = asyncHandler(async (req, res) => {
     let profileImage = null;
     if (req.file) {
       try {
-        const uploadResult = await uploadToCloudinary(req.file.buffer, {
+        const uploadResult = await uploadImage(req.file.buffer, {
           folder: `appzeto/restaurant/staff/${restaurantId}`,
-          resource_type: 'image',
-          transformation: [
-            { width: 400, height: 400, crop: 'fill', gravity: 'face' }
-          ]
+          resource_type: 'image'
         });
 
         profileImage = {

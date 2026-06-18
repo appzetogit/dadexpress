@@ -92,15 +92,17 @@ export default function RestaurantDetails() {
   const [restaurant, setRestaurant] = useState(null)
   const [loadingRestaurant, setLoadingRestaurant] = useState(true)
   const [restaurantError, setRestaurantError] = useState(null)
-  const fetchedRestaurantRef = useRef(false) // Track if restaurant has been fetched for current slug
+  const fetchedRestaurantRef = useRef(null) // Track which slug has been fetched (null = none)
+  const hasRestaurantDataRef = useRef(false) // Track if we have valid data — avoids stale closure issue
 
   // Fetch restaurant data from API
   useEffect(() => {
     const fetchRestaurant = async () => {
       if (!slug) return
 
-      // Prevent re-fetching if we've already fetched for this slug
-      if (fetchedRestaurantRef.current && restaurant && (restaurant.slug === slug || restaurant.id === slug || restaurant.restaurantId === slug)) {
+      // Prevent re-fetching if we've already fetched for this exact slug
+      // Use refs instead of state to avoid stale closure bug
+      if (fetchedRestaurantRef.current === slug && hasRestaurantDataRef.current) {
         return;
       }
 
@@ -257,7 +259,8 @@ export default function RestaurantDetails() {
           }
 
           setRestaurant(transformedRestaurant)
-          fetchedRestaurantRef.current = true
+          fetchedRestaurantRef.current = slug // Mark this slug as fetched
+          hasRestaurantDataRef.current = true  // Mark data as available
 
           // Only fetch menu separately if NOT in shortcut
           if (!apiRestaurant.__shortcutMenu && transformedRestaurant.id) {
@@ -284,7 +287,7 @@ export default function RestaurantDetails() {
     if (slug) {
       fetchRestaurant()
     }
-  }, [slug, zoneId]) // Only re-fetch if slug or core zoneId changes
+  }, [slug]) // Only re-fetch if slug changes — zoneId change should NOT trigger full reload
 
   // Track previous values to prevent unnecessary recalculations
   const prevCoordsRef = useRef({ userLat: null, userLng: null, restaurantLat: null, restaurantLng: null })
@@ -413,8 +416,8 @@ export default function RestaurantDetails() {
       return
     }
 
-    // CRITICAL: Check if user is in service zone or restaurant is available
-    if (isOutOfService) {
+    // CRITICAL: Check if user is in service zone — skip block during zone detection loading
+    if (isOutOfService && !loadingZone) {
       toast.error('You are outside the service zone. Please select a location within the service area.');
       return;
     }
@@ -1064,15 +1067,22 @@ export default function RestaurantDetails() {
     )
   }
 
-  // Only show grayscale when user is out of service (not based on restaurant availability)
-  const shouldShowGrayscale = isOutOfService
+  // Only show unserviceable state when DEFINITIVELY out of service and zone detection is complete
+  // Don't disable during loading (GPS updating) or transient API errors
+  const isUnserviceable = isOutOfService && !loadingZone
+  const shouldShowGrayscale = isUnserviceable; // Keep for compatibility with existing UI disabled states
 
   return (
     <AnimatedPage
       id="scrollingelement"
-      className={`min-h-screen bg-white dark:bg-[#0a0a0a] flex flex-col transition-all duration-300 ${shouldShowGrayscale ? 'grayscale opacity-75' : ''
-        }`}
+      className="min-h-screen bg-white dark:bg-[#0a0a0a] flex flex-col transition-all duration-300"
     >
+      {isUnserviceable && (
+        <div className="bg-red-500 text-white px-4 py-2 text-center text-sm font-medium shadow-sm z-50 sticky top-0 flex items-center justify-center gap-2">
+          <AlertCircle className="h-4 w-4" />
+          Currently not delivering to your location
+        </div>
+      )}
       {/* Header - Back, Search, Menu (like reference image) */}
       <div className="px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 pt-3 md:pt-4 lg:pt-5 pb-2 md:pb-3 bg-white dark:bg-[#1a1a1a]">
         <div className="max-w-7xl mx-auto flex items-center justify-between">

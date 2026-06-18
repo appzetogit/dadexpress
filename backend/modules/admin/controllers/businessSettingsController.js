@@ -4,8 +4,7 @@ import {
   errorResponse,
 } from "../../../shared/utils/response.js";
 import { asyncHandler } from "../../../shared/middleware/asyncHandler.js";
-import { uploadToCloudinary } from "../../../shared/utils/cloudinaryService.js";
-import { initializeCloudinary } from "../../../config/cloudinary.js";
+import { uploadImage, deleteImage } from "../../../shared/services/storageService.js";
 
 /**
  * Get Business Settings (Public - for favicon, logo, company name)
@@ -142,7 +141,6 @@ export const updateBusinessSettings = asyncHandler(async (req, res) => {
     // Handle logo upload
     if (req.files && req.files.logo && req.files.logo.length > 0) {
       try {
-        await initializeCloudinary();
         const logoFile = req.files.logo[0];
 
         // Validate file type
@@ -166,25 +164,19 @@ export const updateBusinessSettings = asyncHandler(async (req, res) => {
           return errorResponse(res, 400, "Logo file size exceeds 5MB limit");
         }
 
-        // Delete old logo from Cloudinary if exists
+        // Delete old logo from storage if exists
         if (settings.logo.publicId) {
           try {
-            const { cloudinary } =
-              await import("../../../config/cloudinary.js");
-            await cloudinary.uploader.destroy(settings.logo.publicId);
+            await deleteImage(settings.logo.publicId);
           } catch (deleteError) {
             console.warn("Failed to delete old logo:", deleteError);
           }
         }
 
         // Upload new logo
-        const logoResult = await uploadToCloudinary(logoFile.buffer, {
+        const logoResult = await uploadImage(logoFile.buffer, {
           folder: "appzeto/business/logo",
           resource_type: "image",
-          transformation: [
-            { width: 500, height: 500, crop: "limit" },
-            { quality: "auto" },
-          ],
         });
 
         settings.logo = {
@@ -200,7 +192,6 @@ export const updateBusinessSettings = asyncHandler(async (req, res) => {
     // Handle favicon upload
     if (req.files && req.files.favicon && req.files.favicon.length > 0) {
       try {
-        await initializeCloudinary();
         const faviconFile = req.files.favicon[0];
 
         // Validate file type
@@ -226,25 +217,19 @@ export const updateBusinessSettings = asyncHandler(async (req, res) => {
           return errorResponse(res, 400, "Favicon file size exceeds 5MB limit");
         }
 
-        // Delete old favicon from Cloudinary if exists
+        // Delete old favicon from storage if exists
         if (settings.favicon.publicId) {
           try {
-            const { cloudinary } =
-              await import("../../../config/cloudinary.js");
-            await cloudinary.uploader.destroy(settings.favicon.publicId);
+            await deleteImage(settings.favicon.publicId);
           } catch (deleteError) {
             console.warn("Failed to delete old favicon:", deleteError);
           }
         }
 
         // Upload new favicon
-        const faviconResult = await uploadToCloudinary(faviconFile.buffer, {
+        const faviconResult = await uploadImage(faviconFile.buffer, {
           folder: "appzeto/business/favicon",
           resource_type: "image",
-          transformation: [
-            { width: 64, height: 64, crop: "limit" },
-            { quality: "auto" },
-          ],
         });
 
         settings.favicon = {

@@ -36,7 +36,7 @@ router.put('/profile', validate(Joi.object({
     zipCode: Joi.string().trim().optional().allow(null, '')
   }).optional(),
   profileImage: Joi.object({
-    url: Joi.string().uri().optional().allow(null, ''),
+    url: Joi.string().optional().allow(null, ''),
     publicId: Joi.string().trim().optional().allow(null, '')
   }).optional(),
   documents: Joi.object({

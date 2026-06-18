@@ -3,8 +3,7 @@ import Menu from '../models/Menu.js';
 import OutletTimings from '../models/OutletTimings.js';
 import Zone from '../../admin/models/Zone.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
-import { uploadToCloudinary, deleteFromCloudinary } from '../../../shared/utils/cloudinaryService.js';
-import { initializeCloudinary } from '../../../config/cloudinary.js';
+import { uploadImage, deleteImage } from '../../../shared/services/storageService.js';
 import asyncHandler from '../../../shared/middleware/asyncHandler.js';
 import mongoose from 'mongoose';
 
@@ -979,9 +978,6 @@ export const uploadProfileImage = asyncHandler(async (req, res) => {
       return errorResponse(res, 400, 'No image file provided');
     }
 
-    // Initialize Cloudinary if not already initialized
-    await initializeCloudinary();
-
     const restaurantId = req.restaurant._id;
     const restaurant = await Restaurant.findById(restaurantId);
 
@@ -989,15 +985,11 @@ export const uploadProfileImage = asyncHandler(async (req, res) => {
       return errorResponse(res, 404, 'Restaurant not found');
     }
 
-    // Upload to Cloudinary
+    // Upload to local storage
     const folder = 'appzeto/restaurant/profile';
-    const result = await uploadToCloudinary(req.file.buffer, {
+    const result = await uploadImage(req.file.buffer, {
       folder,
-      resource_type: 'image',
-      transformation: [
-        { width: 800, height: 800, crop: 'fill', gravity: 'auto' },
-        { quality: 'auto' }
-      ]
+      resource_type: 'image'
     });
 
     // Update restaurant profile image
@@ -1043,9 +1035,6 @@ export const uploadMenuImage = asyncHandler(async (req, res) => {
       return errorResponse(res, 400, `Invalid file type. Allowed types: ${allowedMimeTypes.join(', ')}`);
     }
 
-    // Initialize Cloudinary if not already initialized
-    await initializeCloudinary();
-
     const restaurantId = req.restaurant._id;
     const restaurant = await Restaurant.findById(restaurantId);
 
@@ -1053,7 +1042,7 @@ export const uploadMenuImage = asyncHandler(async (req, res) => {
       return errorResponse(res, 404, 'Restaurant not found');
     }
 
-    console.log('📤 Uploading menu image to Cloudinary:', {
+    console.log('📤 Uploading menu image to local storage:', {
       fileName: req.file.originalname,
       mimeType: req.file.mimetype,
       size: req.file.size,
@@ -1061,15 +1050,11 @@ export const uploadMenuImage = asyncHandler(async (req, res) => {
       restaurantId: restaurantId.toString()
     });
 
-    // Upload to Cloudinary
+    // Upload to local storage
     const folder = 'appzeto/restaurant/menu';
-    const result = await uploadToCloudinary(req.file.buffer, {
+    const result = await uploadImage(req.file.buffer, {
       folder,
-      resource_type: 'image',
-      transformation: [
-        { width: 1200, height: 800, crop: 'fill', gravity: 'auto' },
-        { quality: 'auto' }
-      ]
+      resource_type: 'image'
     });
 
     // Replace first menu image (main banner) or add if none exists
@@ -1173,14 +1158,14 @@ export const deleteRestaurantAccount = asyncHandler(async (req, res) => {
       return errorResponse(res, 404, 'Restaurant not found');
     }
 
-    // Delete Cloudinary images if they exist
+    // Delete local images if they exist
     try {
       // Delete profile image
       if (restaurant.profileImage?.publicId) {
         try {
-          await deleteFromCloudinary(restaurant.profileImage.publicId);
+          await deleteImage(restaurant.profileImage.publicId);
         } catch (error) {
-          console.error('Error deleting profile image from Cloudinary:', error);
+          console.error('Error deleting profile image from storage:', error);
           // Continue with account deletion even if image deletion fails
         }
       }
@@ -1190,16 +1175,16 @@ export const deleteRestaurantAccount = asyncHandler(async (req, res) => {
         for (const menuImage of restaurant.menuImages) {
           if (menuImage?.publicId) {
             try {
-              await deleteFromCloudinary(menuImage.publicId);
+              await deleteImage(menuImage.publicId);
             } catch (error) {
-              console.error('Error deleting menu image from Cloudinary:', error);
+              console.error('Error deleting menu image from storage:', error);
               // Continue with account deletion even if image deletion fails
             }
           }
         }
       }
     } catch (error) {
-      console.error('Error deleting images from Cloudinary:', error);
+      console.error('Error deleting images from storage:', error);
       // Continue with account deletion even if image deletion fails
     }
 

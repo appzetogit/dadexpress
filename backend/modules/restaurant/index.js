@@ -1,7 +1,7 @@
 // Restaurant module
 import express from 'express';
 import { authenticate } from './middleware/restaurantAuth.js';
-import { uploadMiddleware } from '../../shared/utils/cloudinaryService.js';
+import { uploadMiddleware } from '../../shared/services/storageService.js';
 import restaurantAuthRoutes from './routes/restaurantAuthRoutes.js';
 import { getOnboarding, upsertOnboarding, createRestaurantFromOnboardingManual } from './controllers/restaurantOnboardingController.js';
 import { updateFcmToken } from './controllers/restaurantAuthController.js';

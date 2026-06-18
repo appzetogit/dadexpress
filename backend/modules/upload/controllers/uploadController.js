@@ -1,5 +1,5 @@
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
-import { uploadToCloudinary } from '../../../shared/utils/cloudinaryService.js';
+import { uploadImage } from '../../../shared/services/storageService.js';
 
 export const uploadSingleMedia = async (req, res) => {
   try {
@@ -14,7 +14,7 @@ export const uploadSingleMedia = async (req, res) => {
 
     const folder = req.body.folder || 'appzeto/uploads';
 
-    console.log('📤 Uploading file to Cloudinary:', {
+    console.log('📤 Uploading file to local storage:', {
       fileName: req.file.originalname,
       mimeType: req.file.mimetype,
       size: req.file.size,
@@ -22,13 +22,13 @@ export const uploadSingleMedia = async (req, res) => {
       folder
     });
 
-    const result = await uploadToCloudinary(req.file.buffer, {
+    const result = await uploadImage(req.file.buffer, {
       folder,
       resource_type: 'auto',
     });
 
     if (!result || !result.secure_url) {
-      throw new Error('Cloudinary upload failed: No secure_url in response');
+      throw new Error('Local upload failed: No secure_url in response');
     }
 
     console.log('✅ File uploaded successfully:', {
@@ -46,7 +46,7 @@ export const uploadSingleMedia = async (req, res) => {
       format: result.format
     });
   } catch (error) {
-    console.error('❌ Cloudinary upload error:', {
+    console.error('❌ Local upload error:', {
       message: error.message,
       stack: error.stack,
       errorType: error.constructor.name,
@@ -56,14 +56,7 @@ export const uploadSingleMedia = async (req, res) => {
       bufferSize: req.file?.buffer?.length
     });
 
-    const msg = error.message || '';
-    const cloudinaryAuthFail =
-      error.http_code === 401 ||
-      /invalid signature|401/i.test(msg);
-    const errorMessage = cloudinaryAuthFail
-      ? 'Cloudinary rejected the upload (check CLOUDINARY_CLOUD_NAME, API key and secret are from the same account in .env or Admin ENV).'
-      : msg || 'Failed to upload file';
-    return errorResponse(res, 500, `File upload failed: ${errorMessage}`);
+    return errorResponse(res, 500, `File upload failed: ${error.message || 'Failed to upload file'}`);
   }
 };
 

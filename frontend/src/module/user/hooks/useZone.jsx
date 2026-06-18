@@ -82,10 +82,9 @@ export function useZone(locationInput) {
       return
     }
 
-    // Immediately mark as loading and clear old zoneId to prevent stale zone data
-    // being used while we wait for the new zone detection API call
+    // Do NOT immediately clear zoneId/status here — it causes page to flicker
+    // gray during every GPS coordinate update. Keep previous state while loading.
     setZoneStatus('loading')
-    setZoneId(null)
 
     try {
       setLoading(true)
@@ -122,9 +121,12 @@ export function useZone(locationInput) {
     } catch (err) {
       console.error('Error detecting zone:', err)
       setError(err.response?.data?.message || err.message || 'Failed to detect zone')
-      setZoneStatus('OUT_OF_SERVICE')
-      setZoneId(null)
-      setZone(null)
+      // On transient API errors (network failure, timeout, etc.), PRESERVE previous
+      // IN_SERVICE status so the page doesn't incorrectly go gray/disabled.
+      // Only set OUT_OF_SERVICE if we were never successfully in service.
+      setZoneStatus(prev => prev === 'IN_SERVICE' ? 'IN_SERVICE' : 'OUT_OF_SERVICE')
+      setZoneId(prev => prev === null ? null : prev) // keep previous zoneId if we had one
+      setZone(prev => prev === null ? null : prev)   // keep previous zone if we had one
     } finally {
       setLoading(false)
     }

@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import path from 'path';
 import mongoSanitize from 'express-mongo-sanitize';
 import rateLimit from 'express-rate-limit';
 import { createServer } from 'http';
@@ -450,14 +451,13 @@ deliveryNamespace.on('connection', (socket) => {
 app.set('io', io);
 
 // Connect to databases
-import { initializeCloudinary } from './config/cloudinary.js';
+
 
 // Start server only after database is connected
 connectDB().then(() => {
   // Retry realtime init after DB connection so admin-saved Firebase creds can be used too.
   initializeFirebaseRealtimeAsync().catch(err => console.error('Failed to initialize Firebase Realtime Database:', err));
-  // Initialize Cloudinary after DB connection
-  initializeCloudinary().catch(err => console.error('Failed to initialize Cloudinary:', err));
+
 
   // Start HTTP server
   const PORT = process.env.PORT || 5000;
@@ -479,7 +479,10 @@ connectRedis().catch(() => {
 });
 
 // Security middleware
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" }
+}));
 // CORS configuration - allow multiple origins
 const allowedOrigins = [
   process.env.CORS_ORIGIN,
@@ -528,6 +531,42 @@ app.use(cookieParser());
 // Data sanitization
 app.use(mongoSanitize());
 
+// Clean absolute upload URLs in request body to keep the DB host-agnostic
+function cleanUploadUrls(obj) {
+  if (!obj) return obj;
+  if (typeof obj === 'string') {
+    if (obj.includes('/images/')) {
+      const parts = obj.split('/images/');
+      return '/images/' + parts.slice(1).join('/images/');
+    }
+    if (obj.includes('/uploads/')) {
+      const parts = obj.split('/uploads/');
+      return '/images/' + parts.slice(1).join('/uploads/');
+    }
+    return obj;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(cleanUploadUrls);
+  }
+  if (typeof obj === 'object') {
+    if (obj.constructor && ['ObjectId', 'Buffer', 'Date'].includes(obj.constructor.name)) {
+      return obj;
+    }
+    for (const key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        obj[key] = cleanUploadUrls(obj[key]);
+      }
+    }
+  }
+  return obj;
+}
+app.use((req, res, next) => {
+  if (req.body) {
+    req.body = cleanUploadUrls(req.body);
+  }
+  next();
+});
+
 // Rate limiting (disabled in development mode)
 if (process.env.NODE_ENV === 'production') {
   // Trust proxy is required if the app is behind a reverse proxy (Nginx, Cloudflare, etc.)
@@ -553,6 +592,9 @@ if (process.env.NODE_ENV === 'production') {
 } else {
   console.log('Rate limiting disabled (development mode)');
 }
+
+// Serve static images
+app.use('/images', express.static(path.join(process.cwd(), 'images')));
 
 // Health check route
 app.get('/health', (req, res) => {

@@ -17,8 +17,7 @@ import { asyncHandler } from "../../../shared/middleware/asyncHandler.js";
 import { normalizePhoneNumber } from "../../../shared/utils/phoneUtils.js";
 import winston from "winston";
 import mongoose from "mongoose";
-import { uploadToCloudinary } from "../../../shared/utils/cloudinaryService.js";
-import { initializeCloudinary } from "../../../config/cloudinary.js";
+import { uploadImage } from "../../../shared/services/storageService.js";
 
 const logger = winston.createLogger({
   level: "info",
@@ -1873,14 +1872,12 @@ export const updateRestaurant = asyncHandler(async (req, res) => {
       diningSettings,
     } = req.body;
 
-    await initializeCloudinary();
-
     // Handle profile image
     if (profileImage !== undefined) {
       if (typeof profileImage === "string" && profileImage.startsWith("data:")) {
         const base64Data = profileImage.replace(/^data:image\/\w+;base64,/, "");
         const buffer = Buffer.from(base64Data, "base64");
-        const result = await uploadToCloudinary(buffer, { folder: "appzeto/restaurant/profile", resource_type: "image" });
+        const result = await uploadImage(buffer, { folder: "appzeto/restaurant/profile", resource_type: "image" });
         restaurant.profileImage = { url: result.secure_url, publicId: result.public_id };
         if (!restaurant.onboarding) restaurant.onboarding = {};
         if (!restaurant.onboarding.step2) restaurant.onboarding.step2 = {};
@@ -1905,7 +1902,7 @@ export const updateRestaurant = asyncHandler(async (req, res) => {
         if (typeof img === "string" && img.startsWith("data:")) {
           const base64Data = img.replace(/^data:image\/\w+;base64,/, "");
           const buffer = Buffer.from(base64Data, "base64");
-          const result = await uploadToCloudinary(buffer, { folder: "appzeto/restaurant/menu", resource_type: "image" });
+          const result = await uploadImage(buffer, { folder: "appzeto/restaurant/menu", resource_type: "image" });
           processedImages.push({ url: result.secure_url, publicId: result.public_id });
         } else if (typeof img === "string" && img.startsWith("http")) {
           processedImages.push({ url: img });
@@ -1924,7 +1921,7 @@ export const updateRestaurant = asyncHandler(async (req, res) => {
       if (typeof panImage === "string" && panImage.startsWith("data:")) {
         const base64Data = panImage.replace(/^data:image\/\w+;base64,/, "");
         const buffer = Buffer.from(base64Data, "base64");
-        const result = await uploadToCloudinary(buffer, { folder: "appzeto/restaurant/pan", resource_type: "image" });
+        const result = await uploadImage(buffer, { folder: "appzeto/restaurant/pan", resource_type: "image" });
         restaurant.panImage = { url: result.secure_url, publicId: result.public_id };
         if (!restaurant.onboarding) restaurant.onboarding = {};
         if (!restaurant.onboarding.step3) restaurant.onboarding.step3 = {};
@@ -1950,7 +1947,7 @@ export const updateRestaurant = asyncHandler(async (req, res) => {
       if (typeof gstImage === "string" && gstImage.startsWith("data:")) {
         const base64Data = gstImage.replace(/^data:image\/\w+;base64,/, "");
         const buffer = Buffer.from(base64Data, "base64");
-        const result = await uploadToCloudinary(buffer, { folder: "appzeto/restaurant/gst", resource_type: "image" });
+        const result = await uploadImage(buffer, { folder: "appzeto/restaurant/gst", resource_type: "image" });
         restaurant.gstImage = { url: result.secure_url, publicId: result.public_id };
         if (!restaurant.onboarding) restaurant.onboarding = {};
         if (!restaurant.onboarding.step3) restaurant.onboarding.step3 = {};
@@ -1976,7 +1973,7 @@ export const updateRestaurant = asyncHandler(async (req, res) => {
       if (typeof fssaiImage === "string" && fssaiImage.startsWith("data:")) {
         const base64Data = fssaiImage.replace(/^data:image\/\w+;base64,/, "");
         const buffer = Buffer.from(base64Data, "base64");
-        const result = await uploadToCloudinary(buffer, { folder: "appzeto/restaurant/fssai", resource_type: "image" });
+        const result = await uploadImage(buffer, { folder: "appzeto/restaurant/fssai", resource_type: "image" });
         restaurant.fssaiImage = { url: result.secure_url, publicId: result.public_id };
         if (!restaurant.onboarding) restaurant.onboarding = {};
         if (!restaurant.onboarding.step3) restaurant.onboarding.step3 = {};
@@ -2228,9 +2225,6 @@ export const createRestaurant = asyncHandler(async (req, res) => {
       }
     }
 
-    // Initialize Cloudinary
-    await initializeCloudinary();
-
     // Upload images if provided as base64 or files
     let profileImageData = null;
     if (profileImage) {
@@ -2241,7 +2235,7 @@ export const createRestaurant = asyncHandler(async (req, res) => {
         // Base64 image - convert to buffer and upload
         const base64Data = profileImage.replace(/^data:image\/\w+;base64,/, "");
         const buffer = Buffer.from(base64Data, "base64");
-        const result = await uploadToCloudinary(buffer, {
+        const result = await uploadImage(buffer, {
           folder: "appzeto/restaurant/profile",
           resource_type: "image",
         });
@@ -2267,7 +2261,7 @@ export const createRestaurant = asyncHandler(async (req, res) => {
         if (typeof img === "string" && img.startsWith("data:")) {
           const base64Data = img.replace(/^data:image\/\w+;base64,/, "");
           const buffer = Buffer.from(base64Data, "base64");
-          const result = await uploadToCloudinary(buffer, {
+          const result = await uploadImage(buffer, {
             folder: "appzeto/restaurant/menu",
             resource_type: "image",
           });
@@ -2289,7 +2283,7 @@ export const createRestaurant = asyncHandler(async (req, res) => {
       if (typeof panImage === "string" && panImage.startsWith("data:")) {
         const base64Data = panImage.replace(/^data:image\/\w+;base64,/, "");
         const buffer = Buffer.from(base64Data, "base64");
-        const result = await uploadToCloudinary(buffer, {
+        const result = await uploadImage(buffer, {
           folder: "appzeto/restaurant/pan",
           resource_type: "image",
         });
@@ -2306,7 +2300,7 @@ export const createRestaurant = asyncHandler(async (req, res) => {
       if (typeof gstImage === "string" && gstImage.startsWith("data:")) {
         const base64Data = gstImage.replace(/^data:image\/\w+;base64,/, "");
         const buffer = Buffer.from(base64Data, "base64");
-        const result = await uploadToCloudinary(buffer, {
+        const result = await uploadImage(buffer, {
           folder: "appzeto/restaurant/gst",
           resource_type: "image",
         });
@@ -2323,7 +2317,7 @@ export const createRestaurant = asyncHandler(async (req, res) => {
       if (typeof fssaiImage === "string" && fssaiImage.startsWith("data:")) {
         const base64Data = fssaiImage.replace(/^data:image\/\w+;base64,/, "");
         const buffer = Buffer.from(base64Data, "base64");
-        const result = await uploadToCloudinary(buffer, {
+        const result = await uploadImage(buffer, {
           folder: "appzeto/restaurant/fssai",
           resource_type: "image",
         });

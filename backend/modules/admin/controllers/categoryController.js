@@ -1,7 +1,7 @@
 import AdminCategoryManagement from '../models/AdminCategoryManagement.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
-import { uploadToCloudinary } from '../../../shared/utils/cloudinaryService.js';
+import { uploadImage } from '../../../shared/services/storageService.js';
 import winston from 'winston';
 
 const logger = winston.createLogger({
@@ -155,16 +155,12 @@ export const createCategory = asyncHandler(async (req, res) => {
     if (req.file) {
       try {
         const folder = 'appzeto/admin/categories';
-        const result = await uploadToCloudinary(req.file.buffer, {
+        const result = await uploadImage(req.file.buffer, {
           folder,
-          resource_type: 'image',
-          transformation: [
-            { width: 400, height: 400, crop: 'fill', gravity: 'auto' },
-            { quality: 'auto' }
-          ]
+          resource_type: 'image'
         });
         imageUrl = result.secure_url;
-        logger.info(`Image uploaded to Cloudinary: ${imageUrl}`);
+        logger.info(`Image uploaded to local storage: ${imageUrl}`);
       } catch (uploadError) {
         logger.error(`Error uploading image: ${uploadError.message}`);
         return errorResponse(res, 500, 'Failed to upload image');
@@ -243,16 +239,12 @@ export const updateCategory = asyncHandler(async (req, res) => {
     if (req.file) {
       try {
         const folder = 'appzeto/admin/categories';
-        const result = await uploadToCloudinary(req.file.buffer, {
+        const result = await uploadImage(req.file.buffer, {
           folder,
-          resource_type: 'image',
-          transformation: [
-            { width: 400, height: 400, crop: 'fill', gravity: 'auto' },
-            { quality: 'auto' }
-          ]
+          resource_type: 'image'
         });
         imageUrl = result.secure_url;
-        logger.info(`Image uploaded to Cloudinary: ${imageUrl}`);
+        logger.info(`Image uploaded to local storage: ${imageUrl}`);
       } catch (uploadError) {
         logger.error(`Error uploading image: ${uploadError.message}`);
         return errorResponse(res, 500, 'Failed to upload image');

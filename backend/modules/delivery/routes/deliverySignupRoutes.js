@@ -35,31 +35,31 @@ router.post('/signup/details', validate(Joi.object({
 
 router.post('/signup/documents', validate(Joi.object({
   profilePhoto: Joi.object({
-    url: Joi.string().uri().required(),
+    url: Joi.string().required(),
     publicId: Joi.string().trim().required()
   }).required(),
   aadharPhoto: Joi.object({
-    url: Joi.string().uri().required(),
+    url: Joi.string().required(),
     publicId: Joi.string().trim().required()
   }).required(),
   panPhoto: Joi.object({
-    url: Joi.string().uri().required(),
+    url: Joi.string().required(),
     publicId: Joi.string().trim().required()
   }).required(),
   drivingLicensePhoto: Joi.object({
-    url: Joi.string().uri().required(),
+    url: Joi.string().required(),
     publicId: Joi.string().trim().required()
   }).required(),
   aadharBackPhoto: Joi.object({
-    url: Joi.string().uri().required(),
+    url: Joi.string().required(),
     publicId: Joi.string().trim().required()
   }).required(),
   vehicleRCPhoto: Joi.object({
-    url: Joi.string().uri().required(),
+    url: Joi.string().optional().allow(null),
     publicId: Joi.string().trim().required()
   }).optional().allow(null),
   vehicleRCBackPhoto: Joi.object({
-    url: Joi.string().uri().required(),
+    url: Joi.string().optional().allow(null),
     publicId: Joi.string().trim().required()
   }).optional().allow(null)
 })), submitSignupDocuments);
