@@ -55,7 +55,7 @@ export const getOrders = asyncHandler(async (req, res) => {
 
     // Build query
     const isDiscoverMode = discover === 'true' || discover === true;
-    
+
     // Check if delivery partner is approved
     const isApprovedOrActive = ['approved', 'active'].includes(delivery.status) && delivery.isActive;
 
@@ -87,7 +87,7 @@ export const getOrders = asyncHandler(async (req, res) => {
           _id: { $in: delivery.availability.zones },
           isActive: true
         }).select('restaurantId').lean();
-        
+
         validRestaurantIds = zones
           .filter(z => z.restaurantId)
           .map(z => z.restaurantId.toString());
@@ -217,7 +217,7 @@ export const getOrderDetails = asyncHandler(async (req, res) => {
     const decodedId = orderId ? decodeURIComponent(orderId) : "";
     const trimmedId = decodedId.trim();
     const cleanId = trimmedId.replace(/\s+/g, '');
-    
+
     const variants = [orderId, decodedId, trimmedId, cleanId];
     if (trimmedId && !variants.includes(`${trimmedId} `)) {
       variants.push(`${trimmedId} `);
@@ -353,7 +353,7 @@ export const acceptOrder = asyncHandler(async (req, res) => {
     const decodedId = orderId ? decodeURIComponent(orderId) : "";
     const trimmedId = decodedId.trim();
     const cleanId = trimmedId.replace(/\s+/g, '');
-    
+
     const variants = [orderId, decodedId, trimmedId, cleanId];
     if (trimmedId && !variants.includes(`${trimmedId} `)) {
       variants.push(`${trimmedId} `);
@@ -1430,20 +1430,14 @@ export const confirmOrderId = asyncHandler(async (req, res) => {
     };
 
     // Add bill image URL if provided (with validation)
-    if (billImageUrl) {
-      // Validate URL format
+    if (billImageUrl && typeof billImageUrl === 'string' && billImageUrl.trim() !== '') {
       try {
-        const url = new URL(billImageUrl);
-        // Ensure it's a valid HTTP/HTTPS URL
-        if (!['http:', 'https:'].includes(url.protocol)) {
-          return errorResponse(res, 400, 'Bill image URL must be HTTP or HTTPS');
+        const urlStr = billImageUrl.trim();
+        if (!urlStr.startsWith('http://') && !urlStr.startsWith('https://')) {
+          console.warn(`⚠️ Bill image URL does not start with http/https: ${urlStr}`);
+          // Accept it anyway to avoid blocking the rider, just log a warning
         }
-        // Optional: Validate it's from Cloudinary (security check)
-        if (!url.hostname.includes('cloudinary.com') && !url.hostname.includes('res.cloudinary.com')) {
-          console.warn(`⚠️ Bill image URL is not from Cloudinary: ${url.hostname}`);
-          // Don't reject, but log warning for monitoring
-        }
-        updateData.billImageUrl = billImageUrl;
+        updateData.billImageUrl = urlStr;
         console.log(`📸 Bill image URL validated and saved for order ${order.orderId}`);
       } catch (urlError) {
         console.error(`❌ Invalid bill image URL format: ${billImageUrl}`, urlError);
@@ -1452,13 +1446,13 @@ export const confirmOrderId = asyncHandler(async (req, res) => {
     }
 
     // Add pickup image URL if provided (with validation)
-    if (pickupImageUrl) {
+    if (pickupImageUrl && typeof pickupImageUrl === 'string' && pickupImageUrl.trim() !== '') {
       try {
-        const url = new URL(pickupImageUrl);
-        if (!['http:', 'https:'].includes(url.protocol)) {
-          return errorResponse(res, 400, 'Pickup image URL must be HTTP or HTTPS');
+        const urlStr = pickupImageUrl.trim();
+        if (!urlStr.startsWith('http://') && !urlStr.startsWith('https://')) {
+          console.warn(`⚠️ Pickup image URL does not start with http/https: ${urlStr}`);
         }
-        updateData.pickupImageUrl = pickupImageUrl;
+        updateData.pickupImageUrl = urlStr;
         console.log(`📸 Pickup image URL validated and saved for order ${order.orderId}`);
       } catch (urlError) {
         console.error(`❌ Invalid pickup image URL format: ${pickupImageUrl}`, urlError);
@@ -1870,7 +1864,7 @@ export const completeDelivery = asyncHandler(async (req, res) => {
       'deliveryState.status': 'delivered',
       'deliveryState.currentPhase': 'completed'
     };
-    
+
     // Add actual trip duration if provided (convert seconds to minutes)
     const actualTripTimeSeconds = Number(actualTripTime) || 0;
     if (actualTripTimeSeconds > 0) {
@@ -1897,13 +1891,13 @@ export const completeDelivery = asyncHandler(async (req, res) => {
     }
 
     // Add drop image URL if provided (with validation)
-    if (dropImageUrl) {
+    if (dropImageUrl && typeof dropImageUrl === 'string' && dropImageUrl.trim() !== '') {
       try {
-        const url = new URL(dropImageUrl);
-        if (!['http:', 'https:'].includes(url.protocol)) {
-          return errorResponse(res, 400, 'Drop image URL must be HTTP or HTTPS');
+        const urlStr = dropImageUrl.trim();
+        if (!urlStr.startsWith('http://') && !urlStr.startsWith('https://')) {
+          console.warn(`⚠️ Drop image URL does not start with http/https: ${urlStr}`);
         }
-        updateData.dropImageUrl = dropImageUrl;
+        updateData.dropImageUrl = urlStr;
         console.log(`📸 Drop image URL validated and saved for order ${order.orderId}`);
       } catch (urlError) {
         console.error(`❌ Invalid drop image URL format: ${dropImageUrl}`, urlError);
@@ -1962,13 +1956,13 @@ export const completeDelivery = asyncHandler(async (req, res) => {
       console.error(`❌ Error releasing escrow for order ${orderIdForLog}:`, escrowError.message);
       // Continue with legacy wallet update as fallback
     }
-      // 🎁 Process Referral Rewards
-      try {
-        const { default: referralService } = await import('../../../shared/services/referralService.js');
-        await referralService.processOrderReferral(updatedOrder);
-      } catch (referralError) {
-        console.error(`❌ Error processing referral for order ${orderIdForLog}:`, referralError.message);
-      }
+    // 🎁 Process Referral Rewards
+    try {
+      const { default: referralService } = await import('../../../shared/services/referralService.js');
+      await referralService.processOrderReferral(updatedOrder);
+    } catch (referralError) {
+      console.error(`❌ Error processing referral for order ${orderIdForLog}:`, referralError.message);
+    }
 
 
     // Calculate delivery earnings based on admin's commission rules
@@ -1988,7 +1982,7 @@ export const completeDelivery = asyncHandler(async (req, res) => {
       // Haversine fallback
       const [rLng, rLat] = order.restaurantId.location.coordinates;
       const [cLng, cLat] = order.address.location.coordinates;
-      const R = 6371; 
+      const R = 6371;
       const dLat = (cLat - rLat) * Math.PI / 180;
       const dLng = (cLng - rLng) * Math.PI / 180;
       const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
@@ -2043,7 +2037,7 @@ export const completeDelivery = asyncHandler(async (req, res) => {
 
       const paymentMethod = (order.payment?.method || "").toString().toLowerCase();
       const isCOD = paymentMethod === "cash" || paymentMethod === "cod";
-      
+
       // If paymentCollectedBy is 'qr', it's NOT a cash order in terms of rider holding cash
       const isCashCollectedByRider = isCOD && paymentCollectedBy !== "qr";
       const codAmount = (Number(order.pricing?.total) || 0) + (Number(order.customerTip) || 0);

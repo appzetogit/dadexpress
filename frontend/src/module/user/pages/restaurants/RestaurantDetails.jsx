@@ -305,11 +305,11 @@ export default function RestaurantDetails() {
 
   // Recalculate distance when user location updates
   useEffect(() => {
-    if (!restaurant || !userLocation?.latitude || !userLocation?.longitude) return
+    if (!restaurant || !resolvedUserLat || !resolvedUserLng) return
     if (!restaurantLat || !restaurantLng) return
 
-    const userLat = userLocation.latitude
-    const userLng = userLocation.longitude
+    const userLat = resolvedUserLat
+    const userLng = resolvedUserLng
 
     // Check if coordinates have actually changed (with small threshold to avoid floating point issues)
     const coordsChanged =

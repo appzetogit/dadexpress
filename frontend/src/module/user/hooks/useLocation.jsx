@@ -2493,9 +2493,6 @@ export function useLocation() {
   // so zone detection and UI update in real time without waiting for watcher cycles.
   useEffect(() => {
     const handleExternalLocationUpdate = (event) => {
-      const isPausedOrLocked = isManualAddressLocked() || sessionStorage.getItem("__location_selecting_active") === "true";
-      if (isPausedOrLocked) return;
-
       const payload = event?.detail || {}
       const latitude = Number(payload?.latitude)
       const longitude = Number(payload?.longitude)

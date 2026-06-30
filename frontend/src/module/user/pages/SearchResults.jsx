@@ -683,11 +683,11 @@ export default function SearchResults() {
     return filtered
   }, [query, selectedCategory, activeFilters, restaurantsData, categoryKeywords, loadingCategories])
 
-  // Check if should show grayscale (user out of service)
+  // NOTE: We do NOT apply page-level grayscale anymore to prevent black/white screen flicker
   const shouldShowGrayscale = isOutOfService
 
   return (
-    <div className={`min-h-screen bg-white dark:bg-[#0a0a0a] ${shouldShowGrayscale ? 'grayscale opacity-75' : ''}`}>
+    <div className={`min-h-screen bg-white dark:bg-[#0a0a0a]`}>
       {/* Sticky Header */}
       <div className="sticky top-0 z-20 bg-white dark:bg-[#1a1a1a] shadow-sm">
         <div className="max-w-7xl mx-auto">
@@ -832,7 +832,7 @@ export default function SearchResults() {
                     to={`/user/restaurants/${restaurant.slug || restaurant.name.toLowerCase().replace(/\s+/g, '-')}`}
                     className="block"
                   >
-                    <div className={`group ${shouldShowGrayscale ? 'grayscale opacity-75' : ''}`}>
+                    <div className={`group`}>
                       {/* Image Container */}
                       <div className="relative aspect-square rounded-xl overflow-hidden mb-2 bg-gray-200 dark:bg-gray-800">
                         {restaurant.image ? (
@@ -899,8 +899,7 @@ export default function SearchResults() {
 
               return (
                 <Link key={restaurant.id} to={`/user/restaurants/${restaurant.slug || restaurantSlug}`} className="h-full flex">
-                  <Card className={`overflow-hidden cursor-pointer border-0 dark:border-gray-800 group bg-white dark:bg-[#1a1a1a] shadow-md hover:shadow-xl transition-all duration-300 py-0 rounded-md flex flex-col h-full w-full ${shouldShowGrayscale ? 'grayscale opacity-75' : ''
-                    }`}>
+                  <Card className={`overflow-hidden cursor-pointer border-0 dark:border-gray-800 group bg-white dark:bg-[#1a1a1a] shadow-md hover:shadow-xl transition-all duration-300 py-0 rounded-md flex flex-col h-full w-full`}>
                     {/* Image Section */}
                     <div className="relative h-44 sm:h-52 md:h-60 lg:h-64 xl:h-72 w-full overflow-hidden rounded-t-md flex-shrink-0 bg-gray-200 dark:bg-gray-800">
                       {restaurant.image ? (

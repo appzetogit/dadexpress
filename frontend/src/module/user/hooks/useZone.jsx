@@ -132,29 +132,29 @@ export function useZone(locationInput) {
     }
   }, [])
 
+  const manualAddress = getManualAddressDetails()
+  
+  // Extract manual details if available
+  let manualLat = null
+  let manualLng = null
+  let manualZoneId = null
+  let manualZone = null
+  
+  if (manualAddress) {
+    const coords = Array.isArray(manualAddress.location?.coordinates)
+      ? manualAddress.location.coordinates
+      : null
+    manualLng = toNumber(coords?.[0] ?? manualAddress.longitude ?? manualAddress.lng)
+    manualLat = toNumber(coords?.[1] ?? manualAddress.latitude ?? manualAddress.lat)
+    manualZoneId = manualAddress.zoneId || manualAddress.zone?._id || manualAddress.zone?.id || null
+    manualZone = manualAddress.zone || null
+  }
+
+  const activeLat = isManualMode ? manualLat : location?.latitude
+  const activeLng = isManualMode ? manualLng : location?.longitude
+
   // Auto-detect zone when location changes or manual address selection changes
   useEffect(() => {
-    const manualAddress = getManualAddressDetails()
-    
-    // Extract manual details if available
-    let manualLat = null
-    let manualLng = null
-    let manualZoneId = null
-    let manualZone = null
-    
-    if (manualAddress) {
-      const coords = Array.isArray(manualAddress.location?.coordinates)
-        ? manualAddress.location.coordinates
-        : null
-      manualLng = toNumber(coords?.[0] ?? manualAddress.longitude ?? manualAddress.lng)
-      manualLat = toNumber(coords?.[1] ?? manualAddress.latitude ?? manualAddress.lat)
-      manualZoneId = manualAddress.zoneId || manualAddress.zone?._id || manualAddress.zone?.id || null
-      manualZone = manualAddress.zone || null
-    }
-
-    const activeLat = isManualMode ? manualLat : location?.latitude
-    const activeLng = isManualMode ? manualLng : location?.longitude
-
     if (isManualMode) {
       if (activeLat && activeLng) {
         // Saved/manual addresses can carry stale zoneId data.
@@ -216,28 +216,14 @@ export function useZone(locationInput) {
          setZone(null)
       }
     }
-  }, [location?.latitude, location?.longitude, detectZone, isManualMode, getManualAddressDetails, locationInput?.isManualMode])
+  }, [location?.latitude, location?.longitude, activeLat, activeLng, detectZone, isManualMode, manualZoneId])
 
   // Manual refresh zone
   const refreshZone = useCallback(() => {
-    let activeLat = location?.latitude
-    let activeLng = location?.longitude
-
-    if (isManualMode) {
-      const manualAddress = getManualAddressDetails()
-      if (manualAddress) {
-        const coords = Array.isArray(manualAddress.location?.coordinates)
-          ? manualAddress.location.coordinates
-          : null
-        activeLng = toNumber(coords?.[0] ?? manualAddress.longitude ?? manualAddress.lng)
-        activeLat = toNumber(coords?.[1] ?? manualAddress.latitude ?? manualAddress.lat)
-      }
-    }
-
     if (activeLat && activeLng) {
       detectZone(activeLat, activeLng)
     }
-  }, [location?.latitude, location?.longitude, detectZone, isManualMode, getManualAddressDetails])
+  }, [activeLat, activeLng, detectZone])
 
   return {
     zoneId,
@@ -247,6 +233,8 @@ export function useZone(locationInput) {
     error,
     isInService: zoneStatus === 'IN_SERVICE',
     isOutOfService: zoneStatus === 'OUT_OF_SERVICE',
-    refreshZone
+    refreshZone,
+    activeLat,
+    activeLng
   }
 }
