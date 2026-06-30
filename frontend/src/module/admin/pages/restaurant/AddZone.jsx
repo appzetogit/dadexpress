@@ -160,7 +160,7 @@ export default function AddZone() {
       if (apiKey) {
         const loader = new Loader({
           apiKey: apiKey,
-          version: "weekly",
+          version: "3.64",
           libraries: ["places", "drawing", "geometry"]
         })
 

@@ -387,6 +387,7 @@ export const detectUserZone = asyncHandler(async (req, res) => {
           if (intersect) inside = !inside;
         }
         isInZone = inside;
+        console.log(`[ZONE_DEBUG] Zone "${zone.name}": user(${userLat}, ${userLng}) inside=${inside}, points=${zone.coordinates.length}`);
       }
 
       if (isInZone) {
@@ -424,11 +425,25 @@ export const detectUserZone = asyncHandler(async (req, res) => {
     }
 
     if (!userZone) {
-      return successResponse(res, 200, 'User location is outside all service zones', {
-        status: 'OUT_OF_SERVICE',
-        zoneId: null,
-        zone: null,
-        message: 'Your location is not within any active delivery zone. Please check if delivery is available in your area.'
+      // TEMPORARY DEBUG: Force IN_SERVICE even if not in zone
+      // return successResponse(res, 200, 'User location is outside all service zones', {
+      //   status: 'OUT_OF_SERVICE',
+      //   zoneId: null,
+      //   zone: null,
+      //   message: 'Your location is not within any active delivery zone. Please check if delivery is available in your area.'
+      // });
+      console.log(`[ZONE_DEBUG] Forcing IN_SERVICE for testing user location: lat=${userLat}, lng=${userLng}`);
+      return successResponse(res, 200, 'Forced IN_SERVICE for debugging', {
+        status: 'IN_SERVICE',
+        zoneId: activeZones[0] ? activeZones[0]._id.toString() : 'debug_zone_id',
+        zone: activeZones[0] ? {
+          _id: activeZones[0]._id.toString(),
+          name: activeZones[0].name || activeZones[0].zoneName,
+          zoneName: activeZones[0].zoneName || activeZones[0].name,
+          country: activeZones[0].country,
+          unit: activeZones[0].unit
+        } : null,
+        message: 'Forced service for debugging'
       });
     }
 

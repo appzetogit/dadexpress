@@ -150,8 +150,8 @@ export function useZone(locationInput) {
     manualZone = manualAddress.zone || null
   }
 
-  const activeLat = isManualMode ? manualLat : location?.latitude
-  const activeLng = isManualMode ? manualLng : location?.longitude
+  const activeLat = manualLat || location?.latitude
+  const activeLng = manualLng || location?.longitude
 
   // Auto-detect zone when location changes or manual address selection changes
   useEffect(() => {

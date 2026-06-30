@@ -34,6 +34,7 @@ export default function TableBooking() {
                     const apiRestaurant = response.data.data
                     const actualRestaurant = apiRestaurant?.restaurant || apiRestaurant
                     setRestaurant(actualRestaurant)
+                    setLoading(false)
                     return
                 }
             } catch (error) {

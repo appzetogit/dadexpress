@@ -57,7 +57,9 @@ export default function RestaurantDetails() {
   const { addToCart, updateQuantity, removeFromCart, getCartItem, cart } = useCart()
   const { vegMode, addDishFavorite, removeDishFavorite, isDishFavorite, getDishFavorites, getFavorites, addFavorite, removeFavorite, isFavorite } = useProfile()
   const { location: userLocation } = useLocation() // Get user's current location
-  const { zoneId, zone, loading: loadingZone, isOutOfService } = useZone(userLocation) // Get user's zone for zone-based filtering
+  const { zoneId, zone, loading: loadingZone, isOutOfService, activeLat, activeLng } = useZone(userLocation) // Get user's zone for zone-based filtering
+  const resolvedUserLat = activeLat || userLocation?.latitude
+  const resolvedUserLng = activeLng || userLocation?.longitude
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [highlightIndex, setHighlightIndex] = useState(0)
   const [quantities, setQuantities] = useState({})
