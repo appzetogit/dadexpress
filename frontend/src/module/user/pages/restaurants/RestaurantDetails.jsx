@@ -419,10 +419,11 @@ export default function RestaurantDetails() {
     }
 
     // CRITICAL: Check if user is in service zone — skip block during zone detection loading
-    if (isOutOfService && !loadingZone) {
-      toast.error('You are outside the service zone. Please select a location within the service area.');
-      return;
-    }
+    // User requested to remove this out of zone restriction
+    // if (isOutOfService && !loadingZone) {
+    //   toast.error('You are outside the service zone. Please select a location within the service area.');
+    //   return;
+    // }
 
     // Update local state
     setQuantities((prev) => ({
@@ -1072,7 +1073,7 @@ export default function RestaurantDetails() {
   // Only show unserviceable state when DEFINITIVELY out of service and zone detection is complete
   // Don't disable during loading (GPS updating) or transient API errors
   const isUnserviceable = isOutOfService && !loadingZone
-  const shouldShowGrayscale = isUnserviceable; // Keep for compatibility with existing UI disabled states
+  const shouldShowGrayscale = false; // User requested to disable the "black and white" state
 
   return (
     <AnimatedPage
@@ -1080,11 +1081,12 @@ export default function RestaurantDetails() {
       className="min-h-screen bg-white dark:bg-[#0a0a0a] flex flex-col transition-all duration-300"
     >
       {isUnserviceable && (
-        <div className="bg-red-500 text-white px-4 py-2 text-center text-sm font-medium shadow-sm z-50 sticky top-0 flex items-center justify-center gap-2">
+        <div className="hidden">
           <AlertCircle className="h-4 w-4" />
           Currently not delivering to your location
         </div>
       )}
+
       {/* Header - Back, Search, Menu (like reference image) */}
       <div className="px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 pt-3 md:pt-4 lg:pt-5 pb-2 md:pb-3 bg-white dark:bg-[#1a1a1a]">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
