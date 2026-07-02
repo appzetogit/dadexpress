@@ -12,6 +12,8 @@ import Zone from "../../admin/models/Zone.js";
 import Menu from "../../restaurant/models/Menu.js";
 import emailService from "../../auth/services/emailService.js";
 import mongoose from "mongoose";
+import DiningBill from "../models/DiningBill.js";
+import { createOrder as createRazorpayOrder, verifyPayment as verifyRazorpayPayment } from "../../payment/services/razorpayService.js";
 
 /**
  * Calculate distance between two points (Haversine formula)
@@ -430,7 +432,7 @@ export const getStories = async (req, res) => {
 // Create a new table booking
 export const createBooking = async (req, res) => {
   try {
-    const { restaurant, guests, date, timeSlot, specialRequest } = req.body;
+    const { restaurant, guests, date, timeSlot, specialRequest, guestName, guestPhone } = req.body;
     const userId = req.user._id;
 
     const booking = await TableBooking.create({
@@ -440,6 +442,8 @@ export const createBooking = async (req, res) => {
       date,
       timeSlot,
       specialRequest,
+      guestName,
+      guestPhone,
       status: "confirmed",
     });
 
@@ -636,5 +640,146 @@ export const createDiningReview = async (req, res) => {
       message: "Failed to create review",
       error: error.message,
     });
+  }
+};
+
+// Initiate Pay Bill Payment
+export const initiateDiningBillPayment = async (req, res) => {
+  try {
+    const { restaurantId, amount } = req.body;
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ success: false, message: "Invalid amount" });
+    }
+
+    if (!restaurantId) {
+      return res.status(400).json({ success: false, message: "Restaurant ID is required" });
+    }
+
+    let restaurant = await DiningRestaurant.findById(restaurantId).populate("restaurant");
+    if (!restaurant) {
+      restaurant = await Restaurant.findById(restaurantId);
+    }
+    
+    if (!restaurant) {
+      return res.status(404).json({ success: false, message: `Restaurant not found for ID: ${restaurantId}` });
+    }
+
+    // Dynamic discount/cashback percentage from DB (default 10%)
+    const baseRestaurant = restaurant.diningSettings ? restaurant : (restaurant.restaurant || restaurant);
+    const cashbackPercentage = baseRestaurant?.diningSettings?.billCashbackPercentage || 10;
+    const discountApplied = Math.round(amount * (cashbackPercentage / 100));
+    const finalAmount = amount - discountApplied;
+
+    // Create Razorpay Order
+    // finalAmount is in INR, razorpay needs it in paise
+    const razorpayOrder = await createRazorpayOrder({
+      amount: finalAmount * 100,
+      currency: "INR",
+      receipt: `receipt_${Date.now()}`
+    });
+
+    if (!razorpayOrder) {
+      return res.status(500).json({ success: false, message: "Failed to create payment order" });
+    }
+
+    // Save Bill in DB
+    const newBill = new DiningBill({
+      user: req.user._id,
+      restaurant: baseRestaurant._id,
+      billAmount: amount,
+      discountApplied,
+      finalAmount,
+      paymentDetails: {
+        method: "razorpay",
+        razorpayOrderId: razorpayOrder.id,
+      }
+    });
+    await newBill.save();
+
+    res.status(200).json({
+      success: true,
+      data: {
+        bill: newBill,
+        razorpay: {
+          orderId: razorpayOrder.id,
+          amount: razorpayOrder.amount,
+          currency: razorpayOrder.currency,
+          key: process.env.RAZORPAY_KEY_ID
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error("Error initiating pay bill:", error);
+    res.status(500).json({ success: false, message: `Payment Error: ${error.message}` });
+  }
+};
+
+// Verify Pay Bill Payment
+export const verifyDiningBillPayment = async (req, res) => {
+  try {
+    const { billId, razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+
+    const isValid = verifyRazorpayPayment({
+      orderId: razorpay_order_id,
+      paymentId: razorpay_payment_id,
+      signature: razorpay_signature
+    });
+
+    if (!isValid) {
+      return res.status(400).json({ success: false, message: "Invalid payment signature" });
+    }
+
+    const bill = await DiningBill.findOne({ _id: billId });
+    if (!bill) {
+      return res.status(404).json({ success: false, message: "Bill not found" });
+    }
+
+    bill.paymentStatus = "completed";
+    bill.paymentDetails.razorpayPaymentId = razorpay_payment_id;
+    bill.paymentDetails.razorpaySignature = razorpay_signature;
+    await bill.save();
+
+    res.status(200).json({ success: true, message: "Payment verified successfully", data: bill });
+
+  } catch (error) {
+    console.error("Error verifying pay bill:", error);
+    res.status(500).json({ success: false, message: "Failed to verify payment", error: error.message });
+  }
+};
+
+// Get User Dining Bills
+export const getUserDiningBills = async (req, res) => {
+  try {
+    const bills = await DiningBill.find({ user: req.user._id })
+      .populate("restaurant", "name image profileImage location")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({ success: true, data: bills });
+  } catch (error) {
+    console.error("Error fetching user dining bills:", error);
+    res.status(500).json({ success: false, message: "Failed to fetch dining bills", error: error.message });
+  }
+};
+
+// Delete User Dining Bill (Only if pending or failed)
+export const deleteDiningBill = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const bill = await DiningBill.findOne({ _id: id, user: req.user._id });
+    
+    if (!bill) {
+      return res.status(404).json({ success: false, message: "Bill not found" });
+    }
+
+    if (bill.paymentStatus === "completed") {
+      return res.status(400).json({ success: false, message: "Cannot delete a completed bill" });
+    }
+
+    await DiningBill.findByIdAndDelete(id);
+    res.status(200).json({ success: true, message: "Bill deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting dining bill:", error);
+    res.status(500).json({ success: false, message: "Failed to delete dining bill", error: error.message });
   }
 };

@@ -315,6 +315,24 @@ const restaurantSchema = new mongoose.Schema(
         type: String,
         default: "family-dining", // e.g., 'fine-dining', 'cafe', 'casual-dining'
       },
+      billCashbackPercentage: {
+        type: Number,
+        default: 10,
+      },
+      slots: {
+        Lunch: [
+          {
+            time: { type: String },
+            discount: { type: String, default: "No OFF" }
+          }
+        ],
+        Dinner: [
+          {
+            time: { type: String },
+            discount: { type: String, default: "No OFF" }
+          }
+        ]
+      }
     },
     businessModel: {
       type: String,
@@ -443,7 +461,7 @@ restaurantSchema.pre("save", async function () {
     let uniqueSlug = baseSlug;
     let counter = 1;
     const RestaurantModel = this.constructor;
-    
+
     // Check if slug already exists (excluding current document if updating)
     const existingDoc = await RestaurantModel.findOne({ slug: uniqueSlug });
     if (existingDoc && (!this._id || existingDoc._id.toString() !== this._id.toString())) {

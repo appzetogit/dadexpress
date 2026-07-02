@@ -9,6 +9,7 @@ import AdminCommission from "../models/AdminCommission.js";
 import OrderSettlement from "../../order/models/OrderSettlement.js";
 import AdminWallet from "../models/AdminWallet.js";
 import StaffManagement from "../../restaurant/models/StaffManagement.js";
+import DiningBill from "../../dining/models/DiningBill.js";
 import {
   successResponse,
   errorResponse,
@@ -3892,5 +3893,19 @@ export const deleteAddonForAdmin = asyncHandler(async (req, res) => {
       addons: menu.addons,
       isActive: menu.isActive,
     },
+  });
+});
+
+// @desc    Get all dining bills for admin
+// @route   GET /api/admin/dining/bills
+// @access  Private/Admin
+export const getAdminDiningBills = asyncHandler(async (req, res) => {
+  const bills = await DiningBill.find()
+    .populate("user", "name email phone profileImage")
+    .populate("restaurant", "name image profileImage location")
+    .sort({ createdAt: -1 });
+
+  return successResponse(res, 200, 'Dining bills fetched successfully', {
+    bills
   });
 });

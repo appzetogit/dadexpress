@@ -9,7 +9,8 @@ import {
   getUserAddresses,
   addUserAddress,
   updateUserAddress,
-  deleteUserAddress
+  deleteUserAddress,
+  toggleFavoriteRestaurant
 } from '../controllers/userController.js';
 import { updateFcmToken } from '../../auth/controllers/authController.js';
 import { authenticate } from '../../auth/middleware/auth.js';
@@ -58,6 +59,9 @@ router.use('/complaints', complaintRoutes);
 
 // Referral routes
 router.use('/referral', referralRoutes);
+
+// Favorite routes
+router.post('/favorites/toggle', toggleFavoriteRestaurant);
 
 export default router;
 

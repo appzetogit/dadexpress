@@ -877,3 +877,42 @@ export const deleteAccount = asyncHandler(async (req, res) => {
     return errorResponse(res, 500, 'Failed to delete account');
   }
 });
+
+/**
+ * Toggle favorite restaurant
+ * POST /api/user/favorites/toggle
+ */
+export const toggleFavoriteRestaurant = asyncHandler(async (req, res) => {
+  try {
+    const { restaurantId } = req.body;
+    if (!restaurantId) return errorResponse(res, 400, 'Restaurant ID is required');
+
+    const user = await User.findById(req.user._id);
+    if (!user) return errorResponse(res, 404, 'User not found');
+
+    const favIndex = user.favorites.findIndex(f => f.restaurantId.toString() === restaurantId.toString());
+    let isFavorite = false;
+
+    if (favIndex > -1) {
+      user.favorites.splice(favIndex, 1);
+    } else {
+      user.favorites.push({ restaurantId });
+      isFavorite = true;
+    }
+
+    await user.save();
+
+    logger.info(`Favorite toggled for user: ${user._id}`, {
+      restaurantId,
+      isFavorite
+    });
+
+    return successResponse(res, 200, 'Favorites updated successfully', {
+      isFavorite,
+      favorites: user.favorites
+    });
+  } catch (error) {
+    logger.error(`Error toggling favorite: ${error.message}`, { error: error.stack });
+    return errorResponse(res, 500, 'Failed to toggle favorite');
+  }
+});

@@ -1648,6 +1648,11 @@ export default function Home() {
       filtered = filtered.filter(r => r.cuisine === selectedCuisine)
     }
 
+    if (searchValue && searchValue.trim() !== "") {
+      const lowerSearch = searchValue.toLowerCase().trim()
+      filtered = filtered.filter(r => r.name.toLowerCase().includes(lowerSearch) || (r.cuisine && r.cuisine.toLowerCase().includes(lowerSearch)))
+    }
+
     // Apply sorting
     if (sortBy === 'price-low') {
       filtered.sort((a, b) => {
@@ -1685,7 +1690,7 @@ export default function Home() {
     }
 
     return filtered
-  }, [calculatedRestaurants, activeFilters, selectedCuisine, sortBy])
+  }, [calculatedRestaurants, activeFilters, selectedCuisine, sortBy, searchValue])
 
   const emptyRestaurantsMessage = useMemo(() => {
     // Check if guest (skipped login)

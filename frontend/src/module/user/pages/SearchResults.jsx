@@ -295,70 +295,8 @@ export default function SearchResults() {
               }
             })
 
-          // Wait for all menu fetches to complete
-          const restaurantsWithMenus = await Promise.all(
-            transformedRestaurants.map(async (restaurant) => {
-              try {
-                const menuResponse = await restaurantAPI.getMenuByRestaurantId(restaurant.restaurantId)
-                if (menuResponse.data && menuResponse.data.success && menuResponse.data.data && menuResponse.data.data.menu) {
-                  const menu = menuResponse.data.data.menu
-
-                  // Store menu data for dynamic filtering
-                  const hasPaneer = checkCategoryInMenu(menu, 'paneer-tikka')
-
-                  // Get featured dish and price from menu if not set in restaurant
-                  let featuredDish = restaurant.featuredDish
-                  let featuredPrice = restaurant.featuredPrice
-
-                  // If featured dish/price not set, get from first available menu item
-                  if (!featuredDish || !featuredPrice) {
-                    for (const section of (menu.sections || [])) {
-                      if (section.items && section.items.length > 0) {
-                        const firstItem = section.items[0]
-                        if (!featuredDish) featuredDish = firstItem.name
-                        if (!featuredPrice) {
-                          // Calculate final price considering discounts
-                          const originalPrice = firstItem.originalPrice || firstItem.price || 0
-                          const discountPercent = firstItem.discountPercent || 0
-                          featuredPrice = discountPercent > 0
-                            ? Math.round(originalPrice * (1 - discountPercent / 100))
-                            : originalPrice
-                        }
-                        break
-                      }
-                    }
-                  }
-
-                  return {
-                    ...restaurant,
-                    menu: menu,
-                    hasPaneer: hasPaneer,
-                    featuredDish: featuredDish || null,
-                    featuredPrice: featuredPrice || null,
-                    categoryMatches: {},
-                  }
-                }
-                return {
-                  ...restaurant,
-                  menu: null,
-                  hasPaneer: false,
-                  categoryMatches: {},
-                }
-              } catch (error) {
-                // If menu fetch fails, keep restaurant without menu data
-                console.warn(`Failed to fetch menu for restaurant ${restaurant.restaurantId}:`, error)
-                return {
-                  ...restaurant,
-                  menu: null,
-                  hasPaneer: false,
-                  categoryMatches: {},
-                }
-              }
-            })
-          )
-
-          console.log(`✅ Final transformed restaurants: ${restaurantsWithMenus.length}`)
-          setRestaurantsData(restaurantsWithMenus)
+          console.log(`✅ Final transformed restaurants: ${transformedRestaurants.length}`)
+          setRestaurantsData(transformedRestaurants)
         } else {
           console.warn('⚠️ No restaurants in API response. Response structure:', {
             hasData: !!response.data,
@@ -475,14 +413,13 @@ export default function SearchResults() {
     const sourceData = restaurantsData.length > 0 ? restaurantsData : []
     let filtered = [...sourceData]
 
-    // Filter by search query
+    // Filter by search query - only show restaurants that match the search term
     if (query.trim()) {
       const lowerQuery = query.toLowerCase()
       filtered = filtered.filter(r =>
         r.name?.toLowerCase().includes(lowerQuery) ||
         r.cuisine?.toLowerCase().includes(lowerQuery) ||
-        r.featuredDish?.toLowerCase().includes(lowerQuery) ||
-        r.category === selectedCategory
+        r.featuredDish?.toLowerCase().includes(lowerQuery)
       )
     }
 
@@ -605,7 +542,7 @@ export default function SearchResults() {
           }
         }
 
-        return nameMatch || cuisineMatch || dishMatch || menuMatch || r.category === selectedCategory
+        return nameMatch || cuisineMatch || dishMatch || menuMatch
       })
     }
 

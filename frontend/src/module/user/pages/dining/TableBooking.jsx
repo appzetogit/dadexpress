@@ -1,9 +1,8 @@
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { useLocation, useNavigate, useParams } from "react-router-dom"
 import { ArrowLeft, ChevronDown, Calendar, Clock, Ticket } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import AnimatedPage from "../../components/AnimatedPage"
-import { useEffect } from "react"
 import { diningAPI, restaurantAPI } from "@/lib/api"
 import Loader from "@/components/Loader"
 
@@ -18,6 +17,7 @@ export default function TableBooking() {
     const [selectedDate, setSelectedDate] = useState(new Date())
     const [activeTimeOfDay, setActiveTimeOfDay] = useState("Lunch")
     const [selectedSlot, setSelectedSlot] = useState(null)
+    const [showAllSlots, setShowAllSlots] = useState(false)
 
     useEffect(() => {
         const fetchRestaurant = async () => {
@@ -41,11 +41,13 @@ export default function TableBooking() {
                 console.error("Error fetching restaurant:", error)
             }
 
+            // Fallback lookup
             try {
                 const listResp = await restaurantAPI.getRestaurants()
-                const restaurants = listResp?.data?.data?.restaurants || listResp?.data?.data || []
+                const restaurants = listResp.data?.data?.restaurants || []
+                
                 const requestedSlug = normalizeSlug(slug)
-                const match = restaurants.find((r) => {
+                const match = restaurants.find(r => {
                     const dbSlug = normalizeSlug(r?.slug || "")
                     const nameSlug = normalizeSlug(r?.name || "")
                     return dbSlug === requestedSlug || nameSlug === requestedSlug
@@ -93,7 +95,7 @@ export default function TableBooking() {
         return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
     }
 
-    const slots = {
+    const defaultSlots = {
         Lunch: [
             { time: "12:00 PM", discount: "20% OFF" },
             { time: "12:30 PM", discount: "20% OFF" },
@@ -119,6 +121,13 @@ export default function TableBooking() {
             { time: "10:30 PM", discount: "20% OFF" },
         ]
     }
+
+    const dbSlots = restaurant?.diningSettings?.slots
+    const hasDbSlots = dbSlots && (dbSlots.Lunch?.length > 0 || dbSlots.Dinner?.length > 0)
+    const slots = hasDbSlots ? {
+        Lunch: dbSlots.Lunch || [],
+        Dinner: dbSlots.Dinner || []
+    } : defaultSlots
 
     if (loading) return <Loader />
     if (!restaurant) return <div>Restaurant not found</div>
@@ -229,7 +238,10 @@ export default function TableBooking() {
                         {["Lunch", "Dinner"].map(type => (
                             <button
                                 key={type}
-                                onClick={() => setActiveTimeOfDay(type)}
+                                onClick={() => {
+                                    setActiveTimeOfDay(type)
+                                    setShowAllSlots(false)
+                                }}
                                 className={`flex-1 py-2.5 rounded-lg font-bold text-sm transition-all ${activeTimeOfDay === type
                                     ? "bg-white text-gray-900 shadow-sm"
                                     : "text-gray-500 hover:text-gray-700"
@@ -242,7 +254,7 @@ export default function TableBooking() {
 
                     {/* Slots Grid */}
                     <div className="grid grid-cols-3 gap-3">
-                        {slots[activeTimeOfDay].map((slot, idx) => (
+                        {slots[activeTimeOfDay].slice(0, showAllSlots ? undefined : 6).map((slot, idx) => (
                             <button
                                 key={idx}
                                 onClick={() => setSelectedSlot(slot)}
@@ -265,9 +277,14 @@ export default function TableBooking() {
                         ))}
                     </div>
 
-                    <div className="mt-8 text-center text-red-500 font-bold text-sm flex items-center justify-center gap-1 cursor-pointer">
-                        View all slots <ChevronDown className="w-4 h-4" />
-                    </div>
+                    {slots[activeTimeOfDay].length > 6 && (
+                        <div 
+                            onClick={() => setShowAllSlots(!showAllSlots)}
+                            className="mt-8 text-center text-red-500 font-bold text-sm flex items-center justify-center gap-1 cursor-pointer"
+                        >
+                            {showAllSlots ? "View less slots" : "View all slots"} <ChevronDown className={`w-4 h-4 transition-transform ${showAllSlots ? "rotate-180" : ""}`} />
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -278,13 +295,12 @@ export default function TableBooking() {
                     onClick={handleProceed}
                     className={`w-full h-14 rounded-2xl font-bold text-lg transition-all ${selectedSlot
                         ? "bg-red-500 hover:bg-red-600 text-white shadow-xl shadow-red-200"
-                        : "bg-slate-200 text-slate-400 cursor-not-allowed"
+                        : "bg-slate-100 text-slate-400"
                         }`}
                 >
-                    Proceed
+                    Proceed to book
                 </Button>
             </div>
         </AnimatedPage>
     )
 }
-

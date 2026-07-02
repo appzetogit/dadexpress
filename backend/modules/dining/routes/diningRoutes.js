@@ -13,6 +13,10 @@ import {
   getRestaurantBookings,
   updateBookingStatus,
   createDiningReview,
+  initiateDiningBillPayment,
+  verifyDiningBillPayment,
+  getUserDiningBills,
+  deleteDiningBill
 } from "../controllers/diningController.js";
 import { authenticate as authenticateUser } from "../../auth/middleware/auth.js";
 import { authenticate as authenticateRestaurant } from "../../restaurant/middleware/restaurantAuth.js";
@@ -47,5 +51,11 @@ router.patch(
   updateBookingStatus,
 );
 router.post("/reviews", authenticateUser, createDiningReview);
+
+// Pay Bill Routes
+router.post("/bill/initiate", authenticateUser, initiateDiningBillPayment);
+router.post("/bill/verify", authenticateUser, verifyDiningBillPayment);
+router.get("/bill/my", authenticateUser, getUserDiningBills);
+router.delete("/bill/:id", authenticateUser, deleteDiningBill);
 
 export default router;

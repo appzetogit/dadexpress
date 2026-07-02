@@ -2227,7 +2227,7 @@ export default function OrderTracking() {
               )}
               <div className="pt-2 border-t border-gray-200 flex justify-between items-center">
                 <span className="text-base font-bold text-gray-900">Total Amount</span>
-                <span className="text-lg font-bold text-gray-900">₹{(order?.totalAmount || 0) + Number(order?.customerTip || 0)}</span>
+                <span className="text-lg font-bold text-gray-900">₹{Number(((order?.totalAmount || 0) + Number(order?.customerTip || 0)).toFixed(2))}</span>
               </div>
             </div>
 

@@ -1,12 +1,20 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
-import { ArrowLeft, Calendar, Users, MapPin, Ticket, ChevronRight, Edit2, ShieldCheck, Info } from "lucide-react"
+import { ArrowLeft, Calendar, Users, MapPin, Ticket, ChevronRight, Edit2, ShieldCheck, Info, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import AnimatedPage from "../../components/AnimatedPage"
 import { diningAPI, authAPI } from "@/lib/api"
-import { useEffect } from "react"
 import { toast } from "sonner"
 import Loader from "@/components/Loader"
+import {
+    Sheet,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
+    SheetTrigger,
+} from "@/components/ui/sheet"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 
 export default function TableBookingConfirmation() {
     const location = useLocation()
@@ -14,9 +22,15 @@ export default function TableBookingConfirmation() {
     const { restaurant, guests, date, timeSlot, discount } = location.state || {}
 
     const [specialRequest, setSpecialRequest] = useState("")
+    const [tempSpecialRequest, setTempSpecialRequest] = useState("")
     const [user, setUser] = useState(null)
+    const [tempUser, setTempUser] = useState({ name: "", phone: "" })
     const [loading, setLoading] = useState(true)
     const [bookingInProgress, setBookingInProgress] = useState(false)
+
+    // Modals state
+    const [isSpecialRequestOpen, setIsSpecialRequestOpen] = useState(false)
+    const [isEditDetailsOpen, setIsEditDetailsOpen] = useState(false)
 
     useEffect(() => {
         if (!restaurant) {
@@ -29,10 +43,13 @@ export default function TableBookingConfirmation() {
                 const response = await authAPI.getCurrentUser()
                 if (response.data.success) {
                     setUser(response.data.data)
+                    setTempUser({
+                        name: response.data.data.name || "",
+                        phone: response.data.data.phone || response.data.data.email || ""
+                    })
                 }
             } catch (error) {
                 console.error("Error fetching user:", error)
-                // If not logged in, navigate to sign-in but the ProtectedRoute should handle this
             } finally {
                 setLoading(false)
             }
@@ -48,12 +65,13 @@ export default function TableBookingConfirmation() {
                 guests,
                 date,
                 timeSlot,
-                specialRequest
+                specialRequest,
+                guestName: user?.name,
+                guestPhone: user?.phone
             })
 
             if (response.data.success) {
                 toast.success("Table booked successfully!")
-                // Navigate to success page with booking details
                 navigate("/dining/book-success", { state: { booking: response.data.data } })
             }
         } catch (error) {
@@ -62,6 +80,18 @@ export default function TableBookingConfirmation() {
         } finally {
             setBookingInProgress(false)
         }
+    }
+
+    const saveSpecialRequest = () => {
+        setSpecialRequest(tempSpecialRequest)
+        setIsSpecialRequestOpen(false)
+        toast.success("Special request added")
+    }
+
+    const saveUserDetails = () => {
+        setUser(prev => ({ ...prev, name: tempUser.name, phone: tempUser.phone }))
+        setIsEditDetailsOpen(false)
+        toast.success("Details updated for this booking")
     }
 
     if (loading) return <Loader />
@@ -73,7 +103,7 @@ export default function TableBookingConfirmation() {
             {/* Header */}
             <div className="bg-[#EB590E] text-white px-4 py-4 sticky top-0 z-50 shadow-md">
                 <div className="flex items-center gap-3">
-                    <button onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/') )} className="p-1 hover:bg-white/10 rounded-full transition-colors">
+                    <button onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))} className="p-1 hover:bg-white/10 rounded-full transition-colors">
                         <ArrowLeft className="w-6 h-6" />
                     </button>
                     <p className="font-semibold text-sm">Reach the restaurant 15 minutes before your booking time for a hassle-free experience</p>
@@ -119,15 +149,37 @@ export default function TableBookingConfirmation() {
                 </div>
 
                 {/* Special Request */}
-                <button className="w-full bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-center justify-between group">
-                    <div className="flex items-center gap-3">
-                        <div className="bg-slate-100 p-2 rounded-xl group-hover:bg-slate-200 transition-colors">
-                            <Info className="w-5 h-5 text-slate-600" />
+                <Sheet open={isSpecialRequestOpen} onOpenChange={setIsSpecialRequestOpen}>
+                    <SheetTrigger asChild>
+                        <button className="w-full bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-center justify-between group">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-slate-100 p-2 rounded-xl group-hover:bg-slate-200 transition-colors">
+                                    <Info className="w-5 h-5 text-slate-600" />
+                                </div>
+                                <span className="font-bold text-gray-700">
+                                    {specialRequest ? "Edit special request" : "Add special request"}
+                                </span>
+                            </div>
+                            <ChevronRight className="w-5 h-5 text-slate-400" />
+                        </button>
+                    </SheetTrigger>
+                    <SheetContent side="bottom" className="rounded-t-2xl px-4 pb-8">
+                        <SheetHeader className="pb-4">
+                            <SheetTitle>Add Special Request</SheetTitle>
+                        </SheetHeader>
+                        <div className="space-y-4">
+                            <Textarea
+                                placeholder="Any special requests? (e.g. corner table, anniversary celebration)"
+                                value={tempSpecialRequest}
+                                onChange={(e) => setTempSpecialRequest(e.target.value)}
+                                className="min-h-[120px] rounded-xl resize-none"
+                            />
+                            <Button onClick={saveSpecialRequest} className="w-full h-12 rounded-xl bg-[#EB590E] hover:bg-[#d9520d] text-white font-bold">
+                                Save Request
+                            </Button>
                         </div>
-                        <span className="font-bold text-gray-700">Add special request</span>
-                    </div>
-                    <ChevronRight className="w-5 h-5 text-slate-400" />
-                </button>
+                    </SheetContent>
+                </Sheet>
 
                 {/* Preferences Section */}
                 <div className="pt-4">
@@ -138,31 +190,59 @@ export default function TableBookingConfirmation() {
                     </div>
 
                     <div className="space-y-2">
-                        <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-center justify-between">
-                            <div className="flex items-start gap-3">
-                                <div className="text-[#EB590E] mt-1">
-                                    <Edit2 className="w-5 h-5" />
+                        {/* Modification available */}
+                        <Sheet>
+                            <SheetTrigger asChild>
+                                <button className="w-full text-left bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-center justify-between">
+                                    <div className="flex items-start gap-3">
+                                        <div className="text-[#EB590E] mt-1">
+                                            <Edit2 className="w-5 h-5" />
+                                        </div>
+                                        <div>
+                                            <p className="font-bold text-gray-800 text-sm">Modification available</p>
+                                            <p className="text-xs text-slate-400">Valid till {timeSlot}, today</p>
+                                        </div>
+                                    </div>
+                                    <ChevronRight className="w-4 h-4 text-slate-300" />
+                                </button>
+                            </SheetTrigger>
+                            <SheetContent side="bottom" className="rounded-t-2xl px-4 pb-8">
+                                <SheetHeader className="pb-4">
+                                    <SheetTitle>Modification Policy</SheetTitle>
+                                </SheetHeader>
+                                <div className="space-y-4 text-sm text-slate-600">
+                                    <p>You can modify your booking details such as guest count or time slot up to 30 minutes before your reservation time.</p>
+                                    <p>To modify, please go back to the restaurant page and select your new preferences, or contact the restaurant directly.</p>
                                 </div>
-                                <div>
-                                    <p className="font-bold text-gray-800 text-sm">Modification available</p>
-                                    <p className="text-xs text-slate-400">Valid till {timeSlot}, today</p>
-                                </div>
-                            </div>
-                            <ChevronRight className="w-4 h-4 text-slate-300" />
-                        </div>
+                            </SheetContent>
+                        </Sheet>
 
-                        <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-center justify-between">
-                            <div className="flex items-start gap-3">
-                                <div className="text-red-400 mt-1">
-                                    <ShieldCheck className="w-5 h-5" />
+                        {/* Cancellation available */}
+                        <Sheet>
+                            <SheetTrigger asChild>
+                                <button className="w-full text-left bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-center justify-between">
+                                    <div className="flex items-start gap-3">
+                                        <div className="text-red-400 mt-1">
+                                            <ShieldCheck className="w-5 h-5" />
+                                        </div>
+                                        <div>
+                                            <p className="font-bold text-gray-800 text-sm">Cancellation available</p>
+                                            <p className="text-xs text-slate-400">Valid till {timeSlot}, today</p>
+                                        </div>
+                                    </div>
+                                    <ChevronRight className="w-4 h-4 text-slate-300" />
+                                </button>
+                            </SheetTrigger>
+                            <SheetContent side="bottom" className="rounded-t-2xl px-4 pb-8">
+                                <SheetHeader className="pb-4">
+                                    <SheetTitle>Cancellation Policy</SheetTitle>
+                                </SheetHeader>
+                                <div className="space-y-4 text-sm text-slate-600">
+                                    <p>Free cancellation is available up to 30 minutes before your scheduled arrival time.</p>
+                                    <p>If you cancel after this time, or fail to show up, any cover charges paid might not be refunded per the restaurant's policy.</p>
                                 </div>
-                                <div>
-                                    <p className="font-bold text-gray-800 text-sm">Cancellation available</p>
-                                    <p className="text-xs text-slate-400">Valid till {timeSlot}, today</p>
-                                </div>
-                            </div>
-                            <ChevronRight className="w-4 h-4 text-slate-300" />
-                        </div>
+                            </SheetContent>
+                        </Sheet>
                     </div>
                 </div>
 
@@ -176,10 +256,46 @@ export default function TableBookingConfirmation() {
 
                     <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 flex items-center justify-between">
                         <div>
-                            <p className="font-bold text-gray-900">{user?.name || "Shailu"}</p>
-                            <p className="text-sm text-slate-400 mt-1">{user?.phone || user?.email || "8090512291"}</p>
+                            <p className="font-bold text-gray-900">{user?.name || "Guest"}</p>
+                            <p className="text-sm text-slate-400 mt-1">{user?.phone || user?.email || ""}</p>
                         </div>
-                        <button className="text-red-500 text-sm font-bold hover:underline">Edit</button>
+                        <Sheet open={isEditDetailsOpen} onOpenChange={setIsEditDetailsOpen}>
+                            <SheetTrigger asChild>
+                                <button className="text-red-500 text-sm font-bold hover:underline">Edit</button>
+                            </SheetTrigger>
+                            <SheetContent side="bottom" className="rounded-t-2xl px-4 pb-8">
+                                <SheetHeader className="pb-4">
+                                    <SheetTitle>Edit Details</SheetTitle>
+                                </SheetHeader>
+                                <div className="space-y-4">
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-semibold text-slate-700">Name</label>
+                                        <Input
+                                            value={tempUser.name}
+                                            onChange={(e) => setTempUser({ ...tempUser, name: e.target.value })}
+                                            placeholder="Enter your name"
+                                            className="h-12 rounded-xl"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-semibold text-slate-700">Phone Number</label>
+                                        <Input
+                                            type="tel"
+                                            value={tempUser.phone}
+                                            onChange={(e) => {
+                                                const numericValue = e.target.value.replace(/\D/g, '').slice(0, 10);
+                                                setTempUser({ ...tempUser, phone: numericValue });
+                                            }}
+                                            placeholder="Enter phone number"
+                                            className="h-12 rounded-xl"
+                                        />
+                                    </div>
+                                    <Button onClick={saveUserDetails} className="w-full h-12 rounded-xl bg-[#EB590E] hover:bg-[#d9520d] text-white font-bold mt-2">
+                                        Save Details
+                                    </Button>
+                                </div>
+                            </SheetContent>
+                        </Sheet>
                     </div>
                 </div>
 
