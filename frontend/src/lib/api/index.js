@@ -181,6 +181,11 @@ export const userAPI = {
     return apiClient.delete(API_ENDPOINTS.USER.PROFILE);
   },
 
+  // Toggle favorite restaurant
+  toggleFavorite: (restaurantId) => {
+    return apiClient.post('/user/favorites/toggle', { restaurantId });
+  },
+
   // Upload profile image
   uploadProfileImage: (file) => {
     const formData = new FormData();
@@ -1720,6 +1725,11 @@ export const adminAPI = {
     return apiClient.get(API_ENDPOINTS.ADMIN.BUSINESS_SETTINGS);
   },
 
+  // Dining Bills Management
+  getAdminDiningBills: () => {
+    return apiClient.get("/admin/dining/bills");
+  },
+
   updateBusinessSettings: (data, files = {}) => {
     const formData = new FormData();
 
@@ -2332,6 +2342,26 @@ export const diningAPI = {
   // Create review
   createReview: (reviewData) => {
     return apiClient.post(API_ENDPOINTS.DINING.REVIEW_CREATE, reviewData);
+  },
+
+  // Initiate Bill Payment
+  initiateBillPayment: (data) => {
+    return apiClient.post("/dining/bill/initiate", data);
+  },
+
+  // Verify Bill Payment
+  verifyBillPayment: (data) => {
+    return apiClient.post("/dining/bill/verify", data);
+  },
+
+  // Get My Dining Bills
+  getMyDiningBills: () => {
+    return apiClient.get("/dining/bill/my");
+  },
+
+  // Delete My Dining Bill
+  deleteDiningBill: (id) => {
+    return apiClient.delete(`/dining/bill/${id}`);
   },
 };
 

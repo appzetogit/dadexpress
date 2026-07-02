@@ -40,6 +40,7 @@ import {
   createAddonForAdmin,
   updateAddonForAdmin,
   deleteAddonForAdmin,
+  getAdminDiningBills,
 } from "../controllers/adminController.js";
 import {
   sendPushNotification,
@@ -647,5 +648,8 @@ router.get("/audit-logs/commission-changes", getCommissionChangeLogs);
 router.get("/withdrawal/requests", getAllWithdrawalRequests);
 router.post("/withdrawal/:id/approve", approveWithdrawalRequest);
 router.post("/withdrawal/:id/reject", rejectWithdrawalRequest);
+
+// Dining Management
+router.get("/dining/bills", getAdminDiningBills);
 
 export default router;

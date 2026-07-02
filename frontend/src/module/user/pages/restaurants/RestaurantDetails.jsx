@@ -110,13 +110,13 @@ export default function RestaurantDetails() {
 
       let apiRestaurant = null
       let isWaitingForFallback = false
-      
+
       try {
         setLoadingRestaurant(true)
         setRestaurantError(null)
 
         console.log('🚀 [Optimization] Initializing fetch for:', slug)
-        
+
         // Step 1: Optimized single-call fetch for restaurant + menu + inventory
         let response = null;
         try {
@@ -129,7 +129,7 @@ export default function RestaurantDetails() {
         if (response?.data?.success && response.data.data) {
           apiRestaurant = response.data.data.restaurant || response.data.data;
           console.log('✅ Found restaurant in primary API');
-          
+
           // Step 3: IMMEDIATE MENU INJECTION (if available in optimized response)
           if (response.data.data.menu && response.data.data.menu.sections) {
             console.log('✨ [Optimization] Menu found in merged response, skipping extra call');
@@ -137,9 +137,9 @@ export default function RestaurantDetails() {
             // We'll process this below after transformedRestaurant is created
             apiRestaurant.__shortcutMenu = menuData;
           }
-          
+
           if (response.data.data.inventory) {
-             apiRestaurant.__shortcutInventory = response.data.data.inventory;
+            apiRestaurant.__shortcutInventory = response.data.data.inventory;
           }
         } else {
           // Fallback to dining API
@@ -179,17 +179,17 @@ export default function RestaurantDetails() {
             if (locationObj.addressLine2?.trim()) addressParts.push(locationObj.addressLine2.trim())
             if (locationObj.area?.trim()) addressParts.push(locationObj.area.trim())
             if (locationObj.city?.trim()) addressParts.push(locationObj.city.trim())
-            
+
             const pinCode = locationObj.pincode || locationObj.zipCode || locationObj.postalCode
             if (pinCode?.toString().trim()) addressParts.push(pinCode.toString().trim())
 
             if (addressParts.length >= 2) return addressParts.join(', ')
 
-            return locationObj.formattedAddress?.trim().replace(/^[A-Z0-9]+\+[A-Z0-9]+,\s*/i, '') || 
-                   locationObj.address?.trim() || 
-                   locationObj.area || 
-                   locationObj.city || 
-                   "Location"
+            return locationObj.formattedAddress?.trim().replace(/^[A-Z0-9]+\+[A-Z0-9]+,\s*/i, '') ||
+              locationObj.address?.trim() ||
+              locationObj.area ||
+              locationObj.city ||
+              "Location"
           }
 
           const locationObj = actualRestaurant?.location || apiRestaurant?.location
@@ -202,24 +202,24 @@ export default function RestaurantDetails() {
           const userLng = userLocation?.longitude
 
           let calculatedDistance = null
-          if (userLat && userLng && restaurantLat && restaurantLng && 
-              !isNaN(userLat) && !isNaN(userLng) && !isNaN(restaurantLat) && !isNaN(restaurantLng)) {
-             // Immediate calculation to avoid 'Calculating...' glitch
-             const R = 6371
-             const dLat = (restaurantLat - userLat) * Math.PI / 180
-             const dLng = (restaurantLng - userLng) * Math.PI / 180
-             const a = 
-               Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-               Math.cos(userLat * Math.PI / 180) * Math.cos(restaurantLat * Math.PI / 180) *
-               Math.sin(dLng / 2) * Math.sin(dLng / 2)
-             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-             const distKm = R * c
-             
-             if (distKm >= 1) {
-               calculatedDistance = `${distKm.toFixed(1)} km`
-             } else {
-               calculatedDistance = `${Math.round(distKm * 1000)} m`
-             }
+          if (userLat && userLng && restaurantLat && restaurantLng &&
+            !isNaN(userLat) && !isNaN(userLng) && !isNaN(restaurantLat) && !isNaN(restaurantLng)) {
+            // Immediate calculation to avoid 'Calculating...' glitch
+            const R = 6371
+            const dLat = (restaurantLat - userLat) * Math.PI / 180
+            const dLng = (restaurantLng - userLng) * Math.PI / 180
+            const a =
+              Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(userLat * Math.PI / 180) * Math.cos(restaurantLat * Math.PI / 180) *
+              Math.sin(dLng / 2) * Math.sin(dLng / 2)
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+            const distKm = R * c
+
+            if (distKm >= 1) {
+              calculatedDistance = `${distKm.toFixed(1)} km`
+            } else {
+              calculatedDistance = `${Math.round(distKm * 1000)} m`
+            }
           }
 
           const transformedRestaurant = {
@@ -255,9 +255,9 @@ export default function RestaurantDetails() {
             transformedRestaurant.menuSections = [{ name: "Recommended for you", items: recommendedItems, subsections: [] }, ...menuSections]
             setExpandedSections(new Set([0, 1]))
           }
-          
+
           if (apiRestaurant.__shortcutInventory) {
-              transformedRestaurant.inventory = apiRestaurant.__shortcutInventory.categories || []
+            transformedRestaurant.inventory = apiRestaurant.__shortcutInventory.categories || []
           }
 
           setRestaurant(transformedRestaurant)
@@ -266,13 +266,13 @@ export default function RestaurantDetails() {
 
           // Only fetch menu separately if NOT in shortcut
           if (!apiRestaurant.__shortcutMenu && transformedRestaurant.id) {
-             console.log('📋 Falling back to separate menu fetch');
-             const menuResponse = await restaurantAPI.getMenuByRestaurantId(transformedRestaurant.id)
-             if (menuResponse.data?.success) {
-               // ... (existing menu processing logic)
-               const sections = menuResponse.data.data.menu?.sections || []
-               setRestaurant(prev => ({ ...prev, menuSections: [{name: "Recommended for you", items: [], subsections: []}, ...sections] }))
-             }
+            console.log('📋 Falling back to separate menu fetch');
+            const menuResponse = await restaurantAPI.getMenuByRestaurantId(transformedRestaurant.id)
+            if (menuResponse.data?.success) {
+              // ... (existing menu processing logic)
+              const sections = menuResponse.data.data.menu?.sections || []
+              setRestaurant(prev => ({ ...prev, menuSections: [{ name: "Recommended for you", items: [], subsections: [] }, ...sections] }))
+            }
           }
         } else {
           setRestaurantError('Restaurant not found')
@@ -385,7 +385,7 @@ export default function RestaurantDetails() {
         if (!item.id) return; // Skip corrupted cart items without ID
         // Individual variation quantity
         cartQuantities[item.id] = item.quantity || 0
-        
+
         // Aggregate quantity for the base item (across all variations)
         const itemIdStr = String(item.id);
         const baseId = itemIdStr.includes('-') ? itemIdStr.split('-')[0] : item.id
@@ -598,10 +598,10 @@ export default function RestaurantDetails() {
 
         // Veg/Non-veg filtering
         if (isVegOnly) {
-           if (item.foodType !== 'Veg' && item.isVeg !== true) return false
+          if (item.foodType !== 'Veg' && item.isVeg !== true) return false
         }
         if (vegNonVeg === 'non-veg') {
-           if (item.foodType === 'Veg' || item.isVeg === true) return false
+          if (item.foodType === 'Veg' || item.isVeg === true) return false
         }
 
         // Highly reordered
@@ -617,9 +617,9 @@ export default function RestaurantDetails() {
         if (!sortBy) return items
         return items.sort((a, b) => {
           if (sortBy === 'low-to-high') {
-             return getFinalPrice(a) - getFinalPrice(b)
+            return getFinalPrice(a) - getFinalPrice(b)
           } else if (sortBy === 'high-to-low') {
-             return getFinalPrice(b) - getFinalPrice(a)
+            return getFinalPrice(b) - getFinalPrice(a)
           }
           return 0
         })
@@ -642,19 +642,19 @@ export default function RestaurantDetails() {
       // Include the section if it has any items matching OR if it's the "Recommended" section (index 0)
       // (The recommended section handles its empty state explicitly in the UI)
       if (totalCount > 0 || originalIndex === 0) {
-         processedSections.push({
-           section: clonedSection,
-           originalIndex
-         })
+        processedSections.push({
+          section: clonedSection,
+          originalIndex
+        })
 
-         // Add to categories
-         if (totalCount > 0) {
-            processedCategories.push({
-              name: sectionTitle,
-              count: totalCount,
-              sectionIndex: originalIndex
-            })
-         }
+        // Add to categories
+        if (totalCount > 0) {
+          processedCategories.push({
+            name: sectionTitle,
+            count: totalCount,
+            sectionIndex: originalIndex
+          })
+        }
       }
     })
 
@@ -995,7 +995,7 @@ export default function RestaurantDetails() {
           </div>
           <div className="h-4 w-64 bg-gray-200 dark:bg-gray-800 rounded animate-pulse" />
           <div className="h-4 w-32 bg-gray-200 dark:bg-gray-800 rounded animate-pulse" />
-          
+
           {/* Filters Skeleton */}
           <div className="flex gap-2 pt-4 border-t border-gray-100 dark:border-gray-800">
             <div className="h-8 w-20 bg-gray-200 dark:bg-gray-800 rounded-full animate-pulse" />
@@ -1357,18 +1357,18 @@ export default function RestaurantDetails() {
                         className="text-left"
                       >
                         <div className="space-y-1">
-                        <h2 className="text-lg font-bold text-gray-900 dark:text-white">
-                          {(section?.name && typeof section.name === 'string' && section.name.trim())
-                            ? section.name.trim()
-                            : (section?.title && typeof section.title === 'string' && section.title.trim())
-                              ? section.title.trim()
-                              : "Unnamed Section"}
-                        </h2>
-                        {section.subtitle && (
-                          <button className="text-sm text-blue-600 dark:text-blue-400 underline">
-                            {section.subtitle}
-                          </button>
-                        )}
+                          <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+                            {(section?.name && typeof section.name === 'string' && section.name.trim())
+                              ? section.name.trim()
+                              : (section?.title && typeof section.title === 'string' && section.title.trim())
+                                ? section.title.trim()
+                                : "Unnamed Section"}
+                          </h2>
+                          {section.subtitle && (
+                            <button className="text-sm text-blue-600 dark:text-blue-400 underline">
+                              {section.subtitle}
+                            </button>
+                          )}
                         </div>
                       </button>
                       <button

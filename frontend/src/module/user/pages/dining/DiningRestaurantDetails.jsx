@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { restaurantAPI, diningAPI } from "@/lib/api"
+import { userAPI } from "@/lib/api/index.js"
 import {
     ArrowLeft,
     MapPin,
@@ -29,6 +30,9 @@ export default function DiningRestaurantDetails() {
     const [activeTab, setActiveTab] = useState("Pre-book offers")
     const [isBookingOpen, setIsBookingOpen] = useState(false)
     const [selectedGuests, setSelectedGuests] = useState(2)
+
+    const [isFav, setIsFav] = useState(false)
+    const [isTogglingFav, setIsTogglingFav] = useState(false)
 
     // Fetch data
     useEffect(() => {
@@ -103,8 +107,45 @@ export default function DiningRestaurantDetails() {
                 setLoading(false)
             }
         }
-        fetchRestaurant()
+
+        const fetchUserFavorites = async () => {
+            try {
+                const res = await userAPI.getProfile()
+                if (res.data?.success && res.data?.data?.user?.favorites) {
+                    const favorites = res.data.data.user.favorites
+                    if (restaurant) {
+                         const restaurantId = restaurant._id || restaurant.restaurantId
+                         setIsFav(favorites.some(f => f.restaurantId === restaurantId))
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to load user favorites", err)
+            }
+        }
+
+        fetchRestaurant().then(() => {
+            fetchUserFavorites()
+        })
     }, [slug])
+
+    // Update favorite state if restaurant loads after profile
+    useEffect(() => {
+        if (restaurant) {
+            const checkFav = async () => {
+                try {
+                    const res = await userAPI.getProfile()
+                    if (res.data?.success && res.data?.data?.user?.favorites) {
+                        const favorites = res.data.data.user.favorites
+                        const restaurantId = restaurant._id || restaurant.restaurantId
+                        setIsFav(favorites.some(f => String(f.restaurantId) === String(restaurantId)))
+                    }
+                } catch (err) {
+                   console.log("Not logged in or failed to fetch favorites")
+                }
+            }
+            checkFav()
+        }
+    }, [restaurant])
 
     if (loading) {
         return (
@@ -172,9 +213,56 @@ export default function DiningRestaurantDetails() {
         }
     }
 
-
     const handlePayBill = () => {
-        toast.info("Pay bill feature coming soon! Please pay at the restaurant for now.")
+        navigate(`/dining/pay-bill/${slug}`, { state: { restaurant } })
+    }
+
+    const handleShareClick = async () => {
+        const restaurantSlug = restaurant?.slug || slug || ""
+        const restaurantName = restaurant?.name || "this restaurant"
+        const shareUrl = `${window.location.origin}/dining/${restaurantSlug}`
+        const shareText = `Check out ${restaurantName} for dining! ${shareUrl}`
+
+        if (typeof navigator !== "undefined" && navigator.share) {
+            try {
+                await navigator.share({
+                    title: restaurantName,
+                    text: shareText,
+                    url: shareUrl,
+                })
+                toast.success("Shared successfully")
+            } catch (error) {
+                if (error?.name === "AbortError") return
+                toast.error("Failed to share")
+            }
+        } else {
+            // Fallback to copy link
+            try {
+                await navigator.clipboard.writeText(shareText)
+                toast.success("Link copied to clipboard!")
+            } catch (err) {
+                toast.error("Failed to copy link")
+            }
+        }
+    }
+
+    const handleFavoriteClick = async () => {
+        const restaurantId = restaurant._id || restaurant.restaurantId
+        if (!restaurantId) return
+
+        try {
+            setIsTogglingFav(true)
+            const res = await userAPI.toggleFavorite(restaurantId)
+            if (res.data?.success) {
+                setIsFav(res.data.data.isFavorite)
+                toast.success(res.data.data.isFavorite ? "Added to favorites" : "Removed from favorites")
+            }
+        } catch (error) {
+            console.error(error)
+            toast.error("Please login to save favorites")
+        } finally {
+            setIsTogglingFav(false)
+        }
     }
 
     return (
@@ -189,10 +277,17 @@ export default function DiningRestaurantDetails() {
                 </button>
 
                 <div className="flex gap-3 pointer-events-auto">
-                    <button className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/60 transition-colors">
-                        <Bookmark className="w-5 h-5" />
+                    <button 
+                        onClick={handleFavoriteClick}
+                        disabled={isTogglingFav}
+                        className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/60 transition-colors"
+                    >
+                        {isTogglingFav ? <Loader2 className="w-5 h-5 animate-spin" /> : <Bookmark className={`w-5 h-5 ${isFav ? "fill-white" : ""}`} />}
                     </button>
-                    <button className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/60 transition-colors">
+                    <button 
+                        onClick={handleShareClick}
+                        className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/60 transition-colors"
+                    >
                         <Share2 className="w-5 h-5" />
                     </button>
                 </div>

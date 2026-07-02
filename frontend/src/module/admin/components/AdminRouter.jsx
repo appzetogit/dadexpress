@@ -129,6 +129,7 @@ const SystemAddons = lazy(() => import("../pages/system/SystemAddons"));
 const LandingPageManagement = lazy(() => import("../pages/system/LandingPageManagement"));
 const DiningManagement = lazy(() => import("../pages/system/DiningManagement"));
 const DiningList = lazy(() => import("../pages/system/DiningList"));
+const AdminDiningBills = lazy(() => import("../pages/dining/AdminDiningBills"));
 
 // Referral Program
 const ReferralSettings = lazy(() => import("../pages/referral/ReferralSettings"));
@@ -332,6 +333,7 @@ export default function AdminRouter() {
           {/* DINING MANAGEMENT */}
           <Route path="dining-management" element={<DiningManagement />} />
           <Route path="dining-list" element={<DiningList />} />
+          <Route path="dining-bills" element={<AdminDiningBills />} />
 
           {/* REFERRAL PROGRAM */}
           <Route path="referral/settings" element={<ReferralSettings />} />
