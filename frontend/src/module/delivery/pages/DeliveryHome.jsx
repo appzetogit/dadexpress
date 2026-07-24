@@ -2046,8 +2046,8 @@ export default function DeliveryHome() {
           })
           const audio = await playAlertSound()
           
-          if (!isActive || isRejectingRef.current) {
-            // Popup was closed or Reject was clicked while we were loading audio
+          if (!isActive) {
+            // Popup was closed while we were loading audio
             if (audio) {
               audio.pause();
               audio.currentTime = 0;
@@ -2157,21 +2157,8 @@ export default function DeliveryHome() {
     "Other reason"
   ]
 
-  const isRejectingRef = useRef(false)
-
   // Handle reject order
-  // Stop audio function to reuse
-  const stopAlertAudio = () => {
-    if (alertAudioRef.current) {
-      alertAudioRef.current.pause()
-      alertAudioRef.current.currentTime = 0
-      alertAudioRef.current = null
-    }
-  }
-
   const handleRejectClick = () => {
-    isRejectingRef.current = true
-    stopAlertAudio()
     setShowRejectPopup(true)
   }
 
@@ -5424,7 +5411,6 @@ export default function DeliveryHome() {
   // Show new order popup when order is received from Socket.IO
   useEffect(() => {
     if (newOrder) {
-      isRejectingRef.current = false;
       const orderId = newOrder.orderMongoId || newOrder.orderId;
 
       // If the backend resends a previously rejected order, we want to show it again.

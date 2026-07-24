@@ -435,11 +435,6 @@ export const useDeliveryNotifications = () => {
 
     socketRef.current.on('play_notification_sound', (data) => {
       false && console.log('🔔 Sound notification:', data);
-      // Ignore new order sound events as DeliveryHome.jsx handles them with a looping, cancellable audio player
-      if (data && (data.type === 'new_order' || data.type === 'new_order_available')) {
-        false && console.log('🔇 Ignoring new order sound event - handled by DeliveryHome');
-        return;
-      }
       playNotificationSound();
     });
 
