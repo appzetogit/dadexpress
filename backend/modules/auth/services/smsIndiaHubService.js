@@ -140,6 +140,7 @@ class SMSIndiaHubService {
 
       // Check if template ID is provided (for DLT registered templates)
       const templateId = process.env.SMSINDIAHUB_TEMPLATE_ID?.trim();
+      const peId = process.env.SMSINDIAHUB_PE_ID?.trim();
 
       // Check if promotional SMS is enabled (temporary workaround for template issues)
       // ⚠️ WARNING: Promotional SMS is not recommended for OTP - use only for testing
@@ -189,6 +190,11 @@ class SMSIndiaHubService {
       // Add template ID if provided (required for some DLT templates)
       if (templateId) {
         params.append('templateid', templateId);
+      }
+      
+      if (peId) {
+        params.append('peid', peId);
+        params.append('EntityID', peId);
       }
 
       const apiUrl = `${this.baseUrl}?${params.toString()}`;
