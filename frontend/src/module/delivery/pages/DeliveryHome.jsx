@@ -2025,6 +2025,8 @@ export default function DeliveryHome() {
 
   // Play audio when New Order popup appears (only for real orders from Socket.IO)
   useEffect(() => {
+    let isActive = true;
+
     if (showNewOrderPopup && (newOrder || selectedRestaurant)) {
       // Stop any existing audio first
       if (alertAudioRef.current) {
@@ -2043,6 +2045,16 @@ export default function DeliveryHome() {
             willUse: currentPreference === 'original' ? 'original.mp3' : 'alert.mp3'
           })
           const audio = await playAlertSound()
+          
+          if (!isActive) {
+            // Popup was closed while we were loading audio
+            if (audio) {
+              audio.pause();
+              audio.currentTime = 0;
+            }
+            return;
+          }
+
           if (audio) {
             alertAudioRef.current = audio
             false && console.log('[NewOrder] 🔊 Audio started playing, looping:', audio.loop)
@@ -2055,7 +2067,8 @@ export default function DeliveryHome() {
             // Manually restart if loop doesn't work
             audio.addEventListener('ended', () => {
               false && console.log('[NewOrder] 🔄 Audio ended, restarting...')
-              if (showNewOrderPopup && alertAudioRef.current === audio) {
+              // Use alertAudioRef to check if this is still the active audio
+              if (isActive && alertAudioRef.current === audio) {
                 audio.currentTime = 0
                 audio.play().catch(err => {
                   console.error('[NewOrder] ❌ Failed to restart audio:', err)
@@ -2082,13 +2095,15 @@ export default function DeliveryHome() {
 
       // Small delay to ensure popup is fully rendered
       const timeoutId = setTimeout(() => {
-        playAudio()
+        if (isActive) playAudio()
       }, 100)
 
       return () => {
+        isActive = false;
         clearTimeout(timeoutId)
       }
     } else {
+      isActive = false;
       // Stop audio when popup closes
       if (alertAudioRef.current) {
         false && console.log('[NewOrder] 🔇 Stopping audio (popup closed)')
