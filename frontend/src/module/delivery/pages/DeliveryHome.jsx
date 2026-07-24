@@ -2158,7 +2158,17 @@ export default function DeliveryHome() {
   ]
 
   // Handle reject order
+  // Stop audio function to reuse
+  const stopAlertAudio = () => {
+    if (alertAudioRef.current) {
+      alertAudioRef.current.pause()
+      alertAudioRef.current.currentTime = 0
+      alertAudioRef.current = null
+    }
+  }
+
   const handleRejectClick = () => {
+    stopAlertAudio()
     setShowRejectPopup(true)
   }
 
