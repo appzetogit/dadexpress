@@ -414,7 +414,7 @@ export const useDeliveryNotifications = () => {
       }
 
       setNewOrder(normalizeIncomingOrderNotification(orderData));
-      playNotificationSound();
+      // Audio is handled by DeliveryHome.jsx in a loop until action is taken
     });
 
     // Listen for priority-based order notifications (new_order_available)
@@ -430,7 +430,7 @@ export const useDeliveryNotifications = () => {
 
       // Treat it the same as new_order for now - delivery partner can accept it
       setNewOrder(normalizeIncomingOrderNotification(orderData));
-      playNotificationSound();
+      // Audio is handled by DeliveryHome.jsx in a loop until action is taken
     });
 
     socketRef.current.on('play_notification_sound', (data) => {
