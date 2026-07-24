@@ -1846,44 +1846,50 @@ export default function DeliveryHome() {
   useEffect(() => {
     const handleUserInteraction = () => {
       userInteractedRef.current = true
+      // If audio was created but paused due to autoplay policy, attempt to play now
+      if (alertAudioRef.current && !alertAudioRef.current.isCancelled && alertAudioRef.current.paused) {
+        alertAudioRef.current.play().catch(() => {})
+      }
       // Remove listeners after first interaction
       document.removeEventListener('click', handleUserInteraction)
       document.removeEventListener('touchstart', handleUserInteraction)
+      document.removeEventListener('pointerdown', handleUserInteraction)
       document.removeEventListener('keydown', handleUserInteraction)
     }
 
     // Listen for user interaction
     document.addEventListener('click', handleUserInteraction, { once: true })
-    document.addEventListener('touchstart', handleUserInteraction, { once: true })
+    document.addEventListener('touchstart', handleUserInteraction, { once: true, passive: true })
+    document.addEventListener('pointerdown', handleUserInteraction, { once: true, passive: true })
     document.addEventListener('keydown', handleUserInteraction, { once: true })
 
     return () => {
       document.removeEventListener('click', handleUserInteraction)
       document.removeEventListener('touchstart', handleUserInteraction)
+      document.removeEventListener('pointerdown', handleUserInteraction)
       document.removeEventListener('keydown', handleUserInteraction)
     }
   }, [])
 
-  // Play alert sound function - plays until countdown ends (30 seconds)
-  const playAlertSound = async () => {
-    // Only play if user has interacted with the page (browser autoplay policy)
-    if (!userInteractedRef.current) {
-      false && console.log('🔇 Audio playback skipped - user has not interacted with page yet')
-      return null
+  // Safely stop alert audio and cancel any future play attempts
+  const stopAlertAudio = useCallback(() => {
+    if (alertAudioRef.current) {
+      try {
+        alertAudioRef.current.isCancelled = true
+        alertAudioRef.current.pause()
+        alertAudioRef.current.currentTime = 0
+      } catch (err) {}
+      alertAudioRef.current = null
+      false && console.log('[NewOrder] 🔇 Audio stopped and marked cancelled')
     }
+  }, [])
 
+  // Play alert sound function - plays until order action or countdown ends
+  const playAlertSound = async () => {
     try {
       // Get selected alert sound preference from localStorage
       const selectedSound = localStorage.getItem('delivery_alert_sound') || 'dadexpress_tone'
       const soundFile = selectedSound === 'original' ? originalSound : alertSound
-
-      false && console.log('🔊 Playing alert sound:', {
-        selectedSound,
-        soundType: selectedSound === 'original' ? 'Original' : 'DadExpress Tone',
-        soundFile,
-        originalSoundPath: originalSound,
-        alertSoundPath: alertSound
-      })
 
       // Verify sound file exists
       if (!soundFile) {
@@ -1893,89 +1899,44 @@ export default function DeliveryHome() {
 
       // Use selected sound file from assets
       const audio = new Audio(soundFile)
-
-      // Add load event listener to verify file loads
-      audio.addEventListener('loadeddata', () => {
-        false && console.log('✅ Audio file loaded successfully:', soundFile)
-      })
-
-      audio.addEventListener('canplay', () => {
-        false && console.log('✅ Audio can play:', soundFile)
-      })
-
       audio.volume = 1
       audio.loop = true // Loop the sound
+      audio.preload = 'auto'
+      audio.isCancelled = false
 
       // Set up error handler
       audio.addEventListener('error', (e) => {
         console.error('Audio error:', e)
-        console.error('Audio error details:', {
-          code: audio.error?.code,
-          message: audio.error?.message
-        })
       })
 
-      // Preload audio before playing
-      audio.preload = 'auto'
-
-      // Play the sound and wait for it to start
+      // Attempt immediate play
       try {
-        // Wait for audio to be ready
-        await new Promise((resolve, reject) => {
-          audio.addEventListener('canplaythrough', resolve, { once: true })
-          audio.addEventListener('error', reject, { once: true })
-          audio.load()
-          // Timeout after 3 seconds
-          setTimeout(() => reject(new Error('Audio load timeout')), 3000)
-        })
-
+        if (audio.isCancelled) return null
         const playPromise = audio.play()
         if (playPromise !== undefined) {
           await playPromise
         }
-        false && console.log('✅ Alert sound started playing successfully', {
-          src: audio.src,
-          volume: audio.volume,
-          loop: audio.loop,
-          readyState: audio.readyState
-        })
-        return audio
-      } catch (playError) {
-        console.error('❌ Audio play error:', {
-          error: playError,
-          message: playError.message,
-          name: playError.name,
-          soundFile,
-          selectedSound,
-          audioReadyState: audio.readyState,
-          audioSrc: audio.src
-        })
-
-        // Don't log autoplay policy errors as they're expected before user interaction
-        if (!playError.message?.includes('user didn\'t interact') &&
-          !playError.name?.includes('NotAllowedError') &&
-          !playError.message?.includes('timeout')) {
-          console.error('❌ Could not play alert sound:', playError)
-        }
-
-        // Try to load and play again
-        try {
-          audio.load()
-          await new Promise((resolve) => setTimeout(resolve, 100)) // Small delay
-          const playPromise = audio.play()
-          if (playPromise !== undefined) {
-            await playPromise
-          }
-          false && console.log('✅ Alert sound started playing after retry')
-          return audio
-        } catch (retryError) {
-          // Don't log autoplay policy errors
-          if (!retryError.message?.includes('user didn\'t interact') &&
-            !retryError.name?.includes('NotAllowedError')) {
-            console.error('❌ Could not play alert sound after retry:', retryError)
-          }
+        if (audio.isCancelled) {
+          audio.pause()
           return null
         }
+        return audio
+      } catch (playError) {
+        // If autoplay blocked by browser policy, set up one-time touch listener to play on first user tap
+        const unlockAndPlay = () => {
+          userInteractedRef.current = true
+          if (!audio.isCancelled && alertAudioRef.current === audio) {
+            audio.play().catch(() => {})
+          }
+          document.removeEventListener('touchstart', unlockAndPlay)
+          document.removeEventListener('pointerdown', unlockAndPlay)
+          document.removeEventListener('click', unlockAndPlay)
+        }
+        document.addEventListener('touchstart', unlockAndPlay, { once: true, passive: true })
+        document.addEventListener('pointerdown', unlockAndPlay, { once: true, passive: true })
+        document.addEventListener('click', unlockAndPlay, { once: true })
+
+        return audio
       }
     } catch (error) {
       console.error('❌ Could not create audio:', error)
@@ -1993,12 +1954,7 @@ export default function DeliveryHome() {
         setCountdownSeconds((prev) => {
           if (prev <= 1) {
             // Stop audio when countdown reaches 0
-            if (alertAudioRef.current) {
-              alertAudioRef.current.pause()
-              alertAudioRef.current.currentTime = 0
-              alertAudioRef.current = null
-              false && console.log('[NewOrder] 🔇 Audio stopped (countdown ended)')
-            }
+            stopAlertAudio()
             // Auto-close when countdown reaches 0
             setShowNewOrderPopup(false)
             return 0
@@ -2021,7 +1977,7 @@ export default function DeliveryHome() {
         countdownTimerRef.current = null
       }
     }
-  }, [showNewOrderPopup, countdownSeconds])
+  }, [showNewOrderPopup, countdownSeconds, stopAlertAudio])
 
   // Play audio when New Order popup appears (only for real orders from Socket.IO)
   useEffect(() => {
@@ -2029,11 +1985,7 @@ export default function DeliveryHome() {
 
     if (showNewOrderPopup && (newOrder || selectedRestaurant)) {
       // Stop any existing audio first
-      if (alertAudioRef.current) {
-        alertAudioRef.current.pause()
-        alertAudioRef.current.currentTime = 0
-        alertAudioRef.current = null
-      }
+      stopAlertAudio()
 
       // Play alert sound when popup appears
       const playAudio = async () => {
@@ -2049,6 +2001,7 @@ export default function DeliveryHome() {
           if (!isActive) {
             // Popup was closed while we were loading audio
             if (audio) {
+              audio.isCancelled = true;
               audio.pause();
               audio.currentTime = 0;
             }
@@ -2068,7 +2021,7 @@ export default function DeliveryHome() {
             audio.addEventListener('ended', () => {
               false && console.log('[NewOrder] 🔄 Audio ended, restarting...')
               // Use alertAudioRef to check if this is still the active audio
-              if (isActive && alertAudioRef.current === audio) {
+              if (isActive && !audio.isCancelled && alertAudioRef.current === audio) {
                 audio.currentTime = 0
                 audio.play().catch(err => {
                   console.error('[NewOrder] ❌ Failed to restart audio:', err)
@@ -2105,14 +2058,9 @@ export default function DeliveryHome() {
     } else {
       isActive = false;
       // Stop audio when popup closes
-      if (alertAudioRef.current) {
-        false && console.log('[NewOrder] 🔇 Stopping audio (popup closed)')
-        alertAudioRef.current.pause()
-        alertAudioRef.current.currentTime = 0
-        alertAudioRef.current = null
-      }
+      stopAlertAudio()
     }
-  }, [showNewOrderPopup, selectedRestaurant])
+  }, [showNewOrderPopup, selectedRestaurant, stopAlertAudio])
 
   // Reset countdown when popup closes
   useEffect(() => {
@@ -2169,10 +2117,7 @@ export default function DeliveryHome() {
       rejectedOrderIdsRef.current.add(rejectedOrderId)
     }
 
-    if (alertAudioRef.current) {
-      alertAudioRef.current.pause()
-      alertAudioRef.current.currentTime = 0
-    }
+    stopAlertAudio()
     setShowRejectPopup(false)
     setShowNewOrderPopup(false)
     setIsNewOrderPopupMinimized(false) // Reset minimized state
@@ -2211,11 +2156,7 @@ export default function DeliveryHome() {
     }
 
     // Stop and cleanup audio
-    if (alertAudioRef.current) {
-      alertAudioRef.current.pause()
-      alertAudioRef.current.currentTime = 0
-      alertAudioRef.current = null
-    }
+    stopAlertAudio()
   }, []) // Only run on mount
 
   // Get rider location - App open होते ही location fetch करें
@@ -2910,19 +2851,15 @@ export default function DeliveryHome() {
   }
 
   const handleManualReject = () => {
-    // Stop audio
-    if (alertAudioRef.current) {
-      alertAudioRef.current.pause()
-      alertAudioRef.current.currentTime = 0
-      alertAudioRef.current = null
-    }
+    // Synchronously stop audio immediately
+    stopAlertAudio()
     // Instantly close popup and trigger reject confirm
     setShowNewOrderPopup(false)
     setIsNewOrderPopupMinimized(false)
     setNewOrderDragY(0)
     setCountdownSeconds(300)
     
-    // Check if we should show reasons or just reject
+    // Trigger reject confirm to add to rejected list and clear states
     handleRejectConfirm()
   }
 
@@ -2971,12 +2908,7 @@ export default function DeliveryHome() {
       toast.success('✅ Order Accepted! Heading to pickup.', { duration: 3000 })
 
       // Stop audio immediately when user accepts
-      if (alertAudioRef.current) {
-        alertAudioRef.current.pause()
-        alertAudioRef.current.currentTime = 0
-        alertAudioRef.current = null
-        false && console.log('[NewOrder] 🔇 Audio stopped (order accepted)')
-      }
+      stopAlertAudio()
 
       // INSTANT UI CLOSE - popup closes immediately, API runs in background
       setShowNewOrderPopup(false)
@@ -3110,12 +3042,7 @@ export default function DeliveryHome() {
 
           if (response.data?.success && response.data.data) {
             // Stop audio immediately when order is successfully accepted
-            if (alertAudioRef.current) {
-              alertAudioRef.current.pause()
-              alertAudioRef.current.currentTime = 0
-              alertAudioRef.current = null
-              false && console.log('[NewOrder] 🔇 Audio stopped (order accepted successfully)')
-            }
+            stopAlertAudio()
 
             const orderData = response.data.data
             const order = orderData.order || orderData // Backend returns { order, route }
@@ -11164,7 +11091,10 @@ export default function DeliveryHome() {
               className="fixed top-4 right-4 z-[115]"
             >
               <button
-                onClick={handleRejectConfirm}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleManualReject()
+                }}
                 className="  bg-black border-2 border-white text-white text-bold px-5 p-2 rounded-full font-semibold text-sm hover:bg-red-50 transition-colors shadow-2xl"
               >
                 Deny

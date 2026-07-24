@@ -38,7 +38,6 @@ export const useDeliveryNotifications = () => {
           audioRef.current.pause();
           audioRef.current.src = newSrc;
           audioRef.current.load();
-          false && console.log('🔊 Audio source updated to:', selectedSound === 'original' ? 'Original' : 'DadExpress Tone');
         }
       } else {
         // Initialize audio if not exists
@@ -47,22 +46,22 @@ export const useDeliveryNotifications = () => {
       }
       
       if (audioRef.current) {
-        // Only play if user has interacted with the page (browser autoplay policy)
-        if (!userInteractedRef.current) {
-          false && console.log('🔇 Audio playback skipped - user has not interacted with page yet');
-          return;
-        }
-        
         audioRef.current.currentTime = 0;
         audioRef.current.play().catch(error => {
-          // Don't log autoplay policy errors as they're expected
-          if (!error.message?.includes('user didn\'t interact') && !error.name?.includes('NotAllowedError')) {
-            false && console.warn('Error playing notification sound:', error);
+          // If autoplay blocked, listen for first touch to play
+          if (error.name?.includes('NotAllowedError') || error.message?.includes('user didn\'t interact')) {
+            const unlockAudio = () => {
+              userInteractedRef.current = true;
+              audioRef.current?.play().catch(() => {});
+              document.removeEventListener('touchstart', unlockAudio);
+              document.removeEventListener('click', unlockAudio);
+            };
+            document.addEventListener('touchstart', unlockAudio, { once: true, passive: true });
+            document.addEventListener('click', unlockAudio, { once: true });
           }
         });
       }
     } catch (error) {
-      // Don't log autoplay policy errors
       if (!error.message?.includes('user didn\'t interact') && !error.name?.includes('NotAllowedError')) {
         false && console.warn('Error playing sound:', error);
       }
@@ -455,10 +454,22 @@ export const useDeliveryNotifications = () => {
   // Helper functions
   const clearNewOrder = () => {
     setNewOrder(null);
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      } catch (e) {}
+    }
   };
 
   const clearOrderReady = () => {
     setOrderReady(null);
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      } catch (e) {}
+    }
   };
 
   return {

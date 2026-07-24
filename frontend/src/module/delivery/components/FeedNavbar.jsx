@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { HelpCircle, ArrowRight, Phone, Ambulance, AlertTriangle, Shield, ShieldCheck, User } from "lucide-react";
 import { toast } from "sonner";
-import { deliveryAPI } from "@/lib/api";
+import { deliveryAPI, restaurantAPI } from "@/lib/api";
 import { useCompanyName } from "@/lib/hooks/useCompanyName";
 
 const LS_KEY = "app:isOnline";
