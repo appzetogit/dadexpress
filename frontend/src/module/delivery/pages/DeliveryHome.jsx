@@ -5398,8 +5398,14 @@ export default function DeliveryHome() {
     if (newOrder) {
       const orderId = newOrder.orderMongoId || newOrder.orderId;
 
-      // Check if this order has already been accepted/rejected
-      if (acceptedOrderIdsRef.current.has(orderId) || rejectedOrderIdsRef.current.has(orderId)) {
+      // If the backend resends a previously rejected order, we want to show it again.
+      if (rejectedOrderIdsRef.current.has(orderId)) {
+        false && console.log('ℹ️ Order was previously rejected but backend resent it. Removing from rejected list:', orderId);
+        rejectedOrderIdsRef.current.delete(orderId);
+      }
+
+      // Check if this order has already been accepted
+      if (acceptedOrderIdsRef.current.has(orderId)) {
         false && console.log('⚠️ Order already handled, ignoring duplicate notification:', orderId);
         clearNewOrder();
         return;
