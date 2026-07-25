@@ -2107,7 +2107,25 @@ export default function DeliveryHome() {
 
   // Handle reject order
   const handleRejectClick = () => {
-    setShowRejectPopup(true)
+    const { mongoId, orderId: orderIdString } = getOrderIdCandidates(selectedRestaurant, newOrder)
+    const rejectedOrderId = mongoId || orderIdString
+    if (rejectedOrderId) {
+      rejectedOrderIdsRef.current.add(rejectedOrderId)
+    }
+
+    stopAlertAudio()
+    setShowRejectPopup(false)
+    setShowNewOrderPopup(false)
+    setIsNewOrderPopupMinimized(false) // Reset minimized state
+    setNewOrderDragY(0) // Reset drag position
+    setRejectReason("")
+    setCountdownSeconds(300)
+    setIncomingOrderBanner(null)
+    clearNewOrder()
+    // Here you would typically send the rejection to your backend
+    false && console.log("Order rejected")
+    // 🔔 Real-time notification: Order Rejected
+    toast.info('❌ Order Rejected.', { duration: 3000 })
   }
 
   const handleRejectConfirm = () => {
@@ -11082,24 +11100,7 @@ export default function DeliveryHome() {
               </div>
             </motion.div>
 
-            {/* Reject Button - Outside the popup, positioned below */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 20 }}
-              transition={{ duration: 0.3, delay: 0.1 }}
-              className="fixed top-4 right-4 z-[115]"
-            >
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleManualReject()
-                }}
-                className="  bg-black border-2 border-white text-white text-bold px-5 p-2 rounded-full font-semibold text-sm hover:bg-red-50 transition-colors shadow-2xl"
-              >
-                Deny
-              </button>
-            </motion.div>
+
           </>
         )}
       </AnimatePresence>
