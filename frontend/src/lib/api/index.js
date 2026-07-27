@@ -115,12 +115,13 @@ export const authAPI = {
   },
 
   // Login/Register via Firebase Google ID token
-  firebaseGoogleLogin: (idToken, role = "restaurant", fcmToken = null, platform = "web", referralCode = null) => {
+  firebaseGoogleLogin: (idToken, role = "restaurant", fcmToken = null, platform = "web", referralCode = null, confirmSignup = false) => {
     const payload = {
       idToken,
       role,
       fcmToken,
       platform,
+      confirmSignup
     };
     if (referralCode != null && String(referralCode).trim() !== "") {
       payload.referralCode = String(referralCode).trim().toUpperCase();

@@ -412,10 +412,11 @@ export default function SearchResults() {
     // Use ONLY backend data - no hardcoded fallback
     const sourceData = restaurantsData.length > 0 ? restaurantsData : []
     let filtered = [...sourceData]
+    const activeSearch = searchQuery.trim()
 
     // Filter by search query - only show restaurants that match the search term
-    if (query.trim()) {
-      const lowerQuery = query.toLowerCase()
+    if (activeSearch) {
+      const lowerQuery = activeSearch.toLowerCase()
       filtered = filtered.filter(r =>
         r.name?.toLowerCase().includes(lowerQuery) ||
         r.cuisine?.toLowerCase().includes(lowerQuery) ||
@@ -471,7 +472,7 @@ export default function SearchResults() {
         // If no match found, don't show restaurant for this category
         return false
       })
-    } else if (!query.trim()) {
+    } else if (!activeSearch) {
       // Show all restaurants when no category selected (category is 'all')
       // Don't filter - show all restaurants
     }
@@ -492,16 +493,17 @@ export default function SearchResults() {
     }
 
     return filtered
-  }, [query, selectedCategory, activeFilters, restaurantsData, categoryKeywords, loadingCategories])
+  }, [searchQuery, selectedCategory, activeFilters, restaurantsData, categoryKeywords, loadingCategories])
 
   const filteredAllRestaurants = useMemo(() => {
     // Use ONLY backend data - no hardcoded fallback
     const sourceData = restaurantsData.length > 0 ? restaurantsData : []
     let filtered = [...sourceData]
+    const activeSearch = searchQuery.trim()
 
     // Filter by search query - Search in name, cuisine, featured dish
-    if (query.trim()) {
-      const lowerQuery = query.toLowerCase()
+    if (activeSearch) {
+      const lowerQuery = activeSearch.toLowerCase()
       filtered = filtered.filter(r => {
         const nameMatch = r.name?.toLowerCase().includes(lowerQuery)
         const cuisineMatch = r.cuisine?.toLowerCase().includes(lowerQuery)
@@ -594,7 +596,7 @@ export default function SearchResults() {
         // If no match found, don't show restaurant for this category
         return false
       })
-    } else if (!query.trim()) {
+    } else if (!activeSearch) {
       // Show all restaurants when no category selected (category is 'all')
       // Don't filter - show all restaurants
     }
@@ -618,7 +620,7 @@ export default function SearchResults() {
     }
 
     return filtered
-  }, [query, selectedCategory, activeFilters, restaurantsData, categoryKeywords, loadingCategories])
+  }, [searchQuery, selectedCategory, activeFilters, restaurantsData, categoryKeywords, loadingCategories])
 
   // NOTE: We do NOT apply page-level grayscale anymore to prevent black/white screen flicker
   const shouldShowGrayscale = isOutOfService

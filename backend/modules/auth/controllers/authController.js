@@ -1071,6 +1071,16 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
         role: user.role,
       });
     } else {
+      const { confirmSignup } = req.body;
+      if (!confirmSignup) {
+        // Return needsConfirmation so frontend can ask for referral code
+        return successResponse(res, 200, "User not found. Needs confirmation.", {
+          needsConfirmation: true,
+          email: email.toLowerCase().trim(),
+          name: name.trim()
+        });
+      }
+
       // Auto-register new user based on Firebase data
       const { referralCode } = req.body;
       let referredBy = null;

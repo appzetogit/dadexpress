@@ -66,6 +66,9 @@ export default function SignIn() {
   const redirectHandledRef = useRef(false)
   const googleLoginInProgressRef = useRef(false)
 
+  const [showGoogleConfirm, setShowGoogleConfirm] = useState(false)
+  const [googleData, setGoogleData] = useState({ idToken: "", name: "", fcmToken: "", referral: "" })
+
   // Capture referral code from URL
   useEffect(() => {
     const ref = searchParams.get("ref")
@@ -112,14 +115,23 @@ export default function SignIn() {
       // Get referral code from localStorage
       const referralCode = localStorage.getItem("referralCode")
 
-      const response = await authAPI.firebaseGoogleLogin(idToken, "user", fcmToken, "web", referralCode)
+      const response = await authAPI.firebaseGoogleLogin(idToken, "user", fcmToken, "web", referralCode, false)
       const data = response?.data?.data || {}
 
       debugLog(`✅ Backend response from ${source}:`, {
         hasAccessToken: !!data.accessToken,
         hasUser: !!data.user,
-        userEmail: data.user?.email
+        userEmail: data.user?.email,
+        needsConfirmation: data.needsConfirmation
       })
+
+      if (data.needsConfirmation) {
+        setGoogleData({ idToken, name: data.name || "", fcmToken, referral: referralCode || "" })
+        setShowGoogleConfirm(true)
+        setIsLoading(false)
+        redirectHandledRef.current = false // Allow further actions
+        return
+      }
 
       const accessToken = data.accessToken
       const appUser = data.user
@@ -575,6 +587,55 @@ export default function SignIn() {
     }
   }
 
+  const handleGoogleConfirmSubmit = async (e) => {
+    e.preventDefault()
+    if (isLoading) return
+    setIsLoading(true)
+    setApiError("")
+
+    try {
+      // confirmSignup=true
+      const response = await authAPI.firebaseGoogleLogin(
+        googleData.idToken,
+        "user",
+        googleData.fcmToken,
+        "web",
+        googleData.referral,
+        true
+      )
+      const data = response?.data?.data || {}
+
+      const accessToken = data.accessToken
+      const appUser = data.user
+
+      if (accessToken && appUser) {
+        setAuthData("user", accessToken, appUser)
+        sessionStorage.removeItem("guest_browsing")
+        window.dispatchEvent(new Event("userAuthChanged"))
+
+        const hasHash = window.location.hash.length > 0
+        const hasQueryParams = window.location.search.length > 0
+        if (hasHash || hasQueryParams) {
+          window.history.replaceState({}, document.title, window.location.pathname)
+        }
+
+        navigate("/user", { replace: true })
+      } else {
+        throw new Error("Invalid response from server")
+      }
+    } catch (error) {
+      console.error("❌ Error confirming Google signup:", error)
+      let errorMessage = "Failed to complete sign-in. Please try again."
+      if (error?.response?.data?.message) {
+        errorMessage = error.response.data.message
+      } else if (error?.message) {
+        errorMessage = error.message
+      }
+      setApiError(errorMessage)
+      setIsLoading(false)
+    }
+  }
+
   const toggleMode = () => {
     const newMode = isSignUp ? "signin" : "signup"
     navigate(`/auth/sign-in?mode=${newMode}`, { replace: true })
@@ -625,15 +686,84 @@ export default function SignIn() {
           <SkipForward className="w-3 h-3 md:w-4 md:h-4" />
         </button>
         <div className="max-w-md lg:max-w-lg xl:max-w-xl mx-auto space-y-6 md:space-y-8 lg:space-y-10 w-full">
-          {/* Heading */}
-          <div className="text-center space-y-2 md:space-y-3">
-            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-black dark:text-white leading-tight">
-              Dad Express: India's #1 Food Delivery and Dining App
-            </h2>
-            <p className="text-sm sm:text-base md:text-lg text-gray-600 dark:text-gray-400">
-              Log in or sign up
-            </p>
-          </div>
+          {showGoogleConfirm ? (
+            <div className="space-y-6">
+              <div className="text-center space-y-2 md:space-y-3">
+                <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-black dark:text-white leading-tight">
+                  Welcome, {googleData.name.split(' ')[0]}!
+                </h2>
+                <p className="text-sm sm:text-base md:text-lg text-gray-600 dark:text-gray-400">
+                  Almost there! Do you have a referral code?
+                </p>
+              </div>
+
+              <form onSubmit={handleGoogleConfirmSubmit} className="space-y-4 md:space-y-5">
+                <div className="space-y-2 text-left">
+                  <label className="block text-sm md:text-base font-medium text-black dark:text-white">
+                    Referral code (Optional)
+                  </label>
+                  <div className="relative">
+                    <Input
+                      type="text"
+                      value={googleData.referral}
+                      onChange={(e) => setGoogleData({ ...googleData, referral: e.target.value.toUpperCase() })}
+                      disabled={isLoading}
+                      placeholder="Enter referral code"
+                      className="h-11 md:h-14 text-base md:text-lg border-2 border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1a1a1a] text-black dark:text-white rounded-lg transition-colors focus-visible:ring-2 focus-visible:ring-[#EB590E] uppercase"
+                    />
+                    {googleData.referral && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <div className="bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400 text-[10px] font-black px-2 py-1 rounded">APPLIED</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {apiError && (
+                  <div className="flex items-center gap-1 text-xs text-red-600">
+                    <AlertCircle className="h-3 w-3" />
+                    <span>{apiError}</span>
+                  </div>
+                )}
+
+                <Button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full h-11 md:h-14 bg-[#EB590E] hover:bg-[#D94F0C] text-white font-semibold text-base md:text-lg rounded-lg transition-all hover:shadow-lg active:scale-[0.98]"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Continuing...
+                    </>
+                  ) : (
+                    "Continue"
+                  )}
+                </Button>
+                
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowGoogleConfirm(false);
+                    setIsLoading(false);
+                  }}
+                  className="w-full text-sm text-gray-500 hover:text-gray-700 mt-2"
+                >
+                  Cancel
+                </button>
+              </form>
+            </div>
+          ) : (
+            <>
+              {/* Heading */}
+              <div className="text-center space-y-2 md:space-y-3">
+                <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-black dark:text-white leading-tight">
+                  Dad Express: India's #1 Food Delivery and Dining App
+                </h2>
+                <p className="text-sm sm:text-base md:text-lg text-gray-600 dark:text-gray-400">
+                  Log in or sign up
+                </p>
+              </div>
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4 md:space-y-5">
@@ -780,6 +910,8 @@ export default function SignIn() {
               <Link to="/profile/privacy" className="underline hover:text-gray-700 dark:hover:text-gray-300 transition-colors">Privacy Policy</Link>
             </div>
           </div>
+          </>
+        )}
         </div>
       </div>
     </AnimatedPage>

@@ -1648,8 +1648,9 @@ export default function Home() {
       filtered = filtered.filter(r => r.cuisine === selectedCuisine)
     }
 
-    if (searchValue && searchValue.trim() !== "") {
-      const lowerSearch = searchValue.toLowerCase().trim()
+    const activeSearch = heroSearch || searchValue
+    if (activeSearch && activeSearch.trim() !== "") {
+      const lowerSearch = activeSearch.toLowerCase().trim()
       filtered = filtered.filter(r => r.name.toLowerCase().includes(lowerSearch) || (r.cuisine && r.cuisine.toLowerCase().includes(lowerSearch)))
     }
 
@@ -1690,7 +1691,7 @@ export default function Home() {
     }
 
     return filtered
-  }, [calculatedRestaurants, activeFilters, selectedCuisine, sortBy, searchValue])
+  }, [calculatedRestaurants, activeFilters, selectedCuisine, sortBy, searchValue, heroSearch])
 
   const emptyRestaurantsMessage = useMemo(() => {
     // Check if guest (skipped login)
@@ -1954,8 +1955,6 @@ export default function Home() {
                       <Input
                         value={heroSearch}
                         onChange={(e) => setHeroSearch(e.target.value)}
-                        onFocus={handleSearchFocus}
-                        onClick={handleSearchFocus}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' && heroSearch.trim()) {
                             navigate(`/user/search?q=${encodeURIComponent(heroSearch.trim())}`)
