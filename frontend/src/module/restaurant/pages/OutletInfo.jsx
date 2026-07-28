@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { restaurantAPI } from "@/lib/api"
 import { toast } from "sonner"
+import Loader from "@/components/Loader"
 
 const CUISINES_STORAGE_KEY = "restaurant_cuisines"
 
@@ -54,55 +55,7 @@ export default function OutletInfo() {
   const [editTablePriceValue, setEditTablePriceValue] = useState("")
   const [showEditCashbackDialog, setShowEditCashbackDialog] = useState(false)
   const [editCashbackValue, setEditCashbackValue] = useState("")
-  const [editNameValue, setEditNameValue] = useState("")
-  const [showEditCostDialog, setShowEditCostDialog] = useState(false)
-  const [editCostValue, setEditCostValue] = useState("")
-  const [showEditTablePriceDialog, setShowEditTablePriceDialog] = useState(false)
-  const [editTablePriceValue, setEditTablePriceValue] = useState("")
-  const [restaurantId, setRestaurantId] = useState("")
-  const [restaurantMongoId, setRestaurantMongoId] = useState("")
-  const [uploadingImage, setUploadingImage] = useState(false)
-  const [imageType, setImageType] = useState(null) // 'profile' or 'menu'
-  const [uploadingCount, setUploadingCount] = useState(0) // Track how many images are being uploaded
-  const profileImageInputRef = useRef(null)
-  const menuImageInputRef = useRef(null)
 
-  // Format address from location object
-  const formatAddress = (location) => {
-    if (!location) return ""
-    
-    if (location.formattedAddress && location.formattedAddress.trim() !== "") {
-      return location.formattedAddress.trim()
-    }
-    
-    if (location.address && location.address.trim() !== "") {
-      return location.address.trim()
-    }
-    
-    const parts = []
-    if (location.addressLine1) parts.push(location.addressLine1.trim())
-    if (location.addressLine2) parts.push(location.addressLine2.trim())
-    if (location.area) parts.push(location.area.trim())
-    if (location.city) {
-      const city = location.city.trim()
-      // Only add city if it's not already included in area
-      if (!location.area || !location.area.includes(city)) {
-        parts.push(city)
-      }
-    }
-    if (location.landmark) parts.push(location.landmark.trim())
-    
-    return parts.join(", ") || ""
-  }
-
-  // Fetch restaurant data on mount
-  useEffect(() => {
-    const fetchRestaurantData = async () => {
-      try {
-        setLoading(true)
-        const response = await restaurantAPI.getCurrentRestaurant()
-        const data = response?.data?.data?.restaurant || response?.data?.restaurant
-        if (data) {
   const [restaurantId, setRestaurantId] = useState("")
   const [restaurantMongoId, setRestaurantMongoId] = useState("")
   const [uploadingImage, setUploadingImage] = useState(false)
@@ -750,6 +703,24 @@ export default function OutletInfo() {
       }
     } catch (error) {
       console.error("Error updating cashback percentage:", error)
+    }
+  }
+
+  if (loading) return <Loader />
+
+  return (
+    <div className="min-h-screen bg-slate-50 pb-20 relative">
+      {/* Header */}
+      <div className="sticky top-0 z-50 bg-white shadow-sm px-4 py-3 flex items-center gap-3">
+        <button onClick={() => navigate(-1)} className="p-2 hover:bg-slate-100 rounded-full">
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <h1 className="text-xl font-bold">Outlet Info</h1>
+      </div>
+
+      {/* Banner / Cover Section */}
+      <div className="relative h-[250px] bg-slate-200 overflow-hidden group">
+        <img 
           src={mainImage}
           alt="Restaurant banner"
           className="w-full h-full object-cover"
