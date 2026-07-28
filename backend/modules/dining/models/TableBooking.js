@@ -42,6 +42,16 @@ const tableBookingSchema = new mongoose.Schema(
       enum: ["pending", "confirmed", "checked-in", "completed", "cancelled"],
       default: "confirmed",
     },
+    paymentMethod: {
+      type: String,
+      enum: ["cash", "upi"],
+      default: "cash",
+    },
+    paymentStatus: {
+      type: String,
+      enum: ["pending", "paid"],
+      default: "pending",
+    },
     checkInTime: {
       type: Date,
     },
@@ -51,6 +61,12 @@ const tableBookingSchema = new mongoose.Schema(
     bookingId: {
       type: String,
       unique: true,
+    },
+    razorpayOrderId: {
+      type: String,
+    },
+    razorpayPaymentId: {
+      type: String,
     },
   },
   {

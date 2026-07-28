@@ -148,11 +148,24 @@ export default function MyBookings() {
                                     </Badge>
                                 </div>
                                 <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
-                                    <MapPin className="w-3 h-3" />
+                                    <MapPin className="w-3 h-3 flex-shrink-0" />
                                     <span className="truncate">
-                                        {typeof booking.restaurant?.location === 'string'
-                                            ? booking.restaurant.location
-                                            : (booking.restaurant?.location?.formattedAddress || booking.restaurant?.location?.address || `${booking.restaurant?.location?.city || ''}${booking.restaurant?.location?.area ? ', ' + booking.restaurant.location.area : ''}`)}
+                                        {(() => {
+                                            const loc = booking.restaurant?.location
+                                            if (!loc) return "Location not available"
+                                            // If it's a plain string like "City Name" or "address"
+                                            if (typeof loc === 'string') {
+                                                // Check if it looks like coordinates (numbers, comma, numbers)
+                                                const isCoords = /^-?\d+\.?\d*,\s*-?\d+\.?\d*$/.test(loc.trim())
+                                                return isCoords ? (booking.restaurant?.name || "Location not available") : loc
+                                            }
+                                            // Object: prefer formattedAddress, then address, then city+area
+                                            return loc.formattedAddress
+                                                || loc.address
+                                                || loc.addressLine1
+                                                || [loc.area, loc.city, loc.state].filter(Boolean).join(', ')
+                                                || "Location not available"
+                                        })()}
                                     </span>
                                 </p>
 

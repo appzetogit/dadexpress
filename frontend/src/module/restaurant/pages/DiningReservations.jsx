@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { Calendar, Clock, Users, Search, Filter, MessageSquare, ChevronRight, CheckCircle2, XCircle, Clock4, ArrowLeft } from "lucide-react"
+import { Calendar, Clock, Users, Search, Filter, MessageSquare, CheckCircle2, XCircle, Clock4, ArrowLeft, Check, X } from "lucide-react"
 import { diningAPI, restaurantAPI } from "@/lib/api"
 import Loader from "@/components/Loader"
 import { Badge } from "@/components/ui/badge"
+import { toast } from "sonner"
 
 export default function DiningReservations() {
     const navigate = useNavigate()
@@ -11,6 +12,7 @@ export default function DiningReservations() {
     const [loading, setLoading] = useState(true)
     const [restaurant, setRestaurant] = useState(null)
     const [searchTerm, setSearchTerm] = useState("")
+    const [updatingId, setUpdatingId] = useState(null)
 
     useEffect(() => {
         const fetchAll = async () => {
@@ -44,15 +46,22 @@ export default function DiningReservations() {
 
     const handleStatusUpdate = async (bookingId, newStatus) => {
         try {
+            setUpdatingId(bookingId)
             const response = await diningAPI.updateBookingStatusRestaurant(bookingId, newStatus)
             if (response.data.success) {
-                // Update local state
                 setBookings(prev => prev.map(b =>
                     b._id === bookingId ? { ...b, status: newStatus } : b
                 ))
+                if (newStatus === 'confirmed') toast.success("Booking Accepted ✅")
+                else if (newStatus === 'cancelled') toast.error("Booking Rejected ❌")
+                else if (newStatus === 'checked-in') toast.success("Guest Checked In 🎉")
+                else if (newStatus === 'completed') toast.success("Booking Completed ✓")
             }
         } catch (error) {
             console.error("Error updating status:", error)
+            toast.error("Failed to update booking status")
+        } finally {
+            setUpdatingId(null)
         }
     }
 
@@ -191,32 +200,70 @@ export default function DiningReservations() {
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4">
-                                                <Badge className={`rounded-lg px-2.5 py-1 ${booking.status === 'confirmed' ? 'bg-green-100 text-green-700 hover:bg-green-200' :
+                                                <Badge className={`rounded-lg px-2.5 py-1 ${
+                                                    booking.status === 'confirmed' ? 'bg-green-100 text-green-700 hover:bg-green-200' :
                                                     booking.status === 'checked-in' ? 'bg-orange-100 text-orange-700 hover:bg-orange-200' :
-                                                        booking.status === 'completed' ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' :
-                                                            'bg-red-100 text-red-700 hover:bg-red-200'
-                                                    }`}>
+                                                    booking.status === 'completed' ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' :
+                                                    booking.status === 'pending' ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' :
+                                                    'bg-red-100 text-red-700 hover:bg-red-200'
+                                                }`}>
                                                     {booking.status}
                                                 </Badge>
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-2">
-                                                    {booking.status === 'confirmed' && (
-                                                        <button
-                                                            onClick={() => handleStatusUpdate(booking._id, 'checked-in')}
-                                                            className="px-3 py-1.5 bg-green-600 text-white text-xs font-bold rounded-lg hover:bg-green-700 transition-colors"
-                                                        >
-                                                            Check-in
-                                                        </button>
+                                                    {/* Pending: Accept / Reject */}
+                                                    {booking.status === 'pending' && (
+                                                        <>
+                                                            <button
+                                                                disabled={updatingId === booking._id}
+                                                                onClick={() => handleStatusUpdate(booking._id, 'confirmed')}
+                                                                className="flex items-center gap-1 px-3 py-1.5 bg-green-500 text-white text-xs font-bold rounded-lg hover:bg-green-600 transition-colors disabled:opacity-60"
+                                                            >
+                                                                <Check className="w-3.5 h-3.5" />
+                                                                Accept
+                                                            </button>
+                                                            <button
+                                                                disabled={updatingId === booking._id}
+                                                                onClick={() => handleStatusUpdate(booking._id, 'cancelled')}
+                                                                className="flex items-center gap-1 px-3 py-1.5 bg-red-500 text-white text-xs font-bold rounded-lg hover:bg-red-600 transition-colors disabled:opacity-60"
+                                                            >
+                                                                <X className="w-3.5 h-3.5" />
+                                                                Reject
+                                                            </button>
+                                                        </>
                                                     )}
+                                                    {/* Confirmed: Check-in */}
+                                                    {booking.status === 'confirmed' && (
+                                                        <>
+                                                            <button
+                                                                disabled={updatingId === booking._id}
+                                                                onClick={() => handleStatusUpdate(booking._id, 'checked-in')}
+                                                                className="px-3 py-1.5 bg-green-600 text-white text-xs font-bold rounded-lg hover:bg-green-700 transition-colors disabled:opacity-60"
+                                                            >
+                                                                Check-in
+                                                            </button>
+                                                            <button
+                                                                disabled={updatingId === booking._id}
+                                                                onClick={() => handleStatusUpdate(booking._id, 'cancelled')}
+                                                                className="flex items-center gap-1 px-3 py-1.5 bg-red-100 text-red-600 text-xs font-bold rounded-lg hover:bg-red-200 transition-colors disabled:opacity-60"
+                                                            >
+                                                                <X className="w-3.5 h-3.5" />
+                                                                Cancel
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                    {/* Checked-in: Complete */}
                                                     {booking.status === 'checked-in' && (
                                                         <button
+                                                            disabled={updatingId === booking._id}
                                                             onClick={() => handleStatusUpdate(booking._id, 'completed')}
-                                                            className="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 transition-colors"
+                                                            className="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60"
                                                         >
                                                             Check-out
                                                         </button>
                                                     )}
+                                                    {/* Special Request */}
                                                     {booking.specialRequest && (
                                                         <button
                                                             title={booking.specialRequest}

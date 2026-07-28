@@ -75,6 +75,10 @@ const diningRestaurantSchema = new mongoose.Schema({
             type: Number,
             default: 10
         },
+        maxTables: {
+            type: Number,
+            default: 5   // max concurrent bookings per time slot
+        },
         diningType: {
             type: String,
             default: "family-dining"

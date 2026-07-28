@@ -2273,7 +2273,7 @@ export const diningAPI = {
   // Get restaurant by slug
   getRestaurantBySlug: (slug) => {
     return apiClient.get(
-      API_ENDPOINTS.DINING.RESTAURANT_BY_SLUG.replace(":slug", slug),
+      API_ENDPOINTS.DINING.RESTAURANT_BY_SLUG.replace(":slug", encodeURIComponent(slug)),
     );
   },
 
@@ -2309,6 +2309,15 @@ export const diningAPI = {
   // Create a new table booking
   createBooking: (bookingData) => {
     return apiClient.post(API_ENDPOINTS.DINING.BOOKING_CREATE, bookingData);
+  },
+  // Verify UPI payment and confirm booking
+  verifyBookingPayment: (data) => {
+    return apiClient.post(API_ENDPOINTS.DINING.BOOKING_VERIFY_PAYMENT || "/api/dining/bookings/verify-payment", data);
+  },
+  // Get slot availability for a restaurant on a date
+  getSlotAvailability: (restaurantId, date) => {
+    const dateStr = date instanceof Date ? date.toISOString().split("T")[0] : date;
+    return apiClient.get(`/api/dining/slot-availability?restaurantId=${restaurantId}&date=${dateStr}`);
   },
   // Get current user's bookings
   getBookings: () => {

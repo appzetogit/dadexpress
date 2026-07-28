@@ -31,6 +31,10 @@ export default function JoiningRequest() {
   const [isEditing, setIsEditing] = useState(false)
   const [editData, setEditData] = useState({})
   const [uploading, setUploading] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [totalRecords, setTotalRecords] = useState(0)
+  const ITEMS_PER_PAGE = 10
 
   // Track initial mount to prevent double fetch
   const isInitialMount = useRef(true)
@@ -49,6 +53,11 @@ export default function JoiningRequest() {
 
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, searchQuery, currentPage])
+
+  // Reset to page 1 on tab or search change
+  useEffect(() => {
+    setCurrentPage(1)
   }, [activeTab, searchQuery])
 
   const fetchRequests = async () => {
@@ -67,12 +76,19 @@ export default function JoiningRequest() {
       const response = await adminAPI.getRestaurantJoinRequests({
         status,
         search: searchQuery || undefined,
-        page: 1,
-        limit: 100
+        page: currentPage,
+        limit: ITEMS_PER_PAGE
       })
 
       if (response.data && response.data.success && response.data.data) {
-        const requests = response.data.data.requests || []
+        const responseData = response.data.data
+        const requests = responseData.requests || []
+        
+        if (responseData.pagination) {
+          setTotalPages(responseData.pagination.pages)
+          setTotalRecords(responseData.pagination.total)
+        }
+
         if (activeTab === "pending") {
           setPendingRequests(requests)
         } else {
@@ -547,7 +563,8 @@ export default function JoiningRequest() {
                               alt={request.restaurantName}
                               className="w-full h-full object-cover"
                               onError={(e) => {
-                                e.target.src = "https://via.placeholder.com/40"
+                                e.currentTarget.onerror = null
+                                e.currentTarget.src = "https://via.placeholder.com/40"
                               }}
                             />
                           </div>
@@ -567,11 +584,11 @@ export default function JoiningRequest() {
                         <span className="text-sm text-slate-700">{request.businessModel}</span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${request.status === "Pending"
-                          ? "bg-blue-100 text-blue-700"
-                          : "bg-red-100 text-red-700"
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${activeTab === "rejected" || request.status === "Rejected"
+                          ? "bg-red-100 text-red-700"
+                          : "bg-blue-100 text-blue-700"
                           }`}>
-                          {request.status}
+                          {activeTab === "rejected" ? "Rejected" : request.status}
                         </span>
                       </td>
                           <td className="px-6 py-4 whitespace-nowrap text-center">
@@ -636,6 +653,46 @@ export default function JoiningRequest() {
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Controls */}
+          {!loading && !error && totalPages > 1 && (
+            <div className="flex items-center justify-between px-6 py-4 border-t border-slate-200">
+              <div className="text-sm text-slate-500">
+                Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, totalRecords)} of {totalRecords} records
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1.5 text-sm font-medium rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                    <button
+                      key={page}
+                      onClick={() => setCurrentPage(page)}
+                      className={`px-3 py-1.5 text-sm font-medium rounded-lg ${
+                        currentPage === page
+                          ? "bg-blue-600 text-white"
+                          : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-1.5 text-sm font-medium rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

@@ -18,6 +18,8 @@ export default function TableBooking() {
     const [activeTimeOfDay, setActiveTimeOfDay] = useState("Lunch")
     const [selectedSlot, setSelectedSlot] = useState(null)
     const [showAllSlots, setShowAllSlots] = useState(false)
+    const [slotAvailability, setSlotAvailability] = useState({})
+    const [availabilityLoading, setAvailabilityLoading] = useState(false)
 
     useEffect(() => {
         const fetchRestaurant = async () => {
@@ -68,6 +70,26 @@ export default function TableBooking() {
         }
         fetchRestaurant()
     }, [slug])
+
+    // Fetch slot availability whenever restaurant or date changes
+    useEffect(() => {
+        if (!restaurant?._id) return
+        const fetchAvailability = async () => {
+            setAvailabilityLoading(true)
+            try {
+                const res = await diningAPI.getSlotAvailability(restaurant._id, selectedDate)
+                if (res.data.success) {
+                    setSlotAvailability(res.data.data.availability || {})
+                }
+            } catch (e) {
+                console.error("Availability fetch failed:", e)
+            } finally {
+                setAvailabilityLoading(false)
+            }
+        }
+        fetchAvailability()
+        setSelectedSlot(null) // reset slot on date change
+    }, [restaurant?._id, selectedDate])
 
     // Generate next 7 days
     const dates = useMemo(() => {
@@ -182,20 +204,22 @@ export default function TableBooking() {
                 </div>
 
                 {/* Cashback Banner */}
-                <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-2xl p-4 flex items-center gap-4 border border-indigo-100 shadow-sm overflow-hidden relative">
-                    <div className="absolute right-0 top-0 opacity-10">
-                        <Ticket className="w-16 h-16 rotate-45" />
+                {(restaurant.diningSettings?.billCashbackPercentage ?? 10) > 0 && (
+                    <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-2xl p-4 flex items-center gap-4 border border-indigo-100 shadow-sm overflow-hidden relative">
+                        <div className="absolute right-0 top-0 opacity-10">
+                            <Ticket className="w-16 h-16 rotate-45" />
+                        </div>
+                        <div className="bg-indigo-500 p-2 rounded-xl text-white shadow-lg shadow-indigo-200">
+                            <Ticket className="w-6 h-6" />
+                        </div>
+                        <div>
+                            <p className="font-bold text-gray-800 flex items-center gap-1">
+                                Get an extra {restaurant.diningSettings?.billCashbackPercentage ?? 10}% cashback <span className="text-indigo-600">on your final bill</span>
+                            </p>
+                            <p className="text-xs text-indigo-500 font-medium">payment at the restaurant</p>
+                        </div>
                     </div>
-                    <div className="bg-indigo-500 p-2 rounded-xl text-white shadow-lg shadow-indigo-200">
-                        <Ticket className="w-6 h-6" />
-                    </div>
-                    <div>
-                        <p className="font-bold text-gray-800 flex items-center gap-1">
-                            Get an extra 10% cashback <span className="text-indigo-600">on your final bill</span>
-                        </p>
-                        <p className="text-xs text-indigo-500 font-medium">payment at the restaurant</p>
-                    </div>
-                </div>
+                )}
 
                 {/* Date Selector */}
                 <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
@@ -207,7 +231,10 @@ export default function TableBooking() {
                         {dates.map((date, idx) => (
                             <button
                                 key={idx}
-                                onClick={() => setSelectedDate(date)}
+                                onClick={() => {
+                                    setSelectedDate(date)
+                                    setSelectedSlot(null)
+                                }}
                                 className={`min-w-[110px] p-3 rounded-2xl border transition-all flex flex-col items-center gap-1 ${selectedDate.toDateString() === date.toDateString()
                                     ? "bg-red-50 border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.1)]"
                                     : "bg-white border-slate-100 hover:border-slate-200"
@@ -254,27 +281,54 @@ export default function TableBooking() {
 
                     {/* Slots Grid */}
                     <div className="grid grid-cols-3 gap-3">
-                        {slots[activeTimeOfDay].slice(0, showAllSlots ? undefined : 6).map((slot, idx) => (
-                            <button
-                                key={idx}
-                                onClick={() => setSelectedSlot(slot)}
-                                className={`p-3 rounded-xl border transition-all text-center flex flex-col gap-0.5 ${selectedSlot?.time === slot.time
-                                    ? "bg-red-500 border-red-500 text-white shadow-lg shadow-red-200"
-                                    : "bg-white border-slate-100 hover:border-slate-200"
+                        {slots[activeTimeOfDay].slice(0, showAllSlots ? undefined : 6).map((slot, idx) => {
+                            const avail = slotAvailability[slot.time]
+                            const isFull = avail?.status === "full"
+                            const isLimited = avail?.status === "limited"
+                            const isSelected = selectedSlot?.time === slot.time
+
+                            return (
+                                <button
+                                    key={idx}
+                                    disabled={isFull}
+                                    onClick={() => !isFull && setSelectedSlot(slot)}
+                                    className={`p-3 rounded-xl border transition-all text-center flex flex-col gap-0.5 relative ${
+                                        isFull
+                                            ? "bg-slate-50 border-slate-100 opacity-50 cursor-not-allowed"
+                                            : isSelected
+                                                ? "bg-red-500 border-red-500 text-white shadow-lg shadow-red-200"
+                                                : "bg-white border-slate-100 hover:border-slate-200"
                                     }`}
-                            >
-                                <span className={`text-sm font-bold ${selectedSlot?.time === slot.time ? "text-white" : "text-gray-800"
+                                >
+                                    <span className={`text-sm font-bold ${
+                                        isFull ? "text-slate-400" : isSelected ? "text-white" : "text-gray-800"
                                     }`}>
-                                    {slot.time}
-                                </span>
-                                {slot.discount !== "No OFF" && (
-                                    <span className={`text-[10px] font-bold ${selectedSlot?.time === slot.time ? "text-white/90" : "text-[#EB590E]"
-                                        }`}>
-                                        {slot.discount}
+                                        {slot.time}
                                     </span>
-                                )}
-                            </button>
-                        ))}
+
+                                    {slot.discount !== "No OFF" && !isFull && (
+                                        <span className={`text-[10px] font-bold ${
+                                            isSelected ? "text-white/90" : "text-[#EB590E]"
+                                        }`}>
+                                            {slot.discount}
+                                        </span>
+                                    )}
+
+                                    {/* Availability Badge */}
+                                    {isFull && (
+                                        <span className="text-[9px] font-bold text-red-400 bg-red-50 rounded px-1 mt-0.5">FULL</span>
+                                    )}
+                                    {isLimited && !isSelected && (
+                                        <span className="text-[9px] font-bold text-orange-500 bg-orange-50 rounded px-1 mt-0.5">FEW LEFT</span>
+                                    )}
+
+                                    {/* Loading shimmer */}
+                                    {availabilityLoading && (
+                                        <div className="absolute inset-0 rounded-xl bg-slate-100 animate-pulse opacity-40" />
+                                    )}
+                                </button>
+                            )
+                        })}
                     </div>
 
                     {slots[activeTimeOfDay].length > 6 && (

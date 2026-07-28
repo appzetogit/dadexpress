@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { useNavigate, useParams } from "react-router-dom"
+import { useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { Building2, Upload, Calendar, CheckCircle2, X, Image as ImageIcon, Loader2 } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -28,7 +28,14 @@ const daysOfWeek = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 export default function EditRestaurant() {
     const navigate = useNavigate()
     const { id } = useParams()
-    const [step, setStep] = useState(1)
+    const [searchParams, setSearchParams] = useSearchParams()
+    
+    const initialStep = parseInt(searchParams.get("step")) || 1
+    const [step, setStep] = useState(initialStep >= 1 && initialStep <= 4 ? initialStep : 1)
+    
+    useEffect(() => {
+        setSearchParams({ step })
+    }, [step, setSearchParams])
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [isLoading, setIsLoading] = useState(true)
     const [showSuccessDialog, setShowSuccessDialog] = useState(false)
@@ -792,6 +799,22 @@ export default function EditRestaurant() {
                     </div>
                 </div>
 
+                <div className="flex items-center justify-between border p-3 rounded-md mt-4">
+                    <div>
+                        <Label className="text-sm font-medium text-black">Enable Menu Ordering (Dining)</Label>
+                        <p className="text-xs text-gray-500">Allow users to add food to cart from the Dining Menu</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button type="button"
+                            onClick={() => setStep4({ ...step4, diningSettings: { ...step4.diningSettings, isDiningOrderingEnabled: !(step4.diningSettings?.isDiningOrderingEnabled ?? true) } })}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${step4.diningSettings?.isDiningOrderingEnabled !== false ? 'bg-black' : 'bg-gray-200'}`}
+                        >
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition duration-200 ease-in-out ${step4.diningSettings?.isDiningOrderingEnabled !== false ? 'translate-x-6' : 'translate-x-1'}`} />
+                        </button>
+                        <span className="text-xs font-medium">{step4.diningSettings?.isDiningOrderingEnabled !== false ? "Active" : "Inactive"}</span>
+                    </div>
+                </div>
+
                 {step4.diningSettings?.isEnabled && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
@@ -813,6 +836,12 @@ export default function EditRestaurant() {
                                 <option value="pub-bar">Pub & Bar</option>
                                 <option value="buffet">Buffet</option>
                             </select>
+                        </div>
+                        <div>
+                            <Label className="text-xs text-gray-700">Bill Cashback Percentage (%)</Label>
+                            <Input type="number" min="0" max="100" value={step4.diningSettings?.billCashbackPercentage ?? 10}
+                                onChange={(e) => setStep4({ ...step4, diningSettings: { ...step4.diningSettings, billCashbackPercentage: parseInt(e.target.value) || 0 } })}
+                                className="mt-1 bg-white text-sm" />
                         </div>
                     </div>
                 )}

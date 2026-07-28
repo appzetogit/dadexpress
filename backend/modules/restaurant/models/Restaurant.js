@@ -307,6 +307,10 @@ const restaurantSchema = new mongoose.Schema(
         type: Boolean,
         default: false,
       },
+      isDiningOrderingEnabled: {
+        type: Boolean,
+        default: true,
+      },
       maxGuests: {
         type: Number,
         default: 6,

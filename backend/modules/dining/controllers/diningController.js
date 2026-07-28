@@ -260,14 +260,52 @@ export const getRestaurants = async (req, res) => {
 // Get single restaurant by slug
 export const getRestaurantBySlug = async (req, res) => {
   try {
-    const restaurant = await DiningRestaurant.findOne({
-      slug: req.params.slug,
+    let slug = req.params.slug;
+    
+    // Auto-fallback for slug variants (handles cases where & is stripped or replaced)
+    let slugVariants = [slug];
+    if (slug.includes('-&-')) {
+      slugVariants.push(slug.replace('-&-', '-'));
+      slugVariants.push(slug.replace('-&-', '-and-'));
+    } else if (slug.includes('&')) {
+      slugVariants.push(slug.replace(/&/g, '-'));
+    }
+
+    let restaurant = await DiningRestaurant.findOne({
+      slug: { $in: slugVariants },
     });
 
-    // If not found in GamingRestaurant, check regular Restaurant
+    // If not found in DiningRestaurant, check regular Restaurant
     let actualRestaurant = restaurant;
     if (!actualRestaurant) {
-      actualRestaurant = await Restaurant.findOne({ slug: req.params.slug });
+      actualRestaurant = await Restaurant.findOne({ slug: { $in: slugVariants } });
+    }
+
+    // Fallback: search by name slugification matching
+    if (!actualRestaurant) {
+      const allDining = await DiningRestaurant.find({});
+      for (const r of allDining) {
+        if (r.name) {
+          const nameSlug = r.name.toLowerCase().replace(/\s+/g, "-");
+          if (nameSlug === slug || slugVariants.includes(nameSlug) || nameSlug.replace(/&/g, "-") === slug.replace(/&/g, "-")) {
+            actualRestaurant = r;
+            break;
+          }
+        }
+      }
+    }
+
+    if (!actualRestaurant) {
+      const allMain = await Restaurant.find({ isActive: true });
+      for (const r of allMain) {
+        if (r.name) {
+          const nameSlug = r.name.toLowerCase().replace(/\s+/g, "-");
+          if (nameSlug === slug || slugVariants.includes(nameSlug) || nameSlug.replace(/&/g, "-") === slug.replace(/&/g, "-")) {
+            actualRestaurant = r;
+            break;
+          }
+        }
+      }
     }
 
     if (!actualRestaurant) {
@@ -428,13 +466,126 @@ export const getStories = async (req, res) => {
     });
   }
 };
+// Get slot availability for a restaurant on a specific date
+export const getSlotAvailability = async (req, res) => {
+  try {
+    const { restaurantId, date } = req.query;
+    if (!restaurantId || !date) {
+      return res.status(400).json({ success: false, message: "restaurantId and date are required" });
+    }
+
+    // Get start and end of the requested day
+    const dayStart = new Date(date);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(date);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    // Fetch all active bookings for this restaurant on this date
+    const bookings = await TableBooking.find({
+      restaurant: restaurantId,
+      date: { $gte: dayStart, $lte: dayEnd },
+      status: { $in: ["pending", "confirmed", "checked-in"] },
+    });
+
+    // Count bookings per timeslot
+    const slotCounts = {};
+    bookings.forEach((b) => {
+      if (b.timeSlot) {
+        slotCounts[b.timeSlot] = (slotCounts[b.timeSlot] || 0) + 1;
+      }
+    });
+
+    // Get maxTables from DiningRestaurant (fallback to 5)
+    let maxTables = 5;
+    const diningRes = await DiningRestaurant.findById(restaurantId).select("diningSettings");
+    if (diningRes?.diningSettings?.maxTables) {
+      maxTables = diningRes.diningSettings.maxTables;
+    }
+
+    // Build availability map
+    const availability = {};
+    for (const [slot, count] of Object.entries(slotCounts)) {
+      let status = "available";
+      if (count >= maxTables) status = "full";
+      else if (count >= Math.ceil(maxTables * 0.7)) status = "limited";
+      availability[slot] = { booked: count, max: maxTables, status };
+    }
+
+    res.status(200).json({
+      success: true,
+      data: { availability, maxTables },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to get slot availability",
+      error: error.message,
+    });
+  }
+};
 
 // Create a new table booking
 export const createBooking = async (req, res) => {
   try {
-    const { restaurant, guests, date, timeSlot, specialRequest, guestName, guestPhone } = req.body;
+    const { restaurant, guests, date, timeSlot, specialRequest, guestName, guestPhone, paymentMethod } = req.body;
     const userId = req.user._id;
 
+    // For UPI payment - first create a Razorpay order, booking will be confirmed after payment
+    if (paymentMethod === "upi") {
+      // Create a temporary booking with pending status
+      const booking = await TableBooking.create({
+        restaurant,
+        user: userId,
+        guests,
+        date,
+        timeSlot,
+        specialRequest,
+        guestName,
+        guestPhone,
+        status: "pending", // pending until payment is verified
+        paymentMethod: "upi",
+        paymentStatus: "pending",
+      });
+
+      // Create Razorpay order (booking fee ₹1 as token amount, or you can set a fixed fee)
+      const BOOKING_FEE = 100; // ₹1 in paise (token amount)
+      const razorpayOrder = await createRazorpayOrder({
+        amount: BOOKING_FEE,
+        currency: "INR",
+        receipt: `booking_${booking._id}`,
+        notes: {
+          bookingId: booking._id.toString(),
+          restaurantId: restaurant,
+          userId: userId.toString(),
+        },
+      });
+
+      if (!razorpayOrder) {
+        await TableBooking.findByIdAndDelete(booking._id);
+        return res.status(500).json({ success: false, message: "Failed to create payment order" });
+      }
+
+      // Save razorpay order id in booking
+      booking.razorpayOrderId = razorpayOrder.id;
+      await booking.save();
+
+      return res.status(200).json({
+        success: true,
+        requiresPayment: true,
+        message: "Proceed to payment to confirm booking",
+        data: {
+          bookingId: booking._id,
+          razorpay: {
+            orderId: razorpayOrder.id,
+            amount: razorpayOrder.amount,
+            currency: razorpayOrder.currency,
+            key: process.env.RAZORPAY_KEY_ID,
+          },
+        },
+      });
+    }
+
+    // For Cash payment - directly confirm booking
     const booking = await TableBooking.create({
       restaurant,
       user: userId,
@@ -445,6 +596,8 @@ export const createBooking = async (req, res) => {
       guestName,
       guestPhone,
       status: "confirmed",
+      paymentMethod: "cash",
+      paymentStatus: "pending",
     });
 
     // Populate restaurant data for the success page
@@ -466,6 +619,7 @@ export const createBooking = async (req, res) => {
 
     res.status(201).json({
       success: true,
+      requiresPayment: false,
       message: "Booking confirmed successfully",
       data: bookingObj,
     });
@@ -482,6 +636,68 @@ export const createBooking = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to create booking",
+      error: error.message,
+    });
+  }
+};
+
+// Verify UPI payment and confirm booking
+export const verifyBookingPayment = async (req, res) => {
+  try {
+    const { bookingId, razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+
+    // Verify payment signature
+    const isValid = verifyRazorpayPayment({
+      orderId: razorpay_order_id,
+      paymentId: razorpay_payment_id,
+      signature: razorpay_signature,
+    });
+
+    if (!isValid) {
+      return res.status(400).json({ success: false, message: "Payment verification failed" });
+    }
+
+    // Update booking to confirmed
+    let booking = await TableBooking.findByIdAndUpdate(
+      bookingId,
+      {
+        status: "confirmed",
+        paymentStatus: "paid",
+        razorpayPaymentId: razorpay_payment_id,
+      },
+      { new: true }
+    );
+
+    if (!booking) {
+      return res.status(404).json({ success: false, message: "Booking not found" });
+    }
+
+    // Populate restaurant
+    let populatedBooking = await TableBooking.findById(booking._id).populate(
+      "restaurant",
+      "name location image",
+    );
+    let bookingObj = populatedBooking.toObject();
+
+    if (!bookingObj.restaurant || typeof bookingObj.restaurant === "string") {
+      const diningRes = await DiningRestaurant.findById(booking.restaurant).select("name location image");
+      if (diningRes) bookingObj.restaurant = diningRes;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Payment verified and booking confirmed!",
+      data: bookingObj,
+    });
+
+    // Send email confirmation
+    if (req.user?.email) {
+      emailService.sendBookingConfirmation(req.user.email, bookingObj).catch(() => {});
+    }
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Payment verification failed",
       error: error.message,
     });
   }

@@ -57,8 +57,8 @@ export default function DiningPayBill() {
 
     const billAmount = parseFloat(amount) || 0
     
-    // Dynamic cashback percentage (default 10%)
-    const cashbackPercentage = restaurant?.diningSettings?.billCashbackPercentage || 10
+    // Dynamic cashback percentage
+    const cashbackPercentage = restaurant?.diningSettings?.billCashbackPercentage ?? 10
     const discount = Math.round(billAmount * (cashbackPercentage / 100))
     const finalAmount = billAmount - discount
 
@@ -165,10 +165,12 @@ export default function DiningPayBill() {
                                 <span className="text-gray-500">Bill Amount</span>
                                 <span className="font-semibold">₹{billAmount}</span>
                             </div>
-                            <div className="flex justify-between text-sm text-green-600">
-                                <span>Cashback ({cashbackPercentage}%)</span>
-                                <span className="font-semibold">-₹{discount}</span>
-                            </div>
+                            {cashbackPercentage > 0 && (
+                                <div className="flex justify-between text-sm text-green-600">
+                                    <span>Cashback ({cashbackPercentage}%)</span>
+                                    <span className="font-semibold">-₹{discount}</span>
+                                </div>
+                            )}
                             <div className="pt-2 border-t border-slate-200 flex justify-between">
                                 <span className="font-bold text-gray-900">Paid Amount</span>
                                 <span className="font-black text-red-500">₹{finalAmount}</span>
@@ -232,13 +234,15 @@ export default function DiningPayBill() {
                                 <span className="font-bold text-gray-900">₹{billAmount}</span>
                             </div>
                             
-                            <div className="flex justify-between items-center text-green-600 bg-green-50 p-3 rounded-2xl">
-                                <span className="font-bold flex items-center gap-1">
-                                    <Info className="w-4 h-4" />
-                                    {cashbackPercentage}% Cashback Applied
-                                </span>
-                                <span className="font-black">-₹{discount}</span>
-                            </div>
+                            {cashbackPercentage > 0 && (
+                                <div className="flex justify-between items-center text-green-600 bg-green-50 p-3 rounded-2xl">
+                                    <span className="font-bold flex items-center gap-1">
+                                        <Info className="w-4 h-4" />
+                                        {cashbackPercentage}% Cashback Applied
+                                    </span>
+                                    <span className="font-black">-₹{discount}</span>
+                                </div>
+                            )}
 
                             <div className="pt-4 border-t border-slate-100 flex justify-between items-center">
                                 <span className="text-lg font-black text-gray-900">Amount to Pay</span>

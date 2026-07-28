@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
-import { ArrowLeft, Calendar, Users, MapPin, Ticket, ChevronRight, Edit2, ShieldCheck, Info, X } from "lucide-react"
+import { ArrowLeft, Calendar, Users, MapPin, Ticket, ChevronRight, Edit2, ShieldCheck, Info, X, Banknote, CreditCard } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import AnimatedPage from "../../components/AnimatedPage"
 import { diningAPI, authAPI } from "@/lib/api"
+import { initRazorpayPayment } from "@/lib/utils/razorpay"
 import { toast } from "sonner"
 import Loader from "@/components/Loader"
 import {
@@ -27,6 +28,7 @@ export default function TableBookingConfirmation() {
     const [tempUser, setTempUser] = useState({ name: "", phone: "" })
     const [loading, setLoading] = useState(true)
     const [bookingInProgress, setBookingInProgress] = useState(false)
+    const [paymentMethod, setPaymentMethod] = useState("cash")
 
     // Modals state
     const [isSpecialRequestOpen, setIsSpecialRequestOpen] = useState(false)
@@ -67,10 +69,59 @@ export default function TableBookingConfirmation() {
                 timeSlot,
                 specialRequest,
                 guestName: user?.name,
-                guestPhone: user?.phone
+                guestPhone: user?.phone,
+                paymentMethod
             })
 
             if (response.data.success) {
+                // UPI payment - Razorpay Gateway open karo
+                if (response.data.requiresPayment && response.data.data?.razorpay) {
+                    const { razorpay, bookingId } = response.data.data
+
+                    await initRazorpayPayment({
+                        key: razorpay.key,
+                        amount: razorpay.amount,
+                        currency: razorpay.currency || "INR",
+                        order_id: razorpay.orderId,
+                        name: restaurant?.name || "Dad Express",
+                        description: `Table Booking - ${guests} Guest${guests > 1 ? 's' : ''}`,
+                        prefill: {
+                            name: user?.name || "",
+                            contact: user?.phone || "",
+                            email: user?.email || "",
+                        },
+                        handler: async (razorpayResponse) => {
+                            try {
+                                // Payment success - verify karo aur booking confirm karo
+                                const verifyRes = await diningAPI.verifyBookingPayment({
+                                    bookingId,
+                                    razorpay_order_id: razorpayResponse.razorpay_order_id,
+                                    razorpay_payment_id: razorpayResponse.razorpay_payment_id,
+                                    razorpay_signature: razorpayResponse.razorpay_signature,
+                                })
+                                if (verifyRes.data.success) {
+                                    toast.success("Payment successful! Booking confirmed!")
+                                    navigate("/dining/book-success", { state: { booking: verifyRes.data.data } })
+                                }
+                            } catch (err) {
+                                toast.error("Payment verification failed. Please contact support.")
+                            } finally {
+                                setBookingInProgress(false)
+                            }
+                        },
+                        onClose: () => {
+                            toast.error("Payment cancelled")
+                            setBookingInProgress(false)
+                        },
+                        onError: () => {
+                            toast.error("Payment failed. Please try again.")
+                            setBookingInProgress(false)
+                        },
+                    })
+                    return // Razorpay handler ke baad proceed nahi karna
+                }
+
+                // Cash payment - seedha success page
                 toast.success("Table booked successfully!")
                 navigate("/dining/book-success", { state: { booking: response.data.data } })
             }
@@ -143,7 +194,7 @@ export default function TableBookingConfirmation() {
 
                         <div className="flex items-center gap-2 pt-4 border-t border-dashed border-slate-100 text-purple-600">
                             <Ticket className="w-5 h-5" />
-                            <span className="font-bold text-sm">10% cashback</span>
+                            <span className="font-bold text-sm">{restaurant?.diningSettings?.billCashbackPercentage ?? 10}% cashback</span>
                         </div>
                     </div>
                 </div>
@@ -299,6 +350,91 @@ export default function TableBookingConfirmation() {
                     </div>
                 </div>
 
+                {/* Select Payment Method */}
+                <div className="pt-4">
+                    <div className="flex items-center gap-4 mb-3">
+                        <div className="h-px bg-slate-200 flex-1"></div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Payment Method</span>
+                        <div className="h-px bg-slate-200 flex-1"></div>
+                    </div>
+
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                        {/* COD Option */}
+                        <button
+                            type="button"
+                            id="payment-cod"
+                            onClick={() => setPaymentMethod("cash")}
+                            className={`w-full flex items-center gap-4 p-4 text-left transition-all ${
+                                paymentMethod === "cash"
+                                    ? "bg-orange-50/60"
+                                    : "bg-white hover:bg-slate-50"
+                            }`}
+                        >
+                            {/* Radio */}
+                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                                paymentMethod === "cash" ? "border-[#EB590E]" : "border-slate-300"
+                            }`}>
+                                {paymentMethod === "cash" && (
+                                    <div className="w-2.5 h-2.5 rounded-full bg-[#EB590E]"></div>
+                                )}
+                            </div>
+
+                            {/* Icon */}
+                            <div className={`p-2.5 rounded-xl flex-shrink-0 ${paymentMethod === "cash" ? "bg-orange-100 text-[#EB590E]" : "bg-slate-100 text-slate-500"}`}>
+                                <Banknote className="w-5 h-5" />
+                            </div>
+
+                            {/* Text */}
+                            <div className="flex-1">
+                                <p className="font-bold text-gray-900 text-sm">Cash on Arrival (COD)</p>
+                                <p className="text-[11px] text-slate-400 mt-0.5">Pay cash directly at the restaurant</p>
+                            </div>
+
+                            {paymentMethod === "cash" && (
+                                <span className="text-[10px] font-bold text-[#EB590E] bg-orange-50 border border-orange-200 px-2 py-1 rounded-full flex-shrink-0">Selected</span>
+                            )}
+                        </button>
+
+                        <div className="h-px bg-slate-100 mx-4"></div>
+
+                        {/* Online Payment Option */}
+                        <button
+                            type="button"
+                            id="payment-online"
+                            onClick={() => setPaymentMethod("upi")}
+                            className={`w-full flex items-center gap-4 p-4 text-left transition-all ${
+                                paymentMethod === "upi"
+                                    ? "bg-orange-50/60"
+                                    : "bg-white hover:bg-slate-50"
+                            }`}
+                        >
+                            {/* Radio */}
+                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                                paymentMethod === "upi" ? "border-[#EB590E]" : "border-slate-300"
+                            }`}>
+                                {paymentMethod === "upi" && (
+                                    <div className="w-2.5 h-2.5 rounded-full bg-[#EB590E]"></div>
+                                )}
+                            </div>
+
+                            {/* Icon */}
+                            <div className={`p-2.5 rounded-xl flex-shrink-0 ${paymentMethod === "upi" ? "bg-orange-100 text-[#EB590E]" : "bg-slate-100 text-slate-500"}`}>
+                                <CreditCard className="w-5 h-5" />
+                            </div>
+
+                            {/* Text */}
+                            <div className="flex-1">
+                                <p className="font-bold text-gray-900 text-sm">Online Payment</p>
+                                <p className="text-[11px] text-slate-400 mt-0.5">UPI, Card, Net Banking via Razorpay</p>
+                            </div>
+
+                            {paymentMethod === "upi" && (
+                                <span className="text-[10px] font-bold text-[#EB590E] bg-orange-50 border border-orange-200 px-2 py-1 rounded-full flex-shrink-0">Selected</span>
+                            )}
+                        </button>
+                    </div>
+                </div>
+
                 {/* Terms and Conditions */}
                 <div className="pt-4">
                     <div className="flex items-center gap-4 mb-3">
@@ -334,9 +470,13 @@ export default function TableBookingConfirmation() {
                 <Button
                     onClick={handleBooking}
                     disabled={bookingInProgress}
-                    className="w-full h-14 bg-[#ef4444] hover:bg-red-600 text-white font-bold text-lg rounded-2xl shadow-xl shadow-red-200 transition-all active:scale-[0.98]"
+                    className="w-full h-14 bg-[#EB590E] hover:bg-[#d9520d] text-white font-bold text-base rounded-2xl shadow-xl shadow-orange-200 transition-all active:scale-[0.98]"
                 >
-                    {bookingInProgress ? "Confirming..." : "Confirm your seat"}
+                    {bookingInProgress
+                        ? (paymentMethod === "upi" ? "Opening Payment..." : "Confirming...")
+                        : paymentMethod === "upi"
+                            ? "Proceed to Pay Online →"
+                            : "Confirm Seat (Cash on Arrival)"}
                 </Button>
             </div>
         </AnimatedPage>

@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react"
+
+import { useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { restaurantAPI, diningAPI } from "@/lib/api"
 import { userAPI } from "@/lib/api/index.js"
@@ -17,6 +18,8 @@ import {
 import { Button } from "@/components/ui/button"
 import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
+import AddToCartButton from "../../components/AddToCartButton"
+import StickyCartCard from "../../components/StickyCartCard"
 
 export default function DiningRestaurantDetails() {
     const { diningType, slug } = useParams() // Get params from URL
@@ -114,8 +117,8 @@ export default function DiningRestaurantDetails() {
                 if (res.data?.success && res.data?.data?.user?.favorites) {
                     const favorites = res.data.data.user.favorites
                     if (restaurant) {
-                         const restaurantId = restaurant._id || restaurant.restaurantId
-                         setIsFav(favorites.some(f => f.restaurantId === restaurantId))
+                        const restaurantId = restaurant._id || restaurant.restaurantId
+                        setIsFav(favorites.some(f => f.restaurantId === restaurantId))
                     }
                 }
             } catch (err) {
@@ -140,7 +143,7 @@ export default function DiningRestaurantDetails() {
                         setIsFav(favorites.some(f => String(f.restaurantId) === String(restaurantId)))
                     }
                 } catch (err) {
-                   console.log("Not logged in or failed to fetch favorites")
+                    console.log("Not logged in or failed to fetch favorites")
                 }
             }
             checkFav()
@@ -159,7 +162,7 @@ export default function DiningRestaurantDetails() {
         return (
             <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 p-4">
                 <h2 className="text-xl font-bold text-slate-800">Restaurant not found</h2>
-                <Button onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/') )} className="mt-4" variant="outline">Go Back</Button>
+                <Button onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))} className="mt-4" variant="outline">Go Back</Button>
             </div>
         )
     }
@@ -178,7 +181,7 @@ export default function DiningRestaurantDetails() {
                 </div>
                 <h2 className="text-xl font-bold text-slate-800 mb-2">Dining Unavailable</h2>
                 <p className="text-slate-600 mb-6">Dining is currently unavailable for this restaurant.</p>
-                <Button onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/') )} variant="outline">Go Back</Button>
+                <Button onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))} variant="outline">Go Back</Button>
             </div>
         )
     }
@@ -195,7 +198,7 @@ export default function DiningRestaurantDetails() {
     const handleNavigation = () => {
         const address = restaurant.location?.formattedAddress || restaurant.location?.address || (typeof restaurant.location === 'string' ? restaurant.location : null) || restaurant.address
         const coords = restaurant.location?.coordinates || restaurant.coordinates
-        
+
         let url = ""
         // Handle both object {latitude, longitude} and array [lng, lat]
         if (coords?.latitude && coords?.longitude) {
@@ -270,21 +273,21 @@ export default function DiningRestaurantDetails() {
             {/* Sticky Header / Back Button */}
             <div className="fixed top-0 left-0 w-full z-50 p-4 flex justify-between items-center bg-gradient-to-b from-black/50 to-transparent pointer-events-none">
                 <button
-                    onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/') )}
+                    onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))}
                     className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white pointer-events-auto hover:bg-black/60 transition-colors"
                 >
                     <ArrowLeft className="w-6 h-6" />
                 </button>
 
                 <div className="flex gap-3 pointer-events-auto">
-                    <button 
+                    <button
                         onClick={handleFavoriteClick}
                         disabled={isTogglingFav}
                         className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/60 transition-colors"
                     >
                         {isTogglingFav ? <Loader2 className="w-5 h-5 animate-spin" /> : <Bookmark className={`w-5 h-5 ${isFav ? "fill-white" : ""}`} />}
                     </button>
-                    <button 
+                    <button
                         onClick={handleShareClick}
                         className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/60 transition-colors"
                     >
@@ -307,11 +310,11 @@ export default function DiningRestaurantDetails() {
                 <div className="absolute bottom-0 left-0 w-full p-5 text-white">
                     <h1 className="text-3xl font-bold mb-1">{restaurant.name}</h1>
                     <p className="text-sm text-gray-300 line-clamp-2 max-w-[90%] mb-2">
-                        {restaurant.location?.formattedAddress || 
-                         restaurant.location?.addressLine1 || 
-                         (restaurant.location?.area ? `${restaurant.location.area}${restaurant.location.city ? ', ' + restaurant.location.city : ''}` : null) ||
-                         restaurant.address || 
-                         "Location not available"}
+                        {restaurant.location?.formattedAddress ||
+                            restaurant.location?.addressLine1 ||
+                            (restaurant.location?.area ? `${restaurant.location.area}${restaurant.location.city ? ', ' + restaurant.location.city : ''}` : null) ||
+                            restaurant.address ||
+                            "Location not available"}
                     </p>
 
                     <div className="flex items-center gap-3 text-sm font-medium mb-3">
@@ -355,13 +358,13 @@ export default function DiningRestaurantDetails() {
                 </Button>
 
                 <div className="flex gap-3">
-                    <button 
+                    <button
                         onClick={handleNavigation}
                         className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-[#EB590E] hover:bg-orange-50"
                     >
                         <Navigation className="w-5 h-5" />
                     </button>
-                    <button 
+                    <button
                         onClick={handleCall}
                         className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-[#EB590E] hover:bg-orange-50"
                     >
@@ -374,11 +377,11 @@ export default function DiningRestaurantDetails() {
             <div className="px-4 py-4">
                 <div className="bg-[#FFF8E8] border border-[#F5D8A0] rounded-xl p-4 relative overflow-hidden">
                     <div className="flex flex-col items-center justify-center text-center z-10 relative">
-                        <span className="text-2xl font-black text-[#2D2D2D] tracking-tight">10% CASHBACK</span>
+                        <span className="text-2xl font-black text-[#2D2D2D] tracking-tight">{restaurant?.diningSettings?.billCashbackPercentage ?? 10}% CASHBACK</span>
                         <span className="text-xs font-medium text-gray-600 uppercase tracking-widest bg-white/50 px-2 py-0.5 rounded mt-1">on every dining bill</span>
                     </div>
 
-                    {/* Decorative Elements mimicking the screenshot */}
+                    {/* Decorative Elements */}
                     <div className="absolute top-0 left-0 w-8 h-8 bg-purple-500/20 -rotate-45 transform -translate-x-4 -translate-y-4"></div>
                     <div className="absolute bottom-0 right-0 w-8 h-8 bg-green-500/20 rotate-45 transform translate-x-4 translate-y-4"></div>
                 </div>
@@ -406,7 +409,7 @@ export default function DiningRestaurantDetails() {
             {/* Tab Content */}
             <div className="p-4 min-h-[300px]">
                 <h3 className="font-bold text-lg mb-4">{activeTab}</h3>
-                
+
                 {activeTab === "Menu" && (
                     <div className="space-y-8">
                         {/* Menu Card Images */}
@@ -434,7 +437,7 @@ export default function DiningRestaurantDetails() {
                                                 <span className="ml-2 text-[10px] text-gray-400 font-normal">({section.items?.length || 0} items)</span>
                                             </h4>
                                         </div>
-                                        
+
                                         <div className="bg-slate-50/50 rounded-2xl border border-gray-100/50 overflow-hidden divide-y divide-gray-100/50">
                                             {section.items?.map((item, itemIdx) => (
                                                 <div key={itemIdx} className="p-4 flex gap-3 hover:bg-white transition-colors">
@@ -452,8 +455,11 @@ export default function DiningRestaurantDetails() {
                                                             <span className="font-bold text-gray-900 leading-tight">{item.name}</span>
                                                         </div>
                                                         <p className="text-[11px] text-gray-500 line-clamp-2 leading-relaxed">{item.description}</p>
-                                                        <div className="pt-0.5">
+                                                        <div className="pt-2 flex items-center justify-between">
                                                             <span className="text-sm font-black text-gray-900">₹{item.price}</span>
+                                                            {(restaurant?.diningSettings?.isDiningOrderingEnabled !== false) && (
+                                                                <AddToCartButton item={{ ...item, restaurantId: restaurant?._id || restaurant?.restaurantId, restaurant: restaurant?.name, image: restaurant?.profileImage?.url || restaurant?.image }} />
+                                                            )}
                                                         </div>
                                                     </div>
                                                     {item.image && (
@@ -484,7 +490,12 @@ export default function DiningRestaurantDetails() {
                                                                         <span className="font-bold text-gray-900 leading-tight">{item.name}</span>
                                                                     </div>
                                                                     <p className="text-[11px] text-gray-500 line-clamp-2 leading-relaxed">{item.description}</p>
-                                                                    <div className="pt-0.5 text-sm font-black text-gray-900">₹{item.price}</div>
+                                                                    <div className="pt-2 flex items-center justify-between">
+                                                                        <span className="text-sm font-black text-gray-900">₹{item.price}</span>
+                                                                        {(restaurant?.diningSettings?.isDiningOrderingEnabled !== false) && (
+                                                                            <AddToCartButton item={{ ...item, restaurantId: restaurant?._id || restaurant?.restaurantId, restaurant: restaurant?.name, image: restaurant?.profileImage?.url || restaurant?.image }} />
+                                                                        )}
+                                                                    </div>
                                                                 </div>
                                                                 {item.image && (
                                                                     <div className="w-20 h-20 rounded-xl overflow-hidden border border-gray-100 shadow-sm flex-shrink-0">
@@ -515,7 +526,7 @@ export default function DiningRestaurantDetails() {
                     <div className="grid grid-cols-3 gap-2">
                         {[restaurant.profileImage?.url, restaurant.image, ...(restaurant.photos || []).map(p => p.url), ...(restaurant.menuImages || []).map(m => m.url)].filter(Boolean).map((img, i) => (
                             <div key={i} className="aspect-square bg-gray-100 rounded-lg overflow-hidden border border-gray-100 shadow-sm transition-transform active:scale-95">
-                                <img src={img} alt={`Photo ${i+1}`} className="w-full h-full object-cover" />
+                                <img src={img} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
                             </div>
                         ))}
                         {(!restaurant.profileImage?.url && (!restaurant.menuImages || restaurant.menuImages.length === 0)) && (
@@ -563,11 +574,11 @@ export default function DiningRestaurantDetails() {
                         <div>
                             <h4 className="font-bold text-gray-800 text-sm mb-1">Address</h4>
                             <p className="text-gray-600 text-sm leading-relaxed">
-                                {restaurant.location?.formattedAddress || 
-                                 restaurant.location?.addressLine1 || 
-                                 (restaurant.location?.area ? `${restaurant.location.area}${restaurant.location.city ? ', ' + restaurant.location.city : ''}` : null) ||
-                                 restaurant.address || 
-                                 "Address not available"}
+                                {restaurant.location?.formattedAddress ||
+                                    restaurant.location?.addressLine1 ||
+                                    (restaurant.location?.area ? `${restaurant.location.area}${restaurant.location.city ? ', ' + restaurant.location.city : ''}` : null) ||
+                                    restaurant.address ||
+                                    "Address not available"}
                             </p>
                         </div>
                     </div>
@@ -575,7 +586,7 @@ export default function DiningRestaurantDetails() {
 
                 {(activeTab === "Pre-book offers" || activeTab === "Walk-in offers") && (
                     <div className="space-y-4">
-                         <div className="bg-white border border-green-100 rounded-2xl p-4 flex justify-between items-center shadow-sm">
+                        <div className="bg-white border border-green-100 rounded-2xl p-4 flex justify-between items-center shadow-sm">
                             <div>
                                 <p className="text-green-600 font-bold text-lg">{restaurant.offer || "10% OFF"}</p>
                                 <p className="text-gray-500 text-xs font-medium">on early bird bookings</p>
@@ -690,7 +701,8 @@ export default function DiningRestaurantDetails() {
                     </div>
                 </div>
             )}
+            {/* Sticky Cart Card */}
+            <StickyCartCard />
         </div>
     )
 }
-

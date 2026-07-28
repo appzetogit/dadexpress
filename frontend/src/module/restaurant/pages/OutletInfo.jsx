@@ -44,12 +44,65 @@ export default function OutletInfo() {
   const [coverImages, setCoverImages] = useState([]) // Array of cover images (separate from menu images)
   const [costForTwo, setCostForTwo] = useState(1400)
   const [tableBookingPrice, setTableBookingPrice] = useState("")
+  const [billCashbackPercentage, setBillCashbackPercentage] = useState("")
+  const [isDiningOrderingEnabled, setIsDiningOrderingEnabled] = useState(true)
   const [showEditNameDialog, setShowEditNameDialog] = useState(false)
   const [editNameValue, setEditNameValue] = useState("")
   const [showEditCostDialog, setShowEditCostDialog] = useState(false)
   const [editCostValue, setEditCostValue] = useState("")
   const [showEditTablePriceDialog, setShowEditTablePriceDialog] = useState(false)
   const [editTablePriceValue, setEditTablePriceValue] = useState("")
+  const [showEditCashbackDialog, setShowEditCashbackDialog] = useState(false)
+  const [editCashbackValue, setEditCashbackValue] = useState("")
+  const [editNameValue, setEditNameValue] = useState("")
+  const [showEditCostDialog, setShowEditCostDialog] = useState(false)
+  const [editCostValue, setEditCostValue] = useState("")
+  const [showEditTablePriceDialog, setShowEditTablePriceDialog] = useState(false)
+  const [editTablePriceValue, setEditTablePriceValue] = useState("")
+  const [restaurantId, setRestaurantId] = useState("")
+  const [restaurantMongoId, setRestaurantMongoId] = useState("")
+  const [uploadingImage, setUploadingImage] = useState(false)
+  const [imageType, setImageType] = useState(null) // 'profile' or 'menu'
+  const [uploadingCount, setUploadingCount] = useState(0) // Track how many images are being uploaded
+  const profileImageInputRef = useRef(null)
+  const menuImageInputRef = useRef(null)
+
+  // Format address from location object
+  const formatAddress = (location) => {
+    if (!location) return ""
+    
+    if (location.formattedAddress && location.formattedAddress.trim() !== "") {
+      return location.formattedAddress.trim()
+    }
+    
+    if (location.address && location.address.trim() !== "") {
+      return location.address.trim()
+    }
+    
+    const parts = []
+    if (location.addressLine1) parts.push(location.addressLine1.trim())
+    if (location.addressLine2) parts.push(location.addressLine2.trim())
+    if (location.area) parts.push(location.area.trim())
+    if (location.city) {
+      const city = location.city.trim()
+      // Only add city if it's not already included in area
+      if (!location.area || !location.area.includes(city)) {
+        parts.push(city)
+      }
+    }
+    if (location.landmark) parts.push(location.landmark.trim())
+    
+    return parts.join(", ") || ""
+  }
+
+  // Fetch restaurant data on mount
+  useEffect(() => {
+    const fetchRestaurantData = async () => {
+      try {
+        setLoading(true)
+        const response = await restaurantAPI.getCurrentRestaurant()
+        const data = response?.data?.data?.restaurant || response?.data?.restaurant
+        if (data) {
   const [restaurantId, setRestaurantId] = useState("")
   const [restaurantMongoId, setRestaurantMongoId] = useState("")
   const [uploadingImage, setUploadingImage] = useState(false)
@@ -101,7 +154,15 @@ export default function OutletInfo() {
           
           // Set cost for two
           setCostForTwo(data.costForTwo || 1400)
-          setTableBookingPrice(data.tableBookingPrice === null || data.tableBookingPrice === undefined ? "" : String(data.tableBookingPrice))
+          
+          // Set table booking price
+          setTableBookingPrice(data.tableBookingPrice !== null && data.tableBookingPrice !== undefined ? String(data.tableBookingPrice) : "")
+
+          // Set bill cashback percentage
+          setBillCashbackPercentage(data.diningSettings?.billCashbackPercentage !== undefined ? String(data.diningSettings.billCashbackPercentage) : "10")
+          
+          // Set dining ordering flag
+          setIsDiningOrderingEnabled(data.diningSettings?.isDiningOrderingEnabled ?? true)
           
           // Set restaurant ID
           setRestaurantId(data.restaurantId || data.id || "")
@@ -624,8 +685,13 @@ export default function OutletInfo() {
   }
 
   const handleOpenTablePriceDialog = () => {
-    setEditTablePriceValue(tableBookingPrice)
+    setEditTablePriceValue(tableBookingPrice || "")
     setShowEditTablePriceDialog(true)
+  }
+
+  const handleOpenCashbackDialog = () => {
+    setEditCashbackValue(billCashbackPercentage || "10")
+    setShowEditCashbackDialog(true)
   }
 
   const handleSaveTablePrice = async () => {
@@ -663,45 +729,27 @@ export default function OutletInfo() {
     }
   }
 
-
-  // Prevent body scroll when dialog is open
-  useEffect(() => {
-    if (showEditNameDialog) {
-      document.body.style.overflow = 'hidden'
-    } else {
-      document.body.style.overflow = 'unset'
+  const handleSaveCashback = async () => {
+    const newCashback = parseInt(editCashbackValue)
+    if (isNaN(newCashback) || newCashback < 0 || newCashback > 100) {
+      toast.error("Please enter a valid percentage between 0 and 100")
+      return
     }
-    return () => {
-      document.body.style.overflow = 'unset'
-    }
-  }, [showEditNameDialog])
 
-  return (
-    <div className="min-h-screen bg-white overflow-x-hidden">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3 sticky top-0 z-50">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3 flex-1">
-            <button
-              onClick={() => navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : "/restaurant")}
-              className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
-              aria-label="Go back"
-            >
-              <ArrowLeft className="w-6 h-6 text-gray-900" />
-            </button>
-            <h1 className="text-lg font-bold text-gray-900">Outlet info</h1>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-900 font-normal">
-              Restaurant id: {loading ? "Loading..." : (restaurantMongoId && restaurantMongoId.length >= 5 ? restaurantMongoId.slice(-5) : (restaurantId || "N/A"))}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Image Section */}
-      <div className="relative w-full h-[200px] overflow-visible">
-        <img 
+    try {
+      const response = await restaurantAPI.updateProfile({ 
+        diningSettings: {
+          ...restaurantData.diningSettings,
+          billCashbackPercentage: newCashback
+        }
+      })
+      if (response?.data?.data?.restaurant || response?.data?.restaurant) {
+        setBillCashbackPercentage(String(newCashback))
+        setShowEditCashbackDialog(false)
+        toast.success("Cashback percentage updated successfully")
+      }
+    } catch (error) {
+      console.error("Error updating cashback percentage:", error)
           src={mainImage}
           alt="Restaurant banner"
           className="w-full h-full object-cover"
@@ -950,6 +998,54 @@ export default function OutletInfo() {
           </div>
         </motion.div>
 
+        {/* Cashback Percentage Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.14 }}
+          className="bg-blue-100/50 rounded-lg p-4 border border-blue-300"
+        >
+          <div className="flex items-start justify-between">
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-gray-500 font-normal mb-1">Bill Cashback Percentage (Dining)</p>
+              <p className="text-base font-semibold text-gray-900">
+                {loading ? "..." : (billCashbackPercentage === "" ? "10%" : `${billCashbackPercentage}%`)}
+              </p>
+            </div>
+            <button
+              onClick={handleOpenCashbackDialog}
+              className="text-blue-600 text-sm font-normal hover:text-blue-700 transition-colors ml-4 shrink-0"
+            >
+              Edit
+            </button>
+          </div>
+        </motion.div>
+
+        {/* Enable Dining Ordering Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.145 }}
+          className="bg-blue-100/50 rounded-lg p-4 border border-blue-300"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-gray-900 mb-1">Enable Menu Ordering (Dining)</p>
+              <p className="text-xs text-gray-500 font-normal">
+                Allow users to add food to cart from the Dining Menu
+              </p>
+            </div>
+            <div className="flex items-center gap-2 ml-4 shrink-0">
+                <button type="button"
+                    onClick={handleToggleDiningOrdering}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isDiningOrderingEnabled !== false ? 'bg-black' : 'bg-gray-200'}`}
+                >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition duration-200 ease-in-out ${isDiningOrderingEnabled !== false ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
+            </div>
+          </div>
+        </motion.div>
+
         {/* Action Cards */}
         <motion.div
           initial={{ opacity: 0, y: 8 }}
@@ -1090,6 +1186,47 @@ export default function OutletInfo() {
             </Button>
             <Button
               onClick={handleSaveTablePrice}
+              className="bg-black text-white"
+            >
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Cashback Percentage Dialog */}
+      <Dialog open={showEditCashbackDialog} onOpenChange={setShowEditCashbackDialog}>
+        <DialogContent className="sm:max-w-md p-4 w-[90%]">
+          <DialogHeader>
+            <DialogTitle className="text-left">Edit Cashback Percentage</DialogTitle>
+            <DialogDescription className="text-left text-xs text-gray-500">
+              Set the cashback percentage for dining customers (0 to 100).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="relative">
+              <Input
+                type="number"
+                min="0"
+                max="100"
+                value={editCashbackValue}
+                onChange={(e) => setEditCashbackValue(e.target.value)}
+                placeholder="e.g. 10"
+                className="w-full pr-8 focus-visible:border-black focus-visible:ring-0"
+                autoFocus
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">%</span>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowEditCashbackDialog(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveCashback}
               className="bg-black text-white"
             >
               Save
