@@ -864,10 +864,8 @@ export const deleteAccount = asyncHandler(async (req, res) => {
       return errorResponse(res, 404, 'User not found');
     }
 
-    // Soft delete - mark as deleted instead of removing from database
-    user.isDeleted = true;
-    user.deletedAt = new Date();
-    await user.save();
+    // Permanent delete - remove completely from database
+    await User.findByIdAndDelete(req.user._id);
 
     logger.info(`User account deleted: ${req.user._id}`);
 

@@ -1,6 +1,37 @@
+import { useState, useEffect } from "react"
 import { X } from "lucide-react"
+import { adminAPI } from "@/lib/api"
 
 export default function DispatchFilterPanel({ isOpen, onClose, filters, setFilters, onApply, onReset }) {
+  const [zones, setZones] = useState([])
+  const [tempFilters, setTempFilters] = useState({})
+
+  useEffect(() => {
+    if (isOpen) {
+      setTempFilters(filters || {})
+      const fetchZones = async () => {
+        try {
+          const response = await adminAPI.getZones({ page: 1, limit: 100 })
+          const zoneList = response?.data?.data?.zones || response?.data?.zones || []
+          setZones(zoneList)
+        } catch (error) {
+          console.error("Error fetching zones in DispatchFilterPanel:", error)
+        }
+      }
+      fetchZones()
+    }
+  }, [isOpen, filters])
+
+  const handleSave = () => {
+    setFilters(tempFilters)
+    onApply()
+  }
+
+  const handleClear = () => {
+    setTempFilters({})
+    onReset()
+  }
+
   if (!isOpen) return null
 
   return (
@@ -25,11 +56,16 @@ export default function DispatchFilterPanel({ isOpen, onClose, filters, setFilte
               Zone
             </label>
             <select
-              value={filters.zone || ""}
-              onChange={(e) => setFilters(prev => ({ ...prev, zone: e.target.value }))}
+              value={tempFilters.zone || ""}
+              onChange={(e) => setTempFilters(prev => ({ ...prev, zone: e.target.value }))}
               className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
             >
               <option value="">Select zone</option>
+              {zones.map((zone) => (
+                <option key={zone._id || zone.id} value={zone.name}>
+                  {zone.name}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -39,8 +75,8 @@ export default function DispatchFilterPanel({ isOpen, onClose, filters, setFilte
             </label>
             <input
               type="text"
-              value={filters.restaurant || ""}
-              onChange={(e) => setFilters(prev => ({ ...prev, restaurant: e.target.value }))}
+              value={tempFilters.restaurant || ""}
+              onChange={(e) => setTempFilters(prev => ({ ...prev, restaurant: e.target.value }))}
               placeholder="Enter restaurant name"
               className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
             />
@@ -54,16 +90,16 @@ export default function DispatchFilterPanel({ isOpen, onClose, filters, setFilte
               <div>
                 <input
                   type="date"
-                  value={filters.fromDate || ""}
-                  onChange={(e) => setFilters(prev => ({ ...prev, fromDate: e.target.value }))}
+                  value={tempFilters.fromDate || ""}
+                  onChange={(e) => setTempFilters(prev => ({ ...prev, fromDate: e.target.value }))}
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
               <div>
                 <input
                   type="date"
-                  value={filters.toDate || ""}
-                  onChange={(e) => setFilters(prev => ({ ...prev, toDate: e.target.value }))}
+                  value={tempFilters.toDate || ""}
+                  onChange={(e) => setTempFilters(prev => ({ ...prev, toDate: e.target.value }))}
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
@@ -73,13 +109,13 @@ export default function DispatchFilterPanel({ isOpen, onClose, filters, setFilte
 
         <div className="sticky bottom-0 bg-slate-50 border-t border-slate-200 px-6 py-4 flex items-center justify-end gap-3">
           <button
-            onClick={onReset}
+            onClick={handleClear}
             className="px-4 py-2 text-sm font-medium rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-all"
           >
             Clear all filters
           </button>
           <button
-            onClick={onApply}
+            onClick={handleSave}
             className="px-4 py-2 text-sm font-medium rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-all shadow-md"
           >
             Save

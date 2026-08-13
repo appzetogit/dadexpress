@@ -209,6 +209,7 @@ const transformOrder = (order, index) => {
     statusHistory: statusHistory,
     orderDate: dateStr,
     orderTime: timeStr,
+    zone: order.assignmentInfo?.zoneName || null,
     // Keep original order data for detail view
     originalOrder: order
   }
@@ -229,6 +230,33 @@ export default function OrderDetectDelivery() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
 
+  const {
+    searchQuery,
+    setSearchQuery,
+    isFilterOpen,
+    setIsFilterOpen,
+    isSettingsOpen,
+    setIsSettingsOpen,
+    isViewOrderOpen,
+    setIsViewOrderOpen,
+    selectedOrder,
+    filters,
+    setFilters,
+    filteredData,
+    count,
+    activeFiltersCount,
+    handleApplyFilters,
+    handleResetFilters,
+    handleExport,
+    handleViewOrder,
+    handlePrintOrder,
+  } = useGenericTableManagement(
+    orders,
+    "Order Detect Delivery",
+    ["orderId", "userName", "userNumber", "restaurantName", "deliveryBoyName", "status"],
+    ["zone", "restaurant", "fromDate", "toDate"]
+  )
+
   // Fetch orders from backend
   useEffect(() => {
     const fetchOrders = async () => {
@@ -238,6 +266,7 @@ export default function OrderDetectDelivery() {
         const params = {
           page: 1,
           limit: 1000, // Fetch all orders for now
+          ...filters
         }
         
         const response = await adminAPI.getOrders(params)
@@ -264,33 +293,7 @@ export default function OrderDetectDelivery() {
     }
 
     fetchOrders()
-  }, [])
-
-  const {
-    searchQuery,
-    setSearchQuery,
-    isFilterOpen,
-    setIsFilterOpen,
-    isSettingsOpen,
-    setIsSettingsOpen,
-    isViewOrderOpen,
-    setIsViewOrderOpen,
-    selectedOrder,
-    filters,
-    setFilters,
-    filteredData,
-    count,
-    activeFiltersCount,
-    handleApplyFilters,
-    handleResetFilters,
-    handleExport,
-    handleViewOrder,
-    handlePrintOrder,
-  } = useGenericTableManagement(
-    orders,
-    "Order Detect Delivery",
-    ["orderId", "userName", "userNumber", "restaurantName", "deliveryBoyName", "status"]
-  )
+  }, [filters])
 
   // Statistics
   const stats = useMemo(() => {

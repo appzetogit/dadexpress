@@ -29,7 +29,7 @@ import {
 } from "recharts"
 import { Play } from "lucide-react"
 import BottomNavOrders from "../components/BottomNavOrders"
-import { restaurantAPI } from "@/lib/api"
+import { restaurantAPI, api } from "@/lib/api"
 
 export default function ToHub() {
   const navigate = useNavigate()
@@ -41,8 +41,9 @@ export default function ToHub() {
   const [isTransitioning, setIsTransitioning] = useState(false)
   const [restaurantData, setRestaurantData] = useState(null)
   const [loadingRestaurant, setLoadingRestaurant] = useState(true)
+  const [growthHelplinePhone, setGrowthHelplinePhone] = useState("1111111111")
 
-  // Fetch restaurant data on mount
+  // Fetch restaurant data and public settings on mount
   useEffect(() => {
     const fetchRestaurantData = async () => {
       try {
@@ -63,7 +64,20 @@ export default function ToHub() {
       }
     }
 
+    const fetchBusinessSettings = async () => {
+      try {
+        const response = await api.get("/business-settings/public")
+        const data = response?.data?.data
+        if (data?.growthHelpline) {
+          setGrowthHelplinePhone(data.growthHelpline)
+        }
+      } catch (error) {
+        console.error("Error fetching public settings in ToHub:", error)
+      }
+    }
+
     fetchRestaurantData()
+    fetchBusinessSettings()
   }, [])
   const topTabBarRef = useRef(null)
   const contentContainerRef = useRef(null)
@@ -305,7 +319,7 @@ export default function ToHub() {
   }
 
   const quickLinks = [
-    { id: "growth-helpline", label: "Growth helpline", icon: FaPhone, route: "tel:1111111111", isPhone: true },
+    { id: "growth-helpline", label: "Growth helpline", icon: FaPhone, route: `tel:${growthHelplinePhone}`, isPhone: true },
     { id: "order-history", label: "Order history", icon: FaHistory, route: "/restaurant/orders/all" },
     { id: "complaints", label: "Complaints", icon: FaExclamationTriangle, route: "/restaurant/feedback?tab=complaints" },
     { id: "reviews", label: "Reviews", icon: FaStar, route: "/restaurant/feedback" },
@@ -1179,7 +1193,7 @@ export default function ToHub() {
           </div>
 
           <button 
-            onClick={() => setActiveTopTab("customers")}
+            onClick={() => navigate("/restaurant/feedback")}
             className="w-full bg-black text-white py-3 rounded-md text-sm font-semibold hover:bg-gray-800 transition-colors"
           >
             Get deeper insights
@@ -1308,7 +1322,7 @@ export default function ToHub() {
           </div>
 
           <button 
-            onClick={() => setActiveTopTab("offers")}
+            onClick={() => navigate("/restaurant/hub-growth/create-offers")}
             className="w-full bg-black text-white py-3 rounded-md text-sm font-semibold hover:bg-gray-800 transition-colors"
           >
             Get deeper insights

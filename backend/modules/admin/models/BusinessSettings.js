@@ -34,6 +34,12 @@ const businessSettingsSchema = new mongoose.Schema(
         default: "",
       },
     },
+    growthHelpline: {
+      type: String,
+      required: false,
+      trim: true,
+      default: "1111111111",
+    },
     address: {
       type: String,
       trim: true,
@@ -153,6 +159,7 @@ businessSettingsSchema.statics.getSettings = async function () {
           countryCode: "+91",
           number: "",
         },
+        growthHelpline: "1111111111",
         deliveryCashLimit: 5000,
         deliveryWithdrawalLimit: 100,
       });
@@ -172,6 +179,7 @@ businessSettingsSchema.statics.getSettings = async function () {
           countryCode: "+91",
           number: "",
         },
+        growthHelpline: "1111111111",
         deliveryCashLimit: 5000,
         deliveryWithdrawalLimit: 100,
       });

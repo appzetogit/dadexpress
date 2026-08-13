@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from "react"
-import { Search, Download, ChevronDown, DollarSign, Calendar, Filter, Loader2, FileText, FileSpreadsheet, Code, Trash2 } from "lucide-react"
+import { Search, Download, ChevronDown, IndianRupee, Users, Calendar, Filter, Loader2, FileText, FileSpreadsheet, Code, Trash2 } from "lucide-react"
 import { adminAPI } from "@/lib/api"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { toast } from "sonner"
@@ -11,9 +11,9 @@ const formatCurrency = (amount) => {
 const formatDate = (dateString) => {
   if (!dateString) return 'N/A'
   const date = new Date(dateString)
-  return date.toLocaleDateString('en-IN', { 
-    day: '2-digit', 
-    month: 'short', 
+  return date.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit'
@@ -58,7 +58,7 @@ export default function DeliveryEarnings() {
     try {
       setLoading(true)
       setError(null)
-      
+
       const params = {
         page: pagination.page,
         limit: pagination.limit,
@@ -70,7 +70,7 @@ export default function DeliveryEarnings() {
       }
 
       const response = await adminAPI.getDeliveryEarnings(params)
-      
+
       if (response.data?.success) {
         setEarnings(response.data.data.earnings || [])
         setSummary(response.data.data.summary || {})
@@ -156,6 +156,8 @@ export default function DeliveryEarnings() {
     const data = earnings.map((earning, index) => ({
       sl: (pagination.page - 1) * pagination.limit + index + 1,
       deliveryPartnerName: earning.deliveryPartnerName || 'N/A',
+
+
       deliveryPartnerPhone: earning.deliveryPartnerPhone || 'N/A',
       orderId: earning.orderId || 'N/A',
       restaurantName: earning.restaurantName || 'N/A',
@@ -163,7 +165,7 @@ export default function DeliveryEarnings() {
       orderTotal: formatCurrency(earning.orderTotal),
       deliveryFee: formatCurrency(earning.deliveryFee),
       orderStatus: earning.orderStatus || 'N/A',
-      createdAt: formatDate(earning.createdAt)
+      createdAt: formatDate(earning.createdAt),
     }))
 
     switch (format) {
@@ -218,7 +220,7 @@ export default function DeliveryEarnings() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-green-600 flex items-center justify-center">
-                <DollarSign className="w-5 h-5 text-white" />
+                <IndianRupee className="w-5 h-5 text-white" />
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-slate-900">Delivery Earning</h1>
@@ -237,18 +239,19 @@ export default function DeliveryEarnings() {
                 <p className="text-2xl font-bold text-slate-900">{summary.totalDeliveryPartners || 0}</p>
               </div>
               <div className="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center">
-                <DollarSign className="w-6 h-6 text-blue-600" />
+                <Users className="w-6 h-6 text-blue-600" />
               </div>
             </div>
           </div>
-            <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-4">
+
+          <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-slate-600 mb-1">Total Delivery Charges</p>
                 <p className="text-2xl font-bold text-blue-600">{formatCurrency(summary.totalDeliveryCharges || 0)}</p>
               </div>
               <div className="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center">
-                <DollarSign className="w-6 h-6 text-blue-600" />
+                <IndianRupee className="w-6 h-6 text-blue-600" />
               </div>
             </div>
           </div>
@@ -260,10 +263,11 @@ export default function DeliveryEarnings() {
                 <p className="text-2xl font-bold text-green-600">{formatCurrency(summary.totalEarnings || 0)}</p>
               </div>
               <div className="w-12 h-12 rounded-lg bg-green-100 flex items-center justify-center">
-                <DollarSign className="w-6 h-6 text-green-600" />
+                <IndianRupee className="w-6 h-6 text-green-600" />
               </div>
             </div>
           </div>
+
           <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -434,11 +438,10 @@ export default function DeliveryEarnings() {
                         {formatCurrency(earning.orderTotal)}
                       </td>
                       <td className="px-4 py-3 text-sm">
-                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                          earning.orderStatus === 'delivered' 
-                            ? 'bg-green-100 text-green-800' 
-                            : 'bg-yellow-100 text-yellow-800'
-                        }`}>
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${earning.orderStatus === 'delivered'
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-yellow-100 text-yellow-800'
+                          }`}>
                           {earning.orderStatus || 'N/A'}
                         </span>
                       </td>
@@ -478,21 +481,20 @@ export default function DeliveryEarnings() {
                   Previous
                 </button>
                 {Array.from({ length: Math.min(5, pagination.pages) }).map((_, idx) => {
-                  const pageNum = pagination.page <= 3 
-                    ? idx + 1 
-                    : pagination.page >= pagination.pages - 2 
-                      ? pagination.pages - 4 + idx 
+                  const pageNum = pagination.page <= 3
+                    ? idx + 1
+                    : pagination.page >= pagination.pages - 2
+                      ? pagination.pages - 4 + idx
                       : pagination.page - 2 + idx
                   if (pageNum < 1 || pageNum > pagination.pages) return null
                   return (
                     <button
                       key={idx}
                       onClick={() => handlePageChange(pageNum)}
-                      className={`px-3 py-1 text-sm rounded border ${
-                        pagination.page === pageNum
-                          ? "bg-blue-600 border-blue-600 text-white"
-                          : "border-slate-300 text-slate-700 hover:bg-slate-50"
-                      }`}
+                      className={`px-3 py-1 text-sm rounded border ${pagination.page === pageNum
+                        ? "bg-blue-600 border-blue-600 text-white"
+                        : "border-slate-300 text-slate-700 hover:bg-slate-50"
+                        }`}
                     >
                       {pageNum}
                     </button>

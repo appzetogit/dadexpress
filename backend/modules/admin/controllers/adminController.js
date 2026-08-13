@@ -288,12 +288,13 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
 
     // 4. Partner Counts
     const User = (await import("../../auth/models/User.js")).default;
-    const [zoneRestaurants, activeInDbCount] = await Promise.all([
+    const [zoneRestaurants, activeInDbCount, totalApprovedRestaurants] = await Promise.all([
       Restaurant.find(restaurantMatch).select("_id isActive").lean(),
-      Restaurant.countDocuments({ ...restaurantMatch, isActive: true })
+      Restaurant.countDocuments({ ...restaurantMatch, isActive: true }),
+      Restaurant.countDocuments({ ...restaurantMatch, approvedAt: { $ne: null } })
     ]);
 
-    const totalRestaurants = zoneRestaurants.length;
+    const totalRestaurants = totalApprovedRestaurants;
     const activeRestaurantsCount = activeInDbCount;
 
     const deliveryBoyQuery = { status: { $in: ["approved", "active"] } };
@@ -313,9 +314,13 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
 
     // 5. Foods & Addons
     const Menu = (await import("../../restaurant/models/Menu.js")).default;
-    const menuQuery = { isActive: true };
+    const approvedRestaurantsList = await Restaurant.find({ approvedAt: { $ne: null } }).distinct("_id");
+    const menuQuery = { 
+      isActive: true,
+      restaurant: { $in: approvedRestaurantsList }
+    };
     if (zoneIdString) {
-      menuQuery.restaurant = { $in: activeRestIds };
+      menuQuery.restaurant = { $in: activeRestIds.filter(id => approvedRestaurantsList.some(arId => String(arId) === String(id))) };
     }
     const activeMenus = await Menu.find(menuQuery).select("sections addons").lean();
     let totalFoods = 0, totalAddons = 0;
@@ -398,7 +403,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
         period: "last24Hours"
       },
       monthlyData,
-      restaurants: { total: totalRestaurants, active: activeRestaurantsCount, pendingRequests: await Restaurant.countDocuments({ ...restaurantMatch, "onboarding.completedSteps": { $gte: 1 }, $or: [{ approvedAt: { $exists: false } }, { approvedAt: null }], $and: [{ $or: [{ rejectionReason: { $exists: false } }, { rejectionReason: null }, { rejectionReason: "" }] }] }) },
+      restaurants: { total: totalRestaurants, active: activeRestaurantsCount, pendingRequests: await Restaurant.countDocuments({ ...restaurantMatch, "onboarding.completedSteps": { $gte: 0 }, $or: [{ approvedAt: { $exists: false } }, { approvedAt: null }], $and: [{ $or: [{ rejectionReason: { $exists: false } }, { rejectionReason: null }, { rejectionReason: "" }] }] }) },
       deliveryBoys: { total: totalDeliveryBoys, active: activeDeliveryPartners, pendingRequests: realPendingDeliveryBoys },
       foods: { total: totalFoods },
       addons: { total: totalAddons },

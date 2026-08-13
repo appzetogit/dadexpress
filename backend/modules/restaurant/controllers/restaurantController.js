@@ -79,6 +79,73 @@ function isRestaurantInAnyZone(restaurantLat, restaurantLng, activeZones) {
   return false;
 }
 
+const isRestaurantOpenSync = (restaurant, outletTimings) => {
+  // Get current date/time in IST
+  const now = new Date();
+  const istOffset = 5.5 * 60 * 60 * 1000;
+  const istDate = new Date(now.getTime() + istOffset);
+  const currentMinutes = istDate.getUTCHours() * 60 + istDate.getUTCMinutes();
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const currentDay = days[istDate.getUTCDay()];
+  const previousDay = days[(istDate.getUTCDay() + 6) % 7];
+
+  const timeToMinutesLocal = (timeStr) => {
+    if (!timeStr) return null;
+    const match = timeStr.match(/^(\d{1,2}):(\d{2})\s?(AM|PM|am|pm)?$/i);
+    if (!match) return null;
+    let h = parseInt(match[1], 10);
+    const m = parseInt(match[2], 10);
+    const ampm = match[3] ? match[3].toUpperCase() : null;
+    if (ampm === 'PM' && h < 12) h += 12;
+    if (ampm === 'AM' && h === 12) h = 0;
+    return h * 60 + m;
+  };
+
+  const isOvernightWindow = (openMin, closeMin) => openMin !== null && closeMin !== null && closeMin < openMin;
+
+  // Logic from OutletTimings.isRestaurantOpen
+  if (!outletTimings || !outletTimings.timings || outletTimings.timings.length === 0) {
+    const openDays = Array.isArray(restaurant.openDays) ? restaurant.openDays : [];
+    const isDayMarkedOpen = (dayName) => {
+      const norm = dayName.toLowerCase().substring(0, 3);
+      return openDays.some(d => d?.toString().toLowerCase().substring(0, 3) === norm);
+    };
+
+    if (openDays.length > 0 && !isDayMarkedOpen(currentDay)) {
+      const openMin = timeToMinutesLocal(restaurant.deliveryTimings?.openingTime);
+      const closeMin = timeToMinutesLocal(restaurant.deliveryTimings?.closingTime);
+      if (!(isDayMarkedOpen(previousDay) && isOvernightWindow(openMin, closeMin) && currentMinutes <= closeMin)) {
+        return false;
+      }
+    } else if (openDays.length > 0 && !isDayMarkedOpen(currentDay)) {
+       return false;
+    }
+
+    const openMin = timeToMinutesLocal(restaurant.deliveryTimings?.openingTime);
+    const closeMin = timeToMinutesLocal(restaurant.deliveryTimings?.closingTime);
+    if (openMin === null || closeMin === null) return true;
+    if (closeMin < openMin) return currentMinutes >= openMin || currentMinutes <= closeMin;
+    return currentMinutes >= openMin && currentMinutes <= closeMin;
+  }
+
+  const todayTiming = outletTimings.timings.find(t => t.day === currentDay);
+  if (todayTiming?.isOpen) {
+    const o = timeToMinutesLocal(todayTiming.openingTime);
+    const c = timeToMinutesLocal(todayTiming.closingTime);
+    if (c < o) return currentMinutes >= o || currentMinutes <= c;
+    return currentMinutes >= o && currentMinutes <= c;
+  }
+
+  const yesterdayTiming = outletTimings.timings.find(t => t.day === previousDay);
+  if (yesterdayTiming?.isOpen) {
+    const o = timeToMinutesLocal(yesterdayTiming.openingTime);
+    const c = timeToMinutesLocal(yesterdayTiming.closingTime);
+    if (isOvernightWindow(o, c) && currentMinutes <= c) return true;
+  }
+
+  return false;
+};
+
 /**
  * Get restaurant's zoneId based on location
  * @param {number} restaurantLat - Restaurant latitude
@@ -1339,13 +1406,9 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
       }
 
       if (dishesUnder250.length > 0) {
-        // Simple timing check
-        let isOpen = true;
+        // Correct robust timing and manual-status check
         const timing = timingLookup.get(r._id.toString());
-        if (timing?.timings?.length > 0) {
-          const todayTiming = timing.timings.find(t => t.day === currentDay);
-          if (todayTiming && !todayTiming.isOpen) isOpen = false;
-        }
+        const isOpen = isRestaurantOpenSync(r, timing) && r.isAcceptingOrders !== false;
 
         results.push({
           id: r._id.toString(),

@@ -25,6 +25,7 @@ export const getBusinessSettingsPublic = asyncHandler(async (req, res) => {
         favicon: settings?.favicon || { url: "", publicId: "" },
         phone: settings?.phone || { countryCode: "+91", number: "" },
         email: settings?.email || "",
+        growthHelpline: settings?.growthHelpline || "1111111111",
       },
     );
   } catch (error) {
@@ -79,6 +80,7 @@ export const updateBusinessSettings = asyncHandler(async (req, res) => {
       region,
       maintenanceMode,
       restaurantReferral,
+      growthHelpline,
     } = req.body;
 
     if (typeof restaurantReferral === "string") {
@@ -98,6 +100,7 @@ export const updateBusinessSettings = asyncHandler(async (req, res) => {
     // Update basic fields
     if (companyName !== undefined) settings.companyName = companyName;
     if (email !== undefined) settings.email = email;
+    if (growthHelpline !== undefined) settings.growthHelpline = growthHelpline;
 
     // Initialize phone object if it doesn't exist
     if (!settings.phone) {

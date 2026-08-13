@@ -90,10 +90,16 @@ const getSafeBackendBaseUrl = () => {
 
 const FALLBACK_RESTAURANT_IMAGE = "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&h=600&fit=crop"
 
-const RestaurantItem = React.memo(({ restaurant, isFavorite, onToggleFavorite, navigate }) => {
+const RestaurantItem = React.memo(({ restaurant, isFavorite, onToggleFavorite, navigate, vegMode }) => {
   const restaurantSlug = restaurant.slug || restaurant.name.toLowerCase().replace(/\s+/g, "-")
   const isRestaurantOpen = restaurant.isActive && restaurant.isAcceptingOrders
   const favorite = isFavorite(restaurantSlug)
+
+  const displayedMenuItems = useMemo(() => {
+    if (!restaurant.menuItems) return [];
+    if (!vegMode) return restaurant.menuItems;
+    return restaurant.menuItems.filter(item => item.isVeg || item.foodType === 'Veg');
+  }, [restaurant.menuItems, vegMode]);
 
   return (
     <div className="space-y-5">
@@ -145,9 +151,9 @@ const RestaurantItem = React.memo(({ restaurant, isFavorite, onToggleFavorite, n
           className="flex overflow-x-auto pb-4 gap-4 sm:gap-6 scrollbar-hide scroll-smooth px-1"
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
-          {restaurant.menuItems && restaurant.menuItems.length > 0 ? (
+          {displayedMenuItems && displayedMenuItems.length > 0 ? (
             <>
-              {restaurant.menuItems.map((item, itemIndex) => (
+              {displayedMenuItems.map((item, itemIndex) => (
                 <div
                   key={item.id}
                   className="flex-shrink-0 w-40 md:w-64 bg-white dark:bg-[#1a1a1a] rounded-[24px] border border-gray-100 dark:border-gray-800 overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer transform hover:-translate-y-2 group"
@@ -209,7 +215,7 @@ const RestaurantItem = React.memo(({ restaurant, isFavorite, onToggleFavorite, n
           ) : (
             <div className="w-full py-10 flex flex-col items-center justify-center text-gray-400">
               <UtensilsCrossed className="h-8 w-8 mb-2 opacity-20" />
-              <p className="text-xs md:text-sm font-medium">Menu loading...</p>
+              <p className="text-xs md:text-sm font-medium">No veg items available</p>
             </div>
           )}
         </div>
@@ -1174,11 +1180,11 @@ export default function Home() {
       }
 
       // Dietary filter for Home restaurants.
-      // Veg mode ON + "Pure Veg": apply dietary filter.
-      // Veg mode ON + "All restaurants": do not apply dietary filter.
+      // Veg mode ON + "Pure Veg": apply pure-veg dietary filter.
+      // Veg mode ON + "All restaurants": apply veg dietary filter to only fetch restaurants with veg items.
       // Veg mode OFF: do not apply dietary filter (show all).
-      if (vegMode === true && vegModeOption === "pure-veg") {
-        params.dietary = "pure-veg"
+      if (vegMode === true) {
+        params.dietary = vegModeOption === "pure-veg" ? "pure-veg" : "veg"
       }
 
       if (!resolvedZoneId) {
@@ -1956,10 +1962,8 @@ export default function Home() {
                         value={heroSearch}
                         onChange={(e) => setHeroSearch(e.target.value)}
                         onKeyDown={(e) => {
-                          if (e.key === 'Enter' && heroSearch.trim()) {
-                            navigate(`/user/search?q=${encodeURIComponent(heroSearch.trim())}`)
-                            closeSearch()
-                            setHeroSearch("")
+                          if (e.key === 'Enter') {
+                            e.currentTarget.blur()
                           }
                         }}
                         aria-label="Search restaurants and food"
@@ -2460,6 +2464,7 @@ export default function Home() {
                   key={restaurant.id}
                   restaurant={restaurant}
                   isFavorite={isFavorite}
+                  vegMode={vegMode}
                   onToggleFavorite={(e, slug, r) => {
                     e.preventDefault()
                     e.stopPropagation()

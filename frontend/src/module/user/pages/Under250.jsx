@@ -388,6 +388,7 @@ export default function Under250() {
   // Only disable Add buttons when user is out of service zone
   // NOTE: We do NOT apply page-level grayscale anymore to prevent black/white screen flicker
   const canAddToCart = !isOutOfService
+  const shouldShowGrayscale = !canAddToCart
 
   return (
 

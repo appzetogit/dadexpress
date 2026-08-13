@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react"
 import { exportToExcel, exportToPDF } from "./ordersExportUtils"
 
-export function useGenericTableManagement(data, title, searchFields = []) {
+export function useGenericTableManagement(data, title, searchFields = [], serverSideFilterKeys = []) {
   const [searchQuery, setSearchQuery] = useState("")
   const [isFilterOpen, setIsFilterOpen] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
@@ -27,9 +27,13 @@ export function useGenericTableManagement(data, title, searchFields = []) {
 
     // Apply filters
     Object.entries(filters).forEach(([key, value]) => {
+      if (serverSideFilterKeys.includes(key)) return; // Skip client-side filtering for server-side filters
       if (value && value !== "") {
         result = result.filter(item => {
-          const itemValue = item[key]
+          let itemValue = item[key]
+          if (key === 'zone' && itemValue === undefined && item.assignmentInfo?.zoneName !== undefined) {
+            itemValue = item.assignmentInfo.zoneName
+          }
           if (typeof value === 'string') {
             return itemValue === value || itemValue?.toString().toLowerCase() === value.toLowerCase()
           }

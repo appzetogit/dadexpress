@@ -128,7 +128,7 @@ earningAddonSchema.pre('save', function(next) {
   if (this.status === 'active' && now > this.endDate) {
     this.status = 'expired';
   }
-  next();
+  if (typeof next === 'function') next();
 });
 
 // Static method to get active offers

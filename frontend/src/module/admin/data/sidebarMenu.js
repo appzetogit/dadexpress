@@ -207,12 +207,6 @@ export const sidebarMenuData = [
       },
       {
         type: "link",
-        label: "Bonus",
-        path: "/admin/delivery-partners/bonus",
-        icon: "Gift",
-      },
-      {
-        type: "link",
         label: "Delivery Emergency Help",
         path: "/admin/delivery-emergency-help",
         icon: "Phone",

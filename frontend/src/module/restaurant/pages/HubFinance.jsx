@@ -12,7 +12,24 @@ export default function HubFinance() {
     const tabParam = searchParams.get("tab")
     return tabParam === "invoices" ? "invoices" : "payouts"
   })
-  const [selectedDateRange, setSelectedDateRange] = useState("14 Nov - 14 Dec'25")
+  const getDefaultDateRange = () => {
+    const today = new Date()
+    today.setHours(23, 59, 59, 999)
+    const start = new Date(today)
+    start.setDate(today.getDate() - 30)
+    start.setHours(0, 0, 0, 0)
+    
+    const formatDateForDisplay = (date) => {
+      const day = date.getDate()
+      const month = date.toLocaleString('en-US', { month: 'short' })
+      const year = date.getFullYear().toString().slice(-2)
+      return `${day} ${month}'${year}`
+    }
+    
+    return `${formatDateForDisplay(start)} - ${formatDateForDisplay(today)}`
+  }
+
+  const [selectedDateRange, setSelectedDateRange] = useState(() => getDefaultDateRange())
   const [showDownloadMenu, setShowDownloadMenu] = useState(false)
   const [showDateRangePicker, setShowDateRangePicker] = useState(false)
   const downloadMenuRef = useRef(null)

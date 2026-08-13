@@ -566,6 +566,33 @@ export default function OutletInfo() {
     }
   }
 
+  // Handle toggle menu ordering (dining) status
+  const handleToggleDiningOrdering = async () => {
+    const newValue = !isDiningOrderingEnabled
+    setIsDiningOrderingEnabled(newValue)
+    
+    try {
+      const response = await restaurantAPI.updateProfile({
+        diningSettings: {
+          ...restaurantData?.diningSettings,
+          isDiningOrderingEnabled: newValue
+        }
+      })
+      if (response?.data?.success) {
+        toast.success(`Dining ordering ${newValue ? 'enabled' : 'disabled'} successfully`)
+        if (response.data.data?.restaurant) {
+          setRestaurantData(response.data.data.restaurant)
+        }
+      } else {
+        throw new Error("Failed to update settings")
+      }
+    } catch (error) {
+      console.error("Error toggling dining ordering:", error)
+      toast.error("Failed to update settings. Rolling back.")
+      setIsDiningOrderingEnabled(!newValue)
+    }
+  }
+
   // Handle edit name dialog
   const handleOpenEditDialog = () => {
     setEditNameValue(restaurantName)
@@ -983,12 +1010,6 @@ export default function OutletInfo() {
                 {loading ? "..." : (billCashbackPercentage === "" ? "10%" : `${billCashbackPercentage}%`)}
               </p>
             </div>
-            <button
-              onClick={handleOpenCashbackDialog}
-              className="text-blue-600 text-sm font-normal hover:text-blue-700 transition-colors ml-4 shrink-0"
-            >
-              Edit
-            </button>
           </div>
         </motion.div>
 

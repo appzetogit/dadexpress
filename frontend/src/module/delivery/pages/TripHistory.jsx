@@ -104,34 +104,99 @@ export default function TripHistory() {
     }
   }, [showDatePicker, showTripTypePicker])
 
-  // Format date for display
-  const formatDateDisplay = (date) => {
-    const today = new Date()
-    const yesterday = new Date(today)
-    yesterday.setDate(yesterday.getDate() - 1)
+  const getPeriodDisplayLabel = (tab, date) => {
+    if (!date) return ""
+    if (tab === "daily") {
+      const today = new Date()
+      const yesterday = new Date(today)
+      yesterday.setDate(yesterday.getDate() - 1)
 
-    if (date.toDateString() === today.toDateString()) {
-      return "Today"
-    } else if (date.toDateString() === yesterday.toDateString()) {
-      return "Yesterday"
-    } else {
-      const options = { day: 'numeric', month: 'short' }
-      return date.toLocaleDateString('en-US', options)
+      if (date.toDateString() === today.toDateString()) {
+        return "Today"
+      } else if (date.toDateString() === yesterday.toDateString()) {
+        return "Yesterday"
+      } else {
+        return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short' })
+      }
+    } else if (tab === "weekly") {
+      const d = new Date(date)
+      const day = d.getDay()
+      const diff = day === 0 ? -6 : 1 - day
+      const monday = new Date(d)
+      monday.setDate(d.getDate() + diff)
+      
+      const sunday = new Date(monday)
+      sunday.setDate(monday.getDate() + 6)
+
+      const today = new Date()
+      const todayDay = today.getDay()
+      const todayDiff = todayDay === 0 ? -6 : 1 - todayDay
+      const currentMonday = new Date(today)
+      currentMonday.setDate(today.getDate() + todayDiff)
+      currentMonday.setHours(0,0,0,0)
+      
+      const mondayNormalized = new Date(monday)
+      mondayNormalized.setHours(0,0,0,0)
+
+      const startStr = monday.toLocaleDateString('en-US', { day: 'numeric', month: 'short' })
+      const endStr = sunday.toLocaleDateString('en-US', { day: 'numeric', month: 'short' })
+
+      if (mondayNormalized.getTime() === currentMonday.getTime()) {
+        return `This Week (${startStr} - ${endStr})`
+      } else {
+        const lastMonday = new Date(currentMonday)
+        lastMonday.setDate(lastMonday.getDate() - 7)
+        if (mondayNormalized.getTime() === lastMonday.getTime()) {
+          return `Last Week (${startStr} - ${endStr})`
+        }
+        return `${startStr} - ${endStr}`
+      }
+    } else if (tab === "monthly") {
+      return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
     }
+    return ""
   }
 
-  // Generate recent dates for picker
-  const generateRecentDates = () => {
-    const dates = []
-    for (let i = 0; i < 30; i++) {
-      const date = new Date()
-      date.setDate(date.getDate() - i)
-      dates.push(date)
-    }
-    return dates
-  }
+  const generatePeriodOptions = (tab) => {
+    const options = []
+    
+    if (tab === "daily") {
+      for (let i = 0; i < 30; i++) {
+        const date = new Date()
+        date.setDate(date.getDate() - i)
+        options.push({
+          value: date,
+          label: getPeriodDisplayLabel("daily", date)
+        })
+      }
+    } else if (tab === "weekly") {
+      const today = new Date()
+      const day = today.getDay()
+      const diff = day === 0 ? -6 : 1 - day
+      const currentMonday = new Date(today)
+      currentMonday.setDate(today.getDate() + diff)
+      currentMonday.setHours(0,0,0,0)
 
-  const recentDates = generateRecentDates()
+      for (let i = 0; i < 8; i++) {
+        const monday = new Date(currentMonday)
+        monday.setDate(currentMonday.getDate() - (i * 7))
+        options.push({
+          value: monday,
+          label: getPeriodDisplayLabel("weekly", monday)
+        })
+      }
+    } else if (tab === "monthly") {
+      const today = new Date()
+      for (let i = 0; i < 12; i++) {
+        const firstOfMonth = new Date(today.getFullYear(), today.getMonth() - i, 1)
+        options.push({
+          value: firstOfMonth,
+          label: getPeriodDisplayLabel("monthly", firstOfMonth)
+        })
+      }
+    }
+    return options
+  }
 
   // Fetch bonus transactions when modal opens
   useEffect(() => {
@@ -212,6 +277,7 @@ export default function TripHistory() {
           <button
             onClick={() => {
               setActiveTab("daily")
+              setSelectedDate(new Date())
               setShowDatePicker(false)
             }}
             className="relative"
@@ -227,6 +293,7 @@ export default function TripHistory() {
           <button
             onClick={() => {
               setActiveTab("weekly")
+              setSelectedDate(new Date())
               setShowDatePicker(false)
             }}
             className="relative"
@@ -242,6 +309,7 @@ export default function TripHistory() {
           <button
             onClick={() => {
               setActiveTab("monthly")
+              setSelectedDate(new Date())
               setShowDatePicker(false)
             }}
             className="relative"
@@ -269,7 +337,7 @@ export default function TripHistory() {
           className="flex-1 flex items-center justify-between px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
         >
           <span className="text-sm font-medium text-black">
-            {formatDateDisplay(selectedDate)}: {selectedDate.toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}
+            {getPeriodDisplayLabel(activeTab, selectedDate)}
           </span>
           <ChevronDown className={`w-4 h-4 text-gray-600 transition-transform ${showDatePicker ? 'rotate-180' : ''}`} />
         </button>
@@ -291,18 +359,18 @@ export default function TripHistory() {
       {/* Date Picker Dropdown */}
       {showDatePicker && (
         <div className="fixed left-4 right-4 top-[201px] bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
-          {recentDates.map((date, index) => (
+          {generatePeriodOptions(activeTab).map((option, index) => (
             <button
               key={index}
               onClick={() => {
-                setSelectedDate(date)
+                setSelectedDate(option.value)
                 setShowDatePicker(false)
               }}
-              className={`w-full text-left px-4 py-3 border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition-colors ${date.toDateString() === selectedDate.toDateString() ? 'bg-gray-50 font-medium' : ''
+              className={`w-full text-left px-4 py-3 border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition-colors ${option.value.toDateString() === selectedDate.toDateString() ? 'bg-gray-50 font-medium' : ''
                 }`}
             >
               <span className="text-sm text-black">
-                {formatDateDisplay(date)}: {date.toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}
+                {option.label}
               </span>
             </button>
           ))}

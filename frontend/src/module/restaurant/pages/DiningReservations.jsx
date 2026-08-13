@@ -13,6 +13,8 @@ export default function DiningReservations() {
     const [restaurant, setRestaurant] = useState(null)
     const [searchTerm, setSearchTerm] = useState("")
     const [updatingId, setUpdatingId] = useState(null)
+    const [activeFilterStatus, setActiveFilterStatus] = useState("all")
+    const [showFilterDropdown, setShowFilterDropdown] = useState(false)
 
     useEffect(() => {
         const fetchAll = async () => {
@@ -65,10 +67,17 @@ export default function DiningReservations() {
         }
     }
 
-    const filteredBookings = bookings.filter(booking =>
-        booking.user?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        booking.bookingId?.toLowerCase().includes(searchTerm.toLowerCase())
-    )
+    const filteredBookings = bookings.filter(booking => {
+        const matchesSearch = 
+            booking.user?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            booking.bookingId?.toLowerCase().includes(searchTerm.toLowerCase())
+            
+        const matchesStatus = 
+            activeFilterStatus === "all" || 
+            booking.status === activeFilterStatus
+            
+        return matchesSearch && matchesStatus
+    })
 
     if (loading) return <Loader />
 
@@ -103,9 +112,52 @@ export default function DiningReservations() {
                                 className="w-full pl-10 pr-4 py-2 bg-slate-100 border-none rounded-xl text-sm focus:ring-2 focus:ring-red-500 focus:bg-white transition-all"
                             />
                         </div>
-                        <button className="p-2 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors">
-                            <Filter className="w-5 h-5 text-slate-600" />
-                        </button>
+                        <div className="relative">
+                            <button 
+                                onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                                className={`p-2 rounded-xl transition-colors flex items-center justify-center gap-1 ${
+                                    activeFilterStatus !== "all" 
+                                        ? "bg-red-500 text-white hover:bg-red-600" 
+                                        : "bg-slate-100 hover:bg-slate-200 text-slate-600"
+                                }`}
+                            >
+                                <Filter className="w-5 h-5" />
+                                {activeFilterStatus !== "all" && (
+                                    <span className="text-xs font-bold uppercase px-1">{activeFilterStatus}</span>
+                                )}
+                            </button>
+                            
+                            {showFilterDropdown && (
+                                <>
+                                    <div className="fixed inset-0 z-40" onClick={() => setShowFilterDropdown(false)} />
+                                    <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-lg z-50 py-1.5">
+                                        {[
+                                            { id: "all", label: "All Bookings" },
+                                            { id: "pending", label: "Pending" },
+                                            { id: "confirmed", label: "Confirmed" },
+                                            { id: "checked-in", label: "Checked In" },
+                                            { id: "completed", label: "Completed" },
+                                            { id: "cancelled", label: "Cancelled" },
+                                        ].map((option) => (
+                                            <button
+                                                key={option.id}
+                                                onClick={() => {
+                                                    setActiveFilterStatus(option.id)
+                                                    setShowFilterDropdown(false)
+                                                }}
+                                                className={`w-full text-left px-4 py-2 text-sm transition-colors ${
+                                                    activeFilterStatus === option.id 
+                                                        ? "bg-red-50 text-red-600 font-bold" 
+                                                        : "text-slate-700 hover:bg-slate-50"
+                                                }`}
+                                            >
+                                                {option.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>

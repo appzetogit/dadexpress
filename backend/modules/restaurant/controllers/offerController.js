@@ -130,9 +130,21 @@ export const getOffers = asyncHandler(async (req, res) => {
     .sort({ createdAt: -1 })
     .lean();
 
+  const now = new Date();
+  const updatedOffers = [];
+
+  for (const offer of offers) {
+    if (offer.status === 'active' && offer.endDate && new Date(offer.endDate) < now) {
+      // Auto-deactivate in DB
+      await Offer.updateOne({ _id: offer._id }, { $set: { status: 'paused' } });
+      offer.status = 'paused';
+    }
+    updatedOffers.push(offer);
+  }
+
   return successResponse(res, 200, 'Offers retrieved successfully', {
-    offers,
-    total: offers.length,
+    offers: updatedOffers,
+    total: updatedOffers.length,
   });
 });
 
