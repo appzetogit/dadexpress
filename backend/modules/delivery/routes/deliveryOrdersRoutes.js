@@ -6,7 +6,8 @@ import {
   confirmReachedPickup, 
   confirmOrderId,
   confirmReachedDrop,
-  completeDelivery
+  completeDelivery,
+  getPendingOrdersForMe
 } from '../controllers/deliveryOrdersController.js';
 import { getTripHistory } from '../controllers/deliveryTripHistoryController.js';
 import { authenticate } from '../middleware/deliveryAuth.js';
@@ -18,6 +19,7 @@ router.use(authenticate);
 
 // Orders routes
 router.get('/orders', getOrders);
+router.get('/orders/pending-for-me', getPendingOrdersForMe);
 router.get('/orders/:orderId', getOrderDetails);
 router.patch('/orders/:orderId/accept', acceptOrder);
 router.patch('/orders/:orderId/reached-pickup', confirmReachedPickup);

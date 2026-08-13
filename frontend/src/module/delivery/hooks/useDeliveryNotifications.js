@@ -16,6 +16,7 @@ export const useDeliveryNotifications = () => {
   // Step 2: All state hooks (unconditional)
   const [newOrder, setNewOrder] = useState(null);
   const [orderReady, setOrderReady] = useState(null);
+  const [orderCancelled, setOrderCancelled] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [deliveryPartnerId, setDeliveryPartnerId] = useState(null);
 
@@ -222,12 +223,51 @@ export const useDeliveryNotifications = () => {
     fetchDeliveryPartnerId();
   }, []);
 
+  // ─── POLLING FALLBACK ────────────────────────────────────────────────────────
+  // When socket notification is missed (background, reconnect lag, etc.),
+  // poll the backend every 20 seconds for orders that were assigned to this partner.
+  // This guarantees the delivery partner never misses an order.
+  useEffect(() => {
+    if (!deliveryPartnerId) return;
+
+    const pollPendingOrders = async () => {
+      try {
+        const response = await deliveryAPI.getPendingOrdersForMe();
+        const orders = response?.data?.data?.orders || [];
+        if (orders.length > 0) {
+          // Only trigger notification for the latest order not already shown
+          const latestOrder = orders[0];
+          const lastShownKey = `delivery_last_shown_order_${deliveryPartnerId}`;
+          const lastShownId = localStorage.getItem(lastShownKey);
+          const thisOrderId = latestOrder._id?.toString() || latestOrder.orderId;
+          
+          if (thisOrderId && thisOrderId !== lastShownId) {
+            // New order found via polling that socket may have missed
+            setNewOrder(normalizeIncomingOrderNotification(latestOrder));
+            playNotificationSound();
+            localStorage.setItem(lastShownKey, thisOrderId);
+          }
+        }
+      } catch (err) {
+        // Silently ignore polling errors - socket is primary channel
+      }
+    };
+
+    // Poll immediately, then every 20 seconds
+    pollPendingOrders();
+    const pollInterval = setInterval(pollPendingOrders, 20000);
+
+    return () => clearInterval(pollInterval);
+  }, [deliveryPartnerId, normalizeIncomingOrderNotification, playNotificationSound]);
+  // ─────────────────────────────────────────────────────────────────────────────
+
   // Socket connection effect
   useEffect(() => {
     if (!deliveryPartnerId) {
       false && console.log('⏳ Waiting for deliveryPartnerId...');
       return;
     }
+
 
     // Normalize backend URL - use simpler, more robust approach
     let backendUrl = API_BASE_URL;
@@ -443,6 +483,12 @@ export const useDeliveryNotifications = () => {
       playNotificationSound();
     });
 
+    socketRef.current.on('order_cancelled', (cancelData) => {
+      false && console.log('❌ Order cancelled notification received via socket:', cancelData);
+      setOrderCancelled(cancelData);
+      playNotificationSound();
+    });
+
     return () => {
       if (socketRef.current) {
         socketRef.current.disconnect();
@@ -472,12 +518,25 @@ export const useDeliveryNotifications = () => {
     }
   };
 
+  const clearOrderCancelled = () => {
+    setOrderCancelled(null);
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      } catch (e) {}
+    }
+  };
+
   return {
     newOrder,
     clearNewOrder,
     orderReady,
     clearOrderReady,
+    orderCancelled,
+    clearOrderCancelled,
     isConnected,
     playNotificationSound
   };
 };
+

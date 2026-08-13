@@ -1018,6 +1018,10 @@ export const deliveryAPI = {
   getOrders: (params = {}) => {
     return apiClient.get(API_ENDPOINTS.DELIVERY.ORDERS, { params });
   },
+  // Polling fallback: get orders pending for this delivery partner (socket miss recovery)
+  getPendingOrdersForMe: () => {
+    return apiClient.get('/delivery/orders/pending-for-me');
+  },
   getOrderDetails: (orderId) => {
     return apiClient.get(
       API_ENDPOINTS.DELIVERY.ORDER_BY_ID.replace(":orderId", orderId),

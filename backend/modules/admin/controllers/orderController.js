@@ -3,7 +3,7 @@ import { successResponse, errorResponse } from '../../../shared/utils/response.j
 import asyncHandler from '../../../shared/middleware/asyncHandler.js';
 import mongoose from 'mongoose';
 import { findNearestDeliveryBoys } from '../../order/services/deliveryAssignmentService.js';
-import { notifyMultipleDeliveryBoys, notifyDeliveryBoyNewOrder } from '../../order/services/deliveryNotificationService.js';
+import { notifyMultipleDeliveryBoys, notifyDeliveryBoyNewOrder, notifyDeliveryBoyOrderCancelled } from '../../order/services/deliveryNotificationService.js';
 import Delivery from '../../delivery/models/Delivery.js';
 
 /**
@@ -2638,6 +2638,12 @@ export const cancelOrder = asyncHandler(async (req, res) => {
     order.cancellationReason = reason || 'Order cancelled by admin';
 
     await order.save();
+
+    // Notify assigned delivery partner (if any) about cancellation
+    if (order.deliveryPartnerId) {
+      notifyDeliveryBoyOrderCancelled(order, order.deliveryPartnerId, 'admin')
+        .catch(err => console.error('Error notifying delivery partner about cancellation:', err));
+    }
 
     return successResponse(res, 200, 'Order cancelled successfully', {
       order: {

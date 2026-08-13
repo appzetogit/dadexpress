@@ -203,6 +203,55 @@ export const getOrders = asyncHandler(async (req, res) => {
     return errorResponse(res, 500, 'Failed to fetch orders');
   }
 });
+/**
+ * Get Pending Orders specifically for this delivery partner (polling fallback)
+ * GET /api/delivery/orders/pending-for-me
+ * Used as a socket-miss fallback - returns orders that this delivery partner
+ * was notified about but may have missed the socket notification.
+ */
+export const getPendingOrdersForMe = asyncHandler(async (req, res) => {
+  try {
+    const delivery = req.delivery;
+    const currentDeliveryId = delivery._id.toString();
+    const isApprovedOrActive = ['approved', 'active'].includes(delivery.status) && delivery.isActive;
+
+    if (!isApprovedOrActive) {
+      return successResponse(res, 200, 'No pending orders', { orders: [] });
+    }
+
+    // Find orders where:
+    // 1. This delivery partner is in the priorityDeliveryPartnerIds list (was notified)
+    // 2. Order is still unassigned (no deliveryPartnerId)
+    // 3. Order is in an acceptable status
+    const pendingOrders = await Order.find({
+      $and: [
+        {
+          $or: [
+            { 'assignmentInfo.priorityDeliveryPartnerIds': delivery._id },
+            { 'assignmentInfo.expandedDeliveryPartnerIds': delivery._id }
+          ]
+        },
+        {
+          $or: [
+            { deliveryPartnerId: null },
+            { deliveryPartnerId: { $exists: false } }
+          ]
+        },
+        { status: { $in: ['pending', 'confirmed', 'preparing', 'ready'] } }
+      ]
+    })
+      .populate('restaurantId', 'name slug profileImage address location phone ownerPhone')
+      .populate('userId', 'name phone')
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .lean();
+
+    return successResponse(res, 200, 'Pending orders fetched', { orders: pendingOrders || [] });
+  } catch (error) {
+    logger.error(`Error fetching pending orders for delivery partner: ${error.message}`);
+    return errorResponse(res, 500, 'Failed to fetch pending orders');
+  }
+});
 
 /**
  * Get Single Order Details

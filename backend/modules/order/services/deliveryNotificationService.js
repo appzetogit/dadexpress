@@ -810,3 +810,75 @@ async function calculateEstimatedEarnings(deliveryDistance, order = null) {
     };
   }
 }
+
+/**
+ * Notify delivery boy that their assigned order has been cancelled
+ * @param {Object} order - The cancelled order document
+ * @param {string} deliveryPartnerId - Delivery partner ID to notify
+ * @param {string} cancelledBy - Who cancelled ('admin', 'restaurant', 'user')
+ */
+export async function notifyDeliveryBoyOrderCancelled(order, deliveryPartnerId, cancelledBy = 'admin') {
+  try {
+    if (!deliveryPartnerId) return;
+
+    const io = await getIOInstance();
+    if (!io) {
+      console.warn('Socket.IO not initialized, skipping order cancelled notification to delivery boy');
+      return;
+    }
+
+    const deliveryNamespace = io.of('/delivery');
+    const normalizedId = deliveryPartnerId?.toString();
+
+    const cancelPayload = {
+      type: 'order_cancelled',
+      orderId: order.orderId,
+      orderMongoId: order._id?.toString(),
+      restaurantName: order.restaurantName || '',
+      cancelledBy: cancelledBy,
+      reason: order.cancellationReason || 'Order has been cancelled',
+      cancelledAt: order.cancelledAt || new Date()
+    };
+
+    // Emit to all room variations
+    const roomVariations = [
+      `delivery:${normalizedId}`,
+      ...(normalizedId !== deliveryPartnerId?.toString()
+        ? [`delivery:${deliveryPartnerId}`]
+        : [])
+    ];
+
+    for (const room of roomVariations) {
+      deliveryNamespace.to(room).emit('order_cancelled', cancelPayload);
+    }
+
+    console.log(`📤 Order cancelled notification sent to delivery partner ${normalizedId} for order ${order.orderId}`);
+
+    // Also send push notification if FCM token exists
+    try {
+      const partner = await Delivery.findById(deliveryPartnerId).select('fcmToken fcmTokenMobile platform').lean();
+      const fcmTokens = [];
+      if (partner?.fcmToken) fcmTokens.push({ token: partner.fcmToken, platform: 'web' });
+      if (partner?.fcmTokenMobile) fcmTokens.push({ token: partner.fcmTokenMobile, platform: 'app' });
+
+      for (const { token, platform } of fcmTokens) {
+        notificationService.sendPushNotification(
+          token,
+          {
+            title: 'Order Cancelled ❌',
+            body: `Order ${order.orderId} has been cancelled by ${cancelledBy}.`
+          },
+          {
+            orderId: order.orderId,
+            type: 'order_cancelled'
+          },
+          partner?.platform || platform || 'web'
+        ).catch(err => console.error(`Error sending cancel push notification:`, err));
+      }
+    } catch (fcmErr) {
+      console.warn('FCM push for order cancel failed:', fcmErr.message);
+    }
+  } catch (error) {
+    console.error('Error notifying delivery boy of order cancellation:', error);
+  }
+}
