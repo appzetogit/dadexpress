@@ -165,7 +165,7 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
             type: 'new_order_available',
             click_action: '/restaurant/orders'
           },
-          restaurant.platform || plat || 'web'
+          plat || 'web'
         ).then(res => {
           if (res) console.log(`✅ Push notification sent to restaurant ${normalizedRestaurantId} (${plat})`);
         }).catch(err => {
@@ -330,7 +330,7 @@ export async function notifyRestaurantOrderUpdate(orderId, status) {
           type: 'order_update',
           click_action: `/restaurant/orders`
         },
-        restaurant.platform || plat || 'web'
+        plat || 'web'
       ).catch(err => console.error(`Error sending push notification to restaurant (${plat}):`, err));
     }
 
@@ -395,7 +395,7 @@ export async function notifyRestaurantPayoutProcessing(restaurantId, amount, set
           amount: String(amount),
           click_action: `/restaurant/hub-finance`
         },
-        restaurant.platform || plat || 'app'
+        plat || 'app'
       ).catch(err => console.error(`Error sending payout push notification to restaurant (${plat}):`, err));
     }
   } catch (error) {
