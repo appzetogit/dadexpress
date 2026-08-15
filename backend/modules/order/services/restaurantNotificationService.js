@@ -163,7 +163,7 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
           {
             orderId: orderNotification.orderId,
             type: 'new_order_available',
-            click_action: '/delivery/discover'
+            click_action: '/restaurant/orders'
           },
           restaurant.platform || plat || 'web'
         ).then(res => {

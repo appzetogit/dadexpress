@@ -29,6 +29,11 @@ class NotificationService {
 
         const message = {
             token: token,
+            notification: {
+                title: notification.title,
+                body: notification.body,
+                image: notification.image || logoUrl,
+            },
             data: {
                 ...data,
                 title: notification.title,
@@ -37,10 +42,6 @@ class NotificationService {
                 click_action: data.click_action || '/',
             },
         };
-
-        // Root 'notification' property is REMOVED to prevent browser double notification.
-        // We use platform-specific blocks for Mobile.
-
 
         // Platform specific optimizations
         if (platform === 'ios') {
@@ -115,6 +116,11 @@ class NotificationService {
 
         const message = {
             tokens: cleanTokens,
+            notification: {
+                title: notification.title,
+                body: notification.body,
+                image: notification.image || logoUrl,
+            },
             data: {
                 ...stringData,
                 title: notification.title,
@@ -152,12 +158,6 @@ class NotificationService {
                 }
             }
         };
-
-        // For non-web platforms, we can add the root notification block
-        // However, for multicast we don't know the mix of tokens easily.
-        // It's safer to rely on platform-specific blocks (Android/APNS) for the notification content.
-        // The root 'notification' is what triggers the browser's automatic notification.
-        // So we REMOVE it from the root message in multicast as well.
 
         if (notification.image) {
             message.apns.fcm_options = { image: notification.image };

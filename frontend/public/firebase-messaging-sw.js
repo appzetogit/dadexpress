@@ -47,19 +47,23 @@ messaging.onBackgroundMessage((payload) => {
     const icon = self.location.origin + '/dadexpress.jpeg';
     const tag = payload.data?.tag || payload.data?.orderId || 'general';
 
-    // Show OS-level Chrome notification
-    return self.registration.showNotification(title, {
-        body,
-        icon,
-        badge: icon,
-        vibrate: [200, 100, 200],
-        tag: tag, // Deduplication
-        renotify: true,
-        requireInteraction: true,
-        data: {
-            url: payload.data?.click_action || payload.fcmOptions?.link || '/',
-        }
-    });
+    // If payload has a 'notification' object, Firebase handles showing it natively.
+    // We only need to show it manually if it's a data-only message.
+    if (!payload.notification) {
+        // Show OS-level Chrome notification
+        return self.registration.showNotification(title, {
+            body,
+            icon,
+            badge: icon,
+            vibrate: [200, 100, 200],
+            tag: tag, // Deduplication
+            renotify: true,
+            requireInteraction: true,
+            data: {
+                url: payload.data?.click_action || payload.fcmOptions?.link || '/',
+            }
+        });
+    }
 });
 
 // Handle notification click — open the app
