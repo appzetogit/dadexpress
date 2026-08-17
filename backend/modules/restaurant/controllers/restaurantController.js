@@ -220,6 +220,9 @@ export const getRestaurants = async (req, res) => {
       approvedAt: { $ne: null }
     };
 
+    // Pre-filter by bounding box removed as it was causing issues.
+    // Instead, we will use a fast bounding box check in memory before the expensive Haversine loop.
+
     // Dietary filter
     if (dietary) {
       const menuQuery = { isActive: true };
@@ -366,6 +369,31 @@ export const getRestaurants = async (req, res) => {
       const coords = getRestaurantCoords(restaurantDoc);
       if (!coords) return false;
       
+      // Calculate Bounding Box of zone if not already calculated to short-circuit the math loop
+      if (!zoneDoc.bbox) {
+        let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
+        for (const v of zoneDoc.coordinates) {
+          const lat = v.latitude || v.lat;
+          const lng = v.longitude || v.lng;
+          if (lat !== undefined && lng !== undefined) {
+            if (lat < minLat) minLat = lat;
+            if (lat > maxLat) maxLat = lat;
+            if (lng < minLng) minLng = lng;
+            if (lng > maxLng) maxLng = lng;
+          }
+        }
+        zoneDoc.bbox = { minLat, maxLat, minLng, maxLng };
+      }
+
+      // Quick Bounding Box exclusion check (with ~1.5km buffer margin = 0.015 degrees)
+      const margin = 0.015;
+      if (zoneDoc.bbox.minLat !== 90) {
+        if (coords.lat < zoneDoc.bbox.minLat - margin || coords.lat > zoneDoc.bbox.maxLat + margin ||
+            coords.lng < zoneDoc.bbox.minLng - margin || coords.lng > zoneDoc.bbox.maxLng + margin) {
+          return false; // Restaurant is too far away to even bother doing the heavy math loop
+        }
+      }
+
       // 1. Strict polygon check
       if (isPointInZone(coords.lat, coords.lng, zoneDoc.coordinates)) return true;
 
@@ -1289,25 +1317,81 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
     }
 
     // 1. Fetch Zone Boundary FIRST - Lean query
-    const userZone = await Zone.findById(zoneId).select("boundary isActive").lean();
-    if (!userZone || !userZone.isActive || !userZone.boundary) {
+    const userZone = await Zone.findById(zoneId).lean(); // Removed .select() so we get coordinates
+    if (!userZone || !userZone.isActive) {
       return successResponse(res, 200, 'Location outside service area', {
         restaurants: [],
         total: 0
       });
     }
 
-    // 2. Fetch Restaurants inside the zone using Geospatial Index - FAST DB Query
-    const restaurantsInZone = await Restaurant.find({
-      isActive: true,
-      "location.coordinates": {
-        $geoWithin: {
-          $geometry: userZone.boundary
+    // 2. Fetch ALL Active Restaurants and filter in memory using Bounding Box + Math check
+    let allRestaurants = await Restaurant.find({ isActive: true })
+      .select("restaurantId name slug rating totalRatings estimatedDeliveryTime distance cuisines priceRange profileImage menuImages location isAcceptingOrders openDays deliveryTimings")
+      .lean();
+
+    const parseCoordinate = (value) => {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+
+    const getRestaurantCoords = (restaurantDoc) => {
+      const coords = restaurantDoc?.location?.coordinates;
+      if (Array.isArray(coords) && coords.length >= 2) {
+        const lng = parseCoordinate(coords[0]);
+        const lat = parseCoordinate(coords[1]);
+        if (lat !== null && lng !== null) return { lat, lng };
+      }
+      const lat = parseCoordinate(restaurantDoc?.location?.latitude);
+      const lng = parseCoordinate(restaurantDoc?.location?.longitude);
+      if (lat !== null && lng !== null) return { lat, lng };
+      return null;
+    };
+
+    const isRestaurantInsideZoneFast = (restaurantDoc, zoneDoc) => {
+      if (!zoneDoc?.coordinates || zoneDoc.coordinates.length < 3) return true;
+      const coords = getRestaurantCoords(restaurantDoc);
+      if (!coords) return false;
+      
+      if (!zoneDoc.bbox) {
+        let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
+        for (const v of zoneDoc.coordinates) {
+          const lat = v.latitude || v.lat;
+          const lng = v.longitude || v.lng;
+          if (lat !== undefined && lng !== undefined) {
+            if (lat < minLat) minLat = lat;
+            if (lat > maxLat) maxLat = lat;
+            if (lng < minLng) minLng = lng;
+            if (lng > maxLng) maxLng = lng;
+          }
+        }
+        zoneDoc.bbox = { minLat, maxLat, minLng, maxLng };
+      }
+
+      const margin = 0.015;
+      if (zoneDoc.bbox.minLat !== 90) {
+        if (coords.lat < zoneDoc.bbox.minLat - margin || coords.lat > zoneDoc.bbox.maxLat + margin ||
+            coords.lng < zoneDoc.bbox.minLng - margin || coords.lng > zoneDoc.bbox.maxLng + margin) {
+          return false;
         }
       }
-    })
-    .select("restaurantId name slug rating totalRatings estimatedDeliveryTime distance cuisines priceRange profileImage menuImages location isAcceptingOrders openDays deliveryTimings")
-    .lean();
+
+      if (isPointInZone(coords.lat, coords.lng, zoneDoc.coordinates)) return true;
+
+      const BUFFER_DISTANCE = 1.5; 
+      for (const vertex of zoneDoc.coordinates) {
+        const vLat = vertex.latitude || vertex.lat;
+        const vLng = vertex.longitude || vertex.lng;
+        if (vLat && vLng) {
+          if (calculateDistance(coords.lat, coords.lng, vLat, vLng) <= BUFFER_DISTANCE) {
+            return true;
+          }
+        }
+      }
+      return false;
+    };
+
+    const restaurantsInZone = allRestaurants.filter(r => isRestaurantInsideZoneFast(r, userZone));
 
     if (restaurantsInZone.length === 0) {
       return successResponse(res, 200, 'No restaurants found in this area', {
