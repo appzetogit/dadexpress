@@ -314,51 +314,57 @@ export default function HomePage() {
   // Fetch All Dynamic Data
   useEffect(() => {
     const fetchData = async () => {
-      // 1. Fetch Banners
-      try {
-        setLoadingBanners(true)
-        const response = await api.get(API_ENDPOINTS.HERO_BANNER.PUBLIC)
+      // Fire all 4 API calls in PARALLEL — no more sequential awaits
+      setLoadingBanners(true)
+      setLoadingCategories(true)
+      setLoadingRestaurants(true)
+      setLoadingTrends(true)
+
+      const [bannersResult, categoriesResult, restaurantsResult, trendsResult] =
+        await Promise.allSettled([
+          api.get(API_ENDPOINTS.HERO_BANNER.PUBLIC),
+          adminAPI.getPublicCategories(),
+          restaurantAPI.getRestaurants({ limit: 10, isActive: true }),
+          heroBannerAPI.getTop10Restaurants(),
+        ])
+
+      // 1. Banners
+      if (bannersResult.status === "fulfilled") {
+        const response = bannersResult.value
         if (response.data.success && response.data.data.banners) {
           setBanners(response.data.data.banners)
         }
-      } catch (error) {
-        console.error("Error fetching banners:", error)
-      } finally {
-        setLoadingBanners(false)
+      } else {
+        console.error("Error fetching banners:", bannersResult.reason)
       }
+      setLoadingBanners(false)
 
-      // 2. Fetch Categories
-      try {
-        setLoadingCategories(true)
-        const response = await adminAPI.getPublicCategories()
+      // 2. Categories
+      if (categoriesResult.status === "fulfilled") {
+        const response = categoriesResult.value
         if (response.data.success && response.data.data.categories) {
           setCategories(response.data.data.categories)
         }
-      } catch (error) {
-        console.error("Error fetching categories:", error)
-      } finally {
-        setLoadingCategories(false)
+      } else {
+        console.error("Error fetching categories:", categoriesResult.reason)
       }
+      setLoadingCategories(false)
 
-      // 3. Fetch Popular Restaurants (for Popular section)
-      try {
-        setLoadingRestaurants(true)
-        const response = await restaurantAPI.getRestaurants({ limit: 10, isActive: true })
+      // 3. Popular Restaurants
+      if (restaurantsResult.status === "fulfilled") {
+        const response = restaurantsResult.value
         if (response.data.success && response.data.data.restaurants) {
           setPopularRestaurants(response.data.data.restaurants)
         }
-      } catch (error) {
-        console.error("Error fetching popular restaurants:", error)
-      } finally {
-        setLoadingRestaurants(false)
+      } else {
+        console.error("Error fetching popular restaurants:", restaurantsResult.reason)
       }
+      setLoadingRestaurants(false)
 
-      // 4. Fetch Trends (using Top 10 API for trends)
-      try {
-        setLoadingTrends(true)
-        const response = await heroBannerAPI.getTop10Restaurants()
+      // 4. Trends
+      if (trendsResult.status === "fulfilled") {
+        const response = trendsResult.value
         if (response.data.success && response.data.data.restaurants) {
-          // Flatten dishes from top restaurants to show as trends
           const allDishes = response.data.data.restaurants.flatMap(r =>
             (r.menuItems || []).slice(0, 2).map(item => ({
               ...item,
@@ -368,11 +374,10 @@ export default function HomePage() {
           )
           setTrendsItems(allDishes.slice(0, 6))
         }
-      } catch (error) {
-        console.error("Error fetching trends:", error)
-      } finally {
-        setLoadingTrends(false)
+      } else {
+        console.error("Error fetching trends:", trendsResult.reason)
       }
+      setLoadingTrends(false)
     }
 
     fetchData()

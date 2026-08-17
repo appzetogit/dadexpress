@@ -839,7 +839,10 @@ export default function Home() {
     isSavedSelectionLocked ? null : location,
   )
   const currentLocation = location || null
-  const [resolvedZoneId, setResolvedZoneId] = useState(null)
+  // Initialize from localStorage cache to avoid "unavailable" flash on GPS startup
+  const [resolvedZoneId, setResolvedZoneId] = useState(() => {
+    try { return localStorage.getItem('userZoneId') || null } catch { return null }
+  })
   const [resolvedZoneSource, setResolvedZoneSource] = useState(null) // "manual" | "gps" | null
   const [selectedAddressOutOfService, setSelectedAddressOutOfService] = useState(false)
   const [zoneResolveLoading, setZoneResolveLoading] = useState(false)
@@ -1213,15 +1216,18 @@ export default function Home() {
         return
       }
 
-      if (isManualMode && resolvedZoneSource !== "manual") {
+      // Source matching: ideally resolvedZoneSource should match the expected mode.
+      // However, source state can lag behind — if zoneId is already resolved and all
+      // loading flags are cleared, we proceed to avoid infinite loading.
+      const expectedZoneSource = isManualMode ? "manual" : "gps"
+      const sourceMatchedOrReady = 
+        Boolean(resolvedZoneId) || // Fast path: if we have any zone ID (cached or resolved), proceed instantly
+        resolvedZoneSource === expectedZoneSource ||
+        (!zoneResolveLoading && !zoneLoading && !profileLoading)
+
+      if (!sourceMatchedOrReady) {
         if (requestId !== restaurantsRequestRef.current) return
-        // Just wait in loading state until source becomes manual
-        return
-      }
-      
-      if (!isManualMode && resolvedZoneSource !== "gps") {
-        if (requestId !== restaurantsRequestRef.current) return
-        // Just wait in loading state until source becomes gps
+        // Still loading, wait silently
         return
       }
       params.zoneId = resolvedZoneId
@@ -1488,15 +1494,19 @@ export default function Home() {
       }
     }
 
-    // Only commit to a fetch (and update refs) if the source actually matches what we expect
-    // Otherwise, we wait for the zone resolver to update the source
-    if (shouldFetch && sourceMatched) {
-      lastFetchedLocationRef.current = { lat, lng, source: resolvedZoneSource }
+    // Proceed with fetch if:
+    // 1. Source matches, OR
+    // 2. Zone is resolved (zoneId available) even if source label hasn't caught up yet
+    //    This prevents infinite loading when resolvedZoneSource state lags behind.
+    const canFetch = sourceMatched || (resolvedZoneId && !zoneLoading && !zoneResolveLoading)
+
+    if (shouldFetch && canFetch) {
+      lastFetchedLocationRef.current = { lat, lng, source: resolvedZoneSource || expectedSource }
       lastFetchedZoneIdRef.current = resolvedZoneId
       isInitialLoadRef.current = false
       fetchRestaurants(appliedFilters)
-    } else if (shouldFetch && !sourceMatched) {
-      // Ensure we're in loading state while waiting for source to match
+    } else if (shouldFetch && !canFetch) {
+      // Ensure we're in loading state while waiting for zone to resolve
       setLoadingRestaurants(true)
     }
   }, [
@@ -1508,7 +1518,30 @@ export default function Home() {
     activeLocation?.id,
     activeLocation?.source,
     selectedAddress?.id,
+    zoneLoading,
+    zoneResolveLoading,
   ])
+
+  // ─── FAST PATH: Instant load using cached zoneId ──────────────────────────
+  // When the page refreshes, GPS takes time to acquire. But we already have a
+  // cached zoneId from localStorage. Use it to fetch restaurants immediately
+  // so the user sees restaurants right away without waiting for GPS.
+  const hasFiredCachedFetchRef = useRef(false)
+  useEffect(() => {
+    // Only fire once on initial mount, and only if we have a cached zone
+    // but activeLocation hasn't resolved yet (GPS still loading)
+    if (hasFiredCachedFetchRef.current) return
+    if (!resolvedZoneId) return
+    if (activeLocation) return // GPS is ready, let the main effect handle it
+    if (!isInitialLoadRef.current) return // Already fetched, skip
+
+    // We have a cached zone but no GPS yet — fetch immediately!
+    hasFiredCachedFetchRef.current = true
+    isInitialLoadRef.current = false
+    lastFetchedZoneIdRef.current = resolvedZoneId
+    fetchRestaurants(appliedFilters)
+  }, [resolvedZoneId, activeLocation, fetchRestaurants, appliedFilters])
+  // ──────────────────────────────────────────────────────────────────────────
 
   // Memoized calculated restaurants with distances
   const calculatedRestaurants = useMemo(() => {
@@ -1712,9 +1745,10 @@ export default function Home() {
     }
 
     // Priority 1: Loading / Resolving states
+    // Also wait while GPS location is still being acquired (loading = true)
     // Added check for selectedDeliveryAddress to wait if we have a saved selection but hasn't resolved to full address yet
     // Also added check for zone ID synchronization to prevent flash of empty state
-    if (profileLoading || zoneResolveLoading || zoneLoading || isAddressLoading || loadingRestaurants ||
+    if (profileLoading || zoneResolveLoading || zoneLoading || isAddressLoading || loadingRestaurants || loading ||
       isInitialLoadRef.current || (resolvedZoneId !== lastFetchedZoneIdRef.current) ||
       (selectedAddress && !resolvedZoneId && !selectedAddressOutOfService) ||
       (selectedDeliveryAddress && !selectedAddress)) {
@@ -1727,7 +1761,8 @@ export default function Home() {
     }
 
     // Priority 4: Definite "Out of Service" state for GPS/Resolved zone
-    if (isOutOfService || selectedAddressOutOfService || (!resolvedZoneId && !zoneLoading && !zoneResolveLoading)) {
+    // Guard: only show "unavailable" when GPS is also done loading (not still acquiring)
+    if ((isOutOfService || selectedAddressOutOfService || (!resolvedZoneId && !zoneLoading && !zoneResolveLoading)) && !loading) {
       if (currentLocation?.city && currentLocation.city !== "Current Location") {
         return `Service currently unavailable in ${currentLocation.city} 📍`
       }
@@ -1739,7 +1774,7 @@ export default function Home() {
       return "Please select your location to explore nearby restaurants & menus 🍽️"
     }
     return "No restaurants available in this area"
-  }, [selectedAddressOutOfService, resolvedZoneId, zoneResolveLoading, zoneLoading, profileLoading, isAddressLoading, loadingRestaurants])
+  }, [selectedAddressOutOfService, resolvedZoneId, zoneResolveLoading, zoneLoading, profileLoading, isAddressLoading, loadingRestaurants, loading, isOutOfService, currentLocation?.city, selectedAddress, selectedDeliveryAddress, isManualMode])
 
   // Featured foods removed - will be handled by restaurants data from API
   const filteredFeaturedFoods = useMemo(() => {

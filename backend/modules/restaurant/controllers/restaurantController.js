@@ -435,6 +435,12 @@ export const getRestaurants = async (req, res) => {
       });
     }
 
+    // Apply limit AFTER in-memory filters (but only when no zone/distance filtering needed)
+    const parsedLimit = parseInt(limit) || 50;
+    const parsedOffset = parseInt(offset) || 0;
+    const total = restaurants.length;
+    restaurants = restaurants.slice(parsedOffset, parsedOffset + parsedLimit);
+
     // 4. Bulk fetch all relevant data in ONE go to solve N+1 performance bottleneck
     const restaurantIds = restaurants.map(r => r._id);
     
@@ -443,6 +449,7 @@ export const getRestaurants = async (req, res) => {
       Menu.find({ restaurant: { $in: restaurantIds }, isActive: true }).lean(),
       OutletTimings.find({ restaurantId: { $in: restaurantIds }, isActive: true }).lean()
     ]);
+
 
     // Create fast lookup maps
     const menuLookup = new Map();
@@ -520,7 +527,6 @@ export const getRestaurants = async (req, res) => {
     };
 
     // 5. Final processing of restaurants
-    const total = restaurants.length;
     const restaurantsWithMenu = restaurants.map((r) => {
       // Status check
       const isOpen = isRestaurantOpenSync(r, timingLookup.get(r._id.toString()));

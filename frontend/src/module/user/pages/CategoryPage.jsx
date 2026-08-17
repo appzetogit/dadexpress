@@ -27,9 +27,17 @@ export default function CategoryPage() {
   const navigate = useNavigate()
   const { vegMode } = useProfile()
   const { location, loading, isManualMode } = useLocation()
-  const { zoneId, isOutOfService, zoneStatus } = useZone(
-    loading && !isManualMode ? null : location
-  )
+  // Always pass location to useZone — it handles GPS-loading internally.
+  const { zoneId: detectedZoneId, isOutOfService, zoneStatus } = useZone(location)
+  // Capture initial cached zoneId ONCE at mount time using a ref.
+  // This persists even if useZone later calls localStorage.removeItem('userZoneId')
+  // when it detects OUT_OF_SERVICE, preventing the blank screen flash.
+  const initialCachedZoneIdRef = useRef(null)
+  if (initialCachedZoneIdRef.current === null) {
+    try { initialCachedZoneIdRef.current = localStorage.getItem('userZoneId') || '' } catch { initialCachedZoneIdRef.current = '' }
+  }
+  const zoneId = detectedZoneId || initialCachedZoneIdRef.current || null
+
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState(category?.toLowerCase() || 'all')
   const [activeFilters, setActiveFilters] = useState(new Set())
@@ -308,8 +316,9 @@ export default function CategoryPage() {
   // Fetch restaurants from API
   useEffect(() => {
     const fetchRestaurants = async () => {
-      // Wait until zone detection settles to avoid initial stale/non-zone fetch flash.
-      if (zoneStatus === 'loading') {
+      // Wait only if zone is still loading AND we have no fallback zoneId.
+      // If we have a cached/detected zoneId, proceed immediately.
+      if (zoneStatus === 'loading' && !zoneId) {
         setLoadingRestaurants(true)
         return
       }
@@ -449,7 +458,10 @@ export default function CategoryPage() {
     }
 
     fetchRestaurants()
-  }, [zoneId, isOutOfService, zoneStatus])
+  // Note: isOutOfService intentionally excluded — OUT_OF_SERVICE zone detection should
+  // NOT clear restaurants (we still show them using cached zoneId).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zoneId, zoneStatus])
 
   // Update selected category when URL changes
   useEffect(() => {
@@ -805,11 +817,8 @@ export default function CategoryPage() {
     }
   }
 
-  // Check if should show grayscale (user out of service)
-  const shouldShowGrayscale = isOutOfService
-
   return (
-    <div className={`min-h-screen bg-white dark:bg-[#0a0a0a] ${shouldShowGrayscale ? 'grayscale opacity-75' : ''}`}>
+    <div className={`min-h-screen bg-white dark:bg-[#0a0a0a]`}>
       {/* Sticky Header */}
       <div className="sticky top-0 z-20 bg-white dark:bg-[#1a1a1a] shadow-sm">
         <div className="max-w-7xl mx-auto">
