@@ -883,6 +883,7 @@ export default function Home() {
   const lastFetchedLocationRef = useRef(null)
   const lastFetchedZoneIdRef = useRef(null)
   const isInitialLoadRef = useRef(true)
+  const hasPendingFetchRef = useRef(false)
 
   const activeLocation = useMemo(
     () => {
@@ -1194,25 +1195,13 @@ export default function Home() {
         if (requestId !== restaurantsRequestRef.current) return
 
         // If zone is still resolving or loading, keep the loader active
-        if (zoneResolveLoading || zoneLoading || profileLoading || (selectedAddress && !resolvedZoneId)) {
+        if (zoneResolveLoading || zoneLoading || profileLoading) {
           // Stay in loading state
           return
         }
 
         setRestaurantsResult([])
         setLoadingRestaurants(false)
-        return
-      }
-      // Zone is still resolving — don't clear data or show spinner; just wait silently
-      if (zoneResolveLoading || zoneLoading) {
-        // Stay in loading state
-        return
-      }
-
-      // Critical: Don't fetch until zone resolution is complete
-      // This prevents the "Service not available" flash when navigating back to Home
-      if (!resolvedZoneId && (zoneResolveLoading || zoneLoading || profileLoading || (selectedAddress && !selectedAddressOutOfService))) {
-        // Keep loading state true
         return
       }
 
@@ -1469,8 +1458,8 @@ export default function Home() {
     const expectedSource = isManualMode ? "manual" : "gps"
     const sourceMatched = resolvedZoneSource === expectedSource
     
-    // Force fetch if zone ID changed OR it's the initial load OR source just matched
-    let shouldFetch = isInitialLoadRef.current || (resolvedZoneId !== lastFetchedZoneIdRef.current)
+    // Force fetch if zone ID changed OR it's the initial load OR source just matched OR pending fetch waiting
+    let shouldFetch = isInitialLoadRef.current || (resolvedZoneId !== lastFetchedZoneIdRef.current) || hasPendingFetchRef.current
 
     // If source didn't match before but matches now, we must fetch!
     // We can use a ref to track the last successful fetch's source
@@ -1494,18 +1483,17 @@ export default function Home() {
       }
     }
 
-    // Proceed with fetch if:
-    // 1. Source matches, OR
-    // 2. Zone is resolved (zoneId available) even if source label hasn't caught up yet
-    //    This prevents infinite loading when resolvedZoneSource state lags behind.
-    const canFetch = sourceMatched || (resolvedZoneId && !zoneLoading && !zoneResolveLoading)
+    // Proceed with fetch if zone resolution is finished
+    const canFetch = sourceMatched || (!zoneLoading && !zoneResolveLoading)
 
     if (shouldFetch && canFetch) {
+      hasPendingFetchRef.current = false
       lastFetchedLocationRef.current = { lat, lng, source: resolvedZoneSource || expectedSource }
       lastFetchedZoneIdRef.current = resolvedZoneId
       isInitialLoadRef.current = false
       fetchRestaurants(appliedFilters)
     } else if (shouldFetch && !canFetch) {
+      hasPendingFetchRef.current = true
       // Ensure we're in loading state while waiting for zone to resolve
       setLoadingRestaurants(true)
     }

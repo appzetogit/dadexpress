@@ -332,6 +332,7 @@ export const getZonesByRestaurant = asyncHandler(async (req, res) => {
  * GET /api/zones/detect?lat=&lng=
  */
 export const detectUserZone = asyncHandler(async (req, res) => {
+  const detectStartTime = Date.now();
   try {
     const { lat, lng, latitude, longitude } = req.query;
     
@@ -366,6 +367,29 @@ export const detectUserZone = asyncHandler(async (req, res) => {
     for (const zone of activeZones) {
       if (!zone.coordinates || zone.coordinates.length < 3) continue;
 
+      // Calculate Bounding Box for fast exclusion
+      let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
+      for (const coord of zone.coordinates) {
+        const lat = typeof coord === 'object' ? (coord.latitude || coord.lat) : null;
+        const lng = typeof coord === 'object' ? (coord.longitude || coord.lng) : null;
+        if (lat !== null && lng !== null) {
+          if (lat < minLat) minLat = lat;
+          if (lat > maxLat) maxLat = lat;
+          if (lng < minLng) minLng = lng;
+          if (lng > maxLng) maxLng = lng;
+        }
+      }
+      zone.bbox = { minLat, maxLat, minLng, maxLng };
+
+      // Bounding Box check (with 0.015 deg ~ 1.5km margin)
+      const margin = 0.015;
+      if (minLat !== 90) {
+        if (userLat < minLat - margin || userLat > maxLat + margin ||
+            userLng < minLng - margin || userLng > maxLng + margin) {
+          continue; // User is far away from this zone, skip expensive Ray casting
+        }
+      }
+
       let isInZone = false;
       if (typeof zone.containsPoint === 'function') {
         isInZone = zone.containsPoint(userLat, userLng);
@@ -387,7 +411,7 @@ export const detectUserZone = asyncHandler(async (req, res) => {
           if (intersect) inside = !inside;
         }
         isInZone = inside;
-        console.log(`[ZONE_DEBUG] Zone "${zone.name}": user(${userLat}, ${userLng}) inside=${inside}, points=${zone.coordinates.length}`);
+        // console.log(`[ZONE_DEBUG] Zone "${zone.name}": user(${userLat}, ${userLng}) inside=${inside}, points=${zone.coordinates.length}`);
       }
 
       if (isInZone) {
@@ -405,9 +429,18 @@ export const detectUserZone = asyncHandler(async (req, res) => {
     // If user is not in any zone, check buffer area (up to 1km margin for edge cases)
     if (!userZone) {
       const BUFFER_DISTANCE = 1.0; // 1km buffer
+      const margin = 0.015; // ~1.5km margin
       
       for (const zone of activeZones) {
         if (!zone.coordinates || zone.coordinates.length < 3) continue;
+
+        // Skip buffer check if user is nowhere near this zone's bounding box
+        if (zone.bbox && zone.bbox.minLat !== 90) {
+          if (userLat < zone.bbox.minLat - margin || userLat > zone.bbox.maxLat + margin ||
+              userLng < zone.bbox.minLng - margin || userLng > zone.bbox.maxLng + margin) {
+            continue;
+          }
+        }
         
         // Find nearest vertex for buffer check
         for (const vertex of zone.coordinates) {
@@ -446,6 +479,8 @@ export const detectUserZone = asyncHandler(async (req, res) => {
         message: 'Forced service for debugging'
       });
     }
+
+    console.log(`⏱️ [PERF] /api/zones/detect completed in ${Date.now() - detectStartTime}ms | zone=${userZone?.name || userZone?.zoneName || 'NONE'}`);
 
     return successResponse(res, 200, 'Zone detected successfully', {
       status: 'IN_SERVICE',

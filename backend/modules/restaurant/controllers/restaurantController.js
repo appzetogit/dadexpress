@@ -176,11 +176,7 @@ function getRestaurantZoneId(restaurantLat, restaurantLng, activeZones) {
 
 // Get all restaurants (for user module)
 export const getRestaurants = async (req, res) => {
-  /**
-   * Calculate distance between two points (Haversine formula)
-   */
-  // Calculate distance between two points moved to top for shared use
-
+  const reqStartTime = Date.now();
   try {
     const {
       limit = 50,
@@ -220,45 +216,61 @@ export const getRestaurants = async (req, res) => {
       approvedAt: { $ne: null }
     };
 
-    // Pre-filter by bounding box removed as it was causing issues.
-    // Instead, we will use a fast bounding box check in memory before the expensive Haversine loop.
+    // Fast DB-level bounding box pre-filter using userZone coordinates
+    if (userZone && Array.isArray(userZone.coordinates) && userZone.coordinates.length >= 3) {
+      let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
+      for (const v of userZone.coordinates) {
+        const vLat = v.latitude || v.lat;
+        const vLng = v.longitude || v.lng;
+        if (vLat !== undefined && vLng !== undefined) {
+          if (vLat < minLat) minLat = vLat;
+          if (vLat > maxLat) maxLat = vLat;
+          if (vLng < minLng) minLng = vLng;
+          if (vLng > maxLng) maxLng = vLng;
+        }
+      }
+      if (minLat !== 90) {
+        // ~0.035 deg margin (~3.5km buffer around zone bounding box for safety)
+        const margin = 0.035;
+        const zoneBbox = {
+          minLat: minLat - margin,
+          maxLat: maxLat + margin,
+          minLng: minLng - margin,
+          maxLng: maxLng + margin,
+        };
+        userZone.bbox = zoneBbox; // Cache on zone doc for fast in-memory ray-casting pre-check
 
-    // Dietary filter
-    if (dietary) {
-      const menuQuery = { isActive: true };
-
-      if (dietary === "veg") {
-        menuQuery.$or = [
-          { "sections.items.foodType": "Veg" },
-          { "sections.subsections.items.foodType": "Veg" },
-        ];
-      } else if (dietary === "non-veg") {
-        menuQuery.$or = [
-          { "sections.items.foodType": "Non-Veg" },
-          { "sections.subsections.items.foodType": "Non-Veg" },
-        ];
-      } else if (dietary === "pure-veg") {
-        menuQuery.$and = [
+        const spatialConditions = [
           {
-            $or: [
-              { "sections.items.foodType": "Veg" },
-              { "sections.subsections.items.foodType": "Veg" },
-            ],
+            "location.coordinates": {
+              $geoWithin: {
+                $box: [
+                  [zoneBbox.minLng, zoneBbox.minLat],
+                  [zoneBbox.maxLng, zoneBbox.maxLat]
+                ]
+              }
+            }
           },
           {
-            $nor: [
-              { "sections.items.foodType": "Non-Veg" },
-              { "sections.subsections.items.foodType": "Non-Veg" },
-            ],
-          },
+            "location.latitude": { $gte: zoneBbox.minLat, $lte: zoneBbox.maxLat },
+            "location.longitude": { $gte: zoneBbox.minLng, $lte: zoneBbox.maxLng }
+          }
         ];
-      }
 
-      if (["veg", "non-veg", "pure-veg"].includes(dietary)) {
-        const matchingMenus = await Menu.find(menuQuery).select("restaurant").lean();
-        const dietaryRestaurantIds = matchingMenus.map((m) => m.restaurant);
-        query._id = { $in: dietaryRestaurantIds };
+        if (query.$or) {
+          query.$and = query.$and || [];
+          query.$and.push({ $or: query.$or });
+          query.$and.push({ $or: spatialConditions });
+          delete query.$or;
+        } else {
+          query.$or = spatialConditions;
+        }
       }
+    }
+
+    // City filter
+    if (req.query.city) {
+      query["location.city"] = { $regex: new RegExp(req.query.city, "i") };
     }
 
     // Cuisine filter
@@ -424,6 +436,43 @@ export const getRestaurants = async (req, res) => {
       restaurants = restaurants.filter((restaurantDoc) =>
         isRestaurantInsideZone(restaurantDoc, userZone),
       );
+    }
+
+    // 1b. Fast targeted Dietary filter (runs ONLY on candidate restaurants in the zone instead of full DB scan)
+    if (dietary && ["veg", "non-veg", "pure-veg"].includes(dietary) && restaurants.length > 0) {
+      const candidateIds = restaurants.map((r) => r._id);
+      const menuQuery = { restaurant: { $in: candidateIds }, isActive: true };
+
+      if (dietary === "veg") {
+        menuQuery.$or = [
+          { "sections.items.foodType": "Veg" },
+          { "sections.subsections.items.foodType": "Veg" },
+        ];
+      } else if (dietary === "non-veg") {
+        menuQuery.$or = [
+          { "sections.items.foodType": "Non-Veg" },
+          { "sections.subsections.items.foodType": "Non-Veg" },
+        ];
+      } else if (dietary === "pure-veg") {
+        menuQuery.$and = [
+          {
+            $or: [
+              { "sections.items.foodType": "Veg" },
+              { "sections.subsections.items.foodType": "Veg" },
+            ],
+          },
+          {
+            $nor: [
+              { "sections.items.foodType": "Non-Veg" },
+              { "sections.subsections.items.foodType": "Non-Veg" },
+            ],
+          },
+        ];
+      }
+
+      const matchingMenus = await Menu.find(menuQuery).select("restaurant").lean();
+      const allowedIds = new Set(matchingMenus.map((m) => m.restaurant.toString()));
+      restaurants = restaurants.filter((r) => allowedIds.has(r._id.toString()));
     }
 
     // 2. Calculate dynamic distances if user coordinates available
@@ -622,6 +671,8 @@ export const getRestaurants = async (req, res) => {
         fullMenu: req.query.includeFullMenu === 'true' ? menu : undefined
       };
     });
+
+    console.log(`⏱️ [PERF] /api/restaurant/list completed in ${Date.now() - reqStartTime}ms | zoneId=${zoneId || 'NONE'} | count=${restaurantsWithMenu.length}`);
 
     console.log(
       `Fetched ${restaurantsWithMenu.length} (total: ${total}) restaurants with filters:`,
