@@ -410,6 +410,18 @@ export const createOrder = async (req, res) => {
       });
     }
 
+    // Check manual override (isAcceptingOrders)
+    if (restaurant.isAcceptingOrders === false) {
+      logger.warn('⚠️ Restaurant manually closed:', {
+        restaurantId: restaurant._id?.toString() || restaurant.restaurantId,
+        restaurantName: restaurant.name
+      });
+      return res.status(403).json({
+        success: false,
+        message: 'This restaurant is currently closed and not accepting orders at this moment.'
+      });
+    }
+
     if (!restaurant.isActive) {
       logger.warn('⚠️ Restaurant is inactive:', {
         restaurantId: restaurant._id?.toString() || restaurant.restaurantId,

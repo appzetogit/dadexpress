@@ -94,19 +94,28 @@ export default function Dining() {
         }
 
         // 2. Fetch Limelight / Banners
-        const resBanners = await diningAPI.getOfferBanners(params)
+        const [resBanners, resDiningBanners] = await Promise.all([
+          diningAPI.getOfferBanners(params),
+          diningAPI.getDiningBanners()
+        ])
+
         if (resBanners.data?.success && resBanners.data.data?.length > 0) {
           setLimelightItems(resBanners.data.data)
+        } else {
+          const resLimelight = await diningAPI.getLimelight()
+          if (resLimelight.data?.success) {
+            setLimelightItems(resLimelight.data.data || [])
+          }
+        }
+
+        if (resDiningBanners.data?.success && resDiningBanners.data.data?.banners?.length > 0) {
+          setDiningHeroBanners(resDiningBanners.data.data.banners)
+        } else if (resBanners.data?.success && resBanners.data.data?.length > 0) {
           const bannerUrls = resBanners.data.data
             .map(b => b.imageUrl || b.image)
             .filter(Boolean)
           if (bannerUrls.length > 0) {
             setDiningHeroBanners(bannerUrls)
-          }
-        } else {
-          const resLimelight = await diningAPI.getLimelight()
-          if (resLimelight.data?.success) {
-            setLimelightItems(resLimelight.data.data || [])
           }
         }
 

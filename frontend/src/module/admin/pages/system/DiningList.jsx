@@ -135,7 +135,7 @@ export default function DiningList() {
                     : r
             ))
 
-            await adminAPI.updateRestaurantDiningSettings(restaurant._id, {
+            await adminAPI.updateRestaurantDiningSettings(restaurant.id, {
                 isEnabled: newStatus
             })
             // Could show success toast here
@@ -165,7 +165,7 @@ export default function DiningList() {
                     : r
             ))
 
-            await adminAPI.updateRestaurantDiningSettings(restaurant._id, {
+            await adminAPI.updateRestaurantDiningSettings(restaurant.id, {
                 maxGuests: guests
             })
         } catch (error) {

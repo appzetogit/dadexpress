@@ -1010,6 +1010,12 @@ export default function OutletInfo() {
                 {loading ? "..." : (billCashbackPercentage === "" ? "10%" : `${billCashbackPercentage}%`)}
               </p>
             </div>
+            <button
+              onClick={handleOpenCashbackDialog}
+              className="text-blue-600 text-sm font-normal hover:text-blue-700 transition-colors ml-4 shrink-0"
+            >
+              Edit
+            </button>
           </div>
         </motion.div>
 

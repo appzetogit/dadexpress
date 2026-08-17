@@ -132,7 +132,7 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
         transactionId: order.payment?.transactionId
       },
     };
-    
+
     console.log('📢 Restaurant notification payload:', {
       orderId: orderNotification.orderId,
       paymentMethod: orderNotification.paymentMethod,
@@ -355,9 +355,9 @@ export async function notifyRestaurantPayoutProcessing(restaurantId, amount, set
   try {
     const io = await getIOInstance();
     if (!io) return;
-    
+
     const restaurantNamespace = io.of('/restaurant');
-    
+
     // Use colon separator and correctly emit within the /restaurant namespace
     if (restaurantNamespace) {
       restaurantNamespace.to(`restaurant:${restaurantId}`).emit('payout_processed', {

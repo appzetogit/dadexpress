@@ -119,28 +119,25 @@ export default function TableBooking() {
 
     const defaultSlots = {
         Lunch: [
-            { time: "12:00 PM", discount: "20% OFF" },
-            { time: "12:30 PM", discount: "20% OFF" },
-            { time: "1:00 PM", discount: "15% OFF" },
-            { time: "1:30 PM", discount: "15% OFF" },
-            { time: "2:00 PM", discount: "10% OFF" },
-            { time: "2:30 PM", discount: "10% OFF" },
-            { time: "3:00 PM", discount: "30% OFF" },
-            { time: "3:30 PM", discount: "30% OFF" },
-            { time: "3:45 PM", discount: "30% OFF" },
-            { time: "4:00 PM", discount: "30% OFF" },
-            { time: "4:15 PM", discount: "30% OFF" },
-            { time: "4:30 PM", discount: "30% OFF" },
+            { time: "12:00 PM", discount: "No OFF" },
+            { time: "12:30 PM", discount: "No OFF" },
+            { time: "1:00 PM", discount: "No OFF" },
+            { time: "1:30 PM", discount: "No OFF" },
+            { time: "2:00 PM", discount: "No OFF" },
+            { time: "2:30 PM", discount: "No OFF" },
+            { time: "3:00 PM", discount: "No OFF" },
+            { time: "3:30 PM", discount: "No OFF" },
+            { time: "4:00 PM", discount: "No OFF" }
         ],
         Dinner: [
-            { time: "7:00 PM", discount: "10% OFF" },
-            { time: "7:30 PM", discount: "10% OFF" },
-            { time: "8:00 PM", discount: "5% OFF" },
-            { time: "8:30 PM", discount: "5% OFF" },
+            { time: "7:00 PM", discount: "No OFF" },
+            { time: "7:30 PM", discount: "No OFF" },
+            { time: "8:00 PM", discount: "No OFF" },
+            { time: "8:30 PM", discount: "No OFF" },
             { time: "9:00 PM", discount: "No OFF" },
             { time: "9:30 PM", discount: "No OFF" },
-            { time: "10:00 PM", discount: "15% OFF" },
-            { time: "10:30 PM", discount: "20% OFF" },
+            { time: "10:00 PM", discount: "No OFF" },
+            { time: "10:30 PM", discount: "No OFF" }
         ]
     }
 

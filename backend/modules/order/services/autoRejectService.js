@@ -1,6 +1,7 @@
 import Order from '../models/Order.js';
 import { notifyRestaurantOrderUpdate } from './restaurantNotificationService.js';
 import { calculateCancellationRefund } from './cancellationRefundService.js';
+import { notifyUserOrderUpdate } from './userNotificationService.js';
 
 /**
  * Automatically reject orders that haven't been accepted within the accept time limit
@@ -77,6 +78,7 @@ export async function processAutoRejectOrders() {
           // Notify about status update
           try {
             await notifyRestaurantOrderUpdate(currentOrder._id.toString(), 'cancelled');
+            await notifyUserOrderUpdate(currentOrder._id.toString(), 'cancelled');
           } catch (notifError) {
             console.error(`❌ Error sending notification for order ${currentOrder.orderId}:`, notifError);
           }

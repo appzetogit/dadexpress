@@ -81,6 +81,7 @@ const FssaiUpdate = lazy(() => import("@/module/restaurant/pages/FssaiUpdate"))
 const Hyperpure = lazy(() => import("@/module/restaurant/pages/Hyperpure"))
 const HubGrowth = lazy(() => import("@/module/restaurant/pages/HubGrowth"))
 const CreateOffers = lazy(() => import("@/module/restaurant/pages/CreateOffers"))
+const DiningDiscounts = lazy(() => import("@/module/restaurant/pages/DiningDiscounts"))
 const ChooseDiscountType = lazy(() => import("@/module/restaurant/pages/ChooseDiscountType"))
 const ChooseMenuDiscountType = lazy(() => import("@/module/restaurant/pages/ChooseMenuDiscountType"))
 const CreatePercentageDiscount = lazy(() => import("@/module/restaurant/pages/CreatePercentageDiscount"))
@@ -609,6 +610,14 @@ export default function App() {
             element={
               <ProtectedRoute requiredRole="restaurant" loginPath="/restaurant/login">
                 <CreateOffers />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/restaurant/hub-growth/create-offers/dining-discounts"
+            element={
+              <ProtectedRoute requiredRole="restaurant" loginPath="/restaurant/login">
+                <DiningDiscounts />
               </ProtectedRoute>
             }
           />

@@ -67,6 +67,7 @@ export default function TableBookingConfirmation() {
                 guests,
                 date,
                 timeSlot,
+                discount,
                 specialRequest,
                 guestName: user?.name,
                 guestPhone: user?.phone,
@@ -364,16 +365,14 @@ export default function TableBookingConfirmation() {
                             type="button"
                             id="payment-cod"
                             onClick={() => setPaymentMethod("cash")}
-                            className={`w-full flex items-center gap-4 p-4 text-left transition-all ${
-                                paymentMethod === "cash"
-                                    ? "bg-orange-50/60"
-                                    : "bg-white hover:bg-slate-50"
-                            }`}
+                            className={`w-full flex items-center gap-4 p-4 text-left transition-all ${paymentMethod === "cash"
+                                ? "bg-orange-50/60"
+                                : "bg-white hover:bg-slate-50"
+                                }`}
                         >
                             {/* Radio */}
-                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
-                                paymentMethod === "cash" ? "border-[#EB590E]" : "border-slate-300"
-                            }`}>
+                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${paymentMethod === "cash" ? "border-[#EB590E]" : "border-slate-300"
+                                }`}>
                                 {paymentMethod === "cash" && (
                                     <div className="w-2.5 h-2.5 rounded-full bg-[#EB590E]"></div>
                                 )}
@@ -395,43 +394,44 @@ export default function TableBookingConfirmation() {
                             )}
                         </button>
 
-                        <div className="h-px bg-slate-100 mx-4"></div>
+                        {/* Online Payment Option - Only show if there is a booking price */}
+                        {restaurant?.tableBookingPrice > 0 && (
+                            <>
+                                <div className="h-px bg-slate-100 mx-4"></div>
+                                <button
+                                    type="button"
+                                    id="payment-online"
+                                    onClick={() => setPaymentMethod("upi")}
+                                    className={`w-full flex items-center gap-4 p-4 text-left transition-all ${paymentMethod === "upi"
+                                        ? "bg-orange-50/60"
+                                        : "bg-white hover:bg-slate-50"
+                                        }`}
+                                >
+                                    {/* Radio */}
+                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${paymentMethod === "upi" ? "border-[#EB590E]" : "border-slate-300"
+                                        }`}>
+                                        {paymentMethod === "upi" && (
+                                            <div className="w-2.5 h-2.5 rounded-full bg-[#EB590E]"></div>
+                                        )}
+                                    </div>
 
-                        {/* Online Payment Option */}
-                        <button
-                            type="button"
-                            id="payment-online"
-                            onClick={() => setPaymentMethod("upi")}
-                            className={`w-full flex items-center gap-4 p-4 text-left transition-all ${
-                                paymentMethod === "upi"
-                                    ? "bg-orange-50/60"
-                                    : "bg-white hover:bg-slate-50"
-                            }`}
-                        >
-                            {/* Radio */}
-                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
-                                paymentMethod === "upi" ? "border-[#EB590E]" : "border-slate-300"
-                            }`}>
-                                {paymentMethod === "upi" && (
-                                    <div className="w-2.5 h-2.5 rounded-full bg-[#EB590E]"></div>
-                                )}
-                            </div>
+                                    {/* Icon */}
+                                    <div className={`p-2.5 rounded-xl flex-shrink-0 ${paymentMethod === "upi" ? "bg-orange-100 text-[#EB590E]" : "bg-slate-100 text-slate-500"}`}>
+                                        <CreditCard className="w-5 h-5" />
+                                    </div>
 
-                            {/* Icon */}
-                            <div className={`p-2.5 rounded-xl flex-shrink-0 ${paymentMethod === "upi" ? "bg-orange-100 text-[#EB590E]" : "bg-slate-100 text-slate-500"}`}>
-                                <CreditCard className="w-5 h-5" />
-                            </div>
+                                    {/* Text */}
+                                    <div className="flex-1">
+                                        <p className="font-bold text-gray-900 text-sm">Online Payment (₹{restaurant.tableBookingPrice})</p>
+                                        <p className="text-[11px] text-slate-400 mt-0.5">Pay booking fee via UPI, Card, Net Banking</p>
+                                    </div>
 
-                            {/* Text */}
-                            <div className="flex-1">
-                                <p className="font-bold text-gray-900 text-sm">Online Payment</p>
-                                <p className="text-[11px] text-slate-400 mt-0.5">UPI, Card, Net Banking via Razorpay</p>
-                            </div>
-
-                            {paymentMethod === "upi" && (
-                                <span className="text-[10px] font-bold text-[#EB590E] bg-orange-50 border border-orange-200 px-2 py-1 rounded-full flex-shrink-0">Selected</span>
-                            )}
-                        </button>
+                                    {paymentMethod === "upi" && (
+                                        <span className="text-[10px] font-bold text-[#EB590E] bg-orange-50 border border-orange-200 px-2 py-1 rounded-full flex-shrink-0">Selected</span>
+                                    )}
+                                </button>
+                            </>
+                        )}
                     </div>
                 </div>
 
@@ -475,7 +475,7 @@ export default function TableBookingConfirmation() {
                     {bookingInProgress
                         ? (paymentMethod === "upi" ? "Opening Payment..." : "Confirming...")
                         : paymentMethod === "upi"
-                            ? "Proceed to Pay Online →"
+                            ? `Proceed to Pay ₹${restaurant.tableBookingPrice} Online →`
                             : "Confirm Seat (Cash on Arrival)"}
                 </Button>
             </div>

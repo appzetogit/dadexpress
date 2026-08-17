@@ -69,7 +69,7 @@ export default function OrderDetails() {
             billing: {
               itemSubtotal: order.pricing?.subtotal || 0,
               taxes: order.pricing?.tax || 0,
-              total: order.pricing?.total || 0,
+              total: (order.pricing?.subtotal || 0) + (order.pricing?.tax || 0),
               paymentStatus: order.payment?.status === 'completed' ? 'PAID' : 'PENDING'
             },
             reason: order.cancellationReason || '',

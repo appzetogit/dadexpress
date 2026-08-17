@@ -1683,8 +1683,9 @@ export const updateRestaurantDiningSettings = asyncHandler(async (req, res) => {
     }
 
     // Update dining settings
+    const currentDiningSettings = restaurant.diningSettings ? (restaurant.diningSettings.toObject ? restaurant.diningSettings.toObject() : restaurant.diningSettings) : {};
     restaurant.diningSettings = {
-      ...restaurant.diningSettings,
+      ...currentDiningSettings,
       ...diningSettings,
     };
 

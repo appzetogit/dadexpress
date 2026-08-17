@@ -2306,6 +2306,11 @@ export const diningAPI = {
     return apiClient.get(API_ENDPOINTS.DINING.OFFER_BANNERS, { params });
   },
 
+  // Get dynamic dining banners from admin panel hero-banners
+  getDiningBanners: () => {
+    return apiClient.get('/hero-banners/dining/public');
+  },
+
   // Get dining stories
   getStories: () => {
     return apiClient.get(API_ENDPOINTS.DINING.STORIES);

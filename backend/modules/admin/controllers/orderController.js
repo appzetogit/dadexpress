@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 import { findNearestDeliveryBoys } from '../../order/services/deliveryAssignmentService.js';
 import { notifyMultipleDeliveryBoys, notifyDeliveryBoyNewOrder, notifyDeliveryBoyOrderCancelled } from '../../order/services/deliveryNotificationService.js';
 import Delivery from '../../delivery/models/Delivery.js';
+import { notifyUserOrderUpdate } from '../../order/services/userNotificationService.js';
 
 /**
  * Get all orders for admin
@@ -2643,6 +2644,13 @@ export const cancelOrder = asyncHandler(async (req, res) => {
     if (order.deliveryPartnerId) {
       notifyDeliveryBoyOrderCancelled(order, order.deliveryPartnerId, 'admin')
         .catch(err => console.error('Error notifying delivery partner about cancellation:', err));
+    }
+
+    // Notify customer about cancellation
+    try {
+      await notifyUserOrderUpdate(order._id.toString(), 'cancelled');
+    } catch (notifError) {
+      console.error('Error notifying user about cancellation:', notifError);
     }
 
     return successResponse(res, 200, 'Order cancelled successfully', {

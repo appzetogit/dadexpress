@@ -9,6 +9,7 @@ import { notifyDeliveryBoyNewOrder, notifyMultipleDeliveryBoys } from '../../ord
 import mongoose from 'mongoose';
 import OrderSettlement from '../../order/models/OrderSettlement.js';
 import { calculateOrderSettlement } from '../../order/services/orderSettlementService.js';
+import { notifyUserOrderUpdate } from '../../order/services/userNotificationService.js';
 
 /**
  * Get all orders for restaurant
@@ -668,6 +669,7 @@ export const rejectOrder = asyncHandler(async (req, res) => {
     // Notify about status update
     try {
       await notifyRestaurantOrderUpdate(order._id.toString(), 'cancelled');
+      await notifyUserOrderUpdate(order._id.toString(), 'cancelled');
     } catch (notifError) {
       console.error('Error sending notification:', notifError);
     }

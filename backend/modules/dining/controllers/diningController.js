@@ -275,13 +275,18 @@ export const getRestaurantBySlug = async (req, res) => {
       slug: { $in: slugVariants },
     });
 
-    // If not found in DiningRestaurant, check regular Restaurant
     let actualRestaurant = restaurant;
+    let realRestaurant = null;
+
     if (!actualRestaurant) {
       actualRestaurant = await Restaurant.findOne({ slug: { $in: slugVariants } });
+      realRestaurant = actualRestaurant;
+    } else {
+      // Found in DiningRestaurant, but we need diningSettings from the real Restaurant
+      realRestaurant = await Restaurant.findOne({ slug: { $in: slugVariants } });
     }
 
-    // Fallback: search by name slugification matching
+    // Fallback: search by name slugification matching for actualRestaurant
     if (!actualRestaurant) {
       const allDining = await DiningRestaurant.find({});
       for (const r of allDining) {
@@ -295,16 +300,30 @@ export const getRestaurantBySlug = async (req, res) => {
       }
     }
 
-    if (!actualRestaurant) {
+    // Fallback: search by name for realRestaurant to get diningSettings
+    if (!realRestaurant) {
       const allMain = await Restaurant.find({ isActive: true });
       for (const r of allMain) {
         if (r.name) {
           const nameSlug = r.name.toLowerCase().replace(/\s+/g, "-");
           if (nameSlug === slug || slugVariants.includes(nameSlug) || nameSlug.replace(/&/g, "-") === slug.replace(/&/g, "-")) {
-            actualRestaurant = r;
+            realRestaurant = r;
             break;
           }
         }
+      }
+    }
+
+    if (!actualRestaurant && realRestaurant) {
+      actualRestaurant = realRestaurant;
+    }
+
+    // Merge diningSettings into actualRestaurant
+    if (actualRestaurant && realRestaurant) {
+      actualRestaurant = actualRestaurant.toObject ? actualRestaurant.toObject() : { ...actualRestaurant };
+      actualRestaurant.diningSettings = realRestaurant.diningSettings;
+      if (realRestaurant.tableBookingPrice !== undefined) {
+        actualRestaurant.tableBookingPrice = realRestaurant.tableBookingPrice;
       }
     }
 
@@ -527,11 +546,25 @@ export const getSlotAvailability = async (req, res) => {
 // Create a new table booking
 export const createBooking = async (req, res) => {
   try {
-    const { restaurant, guests, date, timeSlot, specialRequest, guestName, guestPhone, paymentMethod } = req.body;
+    const { restaurant, guests, date, timeSlot, discount, specialRequest, guestName, guestPhone, paymentMethod } = req.body;
     const userId = req.user._id;
 
     // For UPI payment - first create a Razorpay order, booking will be confirmed after payment
     if (paymentMethod === "upi") {
+      let bookingFeeAmount = 0;
+      let restaurantDoc = await Restaurant.findById(restaurant).select("tableBookingPrice");
+      if (!restaurantDoc) {
+          restaurantDoc = await DiningRestaurant.findById(restaurant).select("tableBookingPrice");
+      }
+      
+      if (restaurantDoc && restaurantDoc.tableBookingPrice > 0) {
+          bookingFeeAmount = restaurantDoc.tableBookingPrice;
+      }
+      
+      if (bookingFeeAmount <= 0) {
+          return res.status(400).json({ success: false, message: "Table booking is free for this restaurant. Please choose Cash on Arrival." });
+      }
+
       // Create a temporary booking with pending status
       const booking = await TableBooking.create({
         restaurant,
@@ -539,6 +572,7 @@ export const createBooking = async (req, res) => {
         guests,
         date,
         timeSlot,
+        discount,
         specialRequest,
         guestName,
         guestPhone,
@@ -547,8 +581,8 @@ export const createBooking = async (req, res) => {
         paymentStatus: "pending",
       });
 
-      // Create Razorpay order (booking fee ₹1 as token amount, or you can set a fixed fee)
-      const BOOKING_FEE = 100; // ₹1 in paise (token amount)
+      // Create Razorpay order with actual booking price
+      const BOOKING_FEE = bookingFeeAmount * 100; // in paise
       const razorpayOrder = await createRazorpayOrder({
         amount: BOOKING_FEE,
         currency: "INR",
@@ -592,6 +626,7 @@ export const createBooking = async (req, res) => {
       guests,
       date,
       timeSlot,
+      discount,
       specialRequest,
       guestName,
       guestPhone,

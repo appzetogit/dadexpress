@@ -1213,27 +1213,15 @@ export default function Home() {
         return
       }
 
-      if (false) {
-        console.log("[Home][RestaurantsFetch:skipped]", {
-          requestId,
-          selectedDeliveryAddress,
-          selectedAddress,
-          currentLocation,
-          activeLocation,
-          zoneIdUsed: resolvedZoneId,
-          zoneResolveLoading,
-          zoneLoading,
-          aborted: requestId !== restaurantsRequestRef.current,
-        })
-        if (requestId !== restaurantsRequestRef.current) return
-        setRestaurantsResult([])
-        setLoadingRestaurants(false)
-        return
-      }
       if (isManualMode && resolvedZoneSource !== "manual") {
         if (requestId !== restaurantsRequestRef.current) return
-        setRestaurantsResult([])
-        setLoadingRestaurants(false)
+        // Just wait in loading state until source becomes manual
+        return
+      }
+      
+      if (!isManualMode && resolvedZoneSource !== "gps") {
+        if (requestId !== restaurantsRequestRef.current) return
+        // Just wait in loading state until source becomes gps
         return
       }
       params.zoneId = resolvedZoneId
@@ -1471,8 +1459,18 @@ export default function Home() {
 
     const prevLoc = lastFetchedLocationRef.current
     
-    // Force fetch if zone ID changed OR it's the initial load
+    // Check if the expected source matches the resolved source
+    const expectedSource = isManualMode ? "manual" : "gps"
+    const sourceMatched = resolvedZoneSource === expectedSource
+    
+    // Force fetch if zone ID changed OR it's the initial load OR source just matched
     let shouldFetch = isInitialLoadRef.current || (resolvedZoneId !== lastFetchedZoneIdRef.current)
+
+    // If source didn't match before but matches now, we must fetch!
+    // We can use a ref to track the last successful fetch's source
+    if (sourceMatched && lastFetchedLocationRef.current?.source !== expectedSource) {
+      shouldFetch = true
+    }
 
     if (!shouldFetch && prevLoc) {
       // Calculate distance to avoid re-fetching on tiny GPS jitter
@@ -1490,16 +1488,23 @@ export default function Home() {
       }
     }
 
-    if (shouldFetch) {
-      lastFetchedLocationRef.current = { lat, lng }
+    // Only commit to a fetch (and update refs) if the source actually matches what we expect
+    // Otherwise, we wait for the zone resolver to update the source
+    if (shouldFetch && sourceMatched) {
+      lastFetchedLocationRef.current = { lat, lng, source: resolvedZoneSource }
       lastFetchedZoneIdRef.current = resolvedZoneId
       isInitialLoadRef.current = false
       fetchRestaurants(appliedFilters)
+    } else if (shouldFetch && !sourceMatched) {
+      // Ensure we're in loading state while waiting for source to match
+      setLoadingRestaurants(true)
     }
   }, [
     appliedFilters,
     fetchRestaurants,
     resolvedZoneId,
+    resolvedZoneSource,
+    isManualMode,
     activeLocation?.id,
     activeLocation?.source,
     selectedAddress?.id,
@@ -2443,7 +2448,7 @@ export default function Home() {
           <div className="relative">
             {/* Loading Overlay */}
             <AnimatePresence>
-              {(isLoadingFilterResults || loadingRestaurants) && (localStorage.getItem("user_authenticated") === "true" || localStorage.getItem("user_accessToken")) && (
+              {(isLoadingFilterResults || loadingRestaurants) && (
                 <motion.div
                   className="absolute inset-0 bg-white/80 dark:bg-[#1a1a1a]/80 backdrop-blur-sm z-10 flex items-center justify-center rounded-lg min-h-[400px]"
                   initial={{ opacity: 0 }}
@@ -2458,7 +2463,7 @@ export default function Home() {
                 </motion.div>
               )}
             </AnimatePresence>
-            <div className={`space-y-12 md:space-y-16 pt-1 sm:pt-1.5 lg:pt-2 ${(isLoadingFilterResults || loadingRestaurants) && (localStorage.getItem("user_authenticated") === "true" || localStorage.getItem("user_accessToken")) ? 'opacity-50' : 'opacity-100'} transition-opacity duration-300`}>
+            <div className={`space-y-12 md:space-y-16 pt-1 sm:pt-1.5 lg:pt-2 ${(isLoadingFilterResults || loadingRestaurants) ? 'opacity-50' : 'opacity-100'} transition-opacity duration-300`}>
               {filteredRestaurants.map((restaurant) => (
                 <RestaurantItem
                   key={restaurant.id}
@@ -2490,11 +2495,10 @@ export default function Home() {
                 />
               ))}
             </div>
-            {((localStorage.getItem("user_authenticated") !== "true" && !localStorage.getItem("user_accessToken")) || 
-              (!isLoadingFilterResults && !loadingRestaurants && !zoneLoading && !zoneResolveLoading && !profileLoading && !isAddressLoading &&
+            {(!isLoadingFilterResults && !loadingRestaurants && !zoneLoading && !zoneResolveLoading && !profileLoading && !isAddressLoading &&
               !(selectedAddress && !resolvedZoneId && !selectedAddressOutOfService) &&
               !(selectedDeliveryAddress && !selectedAddress) &&
-              filteredRestaurants.length === 0)) && (
+              filteredRestaurants.length === 0) && (
                 <div className="mt-4 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-[#1a1a1a] p-4 text-sm text-gray-700 dark:text-gray-300">
                   {emptyRestaurantsMessage}
                 </div>

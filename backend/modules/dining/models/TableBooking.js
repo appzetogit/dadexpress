@@ -25,6 +25,9 @@ const tableBookingSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    discount: {
+      type: String, // e.g. "20% OFF", "No OFF"
+    },
     specialRequest: {
       type: String,
       trim: true,

@@ -6,6 +6,44 @@ import BottomNavOrders from "../components/BottomNavOrders"
 import { restaurantAPI } from "@/lib/api"
 import growCustomerBaseIcon from "@/assets/hub/icons/growyourcustomerbase.png"
 
+const getDynamicDates = (format) => {
+  const now = new Date();
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const formatDate = (date) => `${date.getDate()} ${months[date.getMonth()]}`;
+
+  if (format === 'daily') {
+    const prev = new Date(now);
+    prev.setDate(now.getDate() - 1);
+    return {
+      range: `Daily (${formatDate(now)})`,
+      comparison: `previous day (${formatDate(prev)})`
+    };
+  }
+  if (format === 'weekly') {
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - 6);
+    const prevWeekEnd = new Date(weekStart);
+    prevWeekEnd.setDate(weekStart.getDate() - 1);
+    const prevWeekStart = new Date(prevWeekEnd);
+    prevWeekStart.setDate(prevWeekEnd.getDate() - 6);
+    return {
+      range: `Weekly (${formatDate(weekStart)} - ${formatDate(now)})`,
+      comparison: `previous week (${formatDate(prevWeekStart)} - ${formatDate(prevWeekEnd)})`
+    };
+  }
+  if (format === 'monthly') {
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+    const prevMonthStart = new Date(prevMonthEnd.getFullYear(), prevMonthEnd.getMonth(), 1);
+    return {
+      range: `Monthly (${formatDate(monthStart)} - ${formatDate(monthEnd)})`,
+      comparison: `previous month (${formatDate(prevMonthStart)} - ${formatDate(prevMonthEnd)})`
+    };
+  }
+  return { range: "", comparison: "" };
+};
+
 export default function CreateOffers() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -15,8 +53,10 @@ export default function CreateOffers() {
   const [isFilterOpen, setIsFilterOpen] = useState(false)
   const [isPerformanceInfoOpen, setIsPerformanceInfoOpen] = useState(false)
   const [dateFormat, setDateFormat] = useState("weekly")
-  const [dateRange, setDateRange] = useState("Weekly (15 - 17 Dec)")
-  const [comparisonDate, setComparisonDate] = useState("previous week (8 - 10 Dec)")
+  
+  const initialDates = getDynamicDates("weekly");
+  const [dateRange, setDateRange] = useState(initialDates.range)
+  const [comparisonDate, setComparisonDate] = useState(initialDates.comparison)
   
   // Restaurant data state
   const [restaurant, setRestaurant] = useState(null)
@@ -120,6 +160,12 @@ export default function CreateOffers() {
       id: "grow-customers",
       title: "Grow your customer base",
       description: "Offers to increase your customers and orders",
+      icon: growCustomerBaseIcon,
+    },
+    {
+      id: "dining-discounts",
+      title: "Dining Table Discounts",
+      description: "Manage table booking slots and discount percentages",
       icon: growCustomerBaseIcon,
     },
   ]
@@ -593,19 +639,10 @@ export default function CreateOffers() {
                 <button
                   onClick={() => {
                     // Update date range based on selected format
-                    const dateRanges = {
-                      daily: "Daily (17 Dec)",
-                      weekly: "Weekly (15 - 17 Dec)",
-                      monthly: "Monthly (1 - 31 Dec)",
-                    }
-                    const comparisonDates = {
-                      daily: "previous day (16 Dec)",
-                      weekly: "previous week (8 - 10 Dec)",
-                      monthly: "previous month (1 - 30 Nov)",
-                    }
-                    setDateRange(dateRanges[dateFormat])
-                    setComparisonDate(comparisonDates[dateFormat])
-                    setIsFilterOpen(false)
+                    const dynamicDates = getDynamicDates(dateFormat);
+                    setDateRange(dynamicDates.range);
+                    setComparisonDate(dynamicDates.comparison);
+                    setIsFilterOpen(false);
                   }}
                   className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold text-sm hover:bg-blue-700 transition-colors"
                 >

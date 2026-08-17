@@ -964,11 +964,88 @@ export default function ItemDetailsPage() {
   }
 }
 
-const handleDelete = () => {
-  // Delete logic here
-  console.log("Deleting item:", id)
-  const backPath = adminMode ? `/admin/restaurants/${restaurantId}/menu` : "/restaurant/hub-menu"
-  navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : backPath)
+const handleDelete = async () => {
+  if (!window.confirm("Are you sure you want to delete this item?")) {
+    return;
+  }
+
+  try {
+    setIsSaving(true);
+    
+    // Get current menu
+    const menuResponse = adminMode
+      ? await adminAPI.getRestaurantMenu(restaurantId)
+      : await restaurantAPI.getMenu();
+      
+    let menu = menuResponse.data?.data?.menu;
+    let sections = menu?.sections || [];
+    
+    const searchId = String(itemData?.id || id || '').trim();
+    const urlId = String(id || '').trim();
+    let itemRemoved = false;
+
+    for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex++) {
+      const section = sections[sectionIndex];
+
+      // Check items in section
+      if (section.items && Array.isArray(section.items)) {
+        const itemIndex = section.items.findIndex(item => {
+          const itemIdStr = String(item.id || item._id || '').trim();
+          return itemIdStr === searchId || itemIdStr === urlId;
+        });
+        if (itemIndex !== -1) {
+          section.items.splice(itemIndex, 1);
+          itemRemoved = true;
+          break;
+        }
+      }
+
+      // Check items in subsections
+      if (!itemRemoved && section.subsections && Array.isArray(section.subsections)) {
+        for (let subIndex = 0; subIndex < section.subsections.length; subIndex++) {
+          const subsection = section.subsections[subIndex];
+          if (subsection.items && Array.isArray(subsection.items)) {
+            const subItemIndex = subsection.items.findIndex(item => {
+              const itemIdStr = String(item.id || item._id || '').trim();
+              return itemIdStr === searchId || itemIdStr === urlId;
+            });
+            if (subItemIndex !== -1) {
+              subsection.items.splice(subItemIndex, 1);
+              itemRemoved = true;
+              break;
+            }
+          }
+        }
+        if (itemRemoved) break;
+      }
+    }
+
+    if (!itemRemoved) {
+      toast.error("Item not found in menu to delete.");
+      setIsSaving(false);
+      return;
+    }
+
+    // Save updated menu
+    const updateResponse = adminMode
+      ? await adminAPI.updateRestaurantMenu(restaurantId, { sections })
+      : await restaurantAPI.updateMenu({ sections });
+
+    if (updateResponse.data?.success) {
+      toast.success("Item deleted successfully");
+      await new Promise(resolve => setTimeout(resolve, 300));
+      const backPath = adminMode ? `/admin/restaurants/${restaurantId}/menu` : "/restaurant/hub-menu";
+      navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : backPath);
+      window.dispatchEvent(new CustomEvent('foodsChanged'));
+    } else {
+      toast.error(updateResponse.data?.message || "Failed to delete item");
+    }
+  } catch (error) {
+    console.error('Error deleting item:', error);
+    toast.error(error.response?.data?.message || error.message || "Failed to delete item.");
+  } finally {
+    setIsSaving(false);
+  }
 }
 
 return (
