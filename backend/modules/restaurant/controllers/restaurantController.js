@@ -31,21 +31,21 @@ const calculateDistance = (lat1, lng1, lat2, lng2) => {
  */
 function isPointInZone(lat, lng, zoneCoordinates) {
   if (!zoneCoordinates || zoneCoordinates.length < 3) return false;
-  
+
   let inside = false;
   for (let i = 0, j = zoneCoordinates.length - 1; i < zoneCoordinates.length; j = i++) {
     const coordI = zoneCoordinates[i];
     const coordJ = zoneCoordinates[j];
-    
+
     const xi = typeof coordI === 'object' ? (coordI.latitude || coordI.lat) : null;
     const yi = typeof coordI === 'object' ? (coordI.longitude || coordI.lng) : null;
     const xj = typeof coordJ === 'object' ? (coordJ.latitude || coordJ.lat) : null;
     const yj = typeof coordJ === 'object' ? (coordJ.longitude || coordJ.lng) : null;
-    
+
     if (xi === null || yi === null || xj === null || yj === null) continue;
-    
-    const intersect = ((yi > lng) !== (yj > lng)) && 
-                     (lat < (xj - xi) * (lng - yi) / (yj - yi) + xi);
+
+    const intersect = ((yi > lng) !== (yj > lng)) &&
+      (lat < (xj - xi) * (lng - yi) / (yj - yi) + xi);
     if (intersect) inside = !inside;
   }
   return inside;
@@ -60,22 +60,22 @@ function isPointInZone(lat, lng, zoneCoordinates) {
  */
 function isRestaurantInAnyZone(restaurantLat, restaurantLng, activeZones) {
   if (!restaurantLat || !restaurantLng) return false;
-  
+
   for (const zone of activeZones) {
     if (!zone.coordinates || zone.coordinates.length < 3) continue;
-    
+
     let isInZone = false;
     if (typeof zone.containsPoint === 'function') {
       isInZone = zone.containsPoint(restaurantLat, restaurantLng);
     } else {
       isInZone = isPointInZone(restaurantLat, restaurantLng, zone.coordinates);
     }
-    
+
     if (isInZone) {
       return true;
     }
   }
-  
+
   return false;
 }
 
@@ -118,7 +118,7 @@ const isRestaurantOpenSync = (restaurant, outletTimings) => {
         return false;
       }
     } else if (openDays.length > 0 && !isDayMarkedOpen(currentDay)) {
-       return false;
+      return false;
     }
 
     const openMin = timeToMinutesLocal(restaurant.deliveryTimings?.openingTime);
@@ -155,22 +155,22 @@ const isRestaurantOpenSync = (restaurant, outletTimings) => {
  */
 function getRestaurantZoneId(restaurantLat, restaurantLng, activeZones) {
   if (!restaurantLat || !restaurantLng) return null;
-  
+
   for (const zone of activeZones) {
     if (!zone.coordinates || zone.coordinates.length < 3) continue;
-    
+
     let isInZone = false;
     if (typeof zone.containsPoint === 'function') {
       isInZone = zone.containsPoint(restaurantLat, restaurantLng);
     } else {
       isInZone = isPointInZone(restaurantLat, restaurantLng, zone.coordinates);
     }
-    
+
     if (isInZone) {
       return zone._id.toString();
     }
   }
-  
+
   return null;
 }
 
@@ -211,7 +211,7 @@ export const getRestaurants = async (req, res) => {
     }
 
     // Build query - Only show active AND approved restaurants
-    const query = { 
+    const query = {
       isActive: true,
       approvedAt: { $ne: null }
     };
@@ -380,7 +380,7 @@ export const getRestaurants = async (req, res) => {
       if (!zoneDoc?.coordinates || zoneDoc.coordinates.length < 3) return true;
       const coords = getRestaurantCoords(restaurantDoc);
       if (!coords) return false;
-      
+
       // Calculate Bounding Box of zone if not already calculated to short-circuit the math loop
       if (!zoneDoc.bbox) {
         let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
@@ -401,7 +401,7 @@ export const getRestaurants = async (req, res) => {
       const margin = 0.015;
       if (zoneDoc.bbox.minLat !== 90) {
         if (coords.lat < zoneDoc.bbox.minLat - margin || coords.lat > zoneDoc.bbox.maxLat + margin ||
-            coords.lng < zoneDoc.bbox.minLng - margin || coords.lng > zoneDoc.bbox.maxLng + margin) {
+          coords.lng < zoneDoc.bbox.minLng - margin || coords.lng > zoneDoc.bbox.maxLng + margin) {
           return false; // Restaurant is too far away to even bother doing the heavy math loop
         }
       }
@@ -411,7 +411,7 @@ export const getRestaurants = async (req, res) => {
 
       // 2. Buffer check (1.5km margin to handle edge cases and slightly inaccurate polygons)
       // This matches the detection logic in zoneController to prevent "Service not available" loops.
-      const BUFFER_DISTANCE = 1.5; 
+      const BUFFER_DISTANCE = 1.5;
       for (const vertex of zoneDoc.coordinates) {
         const vLat = vertex.latitude || vertex.lat;
         const vLng = vertex.longitude || vertex.lng;
@@ -421,7 +421,7 @@ export const getRestaurants = async (req, res) => {
           }
         }
       }
-      
+
       return false;
     };
 
@@ -520,12 +520,15 @@ export const getRestaurants = async (req, res) => {
 
     // 4. Bulk fetch all relevant data in ONE go to solve N+1 performance bottleneck
     const restaurantIds = restaurants.map(r => r._id);
-    
+
     // Fetch all menus and outlet timings for these restaurants in parallel
+    const menuQuery = Menu.find({ restaurant: { $in: restaurantIds }, isActive: true });
+    if (String(req.query.includeFullMenu) !== 'true') {
+      menuQuery.select('restaurant sections.name sections.isEnabled sections.items.id sections.items._id sections.items.name sections.items.price sections.items.originalPrice sections.items.image sections.items.images sections.items.foodType sections.items.discountAmount sections.items.description sections.items.isAvailable sections.items.category sections.subsections.name sections.subsections.items.id sections.subsections.items._id sections.subsections.items.name sections.subsections.items.price sections.subsections.items.originalPrice sections.subsections.items.image sections.subsections.items.images sections.subsections.items.foodType sections.subsections.items.discountAmount sections.subsections.items.description sections.subsections.items.isAvailable sections.subsections.items.category');
+    }
+    
     const [allMenus, allTimings] = await Promise.all([
-      Menu.find({ restaurant: { $in: restaurantIds }, isActive: true })
-        .select(req.query.includeFullMenu === 'true' ? '' : 'restaurant sections.name sections.isEnabled sections.items.id sections.items._id sections.items.name sections.items.price sections.items.originalPrice sections.items.image sections.items.images sections.items.foodType sections.items.discountAmount sections.items.description sections.items.isAvailable sections.subsections.name sections.subsections.items.id sections.subsections.items._id sections.subsections.items.name sections.subsections.items.price sections.subsections.items.originalPrice sections.subsections.items.image sections.subsections.items.images sections.subsections.items.foodType sections.subsections.items.discountAmount sections.subsections.items.description sections.subsections.items.isAvailable')
-        .lean(),
+      menuQuery.lean(),
       OutletTimings.find({ restaurantId: { $in: restaurantIds }, isActive: true }).lean()
     ]);
 
@@ -577,7 +580,7 @@ export const getRestaurants = async (req, res) => {
             return false;
           }
         } else if (openDays.length > 0 && !isDayMarkedOpen(currentDay)) {
-           return false;
+          return false;
         }
 
         const openMin = timeToMinutesLocal(restaurant.deliveryTimings?.openingTime);
@@ -615,7 +618,7 @@ export const getRestaurants = async (req, res) => {
       // Menu processing
       const menu = menuLookup.get(r._id.toString());
       const menuItems = [];
-      const MAX_ITEMS = req.query.includeFullMenu === 'true' ? 1000 : 6;
+      const MAX_ITEMS = 1000; // Always return up to 1000 items to support frontend category filtering without needing the massive fullMenu object
 
       if (menu && menu.sections) {
         menu.sections.forEach(section => {
@@ -660,8 +663,8 @@ export const getRestaurants = async (req, res) => {
       return {
         ...r,
         id: r._id.toString(),
-        cuisine: r.cuisines && r.cuisines.length > 0 
-          ? r.cuisines.join(' • ') 
+        cuisine: r.cuisines && r.cuisines.length > 0
+          ? r.cuisines.join(' • ')
           : "Multi-cuisine",
         price: r.priceRange || "$$",
         image: r.profileImage?.url || r.menuImages?.[0]?.url || "",
@@ -670,7 +673,7 @@ export const getRestaurants = async (req, res) => {
         isAcceptingOrders: acceptingOrders,
         status: status,
         // Also provide raw menu structure if requested for complex frontend processing
-        fullMenu: req.query.includeFullMenu === 'true' ? menu : undefined
+        fullMenu: String(req.query.includeFullMenu) === 'true' ? menu : undefined
       };
     });
 
@@ -717,24 +720,24 @@ export const getRestaurants = async (req, res) => {
 export const getRestaurantById = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     // Build query conditions - only include _id if it's a valid ObjectId
     const queryConditions = {
       isActive: true,
     };
-    
+
     const orConditions = [
       { restaurantId: id },
       { slug: id },
     ];
-    
+
     // Only add _id condition if the id is a valid ObjectId
     if (mongoose.Types.ObjectId.isValid(id) && id.length === 24) {
       orConditions.push({ _id: new mongoose.Types.ObjectId(id) });
     }
-    
+
     queryConditions.$or = orConditions;
-    
+
     const restaurant = await Restaurant.findOne(queryConditions)
       .select('-owner -createdAt -updatedAt')
       .lean();
@@ -758,7 +761,7 @@ export const getRestaurantById = async (req, res) => {
 
     // NEW: Check if restaurant is currently open based on outlet timings (Automatic Open/Close)
     const isCurrentlyOpen = await OutletTimings.isRestaurantOpen(restaurant._id);
-    
+
     // Status Diagnostics - consistent with list view
     if (!isCurrentlyOpen || restaurant.isAcceptingOrders === false) {
       const reason = !isCurrentlyOpen ? "Timings" : "Manual Closure";
@@ -790,7 +793,7 @@ export const getRestaurantById = async (req, res) => {
 export const getRestaurantByOwner = async (req, res) => {
   try {
     const restaurantId = req.restaurant._id;
-    
+
     const restaurant = await Restaurant.findById(restaurantId)
       .lean();
 
@@ -811,7 +814,7 @@ export const getRestaurantByOwner = async (req, res) => {
 export const createRestaurantFromOnboarding = async (onboardingData, restaurantId) => {
   try {
     const { step1, step2, step4 } = onboardingData;
-    
+
     if (!step1 || !step2) {
       throw new Error('Incomplete onboarding data: Missing step1 or step2');
     }
@@ -823,7 +826,7 @@ export const createRestaurantFromOnboarding = async (onboardingData, restaurantI
 
     // Find existing restaurant
     const existing = await Restaurant.findById(restaurantId);
-    
+
     if (!existing) {
       throw new Error('Restaurant not found');
     }
@@ -853,7 +856,7 @@ export const createRestaurantFromOnboarding = async (onboardingData, restaurantI
     } else {
       slug = existing.slug; // Keep existing slug
     }
-    
+
     // Update existing restaurant with latest onboarding data
     existing.name = step1.restaurantName || existing.name;
     existing.slug = slug;
@@ -862,7 +865,7 @@ export const createRestaurantFromOnboarding = async (onboardingData, restaurantI
     existing.ownerPhone = step1.ownerPhone || existing.ownerPhone;
     existing.primaryContactNumber = step1.primaryContactNumber || existing.primaryContactNumber;
     if (step1.location) existing.location = step1.location;
-    
+
     // Update step2 data - always update even if empty arrays
     if (step2) {
       if (step2.profileImageUrl) {
@@ -881,7 +884,7 @@ export const createRestaurantFromOnboarding = async (onboardingData, restaurantI
         existing.openDays = step2.openDays; // Update even if empty array
       }
     }
-    
+
     // Update step4 data if available
     if (step4) {
       if (step4.estimatedDeliveryTime) existing.estimatedDeliveryTime = step4.estimatedDeliveryTime;
@@ -894,10 +897,10 @@ export const createRestaurantFromOnboarding = async (onboardingData, restaurantI
       if (step4.tableBookingPrice !== undefined) existing.tableBookingPrice = step4.tableBookingPrice;
       if (step4.diningSettings) existing.diningSettings = step4.diningSettings;
     }
-    
+
     existing.isActive = true; // Ensure it's active
     existing.isAcceptingOrders = true; // Ensure it's accepting orders
-    
+
     try {
       await existing.save();
     } catch (saveError) {
@@ -973,7 +976,7 @@ export const updateRestaurantProfile = asyncHandler(async (req, res) => {
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, '-')
           .replace(/(^-|-$)/g, '');
-        
+
         // Check if slug already exists for another restaurant
         let slug = baseSlug;
         const existingBySlug = await Restaurant.findOne({ slug: baseSlug, _id: { $ne: restaurantId } });
@@ -1001,15 +1004,15 @@ export const updateRestaurantProfile = asyncHandler(async (req, res) => {
       if (location.latitude && location.longitude && !location.coordinates) {
         location.coordinates = [location.longitude, location.latitude]; // GeoJSON format: [lng, lat]
       }
-      
+
       // If coordinates array exists but no lat/lng, extract them
       if (location.coordinates && Array.isArray(location.coordinates) && location.coordinates.length >= 2) {
         if (!location.longitude) location.longitude = location.coordinates[0];
         if (!location.latitude) location.latitude = location.coordinates[1];
       }
-      
+
       updateData.location = location;
-      
+
       // Sync lat/long to Firebase Realtime Database (non-blocking)
       if (location.latitude && location.longitude) {
         const { syncUserRealtime } = await import('../../delivery/services/firebaseTrackingService.js');
@@ -1215,13 +1218,13 @@ export const uploadMenuImage = asyncHandler(async (req, res) => {
     if (!restaurant.menuImages) {
       restaurant.menuImages = [];
     }
-    
+
     // Replace the first menu image (main banner) instead of adding a new one
     const newMenuImage = {
       url: result.secure_url,
       publicId: result.public_id
     };
-    
+
     if (restaurant.menuImages.length > 0) {
       // Replace the first image (main banner)
       restaurant.menuImages[0] = newMenuImage;
@@ -1229,7 +1232,7 @@ export const uploadMenuImage = asyncHandler(async (req, res) => {
       // Add as first image if array is empty
       restaurant.menuImages.push(newMenuImage);
     }
-    
+
     await restaurant.save();
 
     return successResponse(res, 200, 'Menu image uploaded successfully', {
@@ -1251,7 +1254,7 @@ export const uploadMenuImage = asyncHandler(async (req, res) => {
       restaurantId: req.restaurant?._id,
       cloudinaryError: error.http_code || error.name === 'Error' ? error.message : null
     });
-    
+
     // Provide more specific error message
     let errorMessage = 'Failed to upload menu image';
     if (error.message) {
@@ -1259,7 +1262,7 @@ export const uploadMenuImage = asyncHandler(async (req, res) => {
     } else if (error.http_code) {
       errorMessage += `: Cloudinary error (${error.http_code})`;
     }
-    
+
     return errorResponse(res, 500, errorMessage);
   }
 });
@@ -1345,9 +1348,9 @@ export const deleteRestaurantAccount = asyncHandler(async (req, res) => {
     // Delete the restaurant from database
     await Restaurant.findByIdAndDelete(restaurantId);
 
-    console.log(`Restaurant account deleted: ${restaurantId}`, { 
+    console.log(`Restaurant account deleted: ${restaurantId}`, {
       restaurantId: restaurant.restaurantId,
-      name: restaurant.name 
+      name: restaurant.name
     });
 
     return successResponse(res, 200, 'Restaurant account deleted successfully');
@@ -1361,7 +1364,7 @@ export const deleteRestaurantAccount = asyncHandler(async (req, res) => {
 export const getRestaurantsWithDishesUnder250 = async (req, res) => {
   try {
     const { zoneId } = req.query;
-    
+
     if (!zoneId) {
       return successResponse(res, 200, 'Please select a location within a service zone', {
         restaurants: [],
@@ -1405,7 +1408,7 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
       if (!zoneDoc?.coordinates || zoneDoc.coordinates.length < 3) return true;
       const coords = getRestaurantCoords(restaurantDoc);
       if (!coords) return false;
-      
+
       if (!zoneDoc.bbox) {
         let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
         for (const v of zoneDoc.coordinates) {
@@ -1424,14 +1427,14 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
       const margin = 0.015;
       if (zoneDoc.bbox.minLat !== 90) {
         if (coords.lat < zoneDoc.bbox.minLat - margin || coords.lat > zoneDoc.bbox.maxLat + margin ||
-            coords.lng < zoneDoc.bbox.minLng - margin || coords.lng > zoneDoc.bbox.maxLng + margin) {
+          coords.lng < zoneDoc.bbox.minLng - margin || coords.lng > zoneDoc.bbox.maxLng + margin) {
           return false;
         }
       }
 
       if (isPointInZone(coords.lat, coords.lng, zoneDoc.coordinates)) return true;
 
-      const BUFFER_DISTANCE = 1.5; 
+      const BUFFER_DISTANCE = 1.5;
       for (const vertex of zoneDoc.coordinates) {
         const vLat = vertex.latitude || vertex.lat;
         const vLng = vertex.longitude || vertex.lng;
@@ -1455,12 +1458,12 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
 
     const MAX_PRICE = 250;
     const restaurantIds = restaurantsInZone.map(r => r._id);
-    
+
     // 3. Parallel Fetch Menus and Timings - REDUCED payload
     const [allMenus, allTimings] = await Promise.all([
       Menu.find({ restaurant: { $in: restaurantIds }, isActive: true })
-          .select("restaurant sections.name sections.isEnabled sections.items.id sections.items._id sections.items.name sections.items.price sections.items.originalPrice sections.items.image sections.items.images sections.items.foodType sections.items.discountAmount sections.items.description sections.items.isAvailable sections.subsections.name sections.subsections.items.id sections.subsections.items._id sections.subsections.items.name sections.subsections.items.price sections.subsections.items.originalPrice sections.subsections.items.image sections.subsections.items.images sections.subsections.items.foodType sections.subsections.items.discountAmount sections.subsections.items.description sections.subsections.items.isAvailable")
-          .lean(),
+        .select("restaurant sections.name sections.isEnabled sections.items.id sections.items._id sections.items.name sections.items.price sections.items.originalPrice sections.items.image sections.items.images sections.items.foodType sections.items.discountAmount sections.items.description sections.items.isAvailable sections.subsections.name sections.subsections.items.id sections.subsections.items._id sections.subsections.items.name sections.subsections.items.price sections.subsections.items.originalPrice sections.subsections.items.image sections.subsections.items.images sections.subsections.items.foodType sections.subsections.items.discountAmount sections.subsections.items.description sections.subsections.items.isAvailable")
+        .lean(),
       OutletTimings.find({ restaurantId: { $in: restaurantIds }, isActive: true }).select("restaurantId timings").lean()
     ]);
 
@@ -1497,11 +1500,11 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
       if (!menu || !menu.sections) continue;
 
       const dishesUnder250 = [];
-      
+
       // Efficiently scan sections and items
       for (const section of menu.sections) {
         if (section.isEnabled === false) continue;
-        
+
         // Check items
         const items = section.items || [];
         for (const item of items) {
@@ -1521,7 +1524,7 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
           }
           if (dishesUnder250.length >= 10) break; // Limit items per restaurant for performance
         }
-        
+
         // Check subsections if needed
         if (dishesUnder250.length < 10) {
           for (const sub of (section.subsections || [])) {
@@ -1567,7 +1570,7 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
           menuItems: dishesUnder250
         });
       }
-      
+
       if (results.length >= 50) break; // Return top 50 restaurants for optimal frontend speed
     }
 
@@ -1581,7 +1584,7 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
       restaurants: results,
       total: results.length,
     });
-    
+
   } catch (error) {
     console.error('Error in Under 250:', error);
     return errorResponse(res, 500, 'Performance error');

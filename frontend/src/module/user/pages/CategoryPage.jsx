@@ -52,6 +52,7 @@ export default function CategoryPage() {
   const rightContentRef = useRef(null)
   const categoryScrollRef = useRef(null)
   const restaurantsRequestRef = useRef(0)
+
   // State for categories from admin
   const [categories, setCategories] = useState([])
   const [loadingCategories, setLoadingCategories] = useState(true)
@@ -60,6 +61,15 @@ export default function CategoryPage() {
   const [restaurantsData, setRestaurantsData] = useState([])
   const [loadingRestaurants, setLoadingRestaurants] = useState(true)
   const [categoryKeywords, setCategoryKeywords] = useState({})
+
+  // Sync selectedCategory with URL param when navigating back/forward
+  useEffect(() => {
+    if (category) {
+      setSelectedCategory(category.toLowerCase())
+    } else {
+      setSelectedCategory('all')
+    }
+  }, [category])
 
   // Fetch categories from admin API
   useEffect(() => {
@@ -113,9 +123,9 @@ export default function CategoryPage() {
     fetchCategories()
   }, [])
 
-  // Helper function to check if menu has dishes matching category keywords
-  const checkCategoryInMenu = (menu, categoryId) => {
-    if (!menu || !menu.sections || !Array.isArray(menu.sections)) {
+  // Helper function to check if a category exists in the menu items
+  const checkCategoryInMenu = (menuItems, categoryId) => {
+    if (!menuItems || !Array.isArray(menuItems)) {
       return false
     }
 
@@ -124,51 +134,16 @@ export default function CategoryPage() {
       return false
     }
 
-    for (const section of menu.sections) {
-      const sectionNameLower = (section.name || '').toLowerCase()
-      if (keywords.some(keyword => sectionNameLower.includes(keyword))) {
-        return true
-      }
-
-      // Check section items
-      if (section.items && Array.isArray(section.items)) {
-        for (const item of section.items) {
-          const itemNameLower = (item.name || '').toLowerCase()
-          const itemCategoryLower = (item.category || '').toLowerCase()
-
-          if (keywords.some(keyword =>
-            itemNameLower.includes(keyword) || itemCategoryLower.includes(keyword)
-          )) {
-            return true
-          }
-        }
-      }
-
-      // Check subsection items
-      if (section.subsections && Array.isArray(section.subsections)) {
-        for (const subsection of section.subsections) {
-          if (subsection.items && Array.isArray(subsection.items)) {
-            for (const item of subsection.items) {
-              const itemNameLower = (item.name || '').toLowerCase()
-              const itemCategoryLower = (item.category || '').toLowerCase()
-
-              if (keywords.some(keyword =>
-                itemNameLower.includes(keyword) || itemCategoryLower.includes(keyword)
-              )) {
-                return true
-              }
-            }
-          }
-        }
-      }
-    }
-
-    return false
+    return menuItems.some(item => {
+      const itemNameLower = (item.name || '').toLowerCase()
+      const itemCategoryLower = (item.category || '').toLowerCase()
+      return keywords.some(keyword => itemNameLower.includes(keyword) || itemCategoryLower.includes(keyword))
+    })
   }
 
   // Helper function to get ALL dishes matching a category from menu (returns array of dish info)
-  const getAllCategoryDishesFromMenu = (menu, categoryId) => {
-    if (!menu || !menu.sections || !Array.isArray(menu.sections)) {
+  const getAllCategoryDishesFromMenu = (menuItems, categoryId) => {
+    if (!menuItems || !Array.isArray(menuItems)) {
       return []
     }
 
@@ -177,140 +152,39 @@ export default function CategoryPage() {
       return []
     }
 
-    const matchingDishes = []
-
-    for (const section of menu.sections) {
-      // Process items in section
-      if (section.items && Array.isArray(section.items)) {
-        for (const item of section.items) {
-          const itemNameLower = (item.name || '').toLowerCase()
-          const itemCategoryLower = (item.category || '').toLowerCase()
-
-          if (keywords.some(keyword =>
-            itemNameLower.includes(keyword) || itemCategoryLower.includes(keyword)
-          )) {
-            // Calculate final price considering discounts
-            const originalPrice = item.originalPrice || item.price || 0
-            const discountPercent = item.discountPercent || 0
-            const finalPrice = discountPercent > 0
-              ? Math.round(originalPrice * (1 - discountPercent / 100))
-              : originalPrice
-
-            // Get dish image (prioritize item image, then section image)
-            const dishImage = item.image?.url || item.image || section.image?.url || section.image || null
-
-            matchingDishes.push({
-              name: item.name,
-              price: finalPrice,
-              image: dishImage,
-              originalPrice: originalPrice,
-              itemId: item._id || item.id || `${item.name}-${finalPrice}`,
-              foodType: item.foodType, // Include foodType for vegMode filtering
-            })
-          }
-        }
-      }
-
-      // Process items in subsections
-      if (section.subsections && Array.isArray(section.subsections)) {
-        for (const subsection of section.subsections) {
-          if (subsection.items && Array.isArray(subsection.items)) {
-            for (const item of subsection.items) {
-              const itemNameLower = (item.name || '').toLowerCase()
-              const itemCategoryLower = (item.category || '').toLowerCase()
-
-              if (keywords.some(keyword =>
-                itemNameLower.includes(keyword) || itemCategoryLower.includes(keyword)
-              )) {
-                // Calculate final price
-                const originalPrice = item.originalPrice || item.price || 0
-                const discountPercent = item.discountPercent || 0
-                const finalPrice = discountPercent > 0
-                  ? Math.round(originalPrice * (1 - discountPercent / 100))
-                  : originalPrice
-
-                // Get dish image
-                const dishImage = item.image?.url || item.image || subsection.image?.url || subsection.image || section.image?.url || section.image || null
-
-                matchingDishes.push({
-                  name: item.name,
-                  price: finalPrice,
-                  image: dishImage,
-                  originalPrice: originalPrice,
-                  itemId: item._id || item.id || `${item.name}-${finalPrice}`,
-                  foodType: item.foodType,
-                })
-              }
-            }
-          }
-        }
-      }
-    }
-
-    return matchingDishes
+    return menuItems.filter(item => {
+      const itemNameLower = (item.name || '').toLowerCase()
+      const itemCategoryLower = (item.category || '').toLowerCase()
+      return keywords.some(keyword => itemNameLower.includes(keyword) || itemCategoryLower.includes(keyword))
+    }).map(item => ({
+      name: item.name,
+      price: item.price,
+      image: item.image,
+      originalPrice: item.originalPrice || item.price,
+      itemId: item.id || item.itemId || `${item.name}-${item.price}`,
+      foodType: item.isVeg ? 'Veg' : 'Non-Veg',
+    }))
   }
 
   // Helper function to get FIRST featured dish for a category from menu (for backward compatibility)
-  const getCategoryDishFromMenu = (menu, categoryId) => {
-    const allDishes = getAllCategoryDishesFromMenu(menu, categoryId)
+  const getCategoryDishFromMenu = (menuItems, categoryId) => {
+    const allDishes = getAllCategoryDishesFromMenu(menuItems, categoryId)
     return allDishes.length > 0 ? allDishes[0] : null
   }
 
   // Helper function to get ALL menu dishes from a restaurant menu
-  const getAllMenuDishesFromMenu = (menu) => {
-    if (!menu || !menu.sections || !Array.isArray(menu.sections)) {
+  const getAllMenuDishesFromMenu = (menuItems) => {
+    if (!menuItems || !Array.isArray(menuItems)) {
       return []
     }
-
-    const dishes = []
-
-    for (const section of menu.sections) {
-      if (section.items && Array.isArray(section.items)) {
-        for (const item of section.items) {
-          const originalPrice = item.originalPrice || item.price || 0
-          const discountPercent = item.discountPercent || 0
-          const finalPrice = discountPercent > 0
-            ? Math.round(originalPrice * (1 - discountPercent / 100))
-            : originalPrice
-          const dishImage = item.image?.url || item.image || (Array.isArray(item.images) ? item.images[0] : null) || null
-
-          dishes.push({
-            name: item.name,
-            price: finalPrice,
-            image: dishImage,
-            originalPrice,
-            itemId: item._id || item.id || `${item.name}-${finalPrice}`,
-            foodType: item.foodType,
-          })
-        }
-      }
-
-      if (section.subsections && Array.isArray(section.subsections)) {
-        for (const subsection of section.subsections) {
-          if (subsection.items && Array.isArray(subsection.items)) {
-            for (const item of subsection.items) {
-              const originalPrice = item.originalPrice || item.price || 0
-              const discountPercent = item.discountPercent || 0
-              const finalPrice = discountPercent > 0
-                ? Math.round(originalPrice * (1 - discountPercent / 100))
-                : originalPrice
-              const dishImage = item.image?.url || item.image || (Array.isArray(item.images) ? item.images[0] : null) || null
-
-              dishes.push({
-                name: item.name,
-                price: finalPrice,
-                image: dishImage,
-                originalPrice,
-                itemId: item._id || item.id || `${item.name}-${finalPrice}`,
-                foodType: item.foodType,
-              })
-            }
-          }
-        }
-      }
-    }
-
-    return dishes
+    return menuItems.map(item => ({
+      name: item.name,
+      price: item.price,
+      image: item.image,
+      originalPrice: item.originalPrice || item.price,
+      itemId: item.id || item.itemId || `${item.name}-${item.price}`,
+      foodType: item.isVeg ? 'Veg' : 'Non-Veg',
+    }))
   }
 
   // Fetch restaurants from API
@@ -327,8 +201,8 @@ export default function CategoryPage() {
       try {
         setLoadingRestaurants(true)
         setRestaurantsData([])
-        // Use includeFullMenu=true to fetch all menus in a single bulk request
-        const params = { includeFullMenu: true }
+        // Do not use includeFullMenu=true to save massive network payload, since backend always returns 1000 items now
+        const params = {}
         if (zoneId) {
           params.zoneId = zoneId
         }
@@ -404,36 +278,25 @@ export default function CategoryPage() {
               }
             })
 
-          // Use the full menu already provided by the bulk API response
+          // Use the items directly provided by the bulk API response
           const restaurantsWithMenus = transformedRestaurants.map((restaurant) => {
             const originalData = restaurantsArray.find(r => (r.restaurantId || r._id) === restaurant.restaurantId)
-            const menu = originalData?.fullMenu || null
+            const menuItems = originalData?.menuItems || []
             
-            const hasPaneer = menu ? checkCategoryInMenu(menu, 'paneer-tikka') : false
+            const hasPaneer = originalData?.hasPaneer || checkCategoryInMenu(menuItems, 'paneer-tikka')
 
             let featuredDish = restaurant.featuredDish
             let featuredPrice = restaurant.featuredPrice
 
-            if (menu && (!featuredDish || !featuredPrice)) {
-              for (const section of (menu.sections || [])) {
-                if (section.items && section.items.length > 0) {
-                  const firstItem = section.items[0]
-                  if (!featuredDish) featuredDish = firstItem.name
-                  if (!featuredPrice) {
-                    const originalPrice = firstItem.originalPrice || firstItem.price || 0
-                    const discountPercent = firstItem.discountPercent || 0
-                    featuredPrice = discountPercent > 0
-                      ? Math.round(originalPrice * (1 - discountPercent / 100))
-                      : originalPrice
-                  }
-                  break
-                }
-              }
+            if (menuItems.length > 0 && (!featuredDish || !featuredPrice)) {
+              const firstItem = menuItems[0]
+              if (!featuredDish) featuredDish = firstItem.name
+              if (!featuredPrice) featuredPrice = firstItem.price
             }
 
             return {
               ...restaurant,
-              menu: menu,
+              menuItems: menuItems,
               hasPaneer: hasPaneer,
               featuredDish: featuredDish || null,
               featuredPrice: featuredPrice || null,
@@ -551,11 +414,12 @@ export default function CategoryPage() {
       const expandedDishes = []
 
       filtered.forEach(r => {
-        if (r.menu) {
-          const hasCategoryItem = checkCategoryInMenu(r.menu, selectedCategory)
+        const menuObj = r.menuItems || r.fullMenu || r.menu;
+        if (menuObj) {
+          const hasCategoryItem = checkCategoryInMenu(menuObj, selectedCategory)
           if (hasCategoryItem) {
             // Get ALL matching dishes for this category
-            const categoryDishes = getAllCategoryDishesFromMenu(r.menu, selectedCategory)
+            const categoryDishes = getAllCategoryDishesFromMenu(menuObj, selectedCategory)
 
             if (categoryDishes.length > 0) {
               // Create one card per dish
@@ -650,7 +514,8 @@ export default function CategoryPage() {
       }
 
       filtered.forEach(r => {
-        const allMenuDishes = r.menu ? getAllMenuDishesFromMenu(r.menu) : []
+        const menuObj = r.menuItems || r.fullMenu || r.menu;
+        const allMenuDishes = menuObj ? getAllMenuDishesFromMenu(menuObj) : []
 
         if (allMenuDishes.length > 0) {
           allMenuDishes.forEach((dish, index) => {
@@ -684,11 +549,12 @@ export default function CategoryPage() {
       const expandedDishes = []
 
       filtered.forEach(r => {
-        if (r.menu) {
-          const hasCategoryItem = checkCategoryInMenu(r.menu, selectedCategory)
+        const menuObj = r.menuItems || r.fullMenu || r.menu;
+        if (menuObj) {
+          const hasCategoryItem = checkCategoryInMenu(menuObj, selectedCategory)
           if (hasCategoryItem) {
             // Get ALL matching dishes for this category
-            const categoryDishes = getAllCategoryDishesFromMenu(r.menu, selectedCategory)
+            const categoryDishes = getAllCategoryDishesFromMenu(menuObj, selectedCategory)
 
             if (categoryDishes.length > 0) {
               // Create one card per dish
@@ -811,9 +677,9 @@ export default function CategoryPage() {
     setSelectedCategory(categorySlug)
     // Update URL to reflect category change
     if (categorySlug === 'all') {
-      navigate('/user/category/all')
+      navigate('/category/all', { state: { preventScroll: true } })
     } else {
-      navigate(`/user/category/${categorySlug}`)
+      navigate(`/category/${categorySlug}`, { state: { preventScroll: true } })
     }
   }
 
@@ -825,7 +691,7 @@ export default function CategoryPage() {
           {/* Search Bar with Back Button */}
           <div className="flex items-center gap-2 px-3 md:px-6 py-3 border-b border-gray-100 dark:border-gray-800">
             <button
-              onClick={() => navigate('/user')}
+              onClick={() => navigate('/')}
               className="w-9 h-9 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors flex-shrink-0"
             >
               <ArrowLeft className="h-5 w-5 text-gray-700 dark:text-gray-300" />
@@ -988,19 +854,31 @@ export default function CategoryPage() {
       <div className="px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-4 sm:py-6 md:py-8 lg:py-10 space-y-6 md:space-y-8 lg:space-y-10">
         <div className="max-w-7xl mx-auto">
           {/* RECOMMENDED FOR YOU Section - Hide when "All" category is selected */}
-          {filteredRecommended.length > 0 && selectedCategory !== 'all' && (
+          {(loadingRestaurants || (filteredRecommended.length > 0 && selectedCategory !== 'all')) && (
             <section>
               <h2 className="text-xs sm:text-sm md:text-base font-semibold text-gray-400 dark:text-gray-500 tracking-widest uppercase mb-4 md:mb-6">
                 RECOMMENDED FOR YOU
               </h2>
 
-              {/* Small Restaurant Cards - Grid - Show all dishes when category is selected */}
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 md:gap-4">
-                {(selectedCategory && selectedCategory !== 'all'
-                  ? filteredRecommended
-                  : filteredRecommended.slice(0, 6)
-                ).map((restaurant) => {
-                  return (
+              {loadingRestaurants ? (
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 md:gap-4">
+                  {[...Array(6)].map((_, i) => (
+                    <div key={i} className="flex flex-col gap-2">
+                      <div className="animate-pulse bg-gray-200 dark:bg-gray-800 aspect-square rounded-xl md:rounded-2xl w-full"></div>
+                      <div className="animate-pulse bg-gray-200 dark:bg-gray-800 rounded h-3 w-3/4"></div>
+                      <div className="animate-pulse bg-gray-200 dark:bg-gray-800 rounded h-2 w-1/2"></div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 md:gap-4">
+                  {(selectedCategory && selectedCategory !== 'all'
+                    ? filteredRecommended
+                    : filteredRecommended.slice(0, 6)
+                  ).map((restaurant) => {
+                    const shouldShowGrayscale = !restaurant.isAcceptingOrders || restaurant.status === 'Closed' || restaurant.isActive === false
+                    
+                    return (
                     <Link
                       key={restaurant.id}
                       to={`/restaurants/${restaurant.slug || restaurant.name.toLowerCase().replace(/\s+/g, '-')}`}
@@ -1008,6 +886,7 @@ export default function CategoryPage() {
                     >
                       <div className={`group ${shouldShowGrayscale ? 'grayscale opacity-75' : ''}`}>
                         {/* Image Container */}
+
                         <div className="relative aspect-square rounded-xl md:rounded-2xl overflow-hidden mb-2">
                           {/* Use category dish image if available, otherwise restaurant image */}
                           {restaurant.categoryDishImage ? (
@@ -1057,6 +936,7 @@ export default function CategoryPage() {
                             </div>
                           )}
 
+
                           {/* Offer Badge */}
                           {restaurant.offer && (
                             <div className="absolute top-1.5 left-1.5 bg-gradient-to-r from-[#EB590E] to-[#D94F0C] text-white text-[10px] md:text-xs font-semibold px-1.5 py-0.5 rounded shadow-sm">
@@ -1086,6 +966,7 @@ export default function CategoryPage() {
                   )
                 })}
               </div>
+              )}
             </section>
           )}
 
@@ -1106,10 +987,22 @@ export default function CategoryPage() {
             )}
 
             {/* Large Restaurant Cards */}
-            <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5 lg:gap-6 xl:gap-7 items-stretch ${isLoadingFilterResults ? 'opacity-50' : 'opacity-100'} transition-opacity duration-300`}>
-              {filteredAllRestaurants.map((restaurant) => {
+            {loadingRestaurants ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5 lg:gap-6 xl:gap-7 items-stretch">
+                {[...Array(8)].map((_, i) => (
+                  <div key={i} className="flex flex-col gap-3">
+                    <div className="animate-pulse bg-gray-200 dark:bg-gray-800 rounded-xl h-44 sm:h-52 md:h-60 lg:h-64 xl:h-72 w-full"></div>
+                    <div className="animate-pulse bg-gray-200 dark:bg-gray-800 rounded h-4 w-3/4"></div>
+                    <div className="animate-pulse bg-gray-200 dark:bg-gray-800 rounded h-3 w-1/2"></div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5 lg:gap-6 xl:gap-7 items-stretch ${isLoadingFilterResults ? 'opacity-50' : 'opacity-100'} transition-opacity duration-300`}>
+                {filteredAllRestaurants.map((restaurant) => {
                 const restaurantSlug = restaurant.name.toLowerCase().replace(/\s+/g, "-")
                 const isFavorite = favorites.has(restaurant.id)
+                const shouldShowGrayscale = !restaurant.isAcceptingOrders || restaurant.status === 'Closed' || restaurant.isActive === false
 
                 return (
                   <Link key={restaurant.id} to={`/restaurants/${restaurant.slug || restaurant.name.toLowerCase().replace(/\s+/g, "-")}`} className="h-full flex">
@@ -1236,6 +1129,7 @@ export default function CategoryPage() {
                 )
               })}
             </div>
+            )}
 
             {/* Empty State */}
             {!loadingRestaurants && filteredAllRestaurants.length === 0 && (

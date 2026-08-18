@@ -130,10 +130,13 @@ function UserPathRedirect() {
 
 // Scroll to top on route change
 function ScrollToTop() {
-  const { pathname } = useLocation();
+  const location = useLocation();
   useEffect(() => {
+    if (location.state && location.state.preventScroll) {
+      return;
+    }
     window.scrollTo(0, 0);
-  }, [pathname]);
+  }, [location.pathname, location.state]);
   return null;
 }
 
