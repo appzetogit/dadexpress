@@ -220,9 +220,9 @@ export const getRestaurants = async (req, res) => {
     if (userZone && Array.isArray(userZone.coordinates) && userZone.coordinates.length >= 3) {
       let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
       for (const v of userZone.coordinates) {
-        const vLat = v.latitude || v.lat;
-        const vLng = v.longitude || v.lng;
-        if (vLat !== undefined && vLng !== undefined) {
+        const vLat = parseFloat(v.latitude || v.lat);
+        const vLng = parseFloat(v.longitude || v.lng);
+        if (!isNaN(vLat) && !isNaN(vLng)) {
           if (vLat < minLat) minLat = vLat;
           if (vLat > maxLat) maxLat = vLat;
           if (vLng < minLng) minLng = vLng;
@@ -385,9 +385,9 @@ export const getRestaurants = async (req, res) => {
       if (!zoneDoc.bbox) {
         let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
         for (const v of zoneDoc.coordinates) {
-          const lat = v.latitude || v.lat;
-          const lng = v.longitude || v.lng;
-          if (lat !== undefined && lng !== undefined) {
+          const lat = parseFloat(v.latitude || v.lat);
+          const lng = parseFloat(v.longitude || v.lng);
+          if (!isNaN(lat) && !isNaN(lng)) {
             if (lat < minLat) minLat = lat;
             if (lat > maxLat) maxLat = lat;
             if (lng < minLng) minLng = lng;
@@ -523,7 +523,9 @@ export const getRestaurants = async (req, res) => {
     
     // Fetch all menus and outlet timings for these restaurants in parallel
     const [allMenus, allTimings] = await Promise.all([
-      Menu.find({ restaurant: { $in: restaurantIds }, isActive: true }).lean(),
+      Menu.find({ restaurant: { $in: restaurantIds }, isActive: true })
+        .select(req.query.includeFullMenu === 'true' ? '' : 'restaurant sections.name sections.isEnabled sections.items.id sections.items._id sections.items.name sections.items.price sections.items.originalPrice sections.items.image sections.items.images sections.items.foodType sections.items.discountAmount sections.items.description sections.items.isAvailable sections.subsections.name sections.subsections.items.id sections.subsections.items._id sections.subsections.items.name sections.subsections.items.price sections.subsections.items.originalPrice sections.subsections.items.image sections.subsections.items.images sections.subsections.items.foodType sections.subsections.items.discountAmount sections.subsections.items.description sections.subsections.items.isAvailable')
+        .lean(),
       OutletTimings.find({ restaurantId: { $in: restaurantIds }, isActive: true }).lean()
     ]);
 
@@ -1407,9 +1409,9 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
       if (!zoneDoc.bbox) {
         let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
         for (const v of zoneDoc.coordinates) {
-          const lat = v.latitude || v.lat;
-          const lng = v.longitude || v.lng;
-          if (lat !== undefined && lng !== undefined) {
+          const lat = parseFloat(v.latitude || v.lat);
+          const lng = parseFloat(v.longitude || v.lng);
+          if (!isNaN(lat) && !isNaN(lng)) {
             if (lat < minLat) minLat = lat;
             if (lat > maxLat) maxLat = lat;
             if (lng < minLng) minLng = lng;
@@ -1457,7 +1459,7 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
     // 3. Parallel Fetch Menus and Timings - REDUCED payload
     const [allMenus, allTimings] = await Promise.all([
       Menu.find({ restaurant: { $in: restaurantIds }, isActive: true })
-          .select("restaurant sections")
+          .select("restaurant sections.name sections.isEnabled sections.items.id sections.items._id sections.items.name sections.items.price sections.items.originalPrice sections.items.image sections.items.images sections.items.foodType sections.items.discountAmount sections.items.description sections.items.isAvailable sections.subsections.name sections.subsections.items.id sections.subsections.items._id sections.subsections.items.name sections.subsections.items.price sections.subsections.items.originalPrice sections.subsections.items.image sections.subsections.items.images sections.subsections.items.foodType sections.subsections.items.discountAmount sections.subsections.items.description sections.subsections.items.isAvailable")
           .lean(),
       OutletTimings.find({ restaurantId: { $in: restaurantIds }, isActive: true }).select("restaurantId timings").lean()
     ]);

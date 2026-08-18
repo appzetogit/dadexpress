@@ -370,9 +370,9 @@ export const detectUserZone = asyncHandler(async (req, res) => {
       // Calculate Bounding Box for fast exclusion
       let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
       for (const coord of zone.coordinates) {
-        const lat = typeof coord === 'object' ? (coord.latitude || coord.lat) : null;
-        const lng = typeof coord === 'object' ? (coord.longitude || coord.lng) : null;
-        if (lat !== null && lng !== null) {
+        const lat = typeof coord === 'object' ? parseFloat(coord.latitude || coord.lat) : null;
+        const lng = typeof coord === 'object' ? parseFloat(coord.longitude || coord.lng) : null;
+        if (!isNaN(lat) && !isNaN(lng)) {
           if (lat < minLat) minLat = lat;
           if (lat > maxLat) maxLat = lat;
           if (lng < minLng) minLng = lng;
