@@ -864,7 +864,7 @@ export default function Cart() {
       cartItems: cart.map(i => ({ name: i.name, price: i.price, qty: i.quantity }))
     });
   }
-  const savings = pricing?.savings || (discount + (subtotal > 500 ? 32 : 0))
+  const savings = pricing?.savings || discount
   const showCutTotalBill =
     Math.round(Number(totalBeforeDiscount || 0)) > Math.round(Number(total || 0))
 

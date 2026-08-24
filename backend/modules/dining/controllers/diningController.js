@@ -11,6 +11,7 @@ import Restaurant from "../../restaurant/models/Restaurant.js";
 import Zone from "../../admin/models/Zone.js";
 import Menu from "../../restaurant/models/Menu.js";
 import emailService from "../../auth/services/emailService.js";
+import { notifyRestaurantNewBooking } from "../services/diningNotificationService.js";
 import mongoose from "mongoose";
 import DiningBill from "../models/DiningBill.js";
 import { createOrder as createRazorpayOrder, verifyPayment as verifyRazorpayPayment } from "../../payment/services/razorpayService.js";
@@ -667,6 +668,11 @@ export const createBooking = async (req, res) => {
           console.error("Failed to send booking confirmation email:", err);
         });
     }
+
+    // Notify restaurant
+    notifyRestaurantNewBooking(bookingObj).catch(err => {
+      console.error("Failed to send real-time notification to restaurant:", err);
+    });
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -729,6 +735,9 @@ export const verifyBookingPayment = async (req, res) => {
     if (req.user?.email) {
       emailService.sendBookingConfirmation(req.user.email, bookingObj).catch(() => {});
     }
+
+    // Notify restaurant
+    notifyRestaurantNewBooking(bookingObj).catch(() => {});
   } catch (error) {
     res.status(500).json({
       success: false,

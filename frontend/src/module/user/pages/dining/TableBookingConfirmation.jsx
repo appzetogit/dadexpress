@@ -451,7 +451,7 @@ export default function TableBookingConfirmation() {
                                 "Cover charges upon entry are subject to the discretion of the restaurant",
                                 "House rules are to be observed at all times",
                                 "Special requests will be accommodated at the restaurant's discretion",
-                                "Offers can be availed only by paying via Tastizo",
+                                "Offers can be availed only by paying via Dadexpress",
                                 "Cover charges cannot be refunded if slot is cancelled within 30 minutes of slot start time",
                                 "Additional service charges on the bill are at the restaurant's discretion"
                             ].map((term, i) => (

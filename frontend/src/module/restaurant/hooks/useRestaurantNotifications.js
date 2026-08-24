@@ -11,6 +11,7 @@ import alertSound from '@/assets/audio/alert.mp3';
 export const useRestaurantNotifications = (isOnline = null) => {
   const socketRef = useRef(null);
   const [newOrder, setNewOrder] = useState(null);
+  const [newBooking, setNewBooking] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const audioRef = useRef(null);
   const userInteractedRef = useRef(false); // Track user interaction for autoplay policy
@@ -328,6 +329,15 @@ export const useRestaurantNotifications = (isOnline = null) => {
       playNotificationSound();
     });
 
+    // Listen for new table booking notifications
+    socketRef.current.on('new_table_booking', (bookingData) => {
+      console.log('🍽️ New table booking received:', bookingData);
+      setNewBooking(bookingData);
+      
+      // Play notification sound
+      playNotificationSound();
+    });
+
     // Listen for sound notification event
     socketRef.current.on('play_notification_sound', (data) => {
       false && console.log('🔔 Sound notification:', data);
@@ -407,9 +417,15 @@ export const useRestaurantNotifications = (isOnline = null) => {
     setNewOrder(null);
   };
 
+  const clearNewBooking = () => {
+    setNewBooking(null);
+  };
+
   return {
     newOrder,
     clearNewOrder,
+    newBooking,
+    clearNewBooking,
     isConnected,
     playNotificationSound
   };

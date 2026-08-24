@@ -144,7 +144,7 @@ export default function TableBookingSuccess() {
                             {(booking?.restaurant?.diningSettings?.billCashbackPercentage ?? 0) > 0 && (
                                 <div className="flex items-center gap-2">
                                     <div className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse"></div>
-                                    <span className="font-bold text-sm">{booking?.restaurant?.diningSettings?.billCashbackPercentage}% Cashback with Tastizo Pay</span>
+                                    <span className="font-bold text-sm">{booking?.restaurant?.diningSettings?.billCashbackPercentage}% Cashback with Dadexpress Pay</span>
                                 </div>
                             )}
                         </div>

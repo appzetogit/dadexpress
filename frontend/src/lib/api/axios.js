@@ -100,7 +100,7 @@ if (import.meta.env.DEV) {
  */
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 60000, // 60 seconds - increased for slow server handling
+  timeout: 120000, // 120 seconds - increased for slow server handling or cold starts
   headers: {
     "Content-Type": "application/json",
   },

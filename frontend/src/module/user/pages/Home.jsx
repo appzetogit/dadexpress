@@ -1510,6 +1510,17 @@ export default function Home() {
     zoneResolveLoading,
   ])
 
+  // ─── EMPTY STATE PATH: Handle new users with no location ──────────────────
+  // If we have no active location and no resolved zone, and the location/zone
+  // hooks have finished their initial loading, we should turn off the loader
+  // so the empty state message can be shown instead of spinning forever.
+  useEffect(() => {
+    if (!activeLocation && !resolvedZoneId && !zoneLoading && !zoneResolveLoading && !profileLoading && !isAddressLoading) {
+      setLoadingRestaurants(false)
+    }
+  }, [activeLocation, resolvedZoneId, zoneLoading, zoneResolveLoading, profileLoading, isAddressLoading])
+  // ──────────────────────────────────────────────────────────────────────────
+
   // ─── FAST PATH: Instant load using cached zoneId ──────────────────────────
   // When the page refreshes, GPS takes time to acquire. But we already have a
   // cached zoneId from localStorage. Use it to fetch restaurants immediately

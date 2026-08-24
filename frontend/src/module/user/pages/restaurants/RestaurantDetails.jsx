@@ -1168,7 +1168,9 @@ export default function RestaurantDetails() {
                 <Star className="h-3 w-3 fill-white" />
                 {restaurant?.rating ?? 4.5}
               </Badge>
-              <span className="text-xs text-gray-500">By {(restaurant.reviews || 0).toLocaleString()}+</span>
+              {restaurant?.reviews > 0 && (
+                <span className="text-xs text-gray-500">By {restaurant.reviews.toLocaleString()}+</span>
+              )}
             </div>
           </div>
 
@@ -2160,9 +2162,11 @@ export default function RestaurantDetails() {
                                     {outlet?.rating ?? 4.5}
                                   </span>
                                 </div>
-                                <span className="text-xs text-gray-500 dark:text-gray-400">
-                                  By {(outlet?.reviews || 0) >= 1000 ? `${((outlet.reviews || 0) / 1000).toFixed(1)}K+` : `${outlet?.reviews || 0}+`}
-                                </span>
+                                {outlet?.reviews > 0 && (
+                                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                                    By {outlet.reviews >= 1000 ? `${(outlet.reviews / 1000).toFixed(1)}K+` : `${outlet.reviews}+`}
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </div>

@@ -5,6 +5,7 @@ import { diningAPI, restaurantAPI } from "@/lib/api"
 import Loader from "@/components/Loader"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
+import { useRestaurantNotifications } from "../hooks/useRestaurantNotifications"
 
 export default function DiningReservations() {
     const navigate = useNavigate()
@@ -15,6 +16,23 @@ export default function DiningReservations() {
     const [updatingId, setUpdatingId] = useState(null)
     const [activeFilterStatus, setActiveFilterStatus] = useState("all")
     const [showFilterDropdown, setShowFilterDropdown] = useState(false)
+    const { newBooking, clearNewBooking } = useRestaurantNotifications()
+
+    useEffect(() => {
+        if (newBooking) {
+            toast(`New table booking for ${newBooking.guests} guest(s) at ${newBooking.timeSlot}`, {
+                icon: '🍽️',
+                duration: 8000,
+            })
+            // Prepend new booking to the list if on this page
+            setBookings(prev => {
+                // check if already exists
+                if (prev.find(b => b._id === newBooking._id)) return prev;
+                return [newBooking, ...prev];
+            })
+            clearNewBooking()
+        }
+    }, [newBooking, clearNewBooking])
 
     useEffect(() => {
         const fetchAll = async () => {

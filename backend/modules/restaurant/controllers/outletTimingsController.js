@@ -6,7 +6,8 @@ import asyncHandler from '../../../shared/middleware/asyncHandler.js';
 const getCurrentIstDay = () => {
   const now = new Date();
   const istOffset = 5.5 * 60 * 60 * 1000;
-  const istDate = new Date(now.getTime() + (now.getTimezoneOffset() * 60000) + istOffset);
+  // Date.getTime() is always UTC, so we just add the IST offset to get IST-shifted time.
+  const istDate = new Date(now.getTime() + istOffset);
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   return days[istDate.getUTCDay()];
 };

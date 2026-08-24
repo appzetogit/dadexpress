@@ -474,11 +474,13 @@ export const acceptOrder = asyncHandler(async (req, res) => {
           orderId,
           isCashOrder
         });
+        /*
         return errorResponse(
           res,
           403,
           `Cash limit exhausted. Please deposit cash first to accept next cash order. (Cash in hand: ₹${cashInHand.toFixed(2)}, Limit: ₹${totalCashLimit.toFixed(2)})`
         );
+        */
       }
     } catch (cashLimitCheckError) {
       console.error('❌ Cash limit check failed during acceptOrder:', cashLimitCheckError);

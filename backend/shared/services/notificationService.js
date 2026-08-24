@@ -29,11 +29,6 @@ class NotificationService {
 
         const message = {
             token: token,
-            notification: {
-                title: notification.title,
-                body: notification.body,
-                image: notification.image || logoUrl,
-            },
             data: {
                 ...data,
                 title: notification.title,
@@ -48,10 +43,6 @@ class NotificationService {
             message.apns = {
                 payload: {
                     aps: {
-                        alert: {
-                            title: notification.title,
-                            body: notification.body,
-                        },
                         sound: 'default',
                         badge: 1,
                         'mutable-content': 1
@@ -65,17 +56,6 @@ class NotificationService {
             message.android = {
                 priority: 'high',
                 ttl: 3600000, // 1 hour TTL
-                notification: {
-                    title: notification.title,
-                    body: notification.body,
-                    sound: 'default',
-                    icon: 'ic_launcher',
-                    color: '#FF5E00',
-                    clickAction: data.click_action || '/',
-                    image: notification.image || logoUrl,
-                    channelId: 'high_priority_notifications',
-                    vibrateTimings: ['0s', '0.5s', '0.2s', '0.5s'] // Powerful vibration format for FCM v1 API
-                },
             };
         } else if (platform === 'web') {
             message.webpush = {
@@ -116,11 +96,6 @@ class NotificationService {
 
         const message = {
             tokens: cleanTokens,
-            notification: {
-                title: notification.title,
-                body: notification.body,
-                image: notification.image || logoUrl,
-            },
             data: {
                 ...stringData,
                 title: notification.title,
@@ -129,23 +104,11 @@ class NotificationService {
                 click_action: data.click_action || '/'
             },
             android: {
-                priority: 'high',
-                notification: {
-                    title: notification.title,
-                    body: notification.body,
-                    icon: 'ic_launcher',
-                    sound: 'default',
-                    image: notification.image || logoUrl,
-                    clickAction: data.click_action || data.link || '/'
-                },
+                priority: 'high'
             },
             apns: {
                 payload: {
                     aps: {
-                        alert: {
-                            title: notification.title,
-                            body: notification.body,
-                        },
                         sound: 'default',
                         badge: 1,
                         'mutable-content': 1

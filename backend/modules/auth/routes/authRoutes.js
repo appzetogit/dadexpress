@@ -39,11 +39,7 @@ const verifyOTPSchema = Joi.object({
   purpose: Joi.string()
     .valid('login', 'register', 'reset-password', 'verify-phone', 'verify-email')
     .default('login'),
-  name: Joi.string().when('purpose', {
-    is: 'register',
-    then: Joi.required(),
-    otherwise: Joi.optional()
-  }),
+  name: Joi.string().optional().allow(null, ''),
   role: Joi.string().valid('user', 'restaurant', 'delivery', 'admin').default('user'),
   password: Joi.string().min(6).max(100).optional(),
   fcmToken: Joi.string().optional().allow(null, ''),

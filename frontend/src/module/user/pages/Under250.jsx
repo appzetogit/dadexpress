@@ -553,11 +553,13 @@ export default function Under250() {
         ) : sortedAndFilteredRestaurants.length === 0 ? (
           <div className="flex justify-center items-center py-12 px-6 text-center">
             <div className="text-gray-500 dark:text-gray-400">
-              {!zoneId
-                ? "Please select a location to see restaurants in your area."
-                : under250Restaurants.length === 0
-                  ? "No restaurants with dishes under ₹250 found in your zone."
-                  : "No restaurants match the selected filters."}
+              {isOutOfService
+                ? "We don't currently deliver to this location. Please try a different address."
+                : !zoneId
+                  ? "Please select a location to see restaurants in your area."
+                  : under250Restaurants.length === 0
+                    ? "No restaurants with dishes under ₹250 found in your zone."
+                    : "No restaurants match the selected filters."}
             </div>
           </div>
         ) : (

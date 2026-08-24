@@ -105,7 +105,7 @@ export async function findNearestDeliveryBoys(restaurantLat, restaurantLng, rest
           
           if (cashInHand >= totalCashLimit) {
              console.log(`🚫 Skipping over-limit partner ${partner.name} for CASH order (Cash: ${cashInHand}, Limit: ${totalCashLimit})`);
-             return null;
+             // return null;
           }
         }
 
@@ -298,7 +298,7 @@ export async function findNearestDeliveryBoy(restaurantLat, restaurantLng, resta
           
           if (cashInHand >= totalCashLimit) {
             console.log(`🚫 Excluding over-limit partner ${partner.name} from CASH order search`);
-            return null;
+            // return null;
           }
         }
 

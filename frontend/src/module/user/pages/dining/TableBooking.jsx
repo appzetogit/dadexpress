@@ -279,8 +279,30 @@ export default function TableBooking() {
                     {/* Slots Grid */}
                     <div className="grid grid-cols-3 gap-3">
                         {slots[activeTimeOfDay].slice(0, showAllSlots ? undefined : 6).map((slot, idx) => {
+                            const isSlotPast = (slotTime) => {
+                                if (!slotTime) return false;
+                                const today = new Date();
+                                if (selectedDate.toDateString() !== today.toDateString()) return false;
+                                
+                                const match = slotTime.match(/^(\d{1,2}):(\d{2})\s?(AM|PM|am|pm)?$/i);
+                                if (!match) return false;
+                                
+                                let hours = parseInt(match[1], 10);
+                                const minutes = parseInt(match[2], 10);
+                                const ampm = match[3]?.toUpperCase();
+                                
+                                if (ampm === 'PM' && hours < 12) hours += 12;
+                                if (ampm === 'AM' && hours === 12) hours = 0;
+                                
+                                const slotDate = new Date();
+                                slotDate.setHours(hours, minutes, 0, 0);
+                                
+                                return slotDate < today;
+                            };
+
                             const avail = slotAvailability[slot.time]
-                            const isFull = avail?.status === "full"
+                            const isPast = isSlotPast(slot.time)
+                            const isFull = avail?.status === "full" || isPast
                             const isLimited = avail?.status === "limited"
                             const isSelected = selectedSlot?.time === slot.time
 
