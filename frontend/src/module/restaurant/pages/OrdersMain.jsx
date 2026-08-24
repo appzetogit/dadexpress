@@ -650,7 +650,18 @@ export default function OrdersMain() {
   })
 
   // Restaurant notifications hook for real-time orders
-  const { newOrder, clearNewOrder, isConnected } = useRestaurantNotifications(isRestaurantOnline)
+  const { newOrder, clearNewOrder, newBooking, clearNewBooking, isConnected } = useRestaurantNotifications(isRestaurantOnline)
+
+  // Handle new table bookings
+  useEffect(() => {
+    if (newBooking) {
+        toast(`New table booking for ${newBooking.guests} guest(s) at ${newBooking.timeSlot}`, {
+            icon: '🍽️',
+            duration: 8000,
+        })
+        clearNewBooking()
+    }
+  }, [newBooking, clearNewBooking])
 
   // Keep online/offline flag synced with RestaurantStatus toggle.
   useEffect(() => {

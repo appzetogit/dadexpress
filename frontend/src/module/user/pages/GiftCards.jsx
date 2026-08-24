@@ -320,7 +320,7 @@ export default function GiftCards() {
                 <div className="flex items-start gap-3">
                   <div className="w-2 h-2 rounded-full bg-[#EB590E] dark:bg-[#D94F0C] mt-2 flex-shrink-0" />
                   <p className="text-gray-700 dark:text-gray-300 text-sm">
-                    Write to us at <span className="font-semibold text-gray-900 dark:text-white">giftcards@appzeto.com</span>
+                    Write to us at <span className="font-semibold text-gray-900 dark:text-white">giftcards@dadexpress.in</span>
                   </p>
                 </div>
                 <div className="flex items-start gap-3">

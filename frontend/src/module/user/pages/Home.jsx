@@ -705,7 +705,7 @@ export default function Home() {
       duration: 1.2,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
       smoothWheel: true,
-      smoothTouch: true,
+      // smoothTouch disabled to fix iOS scrolling lag and jank
     })
 
     function raf(time) {
@@ -1772,8 +1772,15 @@ export default function Home() {
     if (!resolvedZoneId) {
       return "Please select your location to explore nearby restaurants & menus 🍽️"
     }
+
+    // Priority 6: Check if restaurants were filtered out by search/filters
+    const hasSearch = (heroSearch && heroSearch.trim() !== "") || (searchValue && searchValue.trim() !== "")
+    if (hasSearch || activeFilters.size > 0 || selectedCuisine) {
+      return "No restaurants found matching your search or filters 🔍"
+    }
+
     return "No restaurants available in this area"
-  }, [selectedAddressOutOfService, resolvedZoneId, zoneResolveLoading, zoneLoading, profileLoading, isAddressLoading, loadingRestaurants, loading, isOutOfService, currentLocation?.city, selectedAddress, selectedDeliveryAddress, isManualMode])
+  }, [selectedAddressOutOfService, resolvedZoneId, zoneResolveLoading, zoneLoading, profileLoading, isAddressLoading, loadingRestaurants, loading, isOutOfService, currentLocation?.city, selectedAddress, selectedDeliveryAddress, isManualMode, heroSearch, searchValue, activeFilters, selectedCuisine])
 
   // Featured foods removed - will be handled by restaurants data from API
   const filteredFeaturedFoods = useMemo(() => {
@@ -2000,6 +2007,7 @@ export default function Home() {
                       <Input
                         value={heroSearch}
                         onChange={(e) => setHeroSearch(e.target.value)}
+                        onFocus={handleSearchFocus}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             e.currentTarget.blur()

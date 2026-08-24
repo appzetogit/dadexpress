@@ -21,6 +21,7 @@ import { getOrderStatus, normalizeStatus, matchesOrdersPageFilter, ORDER_STATUS 
 import { getTransactionsByType, getOrderPaymentAmount } from "../utils/walletState"
 import { formatCurrency, usdToInr } from "../utils/currency"
 import { restaurantAPI } from "@/lib/api"
+import { toast } from "sonner"
 
 export default function OrdersPage() {
   const navigate = useNavigate()
@@ -32,7 +33,18 @@ export default function OrdersPage() {
   const [error, setError] = useState(null)
 
   // Restaurant notifications hook
-  const { newOrder, clearNewOrder, isConnected } = useRestaurantNotifications()
+  const { newOrder, clearNewOrder, newBooking, clearNewBooking, isConnected } = useRestaurantNotifications()
+
+  // Handle new table bookings
+  useEffect(() => {
+    if (newBooking) {
+        toast(`New table booking for ${newBooking.guests} guest(s) at ${newBooking.timeSlot}`, {
+            icon: '🍽️',
+            duration: 8000,
+        })
+        clearNewBooking()
+    }
+  }, [newBooking, clearNewBooking])
 
   // Lenis smooth scrolling
   useEffect(() => {

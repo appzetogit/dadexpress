@@ -11,7 +11,7 @@ import Restaurant from "../../restaurant/models/Restaurant.js";
 import Zone from "../../admin/models/Zone.js";
 import Menu from "../../restaurant/models/Menu.js";
 import emailService from "../../auth/services/emailService.js";
-import { notifyRestaurantNewBooking } from "../services/diningNotificationService.js";
+import { notifyRestaurantNewBooking, notifyCustomerBookingStatusUpdate } from "../services/diningNotificationService.js";
 import mongoose from "mongoose";
 import DiningBill from "../models/DiningBill.js";
 import { createOrder as createRazorpayOrder, verifyPayment as verifyRazorpayPayment } from "../../payment/services/razorpayService.js";
@@ -844,6 +844,11 @@ export const updateBookingStatus = async (req, res) => {
       success: true,
       message: `Booking status updated to ${status}`,
       data: booking,
+    });
+
+    // Notify customer about the status update
+    notifyCustomerBookingStatusUpdate(booking).catch(err => {
+      console.error("Failed to notify customer about booking status update:", err);
     });
   } catch (error) {
     res.status(500).json({

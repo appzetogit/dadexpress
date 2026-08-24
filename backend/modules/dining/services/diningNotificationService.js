@@ -102,3 +102,68 @@ export async function notifyRestaurantNewBooking(booking) {
     console.error('Failed to notify restaurant about new booking:', error);
   }
 }
+
+export async function notifyCustomerBookingStatusUpdate(booking) {
+  try {
+    const io = await getIOInstance();
+    if (!io) {
+      console.warn('Socket.IO not initialized, skipping customer dining notification');
+      return;
+    }
+
+    const userId = booking.user?._id || booking.user;
+    if (!userId) return;
+    const normalizedUserId = userId.toString();
+
+    const User = (await import('../../user/models/User.js')).default;
+    const user = await User.findById(normalizedUserId).lean();
+    if (!user) return;
+
+    let statusText = booking.status;
+    if (booking.status === 'cancelled') statusText = 'cancelled';
+    else if (booking.status === 'confirmed') statusText = 'confirmed';
+    
+    // Emit socket event to user room
+    const userRoom = `user:${normalizedUserId}`;
+    io.to(userRoom).emit('table_booking_status_update', booking);
+
+    // Send push notification via FCM for background handling
+    const fcmTokensSet = new Set();
+    if (user?.fcmToken) fcmTokensSet.add(JSON.stringify({ token: user.fcmToken, plat: 'web' }));
+    if (user?.fcmTokenMobile) fcmTokensSet.add(JSON.stringify({ token: user.fcmTokenMobile, plat: 'app' }));
+
+    const fcmTokens = Array.from(fcmTokensSet).map(s => JSON.parse(s));
+
+    let title = 'Table Booking Update';
+    let body = `Your table booking has been ${statusText}.`;
+
+    if (booking.status === 'cancelled') {
+       title = 'Table Booking Cancelled 🚫';
+       body = `Your table booking on ${new Date(booking.date).toLocaleDateString()} at ${booking.timeSlot} has been cancelled.`;
+    }
+
+    for (const { token, plat } of fcmTokens) {
+      notificationService.sendPushNotification(
+        token,
+        {
+          title,
+          body
+        },
+        {
+          bookingId: booking._id.toString(),
+          type: 'booking_status_update',
+          click_action: '/user/dining'
+        },
+        plat || 'web'
+      ).then(res => {
+        if (res) console.log(`✅ Push notification sent for booking update to user ${normalizedUserId} (${plat})`);
+      }).catch(err => {
+        console.error(`❌ Failed to send push notification to user ${normalizedUserId}:`, err);
+      });
+    }
+
+  } catch (error) {
+    console.error('Failed to notify customer about booking status update:', error);
+  }
+}
+

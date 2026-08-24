@@ -188,7 +188,8 @@ export default function OTP() {
       }
 
       // First attempt: verify OTP for login/register with user role
-      const response = await authAPI.verifyOTP(phone, code, purpose, null, email, "user", null, fcmToken, "web", referral)
+      const name = authData?.name || null
+      const response = await authAPI.verifyOTP(phone, code, purpose, name, email, "user", null, fcmToken, "web", referral)
       const data = response?.data?.data || {}
 
       // If backend tells us this is a new user, ask for name
