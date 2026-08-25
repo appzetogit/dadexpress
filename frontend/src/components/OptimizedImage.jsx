@@ -158,34 +158,32 @@ const OptimizedImage = React.memo(({
       )}
 
       {/* Actual Image */}
-      {isInView && (
-        <picture className="absolute inset-0 w-full h-full">
-          {/* WebP source for modern browsers */}
-          {webPSrcSet && (
-            <source
-              srcSet={webPSrcSet}
-              sizes={sizes}
-              type="image/webp"
-            />
-          )}
-
-          {/* Fallback to original format */}
-          <motion.img
-            src={imageSrc}
-            srcSet={srcSet}
-            sizes={supportsOptimization(imageSrc) ? sizes : undefined}
-            alt={alt}
-            className={`w-full h-full ${objectFit === 'cover' ? 'object-cover' : objectFit === 'contain' ? 'object-contain' : ''} ${priority || isLoaded ? 'opacity-100' : 'opacity-0'} ${!priority && 'transition-opacity duration-300'}`}
-            loading={priority ? 'eager' : 'lazy'}
-            decoding="async"
-            fetchPriority={priority ? 'high' : 'auto'}
-            crossOrigin="anonymous"
-            onLoad={handleLoad}
-            onError={handleError}
-            {...props}
+      <picture className="absolute inset-0 w-full h-full">
+        {/* WebP source for modern browsers */}
+        {webPSrcSet && (
+          <source
+            srcSet={webPSrcSet}
+            sizes={sizes}
+            type="image/webp"
           />
-        </picture>
-      )}
+        )}
+
+        {/* Fallback to original format */}
+        <motion.img
+          src={imageSrc}
+          srcSet={srcSet}
+          sizes={supportsOptimization(imageSrc) ? sizes : undefined}
+          alt={alt}
+          className={`w-full h-full ${objectFit === 'cover' ? 'object-cover' : objectFit === 'contain' ? 'object-contain' : ''} ${priority || isLoaded ? 'opacity-100' : 'opacity-0'} ${!priority && 'transition-opacity duration-300'}`}
+          loading={priority ? 'eager' : 'lazy'}
+          decoding="async"
+          fetchPriority={priority ? 'high' : 'auto'}
+          crossOrigin="anonymous"
+          onLoad={handleLoad}
+          onError={handleError}
+          {...props}
+        />
+      </picture>
 
       {/* Error State */}
       {hasError && (

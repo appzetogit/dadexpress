@@ -344,7 +344,7 @@ export default function GiftCards() {
             <h3 className="text-xs sm:text-sm font-semibold text-gray-400 dark:text-gray-500 tracking-widest uppercase">
               YOUR PURCHASE HISTORY
             </h3>
-
+          
             {/* Empty State */}
             <div className="flex flex-col items-center py-8">
               {/* Placeholder Cards Animation */}
