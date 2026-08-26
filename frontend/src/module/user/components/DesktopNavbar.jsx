@@ -173,7 +173,10 @@ export default function DesktopNavbar() {
                                         <Search className="h-4 w-4 text-gray-500 flex-shrink-0 mr-3" />
                                         <Input
                                             value={heroSearch}
-                                            onChange={(e) => setHeroSearch(e.target.value)}
+                                            onChange={(e) => {
+                                                setHeroSearch(e.target.value);
+                                                setSearchValue(e.target.value);
+                                            }}
                                             onFocus={() => {
                                                 if (heroSearch) setSearchValue(heroSearch)
                                             }}
@@ -193,7 +196,10 @@ export default function DesktopNavbar() {
                                                 variant="ghost"
                                                 size="sm"
                                                 className="h-5 w-5 p-0 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full ml-1"
-                                                onClick={() => setHeroSearch("")}
+                                                onClick={() => {
+                                                    setHeroSearch("");
+                                                    setSearchValue("");
+                                                }}
                                             >
                                                 <span className="sr-only">Clear</span>
                                                 <span aria-hidden="true">×</span>

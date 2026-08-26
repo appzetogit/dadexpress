@@ -2042,7 +2042,10 @@ export default function Home() {
                     <div className="relative w-full">
                       <Input
                         value={heroSearch}
-                        onChange={(e) => setHeroSearch(e.target.value)}
+                        onChange={(e) => {
+                          setHeroSearch(e.target.value);
+                          setSearchValue(e.target.value);
+                        }}
                         onFocus={handleSearchFocus}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
