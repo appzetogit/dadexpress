@@ -8,7 +8,7 @@ import StickyCartCard from "../components/StickyCartCard"
 import { useProfile } from "../context/ProfileContext"
 import { useLocation } from "../hooks/useLocation"
 import { useZone } from "../hooks/useZone"
-import { restaurantAPI, adminAPI } from "@/lib/api"
+import { restaurantAPI, adminAPI, publicAPI } from "@/lib/api"
 
 // Import shared food images - prevents duplication
 import { foodImages } from "@/constants/images"
@@ -43,6 +43,8 @@ export default function SearchResults() {
   const [loadingCategories, setLoadingCategories] = useState(true)
   const [categoryKeywords, setCategoryKeywords] = useState({})
   const [isListening, setIsListening] = useState(false)
+  const [menuItems, setMenuItems] = useState([])         // matched food items from DB
+  const [loadingItems, setLoadingItems] = useState(false)
 
   // Fetch categories from admin API
   useEffect(() => {
@@ -197,6 +199,31 @@ export default function SearchResults() {
     return null
   }
 
+  // Fetch MENU ITEMS when search query changes (case-insensitive via backend)
+  useEffect(() => {
+    if (!query.trim()) {
+      setMenuItems([])
+      return
+    }
+    const fetchItems = async () => {
+      try {
+        setLoadingItems(true)
+        const res = await publicAPI.searchMenuItems(query.trim(), 20)
+        if (res.data?.success && res.data?.data?.items) {
+          setMenuItems(res.data.data.items)
+        } else {
+          setMenuItems([])
+        }
+      } catch (err) {
+        console.error('Error fetching menu items:', err)
+        setMenuItems([])
+      } finally {
+        setLoadingItems(false)
+      }
+    }
+    fetchItems()
+  }, [query])
+
   // Fetch restaurants from API
   useEffect(() => {
     const fetchRestaurants = async () => {
@@ -208,6 +235,7 @@ export default function SearchResults() {
         if (zoneId) {
           params.zoneId = zoneId
         }
+        // Add comment above - only show restaurants from user zone
         const response = await restaurantAPI.getRestaurants(params)
 
         console.log('📦 Full API Response:', response)
@@ -781,11 +809,56 @@ export default function SearchResults() {
       {/* Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-4 sm:py-6 md:py-8 lg:py-10 space-y-6 md:space-y-8 lg:space-y-10">
         {/* Loading State */}
-        {loadingRestaurants && (
+        {(loadingRestaurants || loadingItems) && (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-            <span className="ml-3 text-gray-600">Loading restaurants...</span>
+            <span className="ml-3 text-gray-600">Searching...</span>
           </div>
+        )}
+
+        {/* MENU ITEMS SECTION - show only when user searched something */}
+        {!loadingItems && query.trim() && menuItems.length > 0 && (
+          <section>
+            <h2 className="text-xs sm:text-sm font-semibold text-gray-400 dark:text-gray-500 tracking-widest uppercase mb-4">
+              MATCHING DISHES ({menuItems.length})
+            </h2>
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-4">
+              {menuItems.map((item, idx) => (
+                <div
+                  key={item._id || item.id || idx}
+                  className="flex flex-col items-center gap-2 cursor-pointer group"
+                  onClick={() => navigate(`/user/restaurants/${item.restaurantSlug || item.restaurant?.slug || ''}`)}
+                >
+                  <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-800">
+                    {item.image ? (
+                      <img
+                        loading="lazy"
+                        src={item.image}
+                        alt={item.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                        onError={(e) => { e.target.src = foodImages[0] }}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <span className="text-2xl">🍽️</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-center px-1">
+                    <p className="text-xs font-semibold text-gray-800 dark:text-gray-200 group-hover:text-[#EB590E] transition-colors line-clamp-2">
+                      {item.name}
+                    </p>
+                    {item.price && (
+                      <p className="text-[10px] text-[#EB590E] font-bold mt-0.5">₹{item.price}</p>
+                    )}
+                    {item.restaurantName && (
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 line-clamp-1">{item.restaurantName}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
         )}
 
         {/* RECOMMENDED FOR YOU Section */}
