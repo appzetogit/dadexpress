@@ -38,7 +38,7 @@ import { useSelectedDeliveryAddress } from "../hooks/useSelectedDeliveryAddress"
 import { resolveActiveLocation, resolveDeliveryAddress } from "../utils/deliveryAddress"
 import quickSpicyLogo from "@/assets/quicky-spicy-logo.png"
 import offerImage from "@/assets/offerimage.png"
-import api, { restaurantAPI, zoneAPI } from "@/lib/api"
+import api, { restaurantAPI, zoneAPI, publicAPI } from "@/lib/api"
 import { API_BASE_URL } from "@/lib/api/config"
 import OptimizedImage from "@/components/OptimizedImage"
 // Explore More Icons
@@ -463,6 +463,8 @@ export default function Home() {
   const [searchParams] = useSearchParams()
   const query = searchParams.get("q") || ""
   const [heroSearch, setHeroSearch] = useState("")
+  const [menuItems, setMenuItems] = useState([])
+  const [loadingItems, setLoadingItems] = useState(false)
   const { openSearch, closeSearch, searchValue, setSearchValue } = useSearchOverlay()
   const { openLocationSelector } = useLocationSelector()
   const {
@@ -498,6 +500,37 @@ export default function Home() {
   const [loadingRealCategories, setLoadingRealCategories] = useState(true)
   const [showAllCategoriesModal, setShowAllCategoriesModal] = useState(false)
   const isHandlingSwitchOff = useRef(false)
+
+  // Fetch matching menu items dynamically for inline search
+  useEffect(() => {
+    const query = heroSearch.trim() || searchValue.trim()
+    if (!query) {
+      setMenuItems([])
+      return
+    }
+    const fetchItems = async () => {
+      try {
+        setLoadingItems(true)
+        const res = await publicAPI.searchMenuItems(query, 20)
+        if (res.data?.success && res.data?.data?.items) {
+          setMenuItems(res.data.data.items)
+        } else {
+          setMenuItems([])
+        }
+      } catch (err) {
+        console.error('Error fetching menu items:', err)
+        setMenuItems([])
+      } finally {
+        setLoadingItems(false)
+      }
+    }
+    
+    const timeoutId = setTimeout(() => {
+      fetchItems()
+    }, 300)
+    
+    return () => clearTimeout(timeoutId)
+  }, [heroSearch, searchValue])
 
   // Merge API explore items with fallback to ensure all 4 cards are shown
   const finalExploreItems = useMemo(() => {
@@ -2467,6 +2500,59 @@ export default function Home() {
         </motion.section>
 
         {/* Featured Foods - Horizontal Scroll */}
+
+        {/* MATCHING DISHES (Inline Search) */}
+        {!loadingItems && (heroSearch.trim() || searchValue.trim()) && menuItems.length > 0 && (
+          <motion.section
+            className="pt-4 pb-2"
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+          >
+            <div className="px-1 mb-3 lg:mb-4">
+              <h2 className="text-xs sm:text-sm lg:text-base font-semibold text-gray-400 tracking-widest uppercase">
+                MATCHING DISHES ({menuItems.length})
+              </h2>
+            </div>
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-4">
+              {menuItems.map((item, idx) => (
+                <div
+                  key={item._id || item.id || idx}
+                  className="flex flex-col items-center gap-2 cursor-pointer group"
+                  onClick={() => navigate(`/user/restaurants/${item.restaurantSlug || item.restaurant?.slug || ''}`)}
+                >
+                  <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-800">
+                    {item.image ? (
+                      <img
+                        loading="lazy"
+                        src={item.image}
+                        alt={item.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                        onError={(e) => { e.target.src = foodImages[0] }}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <span className="text-2xl">🍽️</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-center px-1">
+                    <p className="text-xs font-semibold text-gray-800 dark:text-gray-200 group-hover:text-[#EB590E] transition-colors line-clamp-2">
+                      {item.name}
+                    </p>
+                    {item.price && (
+                      <p className="text-[10px] text-[#EB590E] font-bold mt-0.5">₹{item.price}</p>
+                    )}
+                    {item.restaurantName && (
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 line-clamp-1">{item.restaurantName}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </motion.section>
+        )}
 
         {/* Restaurants - Enhanced with Animations */}
         <motion.section
