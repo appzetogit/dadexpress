@@ -1834,7 +1834,7 @@ export default function Home() {
     if (heroSearch) {
       setSearchValue(heroSearch)
     }
-    openSearch()
+    // openSearch()
   }, [heroSearch, openSearch, setSearchValue])
 
   const handleSearchClose = useCallback(() => {

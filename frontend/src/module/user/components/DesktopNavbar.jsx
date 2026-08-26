@@ -176,17 +176,13 @@ export default function DesktopNavbar() {
                                             onChange={(e) => setHeroSearch(e.target.value)}
                                             onFocus={() => {
                                                 if (heroSearch) setSearchValue(heroSearch)
-                                                openSearch()
                                             }}
                                             onClick={() => {
                                                 if (heroSearch) setSearchValue(heroSearch)
-                                                openSearch()
                                             }}
                                             onKeyDown={(e) => {
-                                                if (e.key === 'Enter' && heroSearch.trim()) {
-                                                    navigate(`/user/search?q=${encodeURIComponent(heroSearch.trim())}`)
-                                                    closeSearch()
-                                                    setHeroSearch("")
+                                                if (e.key === 'Enter') {
+                                                    e.currentTarget.blur()
                                                 }
                                             }}
                                             className="h-6 p-0 border-0 bg-transparent text-sm font-medium text-neutral-900 dark:text-white placeholder:text-gray-500 focus-visible:ring-0 focus-visible:ring-offset-0"
