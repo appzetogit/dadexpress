@@ -204,7 +204,7 @@ export default function SearchResults() {
         setLoadingRestaurants(true)
         console.log('🔄 Fetching restaurants from API...')
         // Optional: Add zoneId if available (for sorting/filtering, but show all restaurants)
-        const params = {}
+        const params = { isActive: true }
         if (zoneId) {
           params.zoneId = zoneId
         }
@@ -417,11 +417,44 @@ export default function SearchResults() {
     // Filter by search query - only show restaurants that match the search term
     if (activeSearch) {
       const lowerQuery = activeSearch.toLowerCase()
-      filtered = filtered.filter(r =>
-        r.name?.toLowerCase().includes(lowerQuery) ||
-        r.cuisine?.toLowerCase().includes(lowerQuery) ||
-        r.featuredDish?.toLowerCase().includes(lowerQuery)
-      )
+      filtered = filtered.filter(r => {
+        const nameMatch = r.name?.toLowerCase().includes(lowerQuery)
+        const cuisineMatch = r.cuisine?.toLowerCase().includes(lowerQuery)
+        const dishMatch = r.featuredDish?.toLowerCase().includes(lowerQuery)
+
+        // Also search inside menu items
+        let menuMatch = false
+        if (r.menu && r.menu.sections) {
+          for (const section of r.menu.sections) {
+            if (section.items) {
+              for (const item of section.items) {
+                if (item.name?.toLowerCase().includes(lowerQuery) ||
+                  item.category?.toLowerCase().includes(lowerQuery)) {
+                  menuMatch = true
+                  break
+                }
+              }
+            }
+            if (menuMatch) break
+            if (section.subsections) {
+              for (const subsection of section.subsections) {
+                if (subsection.items) {
+                  for (const item of subsection.items) {
+                    if (item.name?.toLowerCase().includes(lowerQuery) ||
+                      item.category?.toLowerCase().includes(lowerQuery)) {
+                      menuMatch = true
+                      break
+                    }
+                  }
+                }
+                if (menuMatch) break
+              }
+            }
+            if (menuMatch) break
+          }
+        }
+        return nameMatch || cuisineMatch || dishMatch || menuMatch
+      })
     }
 
     // Filter by category - Dynamic filtering based on menu items
