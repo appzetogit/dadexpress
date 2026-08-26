@@ -91,7 +91,7 @@ export default function Conversation() {
                 <CardContent className="px-2 md:px-4 py-1.5 md:py-3 gap-0">
                   <div className="flex items-center gap-3">
                     <div className="relative flex-shrink-0">
-                      <img 
+                      <img loading="lazy" decoding="async" 
                         src={conversation.avatar}
                         alt={conversation.name}
                         className="w-12 h-12 rounded-full object-cover"

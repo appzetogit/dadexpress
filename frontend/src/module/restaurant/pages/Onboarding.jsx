@@ -1992,7 +1992,7 @@ export default function RestaurantOnboarding() {
                       </button>
                     </div>
                     {imageUrl ? (
-                      <img
+                      <img loading="lazy" decoding="async"
                         src={imageUrl}
                         alt={`Menu ${idx + 1}`}
                         className="w-full h-full object-cover"
@@ -2035,7 +2035,7 @@ export default function RestaurantOnboarding() {
                     }
 
                     return imageSrc ? (
-                      <img
+                      <img loading="lazy" decoding="async"
                         src={imageSrc}
                         alt="Restaurant profile"
                         className="w-full h-full object-cover"

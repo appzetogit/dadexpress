@@ -1706,7 +1706,7 @@ export default function RestaurantDetails() {
                                       {/* Right Side - Image and Add Button */}
                                       <div className="relative w-32 h-32 flex-shrink-0">
                                         {item.image ? (
-                                          <img
+                                          <img loading="lazy" decoding="async"
                                             src={item.image}
                                             alt={item.name}
                                             className="w-full h-full object-cover rounded-2xl shadow-sm"
@@ -1795,7 +1795,7 @@ export default function RestaurantDetails() {
         <div className="px-4 py-4 mt-2 mb-24 border-t border-dashed border-gray-200 dark:border-gray-800 bg-gray-50/30 dark:bg-white/5 mx-4 rounded-xl">
           <div className="flex items-center gap-4">
             <div className="h-12 w-20 flex items-center justify-center bg-white rounded-lg p-1.5 shadow-sm border border-gray-100">
-              <img
+              <img loading="lazy" decoding="async"
                 src={fssaiLogo}
                 alt="FSSAI"
                 className="h-full w-auto object-contain"
@@ -2349,7 +2349,7 @@ export default function RestaurantDetails() {
                   {/* Image Section */}
                   <div className="relative w-full h-64 overflow-hidden rounded-t-3xl">
                     {selectedItem.image ? (
-                      <img
+                      <img loading="lazy" decoding="async"
                         src={selectedItem.image}
                         alt={selectedItem.name}
                         className="w-full h-full object-cover"
@@ -2896,7 +2896,7 @@ export default function RestaurantDetails() {
                     {restaurant?.onboarding?.step3?.fssai?.registrationNumber && (
                       <div className="mt-4 px-2 pt-4 border-t border-gray-100 dark:border-gray-800 flex items-center gap-3 opacity-80 mb-2">
                         <div className="h-8 w-14 flex items-center justify-center bg-white rounded p-1 border border-gray-100">
-                          <img
+                          <img loading="lazy" decoding="async"
                             src={fssaiLogo}
                             alt="FSSAI"
                             className="h-full w-auto object-contain"

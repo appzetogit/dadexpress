@@ -448,6 +448,7 @@ export default function DaySlots() {
 
   // Lenis smooth scrolling
   useEffect(() => {
+    const isMobile = typeof window !== "undefined" && (window.innerWidth < 768 || "ontouchstart" in window);
     const lenis = new Lenis({
       duration: 1.2,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
@@ -455,7 +456,7 @@ export default function DaySlots() {
     })
 
     function raf(time) {
-      lenis.raf(time)
+      if (!isMobile) lenis.raf(time)
       requestAnimationFrame(raf)
     }
 

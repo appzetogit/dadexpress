@@ -46,7 +46,7 @@ export default function HubGrowth() {
             >
               <div className="shrink-0">
                 <div className="w-12 h-12 rounded-lg flex items-center justify-center relative overflow-hidden">
-                  <img src={offersAndDiscountsIcon} alt="Offers and discounts" className="w-full h-full object-contain" />
+                  <img loading="lazy" decoding="async" src={offersAndDiscountsIcon} alt="Offers and discounts" className="w-full h-full object-contain" />
                 </div>
               </div>
               <div className="flex-1">

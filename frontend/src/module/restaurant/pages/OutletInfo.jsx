@@ -204,6 +204,7 @@ export default function OutletInfo() {
 
   // Lenis smooth scrolling
   useEffect(() => {
+    const isMobile = typeof window !== "undefined" && (window.innerWidth < 768 || "ontouchstart" in window);
     const lenis = new Lenis({
       duration: 1.2,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
@@ -211,7 +212,7 @@ export default function OutletInfo() {
     })
 
     function raf(time) {
-      lenis.raf(time)
+      if (!isMobile) lenis.raf(time)
       requestAnimationFrame(raf)
     }
 
@@ -747,7 +748,7 @@ export default function OutletInfo() {
 
       {/* Banner / Cover Section */}
       <div className="relative h-[250px] bg-slate-200 overflow-hidden group">
-        <img 
+        <img loading="lazy" decoding="async" 
           src={mainImage}
           alt="Restaurant banner"
           className="w-full h-full object-cover"
@@ -783,7 +784,7 @@ export default function OutletInfo() {
                 key={index}
                 className="relative w-8 h-8 rounded border-2 border-white overflow-hidden bg-gray-200"
               >
-                <img
+                <img loading="lazy" decoding="async"
                   src={typeof img === 'string' ? img : img.url}
                   alt={`Cover ${index + 1}`}
                   className="w-full h-full object-cover"
@@ -814,7 +815,7 @@ export default function OutletInfo() {
         {/* Thumbnail Section - Overlapping bottom edge */}
         <div className="absolute bottom-0 left-4 -mb-[45px] flex flex-col gap-2 shrink-0 z-10">
           <div className="relative w-[70px] h-[70px] rounded overflow-hidden">
-            <img 
+            <img loading="lazy" decoding="async" 
               src={thumbnailImage}
               alt="Restaurant thumbnail"
               className="w-full h-full rounded-xl object-cover"

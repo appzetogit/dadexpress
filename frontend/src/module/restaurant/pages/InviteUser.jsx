@@ -76,6 +76,7 @@ export default function InviteUser() {
 
   // Lenis smooth scrolling
   useEffect(() => {
+    const isMobile = typeof window !== "undefined" && (window.innerWidth < 768 || "ontouchstart" in window);
     const lenis = new Lenis({
       duration: 1.2,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
@@ -83,7 +84,7 @@ export default function InviteUser() {
     })
 
     function raf(time) {
-      lenis.raf(time)
+      if (!isMobile) lenis.raf(time)
       requestAnimationFrame(raf)
     }
 
@@ -381,7 +382,7 @@ export default function InviteUser() {
           <div className="flex items-center gap-4">
             <div className="h-20 w-20 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden border-2 border-gray-200">
               {photoPreview ? (
-                <img
+                <img loading="lazy" decoding="async"
                   src={photoPreview}
                   alt="Staff photo preview"
                   className="w-full h-full object-cover"

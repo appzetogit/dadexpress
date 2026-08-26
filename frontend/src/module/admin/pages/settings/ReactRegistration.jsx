@@ -95,7 +95,7 @@ export default function ReactRegistration() {
             <div className="mb-4">
               {heroImagePreview ? (
                 <div className="relative border-2 border-slate-200 rounded-lg p-4 bg-slate-50">
-                  <img
+                  <img loading="lazy" decoding="async"
                     src={heroImagePreview}
                     alt="Hero section preview"
                     className="w-full h-auto rounded-lg max-h-96 object-contain mx-auto"
@@ -240,7 +240,7 @@ export default function ReactRegistration() {
                       <div className="relative inline-block">
                         {opp.icon ? (
                           <div className="relative">
-                            <img
+                            <img loading="lazy" decoding="async"
                               src={opp.icon}
                               alt="Icon"
                               className="w-24 h-24 object-cover rounded-lg border border-slate-300"

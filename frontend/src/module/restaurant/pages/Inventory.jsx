@@ -1393,7 +1393,7 @@ export default function Inventory() {
                         </div>
                         <div className="flex items-start gap-2">
                           {addon.images && addon.images.length > 0 && addon.images[0] && (
-                            <img
+                            <img loading="lazy" decoding="async"
                               src={addon.images[0]}
                               alt={addon.name}
                               className="w-20 h-20 object-cover rounded-lg"

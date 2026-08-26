@@ -117,7 +117,7 @@ export default function DisbursementReportRestaurants() {
             </div>
             <div className="flex flex-col items-center text-center">
               <div className="w-16 h-16 rounded-full bg-green-500 flex items-center justify-center mb-4 relative">
-                <img src={pendingIcon} alt="Pending" className="w-10 h-10" />
+                <img loading="lazy" decoding="async" src={pendingIcon} alt="Pending" className="w-10 h-10" />
               </div>
               <p className="text-2xl font-bold text-green-600 mb-1">{disbursementStats.pending}</p>
               <p className="text-sm text-slate-600">Pending Disbursements</p>
@@ -133,7 +133,7 @@ export default function DisbursementReportRestaurants() {
             </div>
             <div className="flex flex-col items-center text-center">
               <div className="w-16 h-16 rounded-full bg-orange-500 flex items-center justify-center mb-4">
-                <img src={completedIcon} alt="Completed" className="w-10 h-10" />
+                <img loading="lazy" decoding="async" src={completedIcon} alt="Completed" className="w-10 h-10" />
               </div>
               <p className="text-2xl font-bold text-slate-900 mb-1">{disbursementStats.completed}</p>
               <p className="text-sm text-slate-600">Completed Disbursements</p>
@@ -149,7 +149,7 @@ export default function DisbursementReportRestaurants() {
             </div>
             <div className="flex flex-col items-center text-center">
               <div className="w-16 h-16 rounded-full bg-red-500 flex items-center justify-center mb-4 relative">
-                <img src={canceledIcon} alt="Canceled" className="w-10 h-10" />
+                <img loading="lazy" decoding="async" src={canceledIcon} alt="Canceled" className="w-10 h-10" />
               </div>
               <p className="text-2xl font-bold text-red-600 mb-1">{disbursementStats.canceled}</p>
               <p className="text-sm text-slate-600">Canceled Transactions</p>

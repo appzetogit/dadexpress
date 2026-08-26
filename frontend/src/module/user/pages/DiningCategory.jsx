@@ -354,7 +354,7 @@ export default function DiningCategory() {
                     <Card className="overflow-hidden cursor-pointer border-0 group bg-white shadow-md hover:shadow-xl transition-all duration-300 py-0 gap-0 rounded-2xl">
                       {/* Image Section */}
                       <div className="relative h-48 sm:h-56 md:h-60 w-full overflow-hidden rounded-t-2xl">
-                        <img
+                        <img loading="lazy" decoding="async"
                           src={restaurant.image}
                           alt={restaurant.name}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"

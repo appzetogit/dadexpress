@@ -737,7 +737,7 @@ export default function CreatePercentageDiscount() {
                   <div className="flex items-start gap-4">
                     {/* Item Image */}
                     <div className="relative w-20 h-20 rounded-lg overflow-hidden flex-shrink-0">
-                      <img
+                      <img loading="lazy" decoding="async"
                         src={item.image || item.images?.[0] || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=200&h=200&fit=crop"}
                         alt={item.name}
                         className="w-full h-full object-cover"
@@ -908,7 +908,7 @@ export default function CreatePercentageDiscount() {
                       <div className="mt-3 space-y-2">
                         {offer.items.slice(0, 3).map((item, index) => (
                           <div key={index} className="flex items-center gap-3 bg-gray-50 rounded-lg p-2">
-                            <img
+                            <img loading="lazy" decoding="async"
                               src={item.image || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=200&h=200&fit=crop"}
                               alt={item.itemName}
                               className="w-12 h-12 rounded object-cover"

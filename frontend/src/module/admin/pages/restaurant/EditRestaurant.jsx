@@ -498,7 +498,7 @@ export default function EditRestaurant() {
                                 const imageUrl = file instanceof File ? URL.createObjectURL(file) : (file?.url || file)
                                 return (
                                     <div key={idx} className="relative aspect-[4/5] rounded-md overflow-hidden bg-gray-100">
-                                        {imageUrl && <img src={imageUrl} alt={`Menu ${idx + 1}`} className="w-full h-full object-cover" />}
+                                        {imageUrl && <img loading="lazy" decoding="async" src={imageUrl} alt={`Menu ${idx + 1}`} className="w-full h-full object-cover" />}
                                         <button type="button" onClick={() => setStep2((prev) => ({ ...prev, menuImages: prev.menuImages.filter((_, i) => i !== idx) }))} className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full hover:bg-red-600">
                                             <X className="w-3 h-3" />
                                         </button>
@@ -518,7 +518,7 @@ export default function EditRestaurant() {
                             {step2.profileImage ? (
                                 (() => {
                                     const imageSrc = step2.profileImage instanceof File ? URL.createObjectURL(step2.profileImage) : (step2.profileImage?.url || step2.profileImage)
-                                    return imageSrc ? <img src={imageSrc} alt="Profile" className="w-full h-full object-cover" /> : <ImageIcon className="w-6 h-6 text-gray-500" />
+                                    return imageSrc ? <img loading="lazy" decoding="async" src={imageSrc} alt="Profile" className="w-full h-full object-cover" /> : <ImageIcon className="w-6 h-6 text-gray-500" />
                                 })()
                             ) : (
                                 <ImageIcon className="w-6 h-6 text-gray-500" />
@@ -639,7 +639,7 @@ export default function EditRestaurant() {
                 </div>
                 <div>
                     <Label className="text-xs text-gray-700">PAN image {step3.panImage?.url && <span className="text-green-600 ml-1">(existing image)</span>}</Label>
-                    {step3.panImage?.url && <img src={step3.panImage.url} alt="PAN" className="h-16 w-auto rounded mt-1 border" />}
+                    {step3.panImage?.url && <img loading="lazy" decoding="async" src={step3.panImage.url} alt="PAN" className="h-16 w-auto rounded mt-1 border" />}
                     <Input type="file" accept="image/*" onChange={(e) => setStep3({ ...step3, panImage: e.target.files?.[0] || null })} className="mt-1 bg-white text-sm" />
                     {formErrors.panImage && <p className="mt-1 text-xs text-red-600">{formErrors.panImage}</p>}
                 </div>
@@ -670,7 +670,7 @@ export default function EditRestaurant() {
                         />
                         {formErrors.gstLegalName && <p className="-mt-2 text-xs text-red-600">{formErrors.gstLegalName}</p>}
                         <Input value={step3.gstAddress || ""} onChange={(e) => setStep3({ ...step3, gstAddress: e.target.value })} className="bg-white text-sm" placeholder="Registered address" />
-                        {step3.gstImage?.url && <img src={step3.gstImage.url} alt="GST" className="h-16 w-auto rounded border" />}
+                        {step3.gstImage?.url && <img loading="lazy" decoding="async" src={step3.gstImage.url} alt="GST" className="h-16 w-auto rounded border" />}
                         <Input type="file" accept="image/*" onChange={(e) => setStep3({ ...step3, gstImage: e.target.files?.[0] || null })} className="bg-white text-sm" />
                         {formErrors.gstImage && <p className="-mt-2 text-xs text-red-600">{formErrors.gstImage}</p>}
                     </div>
@@ -696,7 +696,7 @@ export default function EditRestaurant() {
                         {formErrors.fssaiExpiry && <p className="mt-1 text-xs text-red-600">{formErrors.fssaiExpiry}</p>}
                     </div>
                 </div>
-                {step3.fssaiImage?.url && <img src={step3.fssaiImage.url} alt="FSSAI" className="h-16 w-auto rounded border" />}
+                {step3.fssaiImage?.url && <img loading="lazy" decoding="async" src={step3.fssaiImage.url} alt="FSSAI" className="h-16 w-auto rounded border" />}
                 <Input type="file" accept="image/*" onChange={(e) => setStep3({ ...step3, fssaiImage: e.target.files?.[0] || null })} className="bg-white text-sm" />
             </section>
 

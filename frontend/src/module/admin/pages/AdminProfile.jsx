@@ -262,7 +262,7 @@ export default function AdminProfile() {
             <div className="flex items-center gap-6 pb-6 border-b border-neutral-200">
               <div className="w-20 h-20 rounded-full bg-neutral-100 flex items-center justify-center overflow-hidden border-2 border-neutral-300">
                 {profile.profileImage ? (
-                  <img
+                  <img loading="lazy" decoding="async"
                     src={profile.profileImage}
                     alt={profile.name}
                     className="w-full h-full object-cover"
@@ -344,7 +344,7 @@ export default function AdminProfile() {
                 />
                 {imagePreview || profile.profileImage ? (
                   <div className="relative w-48 h-48 border-2 border-neutral-300 rounded-lg overflow-hidden group">
-                    <img
+                    <img loading="lazy" decoding="async"
                       src={imagePreview || profile.profileImage}
                       alt="Profile"
                       className="w-full h-full object-cover"

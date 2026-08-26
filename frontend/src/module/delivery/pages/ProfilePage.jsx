@@ -53,6 +53,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     // Initialize Lenis for smooth scrolling
+    const isMobile = typeof window !== "undefined" && (window.innerWidth < 768 || "ontouchstart" in window);
     const lenis = new Lenis({
       duration: 1.2,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
@@ -60,7 +61,7 @@ export default function ProfilePage() {
     })
 
     function raf(time) {
-      lenis.raf(time)
+      if (!isMobile) lenis.raf(time)
       requestAnimationFrame(raf)
     }
 
@@ -319,7 +320,7 @@ export default function ProfilePage() {
             </div>
             <div className="relative shrink-0 ml-4">
               {profile?.profileImage?.url ? (
-                <img
+                <img loading="lazy" decoding="async"
                   src={profile.profileImage.url}
                   alt="Profile"
                   className="w-20 h-20 md:w-24 md:h-24 rounded-full object-cover border-2 border-gray-200"
@@ -333,7 +334,7 @@ export default function ProfilePage() {
                   }}
                 />
               ) : profile?.documents?.photo ? (
-                <img
+                <img loading="lazy" decoding="async"
                   src={profile.documents.photo}
                   alt="Profile"
                   className="w-20 h-20 md:w-24 md:h-24 rounded-full object-cover border-2 border-gray-200"

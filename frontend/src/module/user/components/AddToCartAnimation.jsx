@@ -378,7 +378,7 @@ export default function AddToCartAnimation({
           }}
         >
           {removedProduct.product?.imageUrl ? (
-            <img
+            <img loading="lazy" decoding="async"
               src={removedProduct.product.imageUrl}
               alt={removedProduct.product.name}
               className="w-full h-full object-cover rounded-full"
@@ -402,7 +402,7 @@ export default function AddToCartAnimation({
           }}
         >
           {flyingProduct.product.imageUrl ? (
-            <img
+            <img loading="lazy" decoding="async"
               src={flyingProduct.product.imageUrl}
               alt={flyingProduct.product.name}
               className="w-full h-full object-cover rounded-full"
@@ -464,7 +464,7 @@ export default function AddToCartAnimation({
                     className="w-7 h-7 rounded-full border-2 border-white/90 overflow-hidden bg-white flex-shrink-0 shadow-md"
                   >
                     {item.product.imageUrl ? (
-                      <img
+                      <img loading="lazy" decoding="async"
                         src={item.product.imageUrl}
                         alt={item.product.name}
                         className="w-full h-full object-cover"

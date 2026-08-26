@@ -375,7 +375,7 @@ export default function LandingPageSettings({ type = "admin" }) {
                     <div className="relative inline-block">
                       {adminImageContent.contentImage ? (
                         <div className="relative">
-                          <img
+                          <img loading="lazy" decoding="async"
                             src={adminImageContent.contentImage}
                             alt="Content"
                             className="w-24 h-24 sm:w-32 sm:h-32 object-cover rounded-lg border border-slate-300"
@@ -411,7 +411,7 @@ export default function LandingPageSettings({ type = "admin" }) {
                     <div className="relative inline-block">
                       {adminImageContent.backgroundImage ? (
                         <div className="relative">
-                          <img
+                          <img loading="lazy" decoding="async"
                             src={adminImageContent.backgroundImage}
                             alt="Background"
                             className="w-24 h-24 sm:w-32 sm:h-32 object-cover rounded-lg border border-slate-300"
@@ -1159,7 +1159,7 @@ export default function LandingPageSettings({ type = "admin" }) {
                   <div className="relative inline-block">
                     {reactHeaderContent.backgroundImage ? (
                       <div className="relative">
-                        <img
+                        <img loading="lazy" decoding="async"
                           src={reactHeaderContent.backgroundImage}
                           alt="Background"
                           className="w-40 h-24 sm:w-48 sm:h-32 object-cover rounded-lg border border-slate-300"

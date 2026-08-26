@@ -30,6 +30,7 @@ export default function WishlistPage() {
 
   useEffect(() => {
     // Initialize Lenis for smooth scrolling
+    const isMobile = typeof window !== "undefined" && (window.innerWidth < 768 || "ontouchstart" in window);
     const lenis = new Lenis({
       duration: 1.2,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
@@ -37,7 +38,7 @@ export default function WishlistPage() {
     })
 
     function raf(time) {
-      lenis.raf(time)
+      if (!isMobile) lenis.raf(time)
       requestAnimationFrame(raf)
     }
 
@@ -178,7 +179,7 @@ export default function WishlistPage() {
                     onClick={() => navigate(`/usermain/food/${item.originalId || item.id.replace('food-', '')}`)}
                   >
                     <div className="relative w-24 h-24 flex-shrink-0 rounded-lg overflow-hidden">
-                      <img
+                      <img loading="lazy" decoding="async"
                         src={item.image}
                         alt={item.name}
                         className="w-full h-full object-cover"
@@ -240,7 +241,7 @@ export default function WishlistPage() {
                   >
                     <div className="flex gap-4">
                       <div className="relative w-24 h-24 flex-shrink-0 rounded-lg overflow-hidden">
-                        <img
+                        <img loading="lazy" decoding="async"
                           src={item.foodImage}
                           alt={item.name}
                           className="w-full h-full object-cover"

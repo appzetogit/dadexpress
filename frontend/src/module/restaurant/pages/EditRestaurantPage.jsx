@@ -25,6 +25,7 @@ export default function EditRestaurantPage() {
 
   // Lenis smooth scrolling
   useEffect(() => {
+    const isMobile = typeof window !== "undefined" && (window.innerWidth < 768 || "ontouchstart" in window);
     const lenis = new Lenis({
       duration: 1.2,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
@@ -32,7 +33,7 @@ export default function EditRestaurantPage() {
     })
 
     function raf(time) {
-      lenis.raf(time)
+      if (!isMobile) lenis.raf(time)
       requestAnimationFrame(raf)
     }
 
@@ -261,7 +262,7 @@ export default function EditRestaurantPage() {
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 md:p-8 flex flex-col items-center justify-center min-h-[150px]">
                 {formData.logo ? (
                   <div className="relative w-32 h-32 rounded-lg overflow-hidden">
-                    <img 
+                    <img loading="lazy" decoding="async" 
                       src={formData.logo} 
                       alt="Restaurant Logo" 
                       className="w-full h-full object-cover"
@@ -306,7 +307,7 @@ export default function EditRestaurantPage() {
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 md:p-8 flex flex-col items-center justify-center min-h-[200px]">
                 {formData.cover ? (
                   <div className="relative w-full rounded-lg overflow-hidden">
-                    <img 
+                    <img loading="lazy" decoding="async" 
                       src={formData.cover} 
                       alt="Restaurant Cover" 
                       className="w-full h-auto object-cover"
@@ -379,7 +380,7 @@ export default function EditRestaurantPage() {
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 md:p-8 flex flex-col items-center justify-center min-h-[150px]">
                 {formData.metaImage ? (
                   <div className="relative w-full rounded-lg overflow-hidden">
-                    <img 
+                    <img loading="lazy" decoding="async" 
                       src={formData.metaImage} 
                       alt="Meta Image" 
                       className="w-full h-auto object-cover"

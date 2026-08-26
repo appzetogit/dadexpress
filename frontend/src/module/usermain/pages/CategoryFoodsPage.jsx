@@ -242,7 +242,7 @@ export default function CategoryFoodsPage() {
             <div className="flex gap-3 p-3">
               {/* Food Image */}
               <div className="relative flex-shrink-0">
-                <img
+                <img loading="lazy" decoding="async"
                   src={food.image}
                   alt={food.name}
                   className="w-24 h-24 rounded-lg object-cover"

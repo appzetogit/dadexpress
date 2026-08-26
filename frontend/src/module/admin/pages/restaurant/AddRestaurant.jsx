@@ -542,7 +542,7 @@ export default function AddRestaurant() {
                 const imageUrl = file instanceof File ? URL.createObjectURL(file) : (file?.url || file)
                 return (
                   <div key={idx} className="relative aspect-[4/5] rounded-md overflow-hidden bg-gray-100">
-                    {imageUrl && <img src={imageUrl} alt={`Menu ${idx + 1}`} className="w-full h-full object-cover" />}
+                    {imageUrl && <img loading="lazy" decoding="async" src={imageUrl} alt={`Menu ${idx + 1}`} className="w-full h-full object-cover" />}
                     <button
                       type="button"
                       onClick={() => setStep2((prev) => ({ ...prev, menuImages: prev.menuImages.filter((_, i) => i !== idx) }))}
@@ -564,7 +564,7 @@ export default function AddRestaurant() {
               {step2.profileImage ? (
                 (() => {
                   const imageSrc = step2.profileImage instanceof File ? URL.createObjectURL(step2.profileImage) : (step2.profileImage?.url || step2.profileImage)
-                  return imageSrc ? <img src={imageSrc} alt="Profile" className="w-full h-full object-cover" /> : <ImageIcon className="w-6 h-6 text-gray-500" />
+                  return imageSrc ? <img loading="lazy" decoding="async" src={imageSrc} alt="Profile" className="w-full h-full object-cover" /> : <ImageIcon className="w-6 h-6 text-gray-500" />
                 })()
               ) : (
                 <ImageIcon className="w-6 h-6 text-gray-500" />

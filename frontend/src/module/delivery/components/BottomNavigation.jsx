@@ -116,7 +116,7 @@ export default function BottomNavigation() {
           className="flex flex-col items-center gap-1 p-2"
         >
           {profileImage && !imageError ? (
-            <img
+            <img loading="lazy" decoding="async"
               src={profileImage}
               alt="Profile"
               className={`w-7 h-7 rounded-full border-2 object-cover ${isActive("/delivery/profile") ? "border-black" : "border-gray-300"

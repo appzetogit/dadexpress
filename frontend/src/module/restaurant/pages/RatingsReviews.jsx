@@ -56,6 +56,7 @@ export default function RatingsReviews() {
 
   // Lenis smooth scrolling
   useEffect(() => {
+    const isMobile = typeof window !== "undefined" && (window.innerWidth < 768 || "ontouchstart" in window);
     const lenis = new Lenis({
       duration: 1.2,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
@@ -63,7 +64,7 @@ export default function RatingsReviews() {
     })
 
     function raf(time) {
-      lenis.raf(time)
+      if (!isMobile) lenis.raf(time)
       requestAnimationFrame(raf)
     }
 
@@ -122,7 +123,7 @@ export default function RatingsReviews() {
 
       {/* Top Banner Section */}
       <div className="relative w-full">
-        <img 
+        <img loading="lazy" decoding="async" 
           src={restaurantReviewBanner}
           alt="Ratings and reviews banner"
           className="w-full h-auto object-cover"

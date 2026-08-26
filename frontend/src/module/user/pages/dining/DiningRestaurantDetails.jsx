@@ -298,7 +298,7 @@ export default function DiningRestaurantDetails() {
 
             {/* Hero Section */}
             <div className="relative h-[45vh] w-full">
-                <img
+                <img loading="lazy" decoding="async"
                     src={coverImage}
                     alt={restaurant.name}
                     className="w-full h-full object-cover"
@@ -419,7 +419,7 @@ export default function DiningRestaurantDetails() {
                                 <div className="grid grid-cols-2 gap-4">
                                     {restaurant.menuImages.map((img, i) => (
                                         <div key={i} className="aspect-[3/4] bg-gray-100 rounded-xl overflow-hidden shadow-sm border border-gray-100">
-                                            <img src={img.url} alt={`Menu ${i + 1}`} className="w-full h-full object-cover" />
+                                            <img loading="lazy" decoding="async" src={img.url} alt={`Menu ${i + 1}`} className="w-full h-full object-cover" />
                                         </div>
                                     ))}
                                 </div>
@@ -464,7 +464,7 @@ export default function DiningRestaurantDetails() {
                                                     </div>
                                                     {item.image && (
                                                         <div className="w-20 h-20 rounded-xl overflow-hidden border border-gray-100 shadow-sm flex-shrink-0">
-                                                            <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                                                            <img loading="lazy" decoding="async" src={item.image} alt={item.name} className="w-full h-full object-cover" />
                                                         </div>
                                                     )}
                                                 </div>
@@ -499,7 +499,7 @@ export default function DiningRestaurantDetails() {
                                                                 </div>
                                                                 {item.image && (
                                                                     <div className="w-20 h-20 rounded-xl overflow-hidden border border-gray-100 shadow-sm flex-shrink-0">
-                                                                        <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                                                                        <img loading="lazy" decoding="async" src={item.image} alt={item.name} className="w-full h-full object-cover" />
                                                                     </div>
                                                                 )}
                                                             </div>
@@ -526,7 +526,7 @@ export default function DiningRestaurantDetails() {
                     <div className="grid grid-cols-3 gap-2">
                         {[restaurant.profileImage?.url, restaurant.image, ...(restaurant.photos || []).map(p => p.url), ...(restaurant.menuImages || []).map(m => m.url)].filter(Boolean).map((img, i) => (
                             <div key={i} className="aspect-square bg-gray-100 rounded-lg overflow-hidden border border-gray-100 shadow-sm transition-transform active:scale-95">
-                                <img src={img} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
+                                <img loading="lazy" decoding="async" src={img} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
                             </div>
                         ))}
                         {(!restaurant.profileImage?.url && (!restaurant.menuImages || restaurant.menuImages.length === 0)) && (

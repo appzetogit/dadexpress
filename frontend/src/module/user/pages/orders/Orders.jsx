@@ -607,7 +607,7 @@ Order again from this restaurant in the ${companyName} app.`
                   <div className="flex gap-3">
                     {/* Restaurant Image */}
                     <div className="w-14 h-14 rounded-lg bg-gray-200 dark:bg-gray-800 overflow-hidden flex-shrink-0">
-                      <img
+                      <img loading="lazy" decoding="async"
                         src={restaurantImage}
                         alt={order.restaurant}
                         className="w-full h-full object-cover"
@@ -687,7 +687,7 @@ Order again from this restaurant in the ${companyName} app.`
                           {/* Item Image */}
                           {itemImage && (
                             <div className="w-12 h-12 rounded-lg bg-gray-100 dark:bg-gray-800 overflow-hidden flex-shrink-0">
-                              <img
+                              <img loading="lazy" decoding="async"
                                 src={itemImage}
                                 alt={itemName}
                                 className="w-full h-full object-cover"

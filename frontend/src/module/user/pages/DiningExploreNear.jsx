@@ -229,7 +229,7 @@ export default function DiningExploreNear() {
       <div className="relative w-full overflow-hidden min-h-[39vh] lg:min-h-[50vh] md:pt-16">
         {/* Background with near and top rated banner */}
         <div className="absolute inset-0 z-0">
-          <img
+          <img loading="lazy" decoding="async"
             src={nearAndTopRated}
             alt="Near and Top Rated"
             className="w-full h-full object-cover"
@@ -394,7 +394,7 @@ export default function DiningExploreNear() {
 
                       {/* Image Section */}
                       <div className="relative h-48 sm:h-56 md:h-60 w-full overflow-hidden rounded-t-2xl">
-                        <img
+                        <img loading="lazy" decoding="async"
                           src={restaurantImage}
                           alt={restaurant.name}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"

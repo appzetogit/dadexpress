@@ -267,7 +267,7 @@ export default function Banners() {
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="w-16 h-16 rounded-lg overflow-hidden bg-slate-100 flex-shrink-0">
-                          <img
+                          <img loading="lazy" decoding="async"
                             src={bannerImages[banner.sl] || bannerImage1}
                             alt={banner.title}
                             className="w-full h-full object-cover"

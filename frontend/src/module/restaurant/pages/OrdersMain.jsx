@@ -200,7 +200,7 @@ function CompletedOrders({ onSelectOrder }) {
                 >
                   <div className="h-20 w-20 rounded-xl overflow-hidden bg-gray-100 flex items-center justify-center flex-shrink-0 my-auto">
                     {order.photoUrl ? (
-                      <img
+                      <img loading="lazy" decoding="async"
                         src={order.photoUrl}
                         alt={order.photoAlt}
                         className="h-full w-full object-cover"
@@ -421,7 +421,7 @@ function CancelledOrders({ onSelectOrder }) {
                 >
                   <div className="h-20 w-20 rounded-xl overflow-hidden bg-gray-100 flex items-center justify-center flex-shrink-0 my-auto">
                     {order.photoUrl ? (
-                      <img
+                      <img loading="lazy" decoding="async"
                         src={order.photoUrl}
                         alt={order.photoAlt}
                         className="h-full w-full object-cover"
@@ -815,6 +815,7 @@ export default function OrdersMain() {
 
   // Lenis smooth scrolling
   useEffect(() => {
+    const isMobile = typeof window !== "undefined" && (window.innerWidth < 768 || "ontouchstart" in window);
     const lenis = new Lenis({
       duration: 1.2,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
@@ -822,7 +823,7 @@ export default function OrdersMain() {
     })
 
     function raf(time) {
-      lenis.raf(time)
+      if (!isMobile) lenis.raf(time)
       requestAnimationFrame(raf)
     }
 
@@ -2422,7 +2423,7 @@ function OrderCard({
         {/* Photo */}
         <div className="h-20 w-20 rounded-xl overflow-hidden bg-gray-100 flex items-center justify-center flex-shrink-0 my-auto">
           {photoUrl ? (
-            <img
+            <img loading="lazy" decoding="async"
               src={photoUrl}
               alt={photoAlt}
               className="h-full w-full object-cover"

@@ -212,7 +212,7 @@ export default function RestaurantWelcome() {
               >
                 {/* Background Image */}
                 <div className="relative w-full h-full">
-                  <img
+                  <img loading="lazy" decoding="async"
                     src={item.image}
                     alt={`Carousel ${item.id}`}
                     className="w-full h-full object-cover"

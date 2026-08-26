@@ -27,7 +27,7 @@ export default function ThemeSettings() {
                 style={{ width: "280px", height: "600px" }}
                 onClick={() => setSelectedTheme("theme1")}
               >
-                <img 
+                <img loading="lazy" decoding="async" 
                   src={mobileImage1} 
                   alt="Theme 1" 
                   className="w-full h-full object-contain"
@@ -47,7 +47,7 @@ export default function ThemeSettings() {
                 style={{ width: "280px", height: "600px" }}
                 onClick={() => setSelectedTheme("theme2")}
               >
-                <img 
+                <img loading="lazy" decoding="async" 
                   src={mobileImage2} 
                   alt="Theme 2" 
                   className="w-full h-full object-contain"

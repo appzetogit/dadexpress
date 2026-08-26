@@ -93,6 +93,7 @@ export default function FoodDetailsPage() {
 
   // Lenis smooth scrolling
   useEffect(() => {
+    const isMobile = typeof window !== "undefined" && (window.innerWidth < 768 || "ontouchstart" in window);
     const lenis = new Lenis({
       duration: 1.2,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
@@ -100,7 +101,7 @@ export default function FoodDetailsPage() {
     })
 
     function raf(time) {
-      lenis.raf(time)
+      if (!isMobile) lenis.raf(time)
       requestAnimationFrame(raf)
     }
 
@@ -311,7 +312,7 @@ export default function FoodDetailsPage() {
                   <div className="flex gap-4">
                     {/* Food Image */}
                     <div className="relative flex-shrink-0">
-                      <img 
+                      <img loading="lazy" decoding="async" 
                         src={foodData.image}
                         alt={foodData.name}
                         className="w-24 h-24 md:w-32 md:h-32 rounded-lg object-cover"
@@ -517,7 +518,7 @@ export default function FoodDetailsPage() {
                       <div className="flex gap-4">
                         {/* User Avatar */}
                         <div className="flex-shrink-0">
-                          <img
+                          <img loading="lazy" decoding="async"
                             src={review.userAvatar}
                             alt={review.userName}
                             className="w-12 h-12 rounded-full object-cover"

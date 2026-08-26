@@ -70,7 +70,7 @@ export default function Collections() {
       {/* Banner Section - Clean without dark overlay */}
       <div className="relative w-full overflow-hidden min-h-[25vh] md:min-h-[30vh] bg-gradient-to-b from-amber-50 to-white">
         <div className="absolute inset-0 z-0">
-          <img
+          <img loading="lazy" decoding="async"
             src={collectionsBanner}
             alt="Your Collections"
             className="w-full h-full object-cover"

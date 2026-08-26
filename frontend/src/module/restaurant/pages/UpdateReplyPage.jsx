@@ -18,6 +18,7 @@ export default function UpdateReplyPage() {
 
   // Lenis smooth scrolling
   useEffect(() => {
+    const isMobile = typeof window !== "undefined" && (window.innerWidth < 768 || "ontouchstart" in window);
     const lenis = new Lenis({
       duration: 1.2,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
@@ -25,7 +26,7 @@ export default function UpdateReplyPage() {
     })
 
     function raf(time) {
-      lenis.raf(time)
+      if (!isMobile) lenis.raf(time)
       requestAnimationFrame(raf)
     }
 
@@ -82,7 +83,7 @@ export default function UpdateReplyPage() {
               <div className="flex items-start gap-3">
                 {/* Product Image */}
                 <div className="flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden bg-gray-100 border border-gray-200">
-                  <img
+                  <img loading="lazy" decoding="async"
                     src={reviewData.productImage}
                     alt={reviewData.productName}
                     className="w-full h-full object-cover"

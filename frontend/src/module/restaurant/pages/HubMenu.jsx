@@ -1082,7 +1082,7 @@ export default function HubMenu() {
                       </div>
                       <div className="flex items-start gap-2">
                         {addon.images && addon.images.length > 0 && addon.images[0] && (
-                          <img
+                          <img loading="lazy" decoding="async"
                             src={addon.images[0]}
                             alt={addon.name}
                             className="w-20 h-20 object-cover rounded-lg"
@@ -1224,7 +1224,7 @@ export default function HubMenu() {
 
                           {/* Right: Image */}
                           <div className="relative">
-                            <img
+                            <img loading="lazy" decoding="async"
                               src={item.image}
                               alt={item.name}
                               className="w-20 h-20 rounded-lg object-cover"
@@ -1953,7 +1953,7 @@ export default function HubMenu() {
                                  }}
                                 className="flex items-start gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors"
                               >
-                                <img
+                                <img loading="lazy" decoding="async"
                                   src={item.image}
                                   alt={item.name}
                                   className="w-16 h-16 rounded-lg object-cover"
@@ -2113,7 +2113,7 @@ export default function HubMenu() {
                       {addonImages.map((img, index) => (
                         <div key={index} className="relative group">
                           {img && (
-                            <img
+                            <img loading="lazy" decoding="async"
                               src={img}
                               alt={`Add-on ${index + 1}`}
                               className="w-full h-24 object-cover rounded-lg border border-gray-200"

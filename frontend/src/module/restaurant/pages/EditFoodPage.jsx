@@ -28,6 +28,7 @@ export default function EditFoodPage() {
 
   // Lenis smooth scrolling
   useEffect(() => {
+    const isMobile = typeof window !== "undefined" && (window.innerWidth < 768 || "ontouchstart" in window);
     const lenis = new Lenis({
       duration: 1.2,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
@@ -35,7 +36,7 @@ export default function EditFoodPage() {
     })
 
     function raf(time) {
-      lenis.raf(time)
+      if (!isMobile) lenis.raf(time)
       requestAnimationFrame(raf)
     }
 
@@ -288,7 +289,7 @@ export default function EditFoodPage() {
               <h2 className="text-base md:text-lg font-semibold text-gray-900 mb-4">Food Image</h2>
               <div className="flex justify-center">
                 <div className="relative">
-                  <img 
+                  <img loading="lazy" decoding="async" 
                     src={formData.image}
                     alt={formData.name}
                     className="w-32 h-32 md:w-40 md:h-40 rounded-lg object-cover"

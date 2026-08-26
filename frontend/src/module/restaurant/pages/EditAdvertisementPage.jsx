@@ -67,6 +67,7 @@ export default function EditAdvertisementPage() {
 
   // Lenis smooth scrolling
   useEffect(() => {
+    const isMobile = typeof window !== "undefined" && (window.innerWidth < 768 || "ontouchstart" in window);
     const lenis = new Lenis({
       duration: 1.2,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
@@ -74,7 +75,7 @@ export default function EditAdvertisementPage() {
     })
 
     function raf(time) {
-      lenis.raf(time)
+      if (!isMobile) lenis.raf(time)
       requestAnimationFrame(raf)
     }
 
@@ -288,7 +289,7 @@ export default function EditAdvertisementPage() {
                     </div>
                   ) : adData.profileImage ? (
                     <div className="text-center">
-                      <img 
+                      <img loading="lazy" decoding="async" 
                         src={adData.profileImage} 
                         alt="Profile" 
                         className="w-24 h-24 mx-auto rounded-lg object-cover mb-2"
@@ -360,7 +361,7 @@ export default function EditAdvertisementPage() {
                       </div>
                     ) : adData.coverImage ? (
                       <div>
-                        <img 
+                        <img loading="lazy" decoding="async" 
                           src={adData.coverImage} 
                           alt="Cover" 
                           className="w-full h-48 mx-auto rounded-lg object-cover mb-2"

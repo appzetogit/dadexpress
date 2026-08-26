@@ -509,7 +509,7 @@ export default function RestaurantsList() {
                 <p className="text-2xl font-bold text-slate-900">{totalRestaurants}</p>
               </div>
               <div className="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center">
-                <img src={locationIcon} alt="Location" className="w-8 h-8" />
+                <img loading="lazy" decoding="async" src={locationIcon} alt="Location" className="w-8 h-8" />
               </div>
             </div>
           </div>
@@ -522,7 +522,7 @@ export default function RestaurantsList() {
                 <p className="text-2xl font-bold text-slate-900">{activeRestaurants}</p>
               </div>
               <div className="w-12 h-12 rounded-lg bg-green-100 flex items-center justify-center">
-                <img src={restaurantIcon} alt="Restaurant" className="w-8 h-8" />
+                <img loading="lazy" decoding="async" src={restaurantIcon} alt="Restaurant" className="w-8 h-8" />
               </div>
             </div>
           </div>
@@ -535,7 +535,7 @@ export default function RestaurantsList() {
                 <p className="text-2xl font-bold text-slate-900">{inactiveRestaurants}</p>
               </div>
               <div className="w-12 h-12 rounded-lg bg-red-100 flex items-center justify-center">
-                <img src={inactiveIcon} alt="Inactive" className="w-8 h-8" />
+                <img loading="lazy" decoding="async" src={inactiveIcon} alt="Inactive" className="w-8 h-8" />
               </div>
             </div>
           </div>
@@ -680,7 +680,7 @@ export default function RestaurantsList() {
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-100 flex items-center justify-center flex-shrink-0">
-                              <img
+                              <img loading="lazy" decoding="async"
                                 src={restaurant.logo}
                                 alt={restaurant.name}
                                 className="w-full h-full object-cover"
@@ -812,7 +812,7 @@ export default function RestaurantsList() {
                   {/* Restaurant Basic Info */}
                   <div className="flex flex-col md:flex-row items-center md:items-start gap-8">
                     <div className="w-32 h-32 rounded-3xl overflow-hidden bg-slate-50 flex-shrink-0 shadow-inner group">
-                      <img
+                      <img loading="lazy" decoding="async"
                         src={restaurantDetails?.profileImage?.url || restaurantDetails?.logo || selectedRestaurant?.logo || selectedRestaurant?.originalData?.profileImage?.url || "https://via.placeholder.com/128"}
                         alt={restaurantDetails?.name || selectedRestaurant?.name || "Restaurant"}
                         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
@@ -1377,7 +1377,7 @@ export default function RestaurantsList() {
                               rel="noopener noreferrer"
                               className="inline-block"
                             >
-                              <img
+                              <img loading="lazy" decoding="async"
                                 src={restaurantDetails.onboarding.step2.profileImageUrl.url}
                                 alt="Profile"
                                 className="w-32 h-32 rounded-lg object-cover border border-slate-200 hover:border-blue-500 transition-colors"

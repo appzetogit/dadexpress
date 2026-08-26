@@ -62,7 +62,7 @@ export default function MyDiningBills() {
                     bills.map((bill) => (
                         <div key={bill._id} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-start gap-4">
                             <div className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 bg-slate-100">
-                                <img
+                                <img loading="lazy" decoding="async"
                                     src={bill.restaurant?.image || bill.restaurant?.profileImage?.url || "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=200&q=80"}
                                     className="w-full h-full object-cover"
                                     alt={bill.restaurant?.name}

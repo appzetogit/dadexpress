@@ -372,7 +372,7 @@ export default function SubscriberList() {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 rounded-full bg-slate-50 flex items-center justify-center overflow-hidden border border-slate-200">
-                            <img
+                            <img loading="lazy" decoding="async"
                               src={row.icon}
                               alt={row.name}
                               className="w-8 h-8 object-contain"

@@ -437,7 +437,7 @@ export default function FoodReport() {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-100 flex items-center justify-center flex-shrink-0">
-                            <img
+                            <img loading="lazy" decoding="async"
                               src={food.image}
                               alt={food.name}
                               className="w-full h-full object-cover"

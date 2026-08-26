@@ -318,7 +318,7 @@ export default function CreateOffers() {
                   >
                     <div className="shrink-0">
                       <div className="w-12 h-12 rounded-lg flex items-center justify-center relative overflow-hidden">
-                        <img src={goal.icon} alt={goal.title} className="w-full h-full object-contain" />
+                        <img loading="lazy" decoding="async" src={goal.icon} alt={goal.title} className="w-full h-full object-contain" />
                       </div>
                     </div>
                     <div className="flex-1">
@@ -525,7 +525,7 @@ export default function CreateOffers() {
                             {offer.items.slice(0, 3).map((item, idx) => (
                               <div key={idx} className="flex items-center gap-3 bg-gray-50 rounded-lg p-2">
                                 {item.image && (
-                                  <img
+                                  <img loading="lazy" decoding="async"
                                     src={item.image}
                                     alt={item.itemName}
                                     className="w-10 h-10 rounded object-cover"

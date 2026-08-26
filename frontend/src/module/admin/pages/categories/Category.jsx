@@ -600,7 +600,7 @@ export default function Category() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-100 flex items-center justify-center">
-                        <img
+                        <img loading="lazy" decoding="async"
                           src={category.image}
                           alt={category.name}
                           className="w-full h-full object-cover"
@@ -1050,7 +1050,7 @@ export default function Category() {
                         {/* Image Preview */}
                         {(imagePreview || (formData.image && formData.image !== "https://via.placeholder.com/40")) && (
                           <div className="relative w-32 h-32 rounded-lg overflow-hidden border border-slate-300">
-                            <img
+                            <img loading="lazy" decoding="async"
                               src={imagePreview || formData.image}
                               alt="Category preview"
                               className="w-full h-full object-cover"

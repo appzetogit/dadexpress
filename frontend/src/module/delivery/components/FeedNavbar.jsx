@@ -494,7 +494,7 @@ export default function FeedNavbar({ className = "", onEmergencyClick, onHelpCli
         {/* Profile */}
         <button onClick={handleProfileClick} className="w-9 h-9 rounded-full overflow-hidden ring-2 ring-gray-300 flex items-center justify-center bg-gray-200" title="Profile">
           {profileImage && !imageError ? (
-            <img
+            <img loading="lazy" decoding="async"
               src={profileImage}
               alt="Profile"
               className="w-full h-full object-cover"

@@ -71,7 +71,7 @@ export default function Offers() {
         
         {/* Banner Image */}
         <div className="absolute inset-0 z-0">
-          <img 
+          <img loading="lazy" decoding="async" 
             src={offerBanner} 
             alt="Great Offers" 
             className="w-full h-full object-cover"
@@ -150,7 +150,7 @@ export default function Offers() {
                           onClick={() => navigate(`/user/restaurants/${restaurant.slug}`)}
                         >
                           <div className="relative h-28 md:h-36 overflow-hidden">
-                            <img 
+                            <img loading="lazy" decoding="async" 
                               src={item.image || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&h=300&fit=crop"} 
                               alt={item.name}
                               className="w-full h-full object-cover"

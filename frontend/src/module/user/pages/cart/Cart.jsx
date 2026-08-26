@@ -1716,7 +1716,7 @@ export default function Cart() {
                       {addons.map((addon) => (
                         <div key={addon.id} className="flex-shrink-0 w-28 md:w-36">
                           <div className="relative bg-gray-100 dark:bg-gray-800 rounded-lg md:rounded-xl overflow-hidden">
-                            <img
+                            <img loading="lazy" decoding="async"
                               src={addon.image || (addon.images && addon.images[0]) || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=200&h=200&fit=crop"}
                               alt={addon.name}
                               className="w-full h-28 md:h-36 object-cover rounded-lg md:rounded-xl"

@@ -372,7 +372,7 @@ export default function TransactionReport() {
             <div className="rounded-lg shadow-sm border border-slate-200 p-4" style={{ backgroundColor: '#f1f5f9' }}>
               <div className="relative mb-3 flex justify-center">
                 <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
-                  <img src={completedIcon} alt="Completed" className="w-12 h-12" />
+                  <img loading="lazy" decoding="async" src={completedIcon} alt="Completed" className="w-12 h-12" />
                 </div>
                 <div className="absolute top-0 right-0 w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
                   <Info className="w-3 h-3 text-white" />
@@ -388,7 +388,7 @@ export default function TransactionReport() {
             <div className="rounded-lg shadow-sm border border-slate-200 p-4" style={{ backgroundColor: '#f1f5f9' }}>
               <div className="relative mb-3 flex justify-center">
                 <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center">
-                  <img src={refundedIcon} alt="Refunded" className="w-12 h-12" />
+                  <img loading="lazy" decoding="async" src={refundedIcon} alt="Refunded" className="w-12 h-12" />
                 </div>
                 <div className="absolute top-0 right-0 w-6 h-6 rounded-full bg-red-500 flex items-center justify-center">
                   <Info className="w-3 h-3 text-white" />
@@ -408,7 +408,7 @@ export default function TransactionReport() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
-                    <img src={adminEarningIcon} alt="Admin Earning" className="w-6 h-6" />
+                    <img loading="lazy" decoding="async" src={adminEarningIcon} alt="Admin Earning" className="w-6 h-6" />
                   </div>
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-semibold text-slate-900">Admin Earning</p>
@@ -426,7 +426,7 @@ export default function TransactionReport() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                    <img src={restaurantEarningIcon} alt="Restaurant Earning" className="w-6 h-6" />
+                    <img loading="lazy" decoding="async" src={restaurantEarningIcon} alt="Restaurant Earning" className="w-6 h-6" />
                   </div>
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-semibold text-slate-900">Restaurant Earning</p>
@@ -444,7 +444,7 @@ export default function TransactionReport() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
-                    <img src={deliverymanEarningIcon} alt="Deliveryman Earning" className="w-6 h-6" />
+                    <img loading="lazy" decoding="async" src={deliverymanEarningIcon} alt="Deliveryman Earning" className="w-6 h-6" />
                   </div>
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-semibold text-slate-900">Deliveryman Earning</p>
@@ -477,13 +477,13 @@ export default function TransactionReport() {
                   }}
                   className="pl-7 pr-2 py-1.5 w-full text-[11px] rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
-                <img src={searchIcon} alt="Search" className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3" />
+                <img loading="lazy" decoding="async" src={searchIcon} alt="Search" className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3" />
               </div>
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button className="px-2.5 py-1.5 text-[11px] font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-1 transition-all">
-                    <img src={exportIcon} alt="Export" className="w-3 h-3" />
+                    <img loading="lazy" decoding="async" src={exportIcon} alt="Export" className="w-3 h-3" />
                     <span>Export</span>
                     <ChevronDown className="w-2.5 h-2.5" />
                   </button>

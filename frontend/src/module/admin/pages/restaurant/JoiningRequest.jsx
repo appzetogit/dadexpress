@@ -558,7 +558,7 @@ export default function JoiningRequest() {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-100 flex items-center justify-center flex-shrink-0">
-                            <img
+                            <img loading="lazy" decoding="async"
                               src={request.restaurantImage}
                               alt={request.restaurantName}
                               className="w-full h-full object-cover"
@@ -928,7 +928,7 @@ export default function JoiningRequest() {
                   {/* Restaurant Basic Info */}
                   <div className="flex items-start gap-6 pb-6 border-b border-slate-200">
                     <div className="w-24 h-24 rounded-lg overflow-hidden bg-slate-100 flex-shrink-0 relative group">
-                      <img
+                      <img loading="lazy" decoding="async"
                         src={(isEditing && typeof editData.profileImage === 'string' && editData.profileImage.startsWith('data:')) ? editData.profileImage : (restaurantDetails?.profileImage?.url || restaurantDetails?.profileImageUrl?.url || selectedRequest?.restaurantImage || "https://via.placeholder.com/96")}
                         alt={restaurantDetails?.name || selectedRequest?.restaurantName || "Restaurant"}
                         className="w-full h-full object-cover"
@@ -1508,7 +1508,7 @@ export default function JoiningRequest() {
                               rel="noopener noreferrer"
                               className="rounded-lg overflow-hidden border border-slate-200 hover:border-blue-500 transition-colors"
                             >
-                              <img
+                              <img loading="lazy" decoding="async"
                                 src={imgUrl}
                                 alt={`Menu ${idx + 1}`}
                                 className="w-full h-32 object-cover"

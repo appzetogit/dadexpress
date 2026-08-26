@@ -81,7 +81,7 @@ export default function Top10() {
 
         {/* Banner Image */}
         <div className="absolute inset-0 z-0">
-          <img
+          <img loading="lazy" decoding="async"
             src={top10Banner}
             alt="Top 10 Restaurants"
             className="w-full h-full object-cover"
@@ -170,7 +170,7 @@ export default function Top10() {
                                 onClick={() => navigate(`/user/restaurants/${restaurantSlug}`)}
                               >
                                 <div className="relative h-28 md:h-36 overflow-hidden">
-                                  <img 
+                                  <img loading="lazy" decoding="async" 
                                     src={item.image || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&h=300&fit=crop"} 
                                     alt={item.name}
                                     className="w-full h-full object-cover"

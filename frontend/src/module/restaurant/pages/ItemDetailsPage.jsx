@@ -1100,7 +1100,7 @@ return (
                   className="absolute inset-0"
                 >
                   {images[currentImageIndex] ? (
-                    <img
+                    <img loading="lazy" decoding="async"
                       src={images[currentImageIndex]}
                       alt={`${itemName} - Image ${currentImageIndex + 1}`}
                       className="w-full h-full object-cover"

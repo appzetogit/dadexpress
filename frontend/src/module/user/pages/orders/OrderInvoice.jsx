@@ -222,7 +222,7 @@ export default function OrderInvoice() {
                         <tr key={item.id} className="border-b">
                           <td className="px-2 sm:px-3 py-2 sm:py-3">
                             <div className="flex items-center gap-2 sm:gap-3">
-                              <img
+                              <img loading="lazy" decoding="async"
                                 src={item.image}
                                 alt={item.name}
                                 className="w-8 h-8 sm:w-12 sm:h-12 object-cover rounded flex-shrink-0"

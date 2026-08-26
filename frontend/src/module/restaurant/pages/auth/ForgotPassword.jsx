@@ -197,7 +197,7 @@ export default function RestaurantForgotPassword() {
     <div className="h-screen w-full flex bg-white overflow-hidden">
       {/* Left image section */}
       <div className="hidden lg:flex lg:w-1/2 relative">
-        <img
+        <img loading="lazy" decoding="async"
           src={loginBg}
           alt="Restaurant background"
           className="w-full h-full object-cover"

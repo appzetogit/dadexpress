@@ -155,7 +155,7 @@ export default function ProfileDetails() {
 
       {/* Profile Picture Area */}
       <div className="relative w-full bg-gray-200 overflow-hidden flex items-center justify-center group">
-        <img
+        <img loading="lazy" decoding="async"
           src={profile?.profileImage?.url || profile?.documents?.photo || "https://i.pravatar.cc/400?img=12"}
           alt="Profile"
           className="w-full h-auto max-h-96 object-contain"
@@ -523,7 +523,7 @@ export default function ProfileDetails() {
             
             {/* Document Image */}
             <div className="p-4">
-              <img
+              <img loading="lazy" decoding="async"
                 src={selectedDocument.url}
                 alt={selectedDocument.name}
                 className="w-full h-auto rounded-lg"

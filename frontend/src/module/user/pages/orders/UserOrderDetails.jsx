@@ -251,7 +251,7 @@ export default function UserOrderDetails() {
         <div className="bg-white p-4 rounded-xl shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <img
+              <img loading="lazy" decoding="async"
                 src={(items[0]?.image) || restaurantObj.profileImage?.url || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=100"}
                 alt={restaurantName}
                 className="w-10 h-10 rounded-lg object-cover"

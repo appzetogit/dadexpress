@@ -81,7 +81,7 @@ export default function Footer() {
               }}
             >
               <div className="flex items-center gap-2 mb-4">
-                <img
+                <img loading="lazy" decoding="async"
                   src={logoUrl}
                   alt="Company Logo"
                   className="h-10 w-10 rounded-full object-cover"

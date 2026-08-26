@@ -326,7 +326,7 @@ export default function DiningManagement() {
                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                         {categories.map(cat => (
                                             <div key={cat._id} className="border rounded-lg overflow-hidden group relative">
-                                                <img src={cat.imageUrl} alt={cat.name} className="w-full h-32 object-cover" />
+                                                <img loading="lazy" decoding="async" src={cat.imageUrl} alt={cat.name} className="w-full h-32 object-cover" />
                                                 <div className="p-3 bg-white">
                                                     <p className="font-medium text-slate-900">{cat.name}</p>
                                                 </div>
@@ -392,7 +392,7 @@ export default function DiningManagement() {
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         {banners.map(banner => (
                                             <div key={banner._id} className="border rounded-lg overflow-hidden group relative">
-                                                <img src={banner.imageUrl} alt={banner.tagline} className="w-full h-32 object-cover" />
+                                                <img loading="lazy" decoding="async" src={banner.imageUrl} alt={banner.tagline} className="w-full h-32 object-cover" />
                                                 <div className="p-3 bg-white">
                                                     <p className="font-bold text-slate-900">{banner.percentageOff}</p>
                                                     <p className="text-sm text-slate-600">{banner.tagline}</p>
@@ -446,7 +446,7 @@ export default function DiningManagement() {
                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                         {stories.map(story => (
                                             <div key={story._id} className="border rounded-lg overflow-hidden group relative">
-                                                <img src={story.imageUrl} alt={story.name} className="w-full h-32 object-cover" />
+                                                <img loading="lazy" decoding="async" src={story.imageUrl} alt={story.name} className="w-full h-32 object-cover" />
                                                 <div className="p-3 bg-white">
                                                     <p className="font-medium text-slate-900">{story.name}</p>
                                                 </div>

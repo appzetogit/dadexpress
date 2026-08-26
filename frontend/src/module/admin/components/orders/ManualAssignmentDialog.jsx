@@ -134,7 +134,7 @@ export default function ManualAssignmentDialog({ isOpen, onOpenChange, order, on
                       rider.status === 'Online' ? 'bg-emerald-100' : 'bg-slate-100'
                     }`}>
                       {rider.profileImage ? (
-                        <img src={rider.profileImage} alt="" className="w-full h-full rounded-full object-cover" />
+                        <img loading="lazy" decoding="async" src={rider.profileImage} alt="" className="w-full h-full rounded-full object-cover" />
                       ) : (
                         <User className={`w-6 h-6 ${rider.status === 'Online' ? 'text-emerald-600' : 'text-slate-400'}`} />
                       )}

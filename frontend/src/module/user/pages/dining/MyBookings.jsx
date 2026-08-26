@@ -130,7 +130,7 @@ export default function MyBookings() {
                     bookings.map((booking) => (
                         <div key={booking._id} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-start gap-4">
                             <div className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 bg-slate-100">
-                                <img
+                                <img loading="lazy" decoding="async"
                                     src={booking.restaurant?.image || booking.restaurant?.profileImage?.url || "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=200&q=80"}
                                     className="w-full h-full object-cover"
                                     alt={booking.restaurant?.name}

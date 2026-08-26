@@ -852,7 +852,7 @@ export default function Feedback() {
 
                     {/* User row */}
                     <div className="flex items-center gap-3">
-                      <img
+                      <img loading="lazy" decoding="async"
                         src={review.userImage}
                         alt={review.userName}
                         className="h-8 w-8 rounded-full object-cover"
@@ -965,7 +965,7 @@ export default function Feedback() {
 
                 {/* User row */}
                 <div className="flex items-center gap-3 mb-4">
-                  <img
+                  <img loading="lazy" decoding="async"
                     src={selectedReview.userImage}
                     alt={selectedReview.userName}
                     className="h-10 w-10 rounded-full object-cover"

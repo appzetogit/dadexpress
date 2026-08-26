@@ -45,7 +45,7 @@ export default function SelectDropLocation() {
     <div className="h-screen bg-white flex flex-col overflow-hidden relative">
       {/* Top Banner Section - Extended height to show behind rounded corners */}
       <div className="absolute top-0 left-0 right-0 w-full" style={{ height: '45vh' }}>
-        <img 
+        <img loading="lazy" decoding="async" 
           src={deliveryLoginBanner} 
           alt="Drop Location Banner" 
           className="w-full h-full object-cover"

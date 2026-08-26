@@ -385,6 +385,7 @@ export default function HomePage() {
 
   // Auto-slide effect
   useEffect(() => {
+    const isMobile = typeof window !== "undefined" && (window.innerWidth < 768 || "ontouchstart" in window);
     const lenis = new Lenis({
       duration: 1.2,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
@@ -392,7 +393,7 @@ export default function HomePage() {
     })
 
     function raf(time) {
-      lenis.raf(time)
+      if (!isMobile) lenis.raf(time)
       requestAnimationFrame(raf)
     }
 
@@ -545,7 +546,7 @@ export default function HomePage() {
                   }}
                   className="absolute inset-0"
                 >
-                  <img
+                  <img loading="lazy" decoding="async"
                     src={banners[currentSlide].image}
                     alt={banners[currentSlide].title}
                     className="w-full h-full object-cover"
@@ -627,7 +628,7 @@ export default function HomePage() {
                   onClick={() => navigate(`/usermain/category/${category.slug || category.name}`)}
                 >
                   <div className="w-18 h-18 sm:w-20 sm:h-20 rounded-full overflow-hidden border border-gray-100 bg-white">
-                    <img
+                    <img loading="lazy" decoding="async"
                       src={category.image}
                       alt={category.name}
                       className="w-full h-full object-cover"
@@ -669,7 +670,7 @@ export default function HomePage() {
               >
                 {/* Image Container */}
                 <div className="relative flex-shrink-0">
-                  <img
+                  <img loading="lazy" decoding="async"
                     src={item.image}
                     alt={item.name}
                     className="w-full h-32 object-cover rounded-t-xl"
@@ -754,7 +755,7 @@ export default function HomePage() {
               >
                 {/* Food Image - Large */}
                 <div className="relative w-full h-36 rounded-t-xl overflow-hidden bg-gray-100">
-                  <img
+                  <img loading="lazy" decoding="async"
                     src={restaurant.coverImages?.[0]?.url || restaurant.profileImage?.url || "https://images.unsplash.com/photo-1546241072-48010ad2862c?w=400&h=300&fit=crop"}
                     alt={restaurant.name}
                     className="w-full h-full object-cover"
@@ -785,7 +786,7 @@ export default function HomePage() {
                 <div className="p-3 pt-2 relative">
                   <div className="absolute -top-5 left-3 w-10 h-10 bg-white border border-gray-300 rounded-lg flex items-center justify-center flex-shrink-0 shadow-md z-10 overflow-hidden p-1">
                     {restaurant.logo?.url ? (
-                      <img src={restaurant.logo.url} alt="" className="w-full h-full object-contain" />
+                      <img loading="lazy" decoding="async" src={restaurant.logo.url} alt="" className="w-full h-full object-contain" />
                     ) : (
                       <UtensilsCrossed className="w-5 h-5 text-[#ff8100]" />
                     )}

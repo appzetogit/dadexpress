@@ -136,7 +136,7 @@ export default function Coffee() {
                   <div className="flex-shrink-0">
                     <div className="w-16 h-16 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center">
                       {store.logo ? (
-                        <img
+                        <img loading="lazy" decoding="async"
                           src={store.logo}
                           alt={store.name}
                           className="w-full h-full object-cover"
@@ -204,7 +204,7 @@ export default function Coffee() {
       <div className="relative w-full overflow-hidden">
         {/* Background with coffee banner */}
         <div className="relative w-full z-0">
-          <img
+          <img loading="lazy" decoding="async"
             src={coffeeBanner}
             alt="Coffee"
             className="w-full h-auto object-contain"

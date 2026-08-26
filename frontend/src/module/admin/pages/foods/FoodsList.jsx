@@ -330,7 +330,7 @@ export default function FoodsList() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-100 flex items-center justify-center">
-                        <img
+                        <img loading="lazy" decoding="async"
                           src={food.image}
                           alt={food.name}
                           className="w-full h-full object-cover"
@@ -399,7 +399,7 @@ export default function FoodsList() {
             <div className="p-6">
               <div className="flex items-center gap-4 mb-6">
                 <div className="w-20 h-20 rounded-xl overflow-hidden bg-slate-100 border border-slate-200">
-                  <img
+                  <img loading="lazy" decoding="async"
                     src={viewingFood.image}
                     alt={viewingFood.name}
                     className="w-full h-full object-cover"

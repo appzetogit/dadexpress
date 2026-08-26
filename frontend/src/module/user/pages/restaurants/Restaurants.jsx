@@ -505,7 +505,7 @@ export default function Restaurants() {
                       </CardContent>
 
                       <div className="w-36 sm:w-44 md:w-56 lg:w-64 xl:w-72 flex-shrink-0 relative overflow-hidden group/image">
-                        <img
+                        <img loading="lazy" decoding="async"
                           src={restaurant.image}
                           alt={restaurant.name}
                           className="w-full h-full object-cover"
@@ -567,7 +567,7 @@ export default function Restaurants() {
                       </CardContent>
 
                       <div className="w-36 sm:w-44 md:w-56 lg:w-64 xl:w-72 flex-shrink-0 relative overflow-hidden">
-                        <img
+                        <img loading="lazy" decoding="async"
                           src={restaurant.image}
                           alt={restaurant.name}
                           className="w-full h-full object-cover"

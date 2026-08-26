@@ -359,7 +359,7 @@ export default function FoodApproval() {
                       <div className="flex flex-wrap gap-3">
                         {allImages.map((img, idx) => (
                           img && img.trim() !== '' ? (
-                            <img 
+                            <img loading="lazy" decoding="async" 
                               key={idx}
                               src={img} 
                               alt={`${selectedRequest.itemName} - Image ${idx + 1}`}

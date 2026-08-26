@@ -379,7 +379,7 @@ export default function UpdatesPage() {
                 <div className="w-16 h-16 rounded-full overflow-hidden">
                   {story.isAdd ? (
                     <div className="w-full h-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-                      <img 
+                      <img loading="lazy" decoding="async" 
                         src={story.image}
                         alt={story.title}
                         className="w-full h-full object-cover opacity-50"
@@ -389,7 +389,7 @@ export default function UpdatesPage() {
                       />
                     </div>
                   ) : (
-                    <img 
+                    <img loading="lazy" decoding="async" 
                       src={story.image}
                       alt={story.title}
                       className="w-full h-full object-cover"
@@ -464,7 +464,7 @@ export default function UpdatesPage() {
                 <div className="relative rounded-lg overflow-hidden bg-gray-900">
                   {/* Thumbnail - Horizontal */}
                   <div className="relative aspect-video">
-                    <img
+                    <img loading="lazy" decoding="async"
                       src={video.thumbnail}
                       alt={video.title}
                       className="w-full h-full object-cover"
@@ -537,7 +537,7 @@ export default function UpdatesPage() {
                 <div className="relative rounded-lg overflow-hidden bg-gray-900">
                   {/* Thumbnail - Horizontal */}
                   <div className="relative aspect-video">
-                    <img
+                    <img loading="lazy" decoding="async"
                       src={video.thumbnail}
                       alt={video.title}
                     className="w-full h-full object-cover"

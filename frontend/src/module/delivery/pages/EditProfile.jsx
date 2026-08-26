@@ -121,7 +121,7 @@ export default function EditProfile() {
             <CardContent className="p-3 md:p-6">
               <div className="flex flex-col items-center">
                 <div className="relative mb-2 md:mb-4">
-                  <img 
+                  <img loading="lazy" decoding="async" 
                     src={profilePreview}
                     alt="Profile"
                     className="w-20 h-20 md:w-32 md:h-32 rounded-full border-2 md:border-4 border-white object-cover shadow-md"

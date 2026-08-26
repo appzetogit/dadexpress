@@ -301,7 +301,7 @@ export default function ProductDetail() {
 
         {/* Hero Image Section */}
         <div className="relative w-full h-[350px] sm:h-[400px] md:h-[450px] lg:h-[500px] xl:h-[550px] overflow-hidden rounded-lg md:rounded-xl lg:rounded-2xl mt-4 md:mt-6 lg:mt-8">
-          <img
+          <img loading="lazy" decoding="async"
             src={product.image}
             alt={product.name}
             className="w-full h-full object-cover object-center" />
@@ -632,7 +632,7 @@ export default function ProductDetail() {
                       <div className="space-y-3 pb-4 border-b last:border-0">
                         <div className="flex items-start gap-3">
                           <div className="h-10 w-10 rounded-full overflow-hidden flex-shrink-0">
-                            <img
+                            <img loading="lazy" decoding="async"
                               src={review.userAvatar}
                               alt={review.userName}
                               className="w-full h-full object-cover"
@@ -692,7 +692,7 @@ export default function ProductDetail() {
                               <div className="mt-4 pt-4 border-t space-y-3">
                                 <div className="flex items-start gap-3">
                                   <div className="h-8 w-8 rounded-full overflow-hidden flex-shrink-0">
-                                    <img
+                                    <img loading="lazy" decoding="async"
                                       src={`https://ui-avatars.com/api/?name=You&background=ffc107&color=fff&size=64`}
                                       alt="You"
                                       className="w-full h-full object-cover" />
@@ -737,7 +737,7 @@ export default function ProductDetail() {
                                 {replies[review.id].map((reply) => (
                                   <div key={reply.id} className="flex items-start gap-3 pl-4 border-l-2 border-gray-200">
                                     <div className="h-8 w-8 rounded-full overflow-hidden flex-shrink-0">
-                                      <img
+                                      <img loading="lazy" decoding="async"
                                         src={reply.userAvatar}
                                         alt={reply.userName}
                                         className="w-full h-full object-cover"

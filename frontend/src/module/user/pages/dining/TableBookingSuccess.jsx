@@ -80,7 +80,7 @@ export default function TableBookingSuccess() {
 
                     <div className="flex items-center gap-4">
                         <div className="w-16 h-16 rounded-2xl bg-white border border-slate-100 flex-shrink-0 p-1">
-                            <img
+                            <img loading="lazy" decoding="async"
                                 src={booking.restaurant?.image || booking.restaurant?.profileImage?.url || "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=150&q=80"}
                                 className="w-full h-full object-cover rounded-xl"
                                 alt="restaurant"

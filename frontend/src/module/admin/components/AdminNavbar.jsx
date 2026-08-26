@@ -292,7 +292,7 @@ export default function AdminNavbar({ onMenuClick }) {
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 rounded-full bg-neutral-100 flex items-center justify-center overflow-hidden border border-neutral-300">
                       {adminData?.profileImage ? (
-                        <img
+                        <img loading="lazy" decoding="async"
                           src={adminData.profileImage && adminData.profileImage.trim() ? adminData.profileImage : undefined}
                           alt={adminData.name || "Admin"}
                           className="w-full h-full object-cover"

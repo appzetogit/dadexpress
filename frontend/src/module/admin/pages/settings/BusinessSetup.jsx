@@ -556,7 +556,7 @@ export default function BusinessSetup() {
                 >
                   {logoPreview ? (
                     <>
-                      <img
+                      <img loading="lazy" decoding="async"
                         src={logoPreview}
                         alt="Logo preview"
                         className="w-full h-full object-contain"
@@ -623,7 +623,7 @@ export default function BusinessSetup() {
                 >
                   {faviconPreview ? (
                     <>
-                      <img
+                      <img loading="lazy" decoding="async"
                         src={faviconPreview}
                         alt="Favicon preview"
                         className="w-full h-full object-contain"

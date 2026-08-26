@@ -115,7 +115,7 @@ export default function PromotionalBanner() {
                     </div>
                   </div>
                   <div className="absolute right-0 top-0 bottom-0 w-1/2">
-                    <img
+                    <img loading="lazy" decoding="async"
                       src={bannerImage}
                       alt="Banner preview"
                       className="w-full h-full object-cover"

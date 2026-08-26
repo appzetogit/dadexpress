@@ -27,6 +27,7 @@ export default function AllFoodPage() {
 
   // Lenis smooth scrolling
   useEffect(() => {
+    const isMobile = typeof window !== "undefined" && (window.innerWidth < 768 || "ontouchstart" in window);
     const lenis = new Lenis({
       duration: 1.2,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
@@ -34,7 +35,7 @@ export default function AllFoodPage() {
     })
 
     function raf(time) {
-      lenis.raf(time)
+      if (!isMobile) lenis.raf(time)
       requestAnimationFrame(raf)
     }
 
@@ -236,7 +237,7 @@ export default function AllFoodPage() {
             <div className="flex gap-3 p-3">
               {/* Food Image */}
               <div className="relative flex-shrink-0 w-24 h-24 md:w-28 md:h-28 rounded-lg overflow-hidden">
-                <img
+                <img loading="lazy" decoding="async"
                   src={food.image}
                   alt={food.name}
                   className="w-full h-full object-cover"

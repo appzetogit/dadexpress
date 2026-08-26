@@ -280,7 +280,7 @@ export default function RestaurantVATReport() {
                       <td className="px-4 py-3 whitespace-nowrap">
                         <div className="flex items-center gap-3">
                           {report.icon && (
-                            <img src={report.icon} alt={report.restaurantName} className="w-8 h-8 rounded" />
+                            <img loading="lazy" decoding="async" src={report.icon} alt={report.restaurantName} className="w-8 h-8 rounded" />
                           )}
                           <span className="text-sm text-slate-700">{report.restaurantName}</span>
                         </div>

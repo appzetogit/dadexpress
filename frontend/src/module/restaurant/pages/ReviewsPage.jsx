@@ -21,6 +21,7 @@ export default function ReviewsPage() {
 
   // Lenis smooth scrolling
   useEffect(() => {
+    const isMobile = typeof window !== "undefined" && (window.innerWidth < 768 || "ontouchstart" in window);
     const lenis = new Lenis({
       duration: 1.2,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
@@ -28,7 +29,7 @@ export default function ReviewsPage() {
     })
 
     function raf(time) {
-      lenis.raf(time)
+      if (!isMobile) lenis.raf(time)
       requestAnimationFrame(raf)
     }
 
@@ -143,7 +144,7 @@ export default function ReviewsPage() {
                         <ImageIcon className="w-6 h-6 text-gray-400" />
                       </div>
                     ) : (
-                      <img
+                      <img loading="lazy" decoding="async"
                         src={review.productImage}
                         alt={review.productName}
                         className="w-full h-full object-cover"

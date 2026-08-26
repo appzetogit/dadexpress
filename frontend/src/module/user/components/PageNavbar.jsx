@@ -980,7 +980,7 @@ export default function PageNavbar({
         {/* Left: Company Logo */}
         <Link to="/user" className="flex-shrink-0 mr-3 sm:mr-4">
           {logoUrl ? (
-            <img
+            <img loading="lazy" decoding="async"
               src={logoUrl}
               alt="Company Logo"
               className="h-8 w-auto sm:h-9 md:h-12 object-contain origin-left"
@@ -990,7 +990,7 @@ export default function PageNavbar({
               }}
             />
           ) : (
-            <img
+            <img loading="lazy" decoding="async"
               src={quickSpicyLogo}
               alt={`${companyName} Logo`}
               className="h-8 w-auto sm:h-9 md:h-12 object-contain origin-left"

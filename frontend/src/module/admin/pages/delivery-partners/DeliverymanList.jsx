@@ -343,7 +343,7 @@ export default function DeliverymanList() {
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
                               {dm.profileImage ? (
-                                <img
+                                <img loading="lazy" decoding="async"
                                   src={dm.profileImage}
                                   alt={dm.name}
                                   className="w-10 h-10 rounded-full object-cover flex-shrink-0"
@@ -467,7 +467,7 @@ export default function DeliverymanList() {
                 <div className="flex items-start gap-6 pb-6 border-b border-slate-200">
                   <div className="flex-shrink-0">
                     {viewDetails.profileImage?.url ? (
-                      <img
+                      <img loading="lazy" decoding="async"
                         src={viewDetails.profileImage.url}
                         alt={viewDetails.name}
                         className="w-24 h-24 rounded-full object-cover border-2 border-slate-200"

@@ -1576,7 +1576,7 @@ export default function OrderTracking() {
               >
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center overflow-hidden">
-                    <img
+                    <img loading="lazy" decoding="async"
                       src={circleIcon}
                       alt="Food cooking"
                       className="w-full h-full object-cover"

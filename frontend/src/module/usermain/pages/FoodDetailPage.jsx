@@ -198,7 +198,7 @@ export default function FoodDetailPage() {
 
       {/* Food Image */}
       <div className="w-full bg-white">
-        <img
+        <img loading="lazy" decoding="async"
           src={foodData.image}
           alt={foodData.name}
           className="w-full h-80 object-cover"

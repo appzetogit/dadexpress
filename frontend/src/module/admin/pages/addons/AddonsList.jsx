@@ -285,7 +285,7 @@ export default function AddonsList() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-100 flex items-center justify-center">
-                        <img
+                        <img loading="lazy" decoding="async"
                           src={addon.image}
                           alt={addon.name}
                           className="w-full h-full object-cover"

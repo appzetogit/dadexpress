@@ -12,6 +12,7 @@ export default function CategoriesPage() {
 
   useEffect(() => {
     // Initialize Lenis for smooth scrolling
+    const isMobile = typeof window !== "undefined" && (window.innerWidth < 768 || "ontouchstart" in window);
     const lenis = new Lenis({
       duration: 1.2,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
@@ -19,7 +20,7 @@ export default function CategoriesPage() {
     })
 
     function raf(time) {
-      lenis.raf(time)
+      if (!isMobile) lenis.raf(time)
       requestAnimationFrame(raf)
     }
 
@@ -106,7 +107,7 @@ export default function CategoriesPage() {
             >
               {/* Circular Image */}
               <div className="w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden shadow-md border-2 border-white">
-                <img
+                <img loading="lazy" decoding="async"
                   src={category.image}
                   alt={category.name}
                   className="w-full h-full object-cover"

@@ -298,7 +298,7 @@ export default function DiningList() {
                                                     <td className="px-6 py-4">
                                                         <div className="flex items-center gap-3">
                                                             <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-100 flex-shrink-0">
-                                                                <img
+                                                                <img loading="lazy" decoding="async"
                                                                     src={restaurant.logo}
                                                                     alt={restaurant.name}
                                                                     className="w-full h-full object-cover"

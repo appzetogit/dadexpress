@@ -42,6 +42,7 @@ export default function RestaurantDetailsPage() {
 
   // Lenis smooth scrolling
   useEffect(() => {
+    const isMobile = typeof window !== "undefined" && (window.innerWidth < 768 || "ontouchstart" in window);
     const lenis = new Lenis({
       duration: 1.2,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
@@ -49,7 +50,7 @@ export default function RestaurantDetailsPage() {
     })
 
     function raf(time) {
-      lenis.raf(time)
+      if (!isMobile) lenis.raf(time)
       requestAnimationFrame(raf)
     }
 
@@ -130,7 +131,7 @@ export default function RestaurantDetailsPage() {
     <div className="min-h-screen bg-page-bg overflow-x-hidden">
       {/* Hero Image Section */}
       <div className="relative w-full h-[250px] md:h-[300px] overflow-hidden">
-        <img 
+        <img loading="lazy" decoding="async" 
           src={restaurantData.cover || "https://images.unsplash.com/photo-1512058564366-18510be2db19?w=800&h=400&fit=crop"}
           alt="Restaurant Hero"
           className="w-full h-full object-cover"
@@ -142,7 +143,7 @@ export default function RestaurantDetailsPage() {
             <div className="flex-shrink-0">
               <div className="bg-primary-orange rounded-lg p-3">
                 {restaurantData.logo ? (
-                  <img 
+                  <img loading="lazy" decoding="async" 
                     src={restaurantData.logo} 
                     alt="Restaurant Logo" 
                     className="w-6 h-6 md:w-8 md:h-8 object-cover rounded"
@@ -255,7 +256,7 @@ export default function RestaurantDetailsPage() {
                   <div className="flex gap-2 p-2 md:p-2.5">
                     {/* Food Image */}
                     <div className="relative flex-shrink-0">
-                      <img 
+                      <img loading="lazy" decoding="async" 
                         src={item.image}
                         alt={item.name}
                         className="w-20 h-20 md:w-24 md:h-24 rounded-lg object-cover"

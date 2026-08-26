@@ -654,7 +654,7 @@ export default function SignIn() {
       {/* Mobile: Top Section - Banner Image */}
       {/* Desktop: Left Section - Banner Image */}
       <div className="relative md:hidden w-full shrink-0" style={{ height: "30vh", minHeight: "200px" }}>
-        <img
+        <img loading="lazy" decoding="async"
           src={loginBanner}
           alt="Food Banner"
           className="w-full h-full object-cover object-center"
@@ -662,7 +662,7 @@ export default function SignIn() {
       </div>
 
       <div className="relative hidden md:block w-full shrink-0 md:w-1/2 md:h-screen md:sticky md:top-0">
-        <img
+        <img loading="lazy" decoding="async"
           src={loginBanner}
           alt="Food Banner"
           className="w-full h-full object-cover object-center"
@@ -867,7 +867,7 @@ export default function SignIn() {
               className="w-12 h-12 md:w-14 md:h-14 rounded-full border border-gray-300 dark:border-gray-700 flex items-center justify-center hover:bg-gray-50 dark:hover:bg-gray-800 transition-all hover:shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
               aria-label="Sign in with Apple"
             >
-              <img src="/apple-logo.png" alt="Apple" className="h-6 w-6 object-contain" />
+              <img loading="lazy" decoding="async" src="/apple-logo.png" alt="Apple" className="h-6 w-6 object-contain" />
             </button>
 
             {/* Google Login */}

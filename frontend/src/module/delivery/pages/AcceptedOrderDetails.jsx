@@ -464,7 +464,7 @@ export default function AcceptedOrderDetails() {
           <h3 className="text-gray-900 font-semibold mb-3">Customer Contact Details</h3>
           <div className="bg-gray-50 rounded-lg p-4">
             <div className="flex items-start gap-4">
-              <img 
+              <img loading="lazy" decoding="async" 
                 src={displayOrderData.customer.image}
                 alt="Customer"
                 className="w-12 h-12 rounded-lg object-cover"
@@ -603,7 +603,7 @@ export default function AcceptedOrderDetails() {
               displayOrderData.items.map((item) => (
                 <div key={item.id} className="bg-gray-50 rounded-lg p-4">
                   <div className="flex items-start gap-4">
-                    <img 
+                    <img loading="lazy" decoding="async" 
                       src={item.image}
                       alt={item.name}
                       className="w-16 h-16 rounded-lg object-cover"

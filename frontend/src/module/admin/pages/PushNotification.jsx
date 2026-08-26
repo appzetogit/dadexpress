@@ -303,7 +303,7 @@ export default function PushNotification() {
                 <p className="text-xs text-slate-500">Image format - jpg png jpeg gif webp Image Size -maximum size 2 MB Image Ratio - 3:1</p>
                 {bannerPreview && (
                   <div className="mt-4">
-                    <img src={bannerPreview} alt="Notification banner preview" className="mx-auto h-20 rounded-lg object-cover" />
+                    <img loading="lazy" decoding="async" src={bannerPreview} alt="Notification banner preview" className="mx-auto h-20 rounded-lg object-cover" />
                   </div>
                 )}
               </div>
@@ -421,7 +421,7 @@ export default function PushNotification() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       {notification.image ? (
                         <div className="w-12 h-12 rounded-lg overflow-hidden bg-slate-100">
-                          <img
+                          <img loading="lazy" decoding="async"
                             src={notification.imageUrl}
                             alt={notification.title}
                             className="w-full h-full object-cover"

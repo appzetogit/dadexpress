@@ -1824,6 +1824,7 @@ export default function DeliveryHome() {
 
   // Initialize Lenis
   useEffect(() => {
+    const isMobile = typeof window !== "undefined" && (window.innerWidth < 768 || "ontouchstart" in window);
     const lenis = new Lenis({
       duration: 1.2,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
@@ -1831,7 +1832,7 @@ export default function DeliveryHome() {
     })
 
     function raf(time) {
-      lenis.raf(time)
+      if (!isMobile) lenis.raf(time)
       requestAnimationFrame(raf)
     }
 
@@ -11246,7 +11247,7 @@ export default function DeliveryHome() {
 
                   if (profilePhoto) {
                     return (
-                      <img
+                      <img loading="lazy" decoding="async"
                         src={profilePhoto}
                         alt={displayName}
                         className="w-14 h-14 rounded-xl object-cover border border-gray-200 shrink-0"
@@ -11769,7 +11770,7 @@ export default function DeliveryHome() {
               {pickupImageUrl &&
                 /^https?:\/\//i.test(String(pickupImageUrl).trim()) && (
                   <div className="mt-4 flex justify-center px-2">
-                    <img
+                    <img loading="lazy" decoding="async"
                       src={String(pickupImageUrl).trim()}
                       alt="Pickup photo preview"
                       className="max-h-44 max-w-full rounded-xl border border-gray-200 object-contain bg-gray-50"

@@ -145,7 +145,7 @@ export default function ShowIdCard() {
       <div className="bg-gray-200 h-32 relative">
         {/* Profile Picture - Positioned on gray area, overlapping into white */}
         <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 z-10">
-          <img
+          <img loading="lazy" decoding="async"
             src={idCardData.profileImage}
             alt={idCardData.name}
             className="w-32 h-32 rounded-full object-cover border-4 border-white shadow-lg"

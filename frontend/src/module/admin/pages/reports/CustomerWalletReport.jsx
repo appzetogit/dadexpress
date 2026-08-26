@@ -255,7 +255,7 @@ export default function CustomerWalletReport() {
                 <p className="text-2xl font-bold text-slate-900">{walletStats.debit}</p>
               </div>
               <div className="w-12 h-12 rounded-lg bg-green-100 flex items-center justify-center">
-                <img src={debitIcon} alt="Debit" className="w-8 h-8" />
+                <img loading="lazy" decoding="async" src={debitIcon} alt="Debit" className="w-8 h-8" />
               </div>
             </div>
           </div>
@@ -268,7 +268,7 @@ export default function CustomerWalletReport() {
                 <p className="text-2xl font-bold text-slate-900">{walletStats.credit}</p>
               </div>
               <div className="w-12 h-12 rounded-lg bg-pink-100 flex items-center justify-center">
-                <img src={creditIcon} alt="Credit" className="w-8 h-8" />
+                <img loading="lazy" decoding="async" src={creditIcon} alt="Credit" className="w-8 h-8" />
               </div>
             </div>
           </div>
@@ -281,7 +281,7 @@ export default function CustomerWalletReport() {
                 <p className="text-2xl font-bold text-slate-900">{walletStats.balance}</p>
               </div>
               <div className="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center">
-                <img src={balanceIcon} alt="Balance" className="w-8 h-8" />
+                <img loading="lazy" decoding="async" src={balanceIcon} alt="Balance" className="w-8 h-8" />
               </div>
             </div>
           </div>

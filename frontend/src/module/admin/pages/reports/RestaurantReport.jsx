@@ -389,7 +389,7 @@ export default function RestaurantReport() {
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-full overflow-hidden bg-slate-100 flex items-center justify-center flex-shrink-0">
                             {restaurant.icon ? (
-                              <img
+                              <img loading="lazy" decoding="async"
                                 src={restaurant.icon}
                                 alt={restaurant.restaurantName}
                                 className="w-full h-full object-cover"

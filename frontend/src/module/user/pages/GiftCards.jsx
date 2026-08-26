@@ -132,7 +132,7 @@ export default function GiftCards() {
         {/* Banner Image */}
         <div className="relative w-full overflow-hidden min-h-[25vh] md:min-h-[30vh]">
           <div className="absolute inset-0 z-0">
-            <img
+            <img loading="lazy" decoding="async"
               src={giftCardBanner}
               alt="Gift Cards"
               className="w-full h-full object-cover"

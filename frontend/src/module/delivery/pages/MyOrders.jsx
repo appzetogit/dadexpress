@@ -327,7 +327,7 @@ export default function MyOrders() {
                     <div className="flex gap-3">
                       {/* Restaurant/Food Image */}
                       <div className="w-14 h-14 rounded-lg bg-gray-200 overflow-hidden shrink-0">
-            <img 
+            <img loading="lazy" decoding="async" 
                           src={restaurantImage} 
                           alt={restaurantName}
               className="w-full h-full object-cover"

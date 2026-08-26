@@ -220,7 +220,7 @@ export default function SignupStep2() {
 
         {uploaded ? (
           <div className="relative">
-            <img
+            <img loading="lazy" decoding="async"
               src={uploaded.url}
               alt={label}
               className="w-full h-48 object-cover rounded-lg"

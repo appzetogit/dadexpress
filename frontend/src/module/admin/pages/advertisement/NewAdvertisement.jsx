@@ -367,7 +367,7 @@ export default function NewAdvertisement() {
                         />
                         {profilePreview ? (
                           <div className="relative border-2 border-slate-300 rounded-lg overflow-hidden">
-                            <img
+                            <img loading="lazy" decoding="async"
                               src={profilePreview}
                               alt="Profile preview"
                               className="w-full h-48 object-cover"
@@ -414,7 +414,7 @@ export default function NewAdvertisement() {
                         />
                         {coverPreview ? (
                           <div className="relative border-2 border-slate-300 rounded-lg overflow-hidden">
-                            <img
+                            <img loading="lazy" decoding="async"
                               src={coverPreview}
                               alt="Cover preview"
                               className="w-full h-48 object-cover"
@@ -490,13 +490,13 @@ export default function NewAdvertisement() {
                   {/* Cover Image Area */}
                   <div className="absolute inset-0">
                     {coverPreview ? (
-                      <img
+                      <img loading="lazy" decoding="async"
                         src={coverPreview}
                         alt="Cover"
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <img
+                      <img loading="lazy" decoding="async"
                         src={coverPlaceholder}
                         alt="Cover"
                         className="w-full h-full object-cover"
@@ -512,13 +512,13 @@ export default function NewAdvertisement() {
                     <div className="flex items-start justify-between">
                       <div className="w-16 h-16 rounded-full bg-white border-2 border-white shadow-md overflow-hidden">
                         {profilePreview ? (
-                          <img
+                          <img loading="lazy" decoding="async"
                             src={profilePreview}
                             alt="Profile"
                             className="w-full h-full object-cover"
                           />
                         ) : (
-                          <img
+                          <img loading="lazy" decoding="async"
                             src={profilePlaceholder}
                             alt="Profile"
                             className="w-full h-full object-cover"

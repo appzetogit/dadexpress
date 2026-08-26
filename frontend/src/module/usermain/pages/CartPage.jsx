@@ -107,7 +107,7 @@ export default function CartPage() {
             <div className="flex gap-3 p-3">
               {/* Food Image */}
               <div className="flex-shrink-0">
-                <img 
+                <img loading="lazy" decoding="async" 
                   src={item.image} 
                   alt={item.name}
                   className="w-20 h-20 rounded-lg object-cover"

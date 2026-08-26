@@ -69,7 +69,7 @@ export default function AdminDiningBills() {
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-slate-100 overflow-hidden">
                           {bill.user?.profileImage ? (
-                            <img src={bill.user.profileImage} alt={bill.user?.name} className="w-full h-full object-cover" />
+                            <img loading="lazy" decoding="async" src={bill.user.profileImage} alt={bill.user?.name} className="w-full h-full object-cover" />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center bg-slate-200 text-slate-500 font-bold text-xs">
                               {bill.user?.name?.charAt(0) || "U"}
@@ -86,7 +86,7 @@ export default function AdminDiningBills() {
                       <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded bg-slate-100 overflow-hidden flex-shrink-0">
                           {bill.restaurant?.image ? (
-                            <img src={bill.restaurant.image} alt={bill.restaurant?.name} className="w-full h-full object-cover" />
+                            <img loading="lazy" decoding="async" src={bill.restaurant.image} alt={bill.restaurant?.name} className="w-full h-full object-cover" />
                           ) : null}
                         </div>
                         <span className="text-sm font-medium text-slate-900 truncate max-w-[150px]">
