@@ -60,20 +60,27 @@ export default function ReferAndEarn() {
     fetchData();
   }, []);
 
-  // Lenis smooth scrolling
+  // Lenis smooth scrolling - desktop only
   useEffect(() => {
     const isMobile = typeof window !== "undefined" && (window.innerWidth < 768 || "ontouchstart" in window);
-    const lenis = new Lenis({
-      duration: 1.2,
-      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-      smoothWheel: true,
-    });
-    function raf(time) {
-      if (!isMobile) lenis.raf(time);
-      requestAnimationFrame(raf);
+    let lenis = null;
+    let rafId = null;
+    if (!isMobile) {
+      lenis = new Lenis({
+        duration: 1.2,
+        easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+        smoothWheel: true,
+      });
+      const raf = (time) => {
+        lenis.raf(time);
+        rafId = requestAnimationFrame(raf);
+      };
+      rafId = requestAnimationFrame(raf);
     }
-    requestAnimationFrame(raf);
-    return () => lenis.destroy();
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      if (lenis) lenis.destroy();
+    };
   }, []);
 
   const handleCopy = () => {

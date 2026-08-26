@@ -293,3 +293,44 @@
 .touch-pan-x {
   touch-action: pan-x;
 }
+
+/* ===== iOS / Mobile Performance Fixes ===== */
+
+/* Enable momentum scrolling on iOS for all scrollable containers */
+* {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Prevent GPU layer explosion from framer-motion will-change on mobile */
+@media (max-width: 768px) {
+  [style*="will-change"] {
+    will-change: auto !important;
+  }
+  /* Disable backdrop-filter on mobile (GPU killer on iOS) */
+  [class*="backdrop-blur"] {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background-color: rgba(255,255,255,0.92) !important;
+  }
+  /* Reduce animation weight on mobile */
+  .animate-scroll {
+    animation-duration: 20s;
+  }
+}
+
+/* Respect system reduce-motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .animate-scroll {
+    animation: none !important;
+  }
+}
+
+/* Force GPU compositing only for transform/opacity (safe properties) */
+.will-change-transform {
+  will-change: transform;
+}

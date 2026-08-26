@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react"
+﻿import { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import Lenis from "lenis"
@@ -270,22 +270,7 @@ export default function HomePage() {
     }
   })()
 
-  // Debug: Log location data
-  useEffect(() => {
-    console.log("📍 HomePage - Location state:", {
-      hasLocation: !!location,
-      hasStoredLocation: !!storedLocation,
-      location: location,
-      storedLocation: storedLocation,
-      currentLocation: currentLocation,
-      formattedAddress: currentLocation?.formattedAddress,
-      address: currentLocation?.address,
-      city: currentLocation?.city,
-      state: currentLocation?.state,
-      area: currentLocation?.area,
-      display: locationDisplay
-    })
-  }, [location, storedLocation, currentLocation, locationDisplay])
+  // Debug logging removed for mobile performance
 
   // Show toast notification
   const showToast = (message) => {
@@ -314,7 +299,7 @@ export default function HomePage() {
   // Fetch All Dynamic Data
   useEffect(() => {
     const fetchData = async () => {
-      // Fire all 4 API calls in PARALLEL — no more sequential awaits
+      // Fire all 4 API calls in PARALLEL ÃŽâ€œÃƒâ€¡ÃƒÂ¶ no more sequential awaits
       setLoadingBanners(true)
       setLoadingCategories(true)
       setLoadingRestaurants(true)
@@ -383,32 +368,36 @@ export default function HomePage() {
     fetchData()
   }, [])
 
-  // Auto-slide effect
+  // Auto-slide + Lenis (desktop only - mobile uses native scroll)
   useEffect(() => {
-    const isMobile = typeof window !== "undefined" && (window.innerWidth < 768 || "ontouchstart" in window);
-    const lenis = new Lenis({
-      duration: 1.2,
-      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-      smoothWheel: true,
-    })
+    const isMobile = typeof window !== "undefined" && (window.innerWidth < 768 || "ontouchstart" in window)
+    let lenis = null
+    let rafId = null
 
-    function raf(time) {
-      if (!isMobile) lenis.raf(time)
-      requestAnimationFrame(raf)
+    if (!isMobile) {
+      lenis = new Lenis({
+        duration: 1.2,
+        easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+        smoothWheel: true,
+      })
+      const raf = (time) => {
+        lenis.raf(time)
+        rafId = requestAnimationFrame(raf)
+      }
+      rafId = requestAnimationFrame(raf)
     }
-
-    requestAnimationFrame(raf)
 
     // Auto-slide carousel
     const interval = setInterval(() => {
       if (banners.length > 0) {
         setCurrentSlide((prev) => (prev + 1) % banners.length)
       }
-    }, 4000) // Change slide every 4 seconds
+    }, 4000)
 
     return () => {
       clearInterval(interval)
-      lenis.destroy()
+      if (rafId) cancelAnimationFrame(rafId)
+      if (lenis) lenis.destroy()
     }
   }, [banners.length])
 
@@ -659,13 +648,9 @@ export default function HomePage() {
             <div className="col-span-2 text-center py-4 text-gray-500">No items trending right now</div>
           ) : (
             trendsItems.map((item) => (
-              <motion.div
+              <div
                 key={item._id || item.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4 }}
-                whileHover={{ y: -5 }}
-                className="bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow cursor-pointer flex flex-col h-full"
+                className="bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow hover:-translate-y-1 transition-transform duration-200 cursor-pointer flex flex-col h-full"
                 onClick={() => navigate(`/usermain/food/${item._id || item.id}`)}
               >
                 {/* Image Container */}
@@ -680,7 +665,7 @@ export default function HomePage() {
                   />
                   {/* Price Badge */}
                   <div className="absolute top-1.5 left-1.5 bg-white border-2 border-black rounded-full px-2 py-0.5">
-                    <span className="text-[10px] font-bold text-gray-900">₹{item.price}</span>
+                    <span className="text-[10px] font-bold text-gray-900">ÃŽâ€œÃƒÂ©Ã¢â€¢Â£{item.price}</span>
                   </div>
                   {/* Favorite Icon */}
                   <button
@@ -720,7 +705,7 @@ export default function HomePage() {
                     Add
                   </Button>
                 </div>
-              </motion.div>
+              </div>
             ))
           )}
         </div>
@@ -744,13 +729,9 @@ export default function HomePage() {
             <div className="w-full text-center py-4 text-gray-500">No restaurants found near you</div>
           ) : (
             popularRestaurants.map((restaurant) => (
-              <motion.div
+              <div
                 key={restaurant._id || restaurant.id}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.4 }}
-                whileHover={{ y: -5 }}
-                className="flex-shrink-0 w-[200px] bg-white rounded-xl overflow-visible shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+                className="flex-shrink-0 w-[200px] bg-white rounded-xl overflow-visible shadow-sm hover:shadow-md transition-shadow hover:-translate-y-1 transition-transform duration-200 cursor-pointer"
                 onClick={() => navigate(`/user/restaurants/${restaurant.slug || (restaurant.name.toLowerCase().replace(/\s+/g, '-'))}`)}
               >
                 {/* Food Image - Large */}
@@ -810,7 +791,7 @@ export default function HomePage() {
                     </div>
                   </div>
                 </div>
-              </motion.div>
+              </div>
             ))
           )}
         </div>
@@ -925,3 +906,5 @@ export default function HomePage() {
     </div>
   )
 }
+
+

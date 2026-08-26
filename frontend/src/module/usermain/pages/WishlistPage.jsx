@@ -31,18 +31,20 @@ export default function WishlistPage() {
   useEffect(() => {
     // Initialize Lenis for smooth scrolling
     const isMobile = typeof window !== "undefined" && (window.innerWidth < 768 || "ontouchstart" in window);
-    const lenis = new Lenis({
+    let lenis = null;
+    let rafId = null;
+    if (!isMobile) {
+      lenis = new Lenis({
       duration: 1.2,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
       smoothWheel: true,
     })
-
-    function raf(time) {
-      if (!isMobile) lenis.raf(time)
-      requestAnimationFrame(raf)
+      function raf(time) {
+        lenis.raf(time)
+        rafId = requestAnimationFrame(raf)
+      }
+      rafId = requestAnimationFrame(raf)
     }
-
-    requestAnimationFrame(raf)
 
     // Load wishlist on mount
     loadWishlist()
@@ -68,7 +70,7 @@ export default function WishlistPage() {
     }, 1000) // Check every second
 
     return () => {
-      lenis.destroy()
+      if (lenis) lenis.destroy()
       window.removeEventListener('storage', handleStorageChange)
       window.removeEventListener('wishlistUpdated', handleWishlistUpdate)
       clearInterval(interval)

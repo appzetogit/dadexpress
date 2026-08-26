@@ -54,18 +54,20 @@ export default function ProfilePage() {
   useEffect(() => {
     // Initialize Lenis for smooth scrolling
     const isMobile = typeof window !== "undefined" && (window.innerWidth < 768 || "ontouchstart" in window);
-    const lenis = new Lenis({
+    let lenis = null;
+    let rafId = null;
+    if (!isMobile) {
+      lenis = new Lenis({
       duration: 1.2,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
       smoothWheel: true,
     })
-
-    function raf(time) {
-      if (!isMobile) lenis.raf(time)
-      requestAnimationFrame(raf)
+      function raf(time) {
+        lenis.raf(time)
+        rafId = requestAnimationFrame(raf)
+      }
+      rafId = requestAnimationFrame(raf)
     }
-
-    requestAnimationFrame(raf)
 
     // Small delay to ensure refs are set
     const timeoutId = setTimeout(() => {
@@ -112,7 +114,7 @@ export default function ProfilePage() {
     }, 100)
 
     return () => {
-      lenis.destroy()
+      if (lenis) lenis.destroy()
       clearTimeout(timeoutId)
     }
   }, [location.pathname, animationKey])
