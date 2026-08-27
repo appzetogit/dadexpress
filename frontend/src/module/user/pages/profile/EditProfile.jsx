@@ -475,11 +475,12 @@ export default function EditProfile() {
                   disableFuture
                   slotProps={{
                     textField: {
-                      className: "w-full",
+                      className: "w-full text-gray-900 dark:text-white",
                       sx: {
                         '& .MuiOutlinedInput-root': {
                           height: '48px',
                           borderRadius: '8px',
+                          color: 'inherit',
                           '& fieldset': {
                             borderColor: '#d1d5db',
                           },
@@ -490,10 +491,14 @@ export default function EditProfile() {
                             borderColor: '#EB590E',
                             borderWidth: '1px',
                           },
+                          '& .MuiSvgIcon-root': {
+                            color: 'inherit',
+                          }
                         },
                         '& .MuiInputBase-input': {
                           padding: '12px 14px',
                           fontSize: '16px',
+                          color: 'inherit',
                         },
                       },
                     },
@@ -514,11 +519,12 @@ export default function EditProfile() {
                   disableFuture
                   slotProps={{
                     textField: {
-                      className: "w-full",
+                      className: "w-full text-gray-900 dark:text-white",
                       sx: {
                         '& .MuiOutlinedInput-root': {
                           height: '48px',
                           borderRadius: '8px',
+                          color: 'inherit',
                           '& fieldset': {
                             borderColor: '#d1d5db',
                           },
@@ -529,10 +535,14 @@ export default function EditProfile() {
                             borderColor: '#EB590E',
                             borderWidth: '1px',
                           },
+                          '& .MuiSvgIcon-root': {
+                            color: 'inherit',
+                          }
                         },
                         '& .MuiInputBase-input': {
                           padding: '12px 14px',
                           fontSize: '16px',
+                          color: 'inherit',
                         },
                       },
                     },
@@ -553,9 +563,9 @@ export default function EditProfile() {
                 <SelectTrigger className="h-12 text-base border border-gray-300 dark:border-gray-700 focus:border-[#EB590E] focus:ring-1 focus:ring-[#EB590E] rounded-lg bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-white">
                   <SelectValue placeholder="Gender" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-white border-gray-200 dark:border-gray-800">
                   {genderOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
+                    <SelectItem key={option.value} value={option.value} className="focus:bg-gray-100 dark:focus:bg-gray-800 focus:text-gray-900 dark:focus:text-white cursor-pointer">
                       {option.label}
                     </SelectItem>
                   ))}

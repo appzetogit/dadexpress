@@ -964,7 +964,8 @@ export default function PageNavbar({
     openLocationSelector()
   }
 
-  const textColorClass = textColor === "white" ? "text-white" : "text-black"
+  const textColorClass = textColor === "white" ? "text-white" : "text-black dark:text-white"
+  const textColorOpacityClass = textColor === "white" ? "text-white/80" : "text-black/80 dark:text-white/80"
   const iconFill = textColor === "white" ? "white" : "black"
   const ringColor = textColor === "white" ? "ring-white/30" : "ring-gray-800/30"
 
@@ -1020,7 +1021,7 @@ export default function PageNavbar({
                   <ChevronDown className={`h-3 w-3 sm:h-4 sm:w-4 ${textColorClass} flex-shrink-0`} strokeWidth={2.5} />
                 </div>
                 {subLocationName && (
-                  <span className={`text-[10px] sm:text-xs font-medium ${textColorClass}/80 truncate max-w-[140px] sm:max-w-[200px] text-center`}>
+                  <span className={`text-[10px] sm:text-xs font-medium ${textColorOpacityClass} truncate max-w-[140px] sm:max-w-[200px] text-center`}>
                     {subLocationName}
                   </span>
                 )}
