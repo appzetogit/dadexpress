@@ -29,11 +29,6 @@ class NotificationService {
 
         const message = {
             token: token,
-            notification: {
-                title: notification.title,
-                body: notification.body,
-                image: notification.image || logoUrl,
-            },
             data: {
                 ...data,
                 title: notification.title,
@@ -101,11 +96,6 @@ class NotificationService {
 
         const message = {
             tokens: cleanTokens,
-            notification: {
-                title: notification.title,
-                body: notification.body,
-                image: notification.image || logoUrl,
-            },
             data: {
                 ...stringData,
                 title: notification.title,
