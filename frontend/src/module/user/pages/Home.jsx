@@ -1730,7 +1730,14 @@ export default function Home() {
     const activeSearch = heroSearch || searchValue
     if (activeSearch && activeSearch.trim() !== "") {
       const lowerSearch = activeSearch.toLowerCase().trim()
-      filtered = filtered.filter(r => r.name.toLowerCase().includes(lowerSearch) || (r.cuisine && r.cuisine.toLowerCase().includes(lowerSearch)))
+      filtered = filtered.filter(r => 
+        r.name.toLowerCase().includes(lowerSearch) || 
+        (r.cuisine && r.cuisine.toLowerCase().includes(lowerSearch)) ||
+        (r.menuItems && r.menuItems.some(item => 
+          item.name.toLowerCase().includes(lowerSearch) || 
+          (item.description && item.description.toLowerCase().includes(lowerSearch))
+        ))
+      )
     }
 
     // Apply sorting
@@ -1812,7 +1819,10 @@ export default function Home() {
     // Priority 6: Check if restaurants were filtered out by search/filters
     const hasSearch = (heroSearch && heroSearch.trim() !== "") || (searchValue && searchValue.trim() !== "")
     if (hasSearch || activeFilters.size > 0 || selectedCuisine) {
-      return "No restaurants found matching your search or filters 🔍"
+      if (hasSearch) {
+        return "No menus or restaurants found matching your search 🔍"
+      }
+      return "No restaurants found matching your filters 🔍"
     }
 
     return "No restaurants available in this area"
