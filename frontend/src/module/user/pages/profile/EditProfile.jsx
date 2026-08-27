@@ -475,7 +475,7 @@ export default function EditProfile() {
                   disableFuture
                   slotProps={{
                     textField: {
-                      className: "w-full text-gray-900 dark:text-white",
+                      className: "w-full text-gray-900 dark:text-white [&_input]:text-gray-900 dark:[&_input]:text-white [&_input::placeholder]:text-gray-500 dark:[&_input::placeholder]:text-gray-400 [&_input]:!opacity-100",
                       sx: {
                         '& .MuiOutlinedInput-root': {
                           height: '48px',
@@ -519,7 +519,7 @@ export default function EditProfile() {
                   disableFuture
                   slotProps={{
                     textField: {
-                      className: "w-full text-gray-900 dark:text-white",
+                      className: "w-full text-gray-900 dark:text-white [&_input]:text-gray-900 dark:[&_input]:text-white [&_input::placeholder]:text-gray-500 dark:[&_input::placeholder]:text-gray-400 [&_input]:!opacity-100",
                       sx: {
                         '& .MuiOutlinedInput-root': {
                           height: '48px',
