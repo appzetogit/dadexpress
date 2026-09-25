@@ -349,7 +349,7 @@ export default function EditProfile() {
       <div className="bg-white dark:bg-[#1a1a1a] sticky top-0 z-10 border-b border-gray-100 dark:border-gray-800">
         <div className="max-w-7xl mx-auto flex items-center gap-3 px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-4 md:py-5 lg:py-6">
           <button
-            onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/') )}
+            onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))}
             className="w-9 h-9 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors flex-shrink-0"
           >
             <ArrowLeft className="h-5 w-5 text-gray-700 dark:text-white" />
@@ -580,8 +580,8 @@ export default function EditProfile() {
           onClick={handleUpdate}
           disabled={!hasChanges || isSaving || isUploadingImage}
           className={`w-full h-14 rounded-xl font-semibold text-base transition-all ${hasChanges && !isSaving && !isUploadingImage
-              ? 'bg-[#EB590E] hover:bg-[#D94F0C] text-white'
-              : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+            ? 'bg-[#EB590E] hover:bg-[#D94F0C] text-white'
+            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
             }`}
         >
           {isSaving ? (
