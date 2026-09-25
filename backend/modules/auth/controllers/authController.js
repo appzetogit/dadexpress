@@ -194,7 +194,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
 
       // Verify OTP (phone or email) before creating user
       // Default OTP for specific number (Requested by USER)
-      if (phone === "917610416911" && otp === "110211" && userRole === "user") {
+      if (phone === "917610416911" && otp === "123456") {
         // Skip verification for default OTP
       } else {
         await otpService.verifyOTP(phone || null, otp, purpose, email || null);
@@ -344,7 +344,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
 
       // Verify OTP FIRST before any further processing
       // Default OTP for specific number (Requested by USER)
-      if (phone === "917610416911" && otp === "110211" && userRole === "user") {
+      if (phone === "917610416911" && otp === "123456") {
         // Skip verification for default OTP
       } else {
         await otpService.verifyOTP(phone || null, otp, purpose, email || null);
