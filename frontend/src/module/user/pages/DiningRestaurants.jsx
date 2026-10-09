@@ -11,7 +11,6 @@ import { useLocation as useLocationHook } from "../hooks/useLocation"
 import { useProfile } from "../context/ProfileContext"
 import { diningAPI } from "@/lib/api"
 import { useZone } from "../hooks/useZone"
-import quickSpicyLogo from "@/assets/quicky-spicy-logo.png"
 // Using placeholder for dining restaurant banner
 const diningBanner = "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=1200&h=400&fit=crop"
 

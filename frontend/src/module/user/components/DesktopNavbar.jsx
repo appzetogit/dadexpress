@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom"
-import { useEffect, useState, useRef } from "react"
+import { useState, useRef } from "react"
 import { ChevronDown, ShoppingCart, Wallet, Search, Mic, MapPin } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -9,8 +9,6 @@ import { useCart } from "../context/CartContext"
 import { useLocationSelector, useSearchOverlay } from "./UserLayout"
 import { useProfile } from "../context/ProfileContext"
 import { AnimatePresence, motion } from "framer-motion"
-import quickSpicyLogo from "@/assets/quicky-spicy-logo.png"
-import { getCachedSettings, loadBusinessSettings } from "@/lib/utils/businessSettings"
 
 export default function DesktopNavbar() {
     const location = useLocation()
@@ -21,8 +19,6 @@ export default function DesktopNavbar() {
     const { openSearch, closeSearch, searchValue, setSearchValue } = useSearchOverlay()
     const { vegMode, setVegMode } = useProfile()
     const [heroSearch, setHeroSearch] = useState("")
-    const [logoUrl, setLogoUrl] = useState(() => getCachedSettings()?.logo?.url || null)
-    const [companyName, setCompanyName] = useState(() => getCachedSettings()?.companyName || null)
     const cartCount = getCartCount()
 
 
@@ -49,54 +45,6 @@ export default function DesktopNavbar() {
     const isProfile = location.pathname.startsWith("/profile") || location.pathname.startsWith("/user/profile")
     const isDelivery = !isDining && !isUnder250 && !isProfile && (location.pathname === "/" || location.pathname === "/user" || (location.pathname.startsWith("/") && !location.pathname.startsWith("/restaurant") && !location.pathname.startsWith("/delivery") && !location.pathname.startsWith("/admin") && !location.pathname.startsWith("/usermain")))
 
-    // Load business settings logo
-    useEffect(() => {
-        const loadLogo = async () => {
-            try {
-                const cached = getCachedSettings()
-                if (cached) {
-                    if (cached.logo?.url) {
-                        setLogoUrl(cached.logo.url)
-                    }
-                    if (cached.companyName) {
-                        setCompanyName(cached.companyName)
-                    }
-                } else {
-                    const settings = await loadBusinessSettings()
-                    if (settings) {
-                        if (settings.logo?.url) {
-                            setLogoUrl(settings.logo.url)
-                        }
-                        if (settings.companyName) {
-                            setCompanyName(settings.companyName)
-                        }
-                    }
-                }
-            } catch (error) {
-                console.error('Error loading logo:', error)
-            }
-        }
-        loadLogo()
-
-        // Listen for business settings updates
-        const handleSettingsUpdate = () => {
-            const cached = getCachedSettings()
-            if (cached) {
-                if (cached.logo?.url) {
-                    setLogoUrl(cached.logo.url)
-                }
-                if (cached.companyName) {
-                    setCompanyName(cached.companyName)
-                }
-            }
-        }
-        window.addEventListener('businessSettingsUpdated', handleSettingsUpdate)
-
-        return () => {
-            window.removeEventListener('businessSettingsUpdated', handleSettingsUpdate)
-        }
-    }, [])
-
     // Always visible (sticky)
     // Removed scroll listener logic
 
@@ -112,23 +60,7 @@ export default function DesktopNavbar() {
                         <div className="flex items-center gap-4 lg:gap-6 flex-shrink-0">
                             {/* Logo */}
                             <Link to="/user" className="flex items-center justify-center flex-shrink-0">
-                                {logoUrl ? (
-                                    <img loading="lazy" decoding="async"
-                                        src={logoUrl}
-                                        alt="Company Logo"
-                                        className="h-7 w-auto md:h-9 lg:h-10 object-contain"
-                                        onError={(e) => {
-                                            // Fallback to static logo if backend logo fails
-                                            e.target.src = quickSpicyLogo
-                                        }}
-                                    />
-                                ) : companyName ? (
-                                    <span className="text-lg font-bold text-gray-900 dark:text-white">
-                                        {companyName}
-                                    </span>
-                                ) : (
-                                    <img loading="lazy" decoding="async" src={quickSpicyLogo} alt="Quick Spicy" className="h-7 w-auto md:h-9 lg:h-10 object-contain" />
-                                )}
+                                <img loading="lazy" decoding="async" src="/Dadexpessnewlogo.PNG" alt="DadExpress" className="h-7 w-auto md:h-9 lg:h-10 object-contain" />
                             </Link>
 
                             {/* Location Selector */}

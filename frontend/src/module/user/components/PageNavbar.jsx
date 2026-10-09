@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom"
-import { useState, useEffect, useMemo } from "react"
+import { useMemo } from "react"
 import { ChevronDown, ShoppingCart, Wallet, MapPin } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useLocation } from "../hooks/useLocation"
@@ -8,8 +8,6 @@ import { useProfile } from "../context/ProfileContext"
 import { useSelectedDeliveryAddress } from "../hooks/useSelectedDeliveryAddress"
 import { resolveDeliveryAddress } from "../utils/deliveryAddress"
 import { useLocationSelector } from "./UserLayout"
-import { getCachedSettings, loadBusinessSettings } from "@/lib/utils/businessSettings"
-import quickSpicyLogo from "@/assets/quicky-spicy-logo.png"
 
 export default function PageNavbar({
   textColor = "white",
@@ -23,8 +21,6 @@ export default function PageNavbar({
   const { selectedDeliveryAddress } = useSelectedDeliveryAddress()
   const { openLocationSelector } = useLocationSelector()
   const cartCount = getCartCount()
-  const [logoUrl, setLogoUrl] = useState(() => getCachedSettings()?.logo?.url || null)
-  const [companyName, setCompanyName] = useState(() => getCachedSettings()?.companyName || null)
   const defaultAddress = useMemo(
     () => (typeof getDefaultAddress === "function" ? getDefaultAddress() : null),
     [getDefaultAddress, addresses],
@@ -80,64 +76,6 @@ export default function PageNavbar({
   }, [resolvedDeliveryAddress, geoLocation])
 
 
-
-  // Load business settings logo
-  useEffect(() => {
-    const loadLogo = async () => {
-      try {
-        // First check cache
-        let cached = getCachedSettings()
-        if (cached) {
-          if (cached.logo?.url) {
-            setLogoUrl(cached.logo.url)
-          }
-          if (cached.companyName) {
-            setCompanyName(cached.companyName)
-          }
-        }
-
-        // Always try to load fresh data to ensure we have the latest
-        const settings = await loadBusinessSettings()
-        if (settings) {
-          if (settings.logo?.url) {
-            setLogoUrl(settings.logo.url)
-          }
-          if (settings.companyName) {
-            setCompanyName(settings.companyName)
-          }
-        }
-      } catch (error) {
-        console.error('Error loading logo:', error)
-      }
-    }
-
-    // Load immediately
-    loadLogo()
-
-    // Also try after a small delay to ensure DOM is ready
-    const timeoutId = setTimeout(() => {
-      loadLogo()
-    }, 100)
-
-    // Listen for business settings updates
-    const handleSettingsUpdate = () => {
-      const cached = getCachedSettings()
-      if (cached) {
-        if (cached.logo?.url) {
-          setLogoUrl(cached.logo.url)
-        }
-        if (cached.companyName) {
-          setCompanyName(cached.companyName)
-        }
-      }
-    }
-    window.addEventListener('businessSettingsUpdated', handleSettingsUpdate)
-
-    return () => {
-      clearTimeout(timeoutId)
-      window.removeEventListener('businessSettingsUpdated', handleSettingsUpdate)
-    }
-  }, [])
 
   // Function to extract location parts for display
   // Main location: First 2 parts only (e.g., "Mama Loca, G-2")
@@ -980,23 +918,11 @@ export default function PageNavbar({
 
         {/* Left: Company Logo */}
         <Link to="/user" className="flex-shrink-0 mr-3 sm:mr-4">
-          {logoUrl ? (
-            <img loading="lazy" decoding="async"
-              src={logoUrl}
-              alt="Company Logo"
-              className="h-8 w-auto sm:h-9 md:h-12 object-contain origin-left"
-              crossOrigin="anonymous"
-              onError={(e) => {
-                e.target.src = quickSpicyLogo
-              }}
-            />
-          ) : (
-            <img loading="lazy" decoding="async"
-              src={quickSpicyLogo}
-              alt={`${companyName} Logo`}
-              className="h-8 w-auto sm:h-9 md:h-12 object-contain origin-left"
-            />
-          )}
+          <img loading="lazy" decoding="async"
+            src="/Dadexpessnewlogo.PNG"
+            alt="DadExpress"
+            className="h-8 w-auto sm:h-9 md:h-12 object-contain origin-left"
+          />
         </Link>
 
         {/* Center: Location Selector (Centered) */}

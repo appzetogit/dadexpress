@@ -1,47 +1,10 @@
 import { Link } from "react-router-dom"
 import { Facebook, Twitter, Instagram, Mail, Phone, MapPin, Heart } from "lucide-react"
-import { useState, useEffect } from "react"
-import { getCachedSettings, loadBusinessSettings } from "@/lib/utils/businessSettings"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
-import quickSpicyLogo from "@/assets/quicky-spicy-logo.png"
 
 export default function Footer() {
   const companyName = useCompanyName()
   const currentYear = new Date().getFullYear()
-  const [logoUrl, setLogoUrl] = useState(quickSpicyLogo)
-
-  // Load business settings logo
-  useEffect(() => {
-    const loadLogo = async () => {
-      try {
-        const cached = getCachedSettings()
-        if (cached?.logo?.url) {
-          setLogoUrl(cached.logo.url)
-        } else {
-          const settings = await loadBusinessSettings()
-          if (settings?.logo?.url) {
-            setLogoUrl(settings.logo.url)
-          }
-        }
-      } catch (error) {
-        // Silently fail, use default logo
-      }
-    }
-    loadLogo()
-
-    // Listen for business settings updates
-    const handleSettingsUpdate = () => {
-      const cached = getCachedSettings()
-      if (cached?.logo?.url) {
-        setLogoUrl(cached.logo.url)
-      }
-    }
-    window.addEventListener('businessSettingsUpdated', handleSettingsUpdate)
-
-    return () => {
-      window.removeEventListener('businessSettingsUpdated', handleSettingsUpdate)
-    }
-  }, [])
 
   const footerLinks = {
     company: [
@@ -82,14 +45,10 @@ export default function Footer() {
             >
               <div className="flex items-center gap-2 mb-4">
                 <img loading="lazy" decoding="async"
-                  src={logoUrl}
-                  alt="Company Logo"
+                  src="/Dadexpessnewlogo.PNG"
+                  alt="DadExpress"
                   className="h-10 w-10 rounded-full object-cover"
                   crossOrigin="anonymous"
-                  onError={(e) => {
-                    // Fallback to default logo if business logo fails to load
-                    e.target.src = quickSpicyLogo
-                  }}
                 />
                 <span className="text-2xl font-bold bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent">
                   {companyName}
