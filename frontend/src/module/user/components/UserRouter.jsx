@@ -3,7 +3,6 @@ import ProtectedRoute from "@/components/ProtectedRoute"
 import AuthRedirect from "@/components/AuthRedirect"
 import UserLayout from "./UserLayout"
 import { Suspense, lazy } from "react"
-import Loader from "@/components/Loader"
 
 // Lazy Loading Pages
 
@@ -102,7 +101,7 @@ const ContactSupport = lazy(() => import("../pages/profile/ContactSupport"))
 
 export default function UserRouter() {
   return (
-    <Suspense fallback={<Loader />}>
+    <Suspense fallback={null}>
       <Routes>
         <Route element={<UserLayout />}>
           {/* Home & Discovery */}
