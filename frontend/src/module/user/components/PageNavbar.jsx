@@ -921,7 +921,7 @@ export default function PageNavbar({
           <img loading="lazy" decoding="async"
             src="/Dadexpessnewlogo.PNG"
             alt="DadExpress"
-            className="h-8 w-auto sm:h-9 md:h-12 object-contain origin-left"
+            className="h-10 w-auto sm:h-11 md:h-14 object-contain origin-left"
           />
         </Link>
 
