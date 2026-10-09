@@ -869,7 +869,11 @@ export default function App() {
 
           <Route
             path="/*"
-            element={<UserRouter />}
+            element={
+              <Suspense fallback={null}>
+                <UserRouter />
+              </Suspense>
+            }
           />
         </Routes>
       </Suspense>
