@@ -60,7 +60,7 @@ export default function DesktopNavbar() {
                         <div className="flex items-center gap-4 lg:gap-6 flex-shrink-0">
                             {/* Logo */}
                             <Link to="/user" className="flex items-center justify-center flex-shrink-0">
-                                <img loading="lazy" decoding="async" src="/Dadexpessnewlogo.PNG" alt="DadExpress" className="h-9 w-auto md:h-11 lg:h-12 object-contain" />
+                                <img loading="lazy" decoding="async" src="/DadExpress-horizontal.png" alt="DadExpress" className="h-8 w-auto md:h-9 lg:h-10 object-contain" />
                             </Link>
 
                             {/* Location Selector */}

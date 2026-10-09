@@ -919,9 +919,9 @@ export default function PageNavbar({
         {/* Left: Company Logo */}
         <Link to="/user" className="flex-shrink-0 mr-3 sm:mr-4">
           <img loading="lazy" decoding="async"
-            src="/Dadexpessnewlogo.PNG"
+            src="/DadExpress-horizontal.png"
             alt="DadExpress"
-            className="h-10 w-auto sm:h-11 md:h-14 object-contain origin-left"
+            className="h-8 w-auto sm:h-9 md:h-10 object-contain origin-left"
           />
         </Link>
 
