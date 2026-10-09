@@ -921,12 +921,12 @@ export default function PageNavbar({
           <img loading="lazy" decoding="async"
             src="/DadExpress-horizontal.png"
             alt="DadExpress"
-            className="h-8 w-auto sm:h-9 md:h-10 object-contain origin-left"
+            className="h-10 w-auto object-contain origin-left"
           />
         </Link>
 
         {/* Center: Location Selector (Centered) */}
-        <div className="flex-1 flex items-center justify-center min-w-0 absolute left-1/2 -translate-x-1/2">
+        <div className="flex-1 flex items-center justify-center min-w-0 absolute left-[calc(50%+16px)] -translate-x-1/2">
           <Button
             variant="ghost"
             onClick={handleLocationClick}
