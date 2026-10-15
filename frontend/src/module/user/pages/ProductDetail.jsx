@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
+import TextShimmer from "../components/shimmer/TextShimmer"
 
 export default function ProductDetail() {
   const { id } = useParams()
@@ -270,8 +271,21 @@ export default function ProductDetail() {
   if (loading) {
     return (
       <AnimatedPage className="min-h-screen bg-gradient-to-b from-yellow-50/30 via-white to-orange-50/20 dark:from-[#0a0a0a] dark:via-[#0a0a0a] dark:to-[#0a0a0a]">
-        <div className="max-w-4xl mx-auto px-4 py-20 text-center">
-          <h1 className="text-2xl font-bold mb-4">Loading product...</h1>
+        <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
+          <div className="w-full h-64 sm:h-80 md:h-96 rounded-2xl shimmer-effect shadow-sm" />
+          <div className="space-y-3">
+            <TextShimmer width="w-2/3" height="h-8" rounded="rounded-lg" />
+            <TextShimmer width="w-1/4" height="h-6" rounded="rounded-md" />
+            <div className="flex gap-2 pt-2">
+              <TextShimmer width="w-16" height="h-5" rounded="rounded-full" />
+              <TextShimmer width="w-20" height="h-5" rounded="rounded-full" />
+            </div>
+            <div className="space-y-2 pt-4">
+              <TextShimmer width="w-full" height="h-4" />
+              <TextShimmer width="w-5/6" height="h-4" />
+              <TextShimmer width="w-3/4" height="h-4" />
+            </div>
+          </div>
         </div>
       </AnimatedPage>
     )

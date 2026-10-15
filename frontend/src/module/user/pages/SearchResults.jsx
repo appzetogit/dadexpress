@@ -9,6 +9,9 @@ import { useProfile } from "../context/ProfileContext"
 import { useLocation } from "../hooks/useLocation"
 import { useZone } from "../hooks/useZone"
 import { restaurantAPI, adminAPI, publicAPI } from "@/lib/api"
+import TextShimmer from "../components/shimmer/TextShimmer"
+import RestaurantCardShimmer from "../components/shimmer/RestaurantCardShimmer"
+import DishCardShimmer from "../components/shimmer/DishCardShimmer"
 
 // Import shared food images - prevents duplication
 import { foodImages } from "@/constants/images"
@@ -810,9 +813,15 @@ export default function SearchResults() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-4 sm:py-6 md:py-8 lg:py-10 space-y-6 md:space-y-8 lg:space-y-10">
         {/* Loading State */}
         {(loadingRestaurants || loadingItems) && (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-            <span className="ml-3 text-gray-600">Searching...</span>
+          <div className="space-y-6">
+            <div className="flex items-center gap-2">
+              <TextShimmer width="w-36" height="h-5" />
+            </div>
+            <DishCardShimmer count={6} />
+            <div className="pt-4">
+              <TextShimmer width="w-48" height="h-6" className="mb-4" />
+              <RestaurantCardShimmer count={4} />
+            </div>
           </div>
         )}
 

@@ -14,6 +14,7 @@ import { useCart } from "../context/CartContext"
 import { useLocationSelector } from "./UserLayout"
 import { getCachedSettings, loadBusinessSettings } from "@/lib/utils/businessSettings"
 import useUserPoints from "../hooks/useUserPoints"
+import TextShimmer from "./shimmer/TextShimmer"
 
 export default function Navbar() {
   const { location, loading } = useLocation()
@@ -95,9 +96,13 @@ export default function Navbar() {
               disabled={loading}
             >
               {loading ? (
-                <span className="text-xs sm:text-sm font-semibold text-left text-black">
-                  Loading...
-                </span>
+                <div className="flex flex-col items-start gap-1">
+                  <div className="flex items-center gap-1.5">
+                    <MapPin className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-black/60 flex-shrink-0" />
+                    <TextShimmer width="w-20 sm:w-24" height="h-3.5" rounded="rounded" />
+                  </div>
+                  <TextShimmer width="w-14 sm:w-16" height="h-2.5" rounded="rounded" />
+                </div>
               ) : (
                 <div className="flex flex-col items-start w-full min-w-0">
                   <span className="text-xs sm:text-sm flex flex-row items-center gap-1 font-semibold text-left text-foreground truncate w-full">

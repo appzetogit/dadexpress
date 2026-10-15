@@ -8,6 +8,7 @@ import { useProfile } from "../context/ProfileContext"
 import { useSelectedDeliveryAddress } from "../hooks/useSelectedDeliveryAddress"
 import { resolveDeliveryAddress } from "../utils/deliveryAddress"
 import { useLocationSelector } from "./UserLayout"
+import TextShimmer from "./shimmer/TextShimmer"
 
 export default function PageNavbar({
   textColor = "white",
@@ -934,9 +935,13 @@ export default function PageNavbar({
             className="h-auto px-0 py-0 hover:bg-transparent transition-colors flex-shrink-0"
           >
             {loading ? (
-              <span className={`text-sm font-bold ${textColorClass}`}>
-                Detecting location...
-              </span>
+              <div className="flex flex-col items-center gap-1 min-w-[120px]">
+                <div className="flex items-center gap-1.5">
+                  <MapPin className="h-[18px] w-[18px] text-orange-600 flex-shrink-0 opacity-70" strokeWidth={3} />
+                  <TextShimmer width="w-24 sm:w-28" height="h-4" rounded="rounded" />
+                </div>
+                <TextShimmer width="w-16 sm:w-20" height="h-2.5" rounded="rounded" />
+              </div>
             ) : (
               <div className="flex flex-col items-center min-w-0">
                 <div className="flex items-center justify-center gap-1">

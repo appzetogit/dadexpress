@@ -7,6 +7,7 @@ import { restaurantAPI } from "@/lib/api"
 import { toast } from "sonner"
 import { useLocation } from "../hooks/useLocation"
 import { useZone } from "../hooks/useZone"
+import RestaurantCardShimmer from "../components/shimmer/RestaurantCardShimmer"
 
 // Import banner image
 import offerBanner from "@/assets/offerpagebanner.png"
@@ -90,9 +91,8 @@ export default function Offers() {
 
         {/* Loading State */}
         {loading && (
-          <div className="flex flex-col items-center justify-center py-20">
-            <Loader2 className="h-10 w-10 animate-spin text-gray-400" />
-            <p className="mt-4 text-gray-500 dark:text-gray-400">Loading offers...</p>
+          <div className="pt-2">
+            <RestaurantCardShimmer count={6} />
           </div>
         )}
 

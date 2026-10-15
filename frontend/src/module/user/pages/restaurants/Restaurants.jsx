@@ -14,6 +14,7 @@ import { useLocation } from "../../hooks/useLocation"
 import { useZone } from "../../hooks/useZone"
 import { useSelectedDeliveryAddress } from "../../hooks/useSelectedDeliveryAddress"
 import { resolveActiveLocation, resolveDeliveryAddress } from "../../utils/deliveryAddress"
+import RestaurantCardShimmer from "../../components/shimmer/RestaurantCardShimmer"
 
 const toNumber = (value) => {
   const parsed = Number(value)
@@ -414,7 +415,11 @@ export default function Restaurants() {
 
   const content = useMemo(() => {
     if (loading) {
-      return <p className="text-sm text-gray-600 dark:text-gray-400">Loading restaurants...</p>
+      return (
+        <div className="pt-2 sm:pt-3 lg:pt-4">
+          <RestaurantCardShimmer count={8} />
+        </div>
+      )
     }
 
     if (error) {

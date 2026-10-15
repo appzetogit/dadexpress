@@ -20,6 +20,9 @@ import { Switch } from "@/components/ui/switch"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useSearchOverlay, useLocationSelector } from "../components/UserLayout"
 import PageNavbar from "../components/PageNavbar"
+import TextShimmer from "../components/shimmer/TextShimmer"
+import RestaurantCardShimmer from "../components/shimmer/RestaurantCardShimmer"
+import CategoryRowShimmer from "../components/shimmer/CategoryRowShimmer"
 
 // Import shared food images - prevents duplication
 import { foodImages } from "@/constants/images"
@@ -2104,12 +2107,7 @@ export default function Home() {
       {/* Hero Banner Section - Moved Below Search */}
       <div className={`relative w-full overflow-hidden mt-2 md:mt-4 mb-6 transition-all duration-300 ${(!loadingBanners && heroBannerImages.length === 0) ? 'h-0 mb-0' : 'h-[220px] sm:h-[240px] md:h-[50vh] lg:h-[60vh]'}`}>
         {loadingBanners ? (
-          <div className="absolute top-0 left-0 right-0 bottom-0 z-0 bg-gray-100 dark:bg-gray-900 flex items-center justify-center mx-3 sm:mx-4 lg:mx-8 rounded-xl sm:rounded-2xl">
-            <div className="text-gray-500 text-center">
-              <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2" />
-              <p className="text-sm">Loading banners...</p>
-            </div>
-          </div>
+          <div className="absolute top-0 left-0 right-0 bottom-0 z-0 shimmer-effect mx-3 sm:mx-4 lg:mx-8 rounded-xl sm:rounded-2xl" />
         ) : heroBannerImages.length > 0 ? (
           <div
             className="absolute top-0 left-0 right-0 bottom-0 z-0 cursor-grab active:cursor-grabbing overflow-hidden rounded-xl sm:rounded-2xl mx-3 sm:mx-4 lg:mx-8"
@@ -2244,9 +2242,7 @@ export default function Home() {
               </div>
             </motion.div>
             {loadingRealCategories ? (
-              <div className="flex items-center justify-center py-4">
-                <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-              </div>
+              <CategoryRowShimmer count={7} />
             ) : realCategories.length > 0 ? (
               <>
                 {/* Show only first 10 categories */}
@@ -2467,8 +2463,13 @@ export default function Home() {
             }}
           >
             {loadingLandingConfig ? (
-              <div className="flex items-center justify-center py-4">
-                <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+              <div className="flex items-center gap-4 py-2">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="flex flex-col items-center gap-2.5 w-24 sm:w-28 flex-shrink-0">
+                    <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl shimmer-effect shadow-sm" />
+                    <TextShimmer width="w-16" height="h-3" rounded="rounded" />
+                  </div>
+                ))}
               </div>
             ) : (
               finalExploreItems.map((item, index) => (
@@ -2593,20 +2594,20 @@ export default function Home() {
             <AnimatePresence>
               {(isLoadingFilterResults || loadingRestaurants) && (
                 <motion.div
-                  className="absolute inset-0 bg-white/80 dark:bg-[#1a1a1a]/80 backdrop-blur-sm z-10 flex items-center justify-center rounded-lg min-h-[400px]"
+                  className="absolute inset-0 bg-white/90 dark:bg-[#1a1a1a]/90 backdrop-blur-sm z-10 flex flex-col justify-start rounded-lg min-h-[400px] p-2"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.3 }}
                 >
-                  <div className="flex flex-col items-center gap-3">
-                    <Loader2 className="h-8 w-8 text-green-600 animate-spin" strokeWidth={2.5} />
-                    <span className="text-sm font-medium text-gray-700 dark:text-white">Loading restaurants...</span>
+                  <div className="flex items-center gap-2 mb-4 px-2">
+                    <TextShimmer width="w-40" height="h-6" />
                   </div>
+                  <RestaurantCardShimmer count={4} />
                 </motion.div>
               )}
             </AnimatePresence>
-            <div className={`space-y-12 md:space-y-16 pt-1 sm:pt-1.5 lg:pt-2 ${(isLoadingFilterResults || loadingRestaurants) ? 'opacity-50' : 'opacity-100'} transition-opacity duration-300`}>
+            <div className={`space-y-12 md:space-y-16 pt-1 sm:pt-1.5 lg:pt-2 ${(isLoadingFilterResults || loadingRestaurants) ? 'opacity-30' : 'opacity-100'} transition-opacity duration-300`}>
               {filteredRestaurants.map((restaurant) => (
                 <RestaurantItem
                   key={restaurant.id}

@@ -12,6 +12,9 @@ import allCategoriesV3 from "@/assets/all-categories-v3.png"
 import { useProfile } from "../context/ProfileContext"
 import { useLocation } from "../hooks/useLocation"
 import { useZone } from "../hooks/useZone"
+import TextShimmer from "../components/shimmer/TextShimmer"
+import RestaurantCardShimmer from "../components/shimmer/RestaurantCardShimmer"
+import DishCardShimmer from "../components/shimmer/DishCardShimmer"
 
 // Filter options
 const filterOptions = [
@@ -861,15 +864,7 @@ export default function CategoryPage() {
               </h2>
 
               {loadingRestaurants ? (
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 md:gap-4">
-                  {[...Array(6)].map((_, i) => (
-                    <div key={i} className="flex flex-col gap-2">
-                      <div className="animate-pulse bg-gray-200 dark:bg-gray-800 aspect-square rounded-xl md:rounded-2xl w-full"></div>
-                      <div className="animate-pulse bg-gray-200 dark:bg-gray-800 rounded h-3 w-3/4"></div>
-                      <div className="animate-pulse bg-gray-200 dark:bg-gray-800 rounded h-2 w-1/2"></div>
-                    </div>
-                  ))}
-                </div>
+                <DishCardShimmer count={6} />
               ) : (
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 md:gap-4">
                   {(selectedCategory && selectedCategory !== 'all'
@@ -988,15 +983,7 @@ export default function CategoryPage() {
 
             {/* Large Restaurant Cards */}
             {loadingRestaurants ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5 lg:gap-6 xl:gap-7 items-stretch">
-                {[...Array(8)].map((_, i) => (
-                  <div key={i} className="flex flex-col gap-3">
-                    <div className="animate-pulse bg-gray-200 dark:bg-gray-800 rounded-xl h-44 sm:h-52 md:h-60 lg:h-64 xl:h-72 w-full"></div>
-                    <div className="animate-pulse bg-gray-200 dark:bg-gray-800 rounded h-4 w-3/4"></div>
-                    <div className="animate-pulse bg-gray-200 dark:bg-gray-800 rounded h-3 w-1/2"></div>
-                  </div>
-                ))}
-              </div>
+              <RestaurantCardShimmer count={8} />
             ) : (
               <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5 lg:gap-6 xl:gap-7 items-stretch ${isLoadingFilterResults ? 'opacity-50' : 'opacity-100'} transition-opacity duration-300`}>
                 {filteredAllRestaurants.map((restaurant) => {

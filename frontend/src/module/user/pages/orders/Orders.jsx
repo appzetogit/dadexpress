@@ -4,6 +4,7 @@ import { ArrowLeft, Search, MoreVertical, ChevronRight, Star, RotateCcw, AlertCi
 import { orderAPI, api, API_ENDPOINTS } from "@/lib/api"
 import { toast } from "sonner"
 import { getCompanyNameAsync } from "@/lib/utils/businessSettings"
+import TextShimmer from "../../components/shimmer/TextShimmer"
 
 export default function Orders() {
   const navigate = useNavigate()
@@ -517,8 +518,20 @@ Order again from this restaurant in the ${companyName} app.`
           </Link>
           <h1 className="ml-4 text-xl font-semibold text-gray-800 dark:text-gray-100">Your Orders</h1>
         </div>
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-8 h-8 text-[#EB590E] animate-spin" />
+        <div className="max-w-4xl mx-auto px-4 py-6 space-y-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="bg-white dark:bg-gray-900 rounded-xl p-4 border border-gray-100 dark:border-gray-800 shadow-sm space-y-3">
+              <div className="flex justify-between items-center">
+                <TextShimmer width="w-40 sm:w-48" height="h-5" />
+                <TextShimmer width="w-16" height="h-5" rounded="rounded-full" />
+              </div>
+              <TextShimmer width="w-28" height="h-3.5" />
+              <div className="pt-2 border-t border-gray-100 dark:border-gray-800 flex justify-between items-center">
+                <TextShimmer width="w-32" height="h-4" />
+                <TextShimmer width="w-20" height="h-7" rounded="rounded-lg" />
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     )

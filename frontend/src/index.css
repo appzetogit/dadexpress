@@ -273,6 +273,42 @@
   animation: fade-down 0.5s ease-out;
 }
 
+/* Shimmer Loading Wave Effect */
+@keyframes shimmerWave {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.shimmer-effect {
+  background: linear-gradient(
+    90deg,
+    #f3f4f6 0%,
+    #e5e7eb 30%,
+    #f9fafb 50%,
+    #e5e7eb 70%,
+    #f3f4f6 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmerWave 1.8s ease-in-out infinite;
+}
+
+.dark .shimmer-effect {
+  background: linear-gradient(
+    90deg,
+    #1f2937 0%,
+    #374151 30%,
+    #4b5563 50%,
+    #374151 70%,
+    #1f2937 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmerWave 1.8s ease-in-out infinite;
+}
+
 /* Leaflet map fixes */
 .leaflet-container {
   height: 100%;
