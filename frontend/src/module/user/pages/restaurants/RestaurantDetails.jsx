@@ -2498,82 +2498,93 @@ export default function RestaurantDetails() {
                               </div>
                             </div>
                           )}
-                        </div>
+                        </>
+                      )
+                    })()}
+                  </div>
 
-                        {/* Bottom Action Bar */}
-                        <div className="border-t border-gray-200 dark:border-gray-800 px-4 py-4 bg-white dark:bg-[#1a1a1a]">
-                          <div className="flex items-center gap-4">
-                            {/* Quantity Selector */}
-                            <div className={`flex items-center gap-3 border-2 rounded-lg px-3 h-[44px] bg-white dark:bg-[#2a2a2a] ${shouldShowGrayscale
-                              ? 'border-gray-300 dark:border-gray-700 opacity-50'
-                              : 'border-gray-300 dark:border-gray-700'
-                              }`}>
-                              <button
-                                onClick={(e) => {
-                                  if (!shouldShowGrayscale) {
-                                    updateItemQuantity(selectedItem, Math.max(0, currentQty - 1), e, activeVariation)
-                                  }
-                                }}
-                                disabled={currentQty === 0 || shouldShowGrayscale}
-                                className={`${shouldShowGrayscale
-                                  ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
-                                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white disabled:text-gray-300 dark:disabled:text-gray-600 disabled:cursor-not-allowed'
-                                  }`}
-                              >
-                                <Minus className="h-5 w-5" />
-                              </button>
-                              <span className={`text-lg font-semibold min-w-[2rem] text-center ${shouldShowGrayscale
-                                ? 'text-gray-400 dark:text-gray-600'
-                                : 'text-gray-900 dark:text-white'
-                                }`}>
-                                {currentQty}
-                              </span>
-                              <button
-                                onClick={(e) => {
-                                  if (!shouldShowGrayscale) {
-                                    updateItemQuantity(selectedItem, currentQty + 1, e, activeVariation)
-                                  }
-                                }}
-                                disabled={shouldShowGrayscale}
-                                className={shouldShowGrayscale
-                                  ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
-                                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                  {/* Bottom Action Bar */}
+                  {(() => {
+                    const activeVariation = (selectedItem.variations && selectedItem.variations.length > 0)
+                      ? (selectedItem.variations.find(v => v && v.name === selectedVariation?.name) || selectedItem.variations[0])
+                      : null
+                    const currentVariationPrice = activeVariation ? Number(activeVariation.price) : Number(selectedItem.price)
+                    const cartId = activeVariation ? `${selectedItem.id}-${activeVariation.name}` : selectedItem.id
+                    const currentQty = quantities[cartId] || 0
+
+                    return (
+                      <div className="border-t border-gray-200 dark:border-gray-800 px-4 py-4 bg-white dark:bg-[#1a1a1a]">
+                        <div className="flex items-center gap-4">
+                          {/* Quantity Selector */}
+                          <div className={`flex items-center gap-3 border-2 rounded-lg px-3 h-[44px] bg-white dark:bg-[#2a2a2a] ${shouldShowGrayscale
+                            ? 'border-gray-300 dark:border-gray-700 opacity-50'
+                            : 'border-gray-300 dark:border-gray-700'
+                            }`}>
+                            <button
+                              onClick={(e) => {
+                                if (!shouldShowGrayscale) {
+                                  updateItemQuantity(selectedItem, Math.max(0, currentQty - 1), e, activeVariation)
                                 }
-                              >
-                                <Plus className="h-5 w-5" />
-                              </button>
-                            </div>
-
-                            {/* Add Item Button */}
-                            <Button
-                              className={`flex-1 h-[44px] rounded-lg font-semibold flex items-center justify-center gap-2 ${shouldShowGrayscale
-                                ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-600 cursor-not-allowed opacity-50'
-                                : 'bg-red-500 hover:bg-red-600 text-white'
+                              }}
+                              disabled={currentQty === 0 || shouldShowGrayscale}
+                              className={`${shouldShowGrayscale
+                                ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
+                                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white disabled:text-gray-300 dark:disabled:text-gray-600 disabled:cursor-not-allowed'
                                 }`}
+                            >
+                              <Minus className="h-5 w-5" />
+                            </button>
+                            <span className={`text-lg font-semibold min-w-[2rem] text-center ${shouldShowGrayscale
+                              ? 'text-gray-400 dark:text-gray-600'
+                              : 'text-gray-900 dark:text-white'
+                              }`}>
+                              {currentQty}
+                            </span>
+                            <button
                               onClick={(e) => {
                                 if (!shouldShowGrayscale) {
                                   updateItemQuantity(selectedItem, currentQty + 1, e, activeVariation)
-                                  setShowItemDetail(false)
-                                  setSelectedVariation(null)
                                 }
                               }}
                               disabled={shouldShowGrayscale}
+                              className={shouldShowGrayscale
+                                ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
+                                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                              }
                             >
-                              <span>Add item</span>
-                              <div className="flex items-center gap-1">
-                                {selectedItem.originalPrice && selectedItem.originalPrice > currentVariationPrice && (
-                                  <span className="text-sm line-through text-red-200">
-                                    ₹{Math.round(selectedItem.originalPrice)}
-                                  </span>
-                                )}
-                                <span className="text-base font-bold">
-                                  ₹{Math.round(currentVariationPrice)}
-                                </span>
-                              </div>
-                            </Button>
+                              <Plus className="h-5 w-5" />
+                            </button>
                           </div>
+
+                          {/* Add Item Button */}
+                          <Button
+                            className={`flex-1 h-[44px] rounded-lg font-semibold flex items-center justify-center gap-2 ${shouldShowGrayscale
+                              ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-600 cursor-not-allowed opacity-50'
+                              : 'bg-red-500 hover:bg-red-600 text-white'
+                              }`}
+                            onClick={(e) => {
+                              if (!shouldShowGrayscale) {
+                                updateItemQuantity(selectedItem, currentQty + 1, e, activeVariation)
+                                setShowItemDetail(false)
+                                setSelectedVariation(null)
+                              }
+                            }}
+                            disabled={shouldShowGrayscale}
+                          >
+                            <span>Add item</span>
+                            <div className="flex items-center gap-1">
+                              {selectedItem.originalPrice && selectedItem.originalPrice > currentVariationPrice && (
+                                <span className="text-sm line-through text-red-200">
+                                  ₹{Math.round(selectedItem.originalPrice)}
+                                </span>
+                              )}
+                              <span className="text-base font-bold">
+                                ₹{Math.round(currentVariationPrice)}
+                              </span>
+                            </div>
+                          </Button>
                         </div>
-                      </>
+                      </div>
                     )
                   })()}
                 </motion.div>
