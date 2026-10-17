@@ -287,31 +287,40 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
  */
 export async function notifyRestaurantOrderUpdate(orderId, status) {
   try {
-    const io = await getIOInstance();
-
-    if (!io) {
+    let order = null;
+    if (mongoose.Types.ObjectId.isValid(orderId) && String(orderId).length === 24) {
+      order = await Order.findById(orderId).lean();
+    }
+    if (!order) {
+      order = await Order.findOne({ orderId: orderId }).lean();
+    }
+    if (!order) {
+      console.warn(`⚠️ notifyRestaurantOrderUpdate: Order ${orderId} not found`);
       return;
     }
 
-    const order = await Order.findById(orderId).lean();
-    if (!order) {
-      throw new Error('Order not found');
+    const io = await getIOInstance();
+    if (io) {
+      // Get restaurant namespace
+      const restaurantNamespace = io.of('/restaurant');
+
+      // Use colon separator to match server.js room join logic
+      restaurantNamespace.to(`restaurant:${order.restaurantId}`).emit('order_status_update', {
+        orderId: order.orderId,
+        status,
+        updatedAt: new Date()
+      });
+      console.log(`📢 Notified restaurant ${order.restaurantId} about order ${order.orderId} status: ${status}`);
     }
 
-    // Get restaurant namespace
-    const restaurantNamespace = io.of('/restaurant');
-
-    // Use colon separator to match server.js room join logic
-    restaurantNamespace.to(`restaurant:${order.restaurantId}`).emit('order_status_update', {
-      orderId: order.orderId,
-      status,
-      updatedAt: new Date()
-    });
-
-    console.log(`📢 Notified restaurant ${order.restaurantId} about order ${order.orderId} status: ${status}`);
-
     // Fetch restaurant for FCM token
-    const restaurant = await Restaurant.findById(order.restaurantId).select('fcmToken fcmTokenMobile platform').lean();
+    let restaurant = null;
+    if (mongoose.Types.ObjectId.isValid(order.restaurantId)) {
+      restaurant = await Restaurant.findById(order.restaurantId).select('fcmToken fcmTokenMobile platform').lean();
+    }
+    if (!restaurant) {
+      restaurant = await Restaurant.findOne({ restaurantId: String(order.restaurantId) }).select('fcmToken fcmTokenMobile platform').lean();
+    }
     const restaurantFcmTokensSet = new Set();
     if (restaurant?.fcmToken) restaurantFcmTokensSet.add(JSON.stringify({ token: restaurant.fcmToken, plat: 'web' }));
     if (restaurant?.fcmTokenMobile) restaurantFcmTokensSet.add(JSON.stringify({ token: restaurant.fcmTokenMobile, plat: 'app' }));

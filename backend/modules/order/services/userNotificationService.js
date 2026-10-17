@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Order from '../models/Order.js';
 import User from '../../auth/models/User.js';
 import notificationService from '../../../shared/services/notificationService.js';
@@ -9,7 +10,13 @@ import notificationService from '../../../shared/services/notificationService.js
  */
 export async function notifyUserOrderUpdate(orderId, status) {
     try {
-        const order = await Order.findById(orderId).lean();
+        let order = null;
+        if (mongoose.Types.ObjectId.isValid(orderId) && String(orderId).length === 24) {
+            order = await Order.findById(orderId).lean();
+        }
+        if (!order) {
+            order = await Order.findOne({ orderId: orderId }).lean();
+        }
         if (!order) {
             console.warn(`⚠️ User Notification: Order ${orderId} not found`);
             return;
@@ -25,6 +32,8 @@ export async function notifyUserOrderUpdate(orderId, status) {
 
         for (const { token, plat } of fcmTokens) {
             const statusMessages = {
+                confirmed: 'Your order has been confirmed! 🎉',
+                pending: 'Your order has been placed and is awaiting confirmation! ⏳',
                 preparing: 'Your order is being prepared! 🍳',
                 ready: 'Your order is ready for pickup! 🥡',
                 out_for_delivery: 'Your order is out for delivery! 🛵',

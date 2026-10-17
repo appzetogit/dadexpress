@@ -12,6 +12,7 @@ import { calculateOrderPricing } from '../services/orderCalculationService.js';
 import OutletTimings from '../../restaurant/models/OutletTimings.js';
 import { getRazorpayCredentials } from '../../../shared/utils/envService.js';
 import { notifyRestaurantNewOrder, notifyRestaurantOrderUpdate } from '../services/restaurantNotificationService.js';
+import { notifyUserOrderUpdate } from '../services/userNotificationService.js';
 import { calculateOrderSettlement } from '../services/orderSettlementService.js';
 import { holdEscrow } from '../services/escrowWalletService.js';
 import { processCancellationRefund } from '../services/cancellationRefundService.js';
@@ -807,6 +808,13 @@ export const createOrder = async (req, res) => {
           logger.error('❌ Error notifying restaurant about wallet payment order:', notifyError);
         }
 
+        // Notify customer about confirmed/placed wallet order
+        try {
+          await notifyUserOrderUpdate(order._id.toString(), 'confirmed');
+        } catch (userNotifyError) {
+          logger.error('❌ Error notifying customer about wallet order:', userNotifyError);
+        }
+
         // Respond to client
         return res.status(201).json({
           success: true,
@@ -897,6 +905,13 @@ export const createOrder = async (req, res) => {
           error: notifyError.message,
           stack: notifyError.stack
         });
+      }
+
+      // Notify customer about booked COD order
+      try {
+        await notifyUserOrderUpdate(order._id.toString(), 'confirmed');
+      } catch (userNotifyError) {
+        logger.error('❌ Error notifying customer about COD order:', userNotifyError);
       }
 
       // Respond to client (no Razorpay details for COD)
@@ -1121,6 +1136,9 @@ export const verifyOrderPayment = async (req, res) => {
         if (restaurantId) {
           await notifyRestaurantNewOrder(order, restaurantId).catch(e => logger.error('Restaurant notification error:', e));
         }
+
+        // Notify customer about confirmed online order
+        await notifyUserOrderUpdate(order._id.toString(), 'confirmed').catch(e => logger.error('Customer notification error:', e));
 
         const io = await getIOInstance();
         if (io) {
@@ -1665,6 +1683,13 @@ export const cancelOrder = async (req, res) => {
       await notifyRestaurantOrderUpdate(order._id.toString(), 'cancelled');
     } catch (notifError) {
       console.error('Error notifying restaurant about user cancellation:', notifError);
+    }
+
+    // Explicitly notify customer about cancellation
+    try {
+      await notifyUserOrderUpdate(order._id.toString(), 'cancelled');
+    } catch (custNotifError) {
+      console.error('Error notifying customer about order cancellation:', custNotifError);
     }
 
     res.json({
