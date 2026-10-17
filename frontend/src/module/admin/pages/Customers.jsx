@@ -11,6 +11,8 @@ export default function Customers() {
   const [customers, setCustomers] = useState([])
   const [loading, setLoading] = useState(true)
   const [totalCustomers, setTotalCustomers] = useState(0)
+  const [currentPage, setCurrentPage] = useState(1)
+  const PAGE_SIZE = 50
   const [selectedCustomer, setSelectedCustomer] = useState(null)
   const [userDetails, setUserDetails] = useState(null)
   const [loadingDetails, setLoadingDetails] = useState(false)
@@ -36,8 +38,8 @@ export default function Customers() {
     try {
       setLoading(true)
       const params = {
-        limit: 1000, // Get all customers
-        offset: 0,
+        limit: PAGE_SIZE, // 50 customers per page
+        offset: (currentPage - 1) * PAGE_SIZE,
         ...(searchQuery && { search: searchQuery }),
         ...(filters.orderDate && { orderDate: filters.orderDate }),
         ...(filters.status && { status: filters.status }),
@@ -63,7 +65,7 @@ export default function Customers() {
     } finally {
       setLoading(false)
     }
-  }, [searchQuery, filters.orderDate, filters.status, filters.joiningDate, filters.sortBy])
+  }, [currentPage, searchQuery, filters.orderDate, filters.status, filters.joiningDate, filters.sortBy])
 
   // Fetch customers from API
   useEffect(() => {
@@ -243,13 +245,14 @@ export default function Customers() {
           <div className="mt-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <button
-                onClick={fetchCustomers}
+                onClick={() => { setCurrentPage(1); fetchCustomers(); }}
                 className="px-6 py-2.5 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all"
               >
                 Apply Filters
               </button>
               <button
                 onClick={() => {
+                  setCurrentPage(1)
                   setFilters({
                     orderDate: "",
                     joiningDate: "",
@@ -264,7 +267,7 @@ export default function Customers() {
               </button>
             </div>
             <div className="text-sm text-slate-600">
-              {loading ? 'Loading...' : `Showing ${filteredCustomers.length} of ${totalCustomers} customers`}
+              {loading ? 'Loading...' : `Showing ${totalCustomers === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1} - ${Math.min(currentPage * PAGE_SIZE, totalCustomers)} of ${totalCustomers} customers`}
             </div>
           </div>
         </div>
@@ -275,7 +278,7 @@ export default function Customers() {
             <div className="flex items-center gap-2">
               <h2 className="text-xl font-bold text-slate-900">Customer list</h2>
               <span className="px-3 py-1 rounded-full text-sm font-semibold bg-slate-100 text-slate-700">
-                {filteredCustomers.length}
+                {totalCustomers}
               </span>
             </div>
 
@@ -352,7 +355,7 @@ export default function Customers() {
                   filteredCustomers.map((customer, index) => (
                     <tr key={customer.id || customer.sl} className="hover:bg-slate-50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm font-medium text-slate-700">{index + 1}</span>
+                        <span className="text-sm font-medium text-slate-700">{(currentPage - 1) * PAGE_SIZE + index + 1}</span>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
@@ -402,6 +405,65 @@ export default function Customers() {
                 )}
               </tbody>
             </table>
+
+            {/* Pagination Controls */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 pt-4 border-t border-slate-100">
+              <p className="text-xs text-slate-500">
+                Showing{" "}
+                <span className="font-semibold text-slate-700">
+                  {totalCustomers === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1} -{" "}
+                  {Math.min(currentPage * PAGE_SIZE, totalCustomers)}
+                </span>{" "}
+                of <span className="font-semibold text-slate-700">{totalCustomers}</span> customers
+              </p>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1 || loading}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-300 bg-white text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-all shadow-sm"
+                >
+                  Previous
+                </button>
+
+                {(() => {
+                  const totalPages = Math.max(1, Math.ceil(totalCustomers / PAGE_SIZE))
+                  const pagesToShow = []
+                  const maxButtons = 5
+                  let start = Math.max(1, currentPage - 2)
+                  let end = Math.min(totalPages, start + maxButtons - 1)
+                  if (end - start < maxButtons - 1) {
+                    start = Math.max(1, end - maxButtons + 1)
+                  }
+                  for (let p = start; p <= end; p++) {
+                    pagesToShow.push(p)
+                  }
+
+                  return pagesToShow.map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => setCurrentPage(p)}
+                      disabled={loading}
+                      className={`w-8 h-8 text-xs font-semibold rounded-lg border transition-all ${
+                        currentPage === p
+                          ? "bg-blue-600 border-blue-600 text-white shadow-sm"
+                          : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))
+                })()}
+
+                <button
+                  onClick={() => setCurrentPage((prev) => Math.min(Math.ceil(totalCustomers / PAGE_SIZE), prev + 1))}
+                  disabled={currentPage >= Math.ceil(totalCustomers / PAGE_SIZE) || loading}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-300 bg-white text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-all shadow-sm"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>

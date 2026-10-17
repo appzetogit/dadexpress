@@ -184,7 +184,13 @@ export default function AdminHome() {
             </div>
 
           </div>
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            {isLoading && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-50 border border-indigo-100 text-xs text-indigo-600 font-medium animate-pulse">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Updating...</span>
+              </div>
+            )}
             <Select value={selectedZone} onValueChange={setSelectedZone}>
               <SelectTrigger className="min-w-[160px] border-neutral-300 bg-white text-neutral-900 border-indigo-200 focus:ring-indigo-500">
                 <div className="flex items-center gap-2">

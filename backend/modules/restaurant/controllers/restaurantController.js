@@ -433,9 +433,67 @@ export const getRestaurants = async (req, res) => {
 
     // 1. Filter by user zone (polygon check)
     if (userZone) {
-      restaurants = restaurants.filter((restaurantDoc) =>
+      const zoneFiltered = restaurants.filter((restaurantDoc) =>
         isRestaurantInsideZone(restaurantDoc, userZone),
       );
+
+      // If zone filtered found matching restaurants, use them
+      if (zoneFiltered.length > 0) {
+        restaurants = zoneFiltered;
+      } else {
+        // Fallback: If DB spatial box pre-filter or strict polygon check eliminated restaurants
+        // (e.g. restaurant coordinate is slightly outside user's polygon boundary or registered in nearby zone),
+        // query all active approved restaurants and include those within delivery range (30km of user or zone)
+        console.warn(`⚠️ No restaurants directly inside zone ${userZone.name || zoneId}. Checking nearby fallback...`);
+        const fallbackBaseQuery = {
+          isActive: true,
+          approvedAt: { $ne: null }
+        };
+        if (req.query.city) {
+          fallbackBaseQuery["location.city"] = { $regex: new RegExp(req.query.city, "i") };
+        }
+        if (cuisine) {
+          fallbackBaseQuery.cuisines = { $in: [new RegExp(cuisine, "i")] };
+        }
+        if (minRating) {
+          fallbackBaseQuery.rating = { $gte: parseFloat(minRating) };
+        }
+
+        const allActiveRestaurants = await Restaurant.find(fallbackBaseQuery)
+          .select("-owner -createdAt -updatedAt -password")
+          .sort(sortObj)
+          .lean();
+
+        // Check if any are within 30km of user or zone vertices
+        const nearbyFallbacks = allActiveRestaurants.filter((restaurantDoc) => {
+          const coords = getRestaurantCoords(restaurantDoc);
+          if (!coords) return false;
+
+          // If user location is provided, check distance to user
+          if (userLat && userLng) {
+            const dist = calculateDistance(userLat, userLng, coords.lat, coords.lng);
+            if (dist <= 30) return true;
+          }
+
+          // Otherwise check distance to zone vertices (up to 15km buffer from zone edge)
+          if (userZone.coordinates && userZone.coordinates.length > 0) {
+            for (const vertex of userZone.coordinates) {
+              const vLat = vertex.latitude || vertex.lat;
+              const vLng = vertex.longitude || vertex.lng;
+              if (vLat && vLng && calculateDistance(coords.lat, coords.lng, vLat, vLng) <= 15) {
+                return true;
+              }
+            }
+          }
+          return false;
+        });
+
+        if (nearbyFallbacks.length > 0) {
+          restaurants = nearbyFallbacks;
+        } else {
+          restaurants = zoneFiltered;
+        }
+      }
     }
 
     // 1b. Fast targeted Dietary filter (runs ONLY on candidate restaurants in the zone instead of full DB scan)

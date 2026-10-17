@@ -347,7 +347,7 @@ export const useRestaurantNotifications = (isOnline = null) => {
     // Listen for order status updates
     socketRef.current.on('order_status_update', (data) => {
       false && console.log('📊 Order status update:', data);
-      // You can handle status updates here if needed
+      window.dispatchEvent(new CustomEvent('restaurant_orders_refresh'));
     });
 
     // Load notification sound

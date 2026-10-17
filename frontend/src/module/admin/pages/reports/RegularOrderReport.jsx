@@ -39,6 +39,12 @@ export default function RegularOrderReport() {
   const [restaurants, setRestaurants] = useState([])
   const [customers, setCustomers] = useState([])
   
+  const [pendingFilters, setPendingFilters] = useState({
+    zone: "All Zones",
+    restaurant: "All restaurants",
+    customer: "All customers",
+    time: "All Time",
+  })
   const [filters, setFilters] = useState({
     zone: "All Zones",
     restaurant: "All restaurants",
@@ -46,8 +52,10 @@ export default function RegularOrderReport() {
     time: "All Time",
   })
   const [searchQuery, setSearchQuery] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
 
   // Fetch zones, restaurants, and customers for filter dropdowns
   useEffect(() => {
@@ -77,6 +85,15 @@ export default function RegularOrderReport() {
 
     fetchFilterData()
   }, [])
+
+  // Debounce search query to prevent excessive API calls
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch((searchQuery || "").trim())
+      setCurrentPage(1)
+    }, 350)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
 
   // Calculate date range based on time filter
   const getDateRange = () => {
@@ -117,8 +134,8 @@ export default function RegularOrderReport() {
         const { fromDate, toDate } = getDateRange()
         const params = {
           page: 1,
-          limit: 10000, // Fetch all orders for report (can be optimized later)
-          search: searchQuery || undefined,
+          limit: 1000, // Fetch up to 1000 orders for responsive loading
+          search: debouncedSearch || undefined,
           zone: filters.zone !== "All Zones" ? filters.zone : undefined,
           restaurant: filters.restaurant !== "All restaurants" ? filters.restaurant : undefined,
           customer: filters.customer !== "All customers" ? filters.customer : undefined,
@@ -145,6 +162,7 @@ export default function RegularOrderReport() {
             orderStatus: order.orderStatus,
           }))
           setOrders(transformedOrders)
+          setHasLoadedOnce(true)
         } else {
           setError(response.data?.message || "Failed to fetch orders")
           toast.error(response.data?.message || "Failed to fetch orders")
@@ -159,15 +177,15 @@ export default function RegularOrderReport() {
     }
 
     fetchOrders()
-  }, [filters, searchQuery, refreshTrigger])
+  }, [filters, debouncedSearch, refreshTrigger])
 
   const filteredOrders = useMemo(() => {
     return orders // Orders are already filtered by backend
   }, [orders])
 
-  const handleExport = (format) => {
+  const handleExport = (exportType) => {
     if (filteredOrders.length === 0) {
-      alert("No data to export")
+      toast.error("No data to export")
       return
     }
     const headers = [
@@ -184,7 +202,7 @@ export default function RegularOrderReport() {
       { key: "totalAmount", label: "Order Amount" },
       { key: "orderStatus", label: "Status" },
     ]
-    switch (format) {
+    switch (exportType) {
       case "csv": exportReportsToCSV(filteredOrders, headers, "regular_order_report"); break
       case "excel": exportReportsToExcel(filteredOrders, headers, "regular_order_report"); break
       case "pdf": exportReportsToPDF(filteredOrders, headers, "regular_order_report", "Regular Order Report"); break
@@ -193,16 +211,23 @@ export default function RegularOrderReport() {
   }
 
   const handleFilterApply = () => {
+    setFilters(pendingFilters)
+    setCurrentPage(1)
     setRefreshTrigger(prev => prev + 1)
   }
 
   const handleResetFilters = () => {
-    setFilters({
+    const defaultFilters = {
       zone: "All Zones",
       restaurant: "All restaurants",
       customer: "All customers",
       time: "All Time",
-    })
+    }
+    setPendingFilters(defaultFilters)
+    setFilters(defaultFilters)
+    setSearchQuery("")
+    setDebouncedSearch("")
+    setCurrentPage(1)
   }
 
   const activeFiltersCount = (filters.zone !== "All Zones" ? 1 : 0) + (filters.restaurant !== "All restaurants" ? 1 : 0) + (filters.customer !== "All customers" ? 1 : 0) + (filters.time !== "All Time" ? 1 : 0)
@@ -240,11 +265,10 @@ export default function RegularOrderReport() {
   )
 
   const formatAmount = (amount) =>
-    `$ ${Number(amount || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    `₹${Number(amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-  const handleFilterChange = (key, value) => {
-    setFilters((prev) => ({ ...prev, [key]: value }))
-    setCurrentPage(1)
+  const handlePendingFilterChange = (key, value) => {
+    setPendingFilters((prev) => ({ ...prev, [key]: value }))
   }
 
   const handlePageChange = (newPage) => {
@@ -267,17 +291,6 @@ export default function RegularOrderReport() {
           <span className="text-[11px] font-medium text-slate-800">{meta.label}</span>
         </div>
         <span className={`text-xs font-semibold ${meta.color}`}>{statusCounts[statusKey] ?? 0}</span>
-      </div>
-    )
-  }
-
-  if (loading) {
-    return (
-      <div className="p-2 lg:p-3 bg-slate-50 min-h-screen flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-          <p className="text-gray-600">Loading orders...</p>
-        </div>
       </div>
     )
   }
@@ -316,8 +329,8 @@ export default function RegularOrderReport() {
           <div className="flex flex-col sm:flex-row sm:items-center gap-2">
             <div className="relative flex-1 min-w-0">
               <select
-                value={filters.zone}
-                onChange={(e) => handleFilterChange("zone", e.target.value)}
+                value={pendingFilters.zone}
+                onChange={(e) => handlePendingFilterChange("zone", e.target.value)}
                 className="w-full px-2.5 py-1.5 pr-5 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs appearance-none cursor-pointer"
               >
                 <option value="All Zones">All Zones</option>
@@ -332,8 +345,8 @@ export default function RegularOrderReport() {
 
             <div className="relative flex-1 min-w-0">
               <select
-                value={filters.restaurant}
-                onChange={(e) => handleFilterChange("restaurant", e.target.value)}
+                value={pendingFilters.restaurant}
+                onChange={(e) => handlePendingFilterChange("restaurant", e.target.value)}
                 className="w-full px-2.5 py-1.5 pr-5 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs appearance-none cursor-pointer"
               >
                 <option value="All restaurants">All restaurants</option>
@@ -348,8 +361,8 @@ export default function RegularOrderReport() {
 
             <div className="relative flex-1 min-w-0">
               <select
-                value={filters.customer}
-                onChange={(e) => handleFilterChange("customer", e.target.value)}
+                value={pendingFilters.customer}
+                onChange={(e) => handlePendingFilterChange("customer", e.target.value)}
                 className="w-full px-2.5 py-1.5 pr-5 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs appearance-none cursor-pointer"
               >
                 <option value="All customers">All customers</option>
@@ -364,8 +377,8 @@ export default function RegularOrderReport() {
 
             <div className="relative flex-1 min-w-0">
               <select
-                value={filters.time}
-                onChange={(e) => handleFilterChange("time", e.target.value)}
+                value={pendingFilters.time}
+                onChange={(e) => handlePendingFilterChange("time", e.target.value)}
                 className="w-full px-2.5 py-1.5 pr-5 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs appearance-none cursor-pointer"
               >
                 <option key="all-time" value="All Time">All Time</option>
@@ -505,7 +518,16 @@ export default function RegularOrderReport() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-slate-100">
-                {paginatedOrders.length === 0 ? (
+                {loading ? (
+                  <tr>
+                    <td colSpan={13} className="px-6 py-20 text-center">
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+                        <p className="text-sm font-medium text-slate-600">Loading orders...</p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : paginatedOrders.length === 0 ? (
                   <tr>
                     <td colSpan={13} className="px-6 py-20 text-center">
                       <div className="flex flex-col items-center justify-center">

@@ -73,6 +73,7 @@ export default function PageNavbar({
         "",
       latitude: Number.isFinite(latitude) ? latitude : null,
       longitude: Number.isFinite(longitude) ? longitude : null,
+      mainTitle: address?.mainTitle || geoLocation?.mainTitle || "",
     }
   }, [resolvedDeliveryAddress, geoLocation])
 

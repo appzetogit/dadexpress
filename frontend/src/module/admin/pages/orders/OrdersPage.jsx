@@ -174,7 +174,7 @@ export default function OrdersPage({ statusKey = "all" }) {
       if (!silent) setIsLoading(true)
       const params = {
         page: 1,
-        limit: 1000,
+        limit: 100,
         status:
           statusKey === "all"
             ? undefined

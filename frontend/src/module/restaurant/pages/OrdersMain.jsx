@@ -1064,7 +1064,7 @@ export default function OrdersMain() {
       setPrepTime(11)
 
       // Note: PreparingOrders component will automatically refresh orders via its own useEffect
-      // No need to manually refresh here as the component polls every 10 seconds
+      window.dispatchEvent(new CustomEvent('restaurant_orders_refresh'))
     } finally {
       setIsAccepting(false)
     }
@@ -2281,6 +2281,13 @@ export default function OrdersMain() {
                 })()}</span></span>
               </div>
 
+              {selectedOrder.note && (
+                <div className="mb-4 rounded-lg border border-orange-200 bg-orange-50 p-3">
+                  <p className="text-[11px] font-semibold text-orange-800 mb-1">Customer Note / Cooking Instruction</p>
+                  <p className="text-xs text-orange-950 font-medium">{selectedOrder.note}</p>
+                </div>
+              )}
+
               {selectedOrder.deliveryInstruction && (
                 <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
                   <p className="text-[11px] font-medium text-amber-800 mb-1">Delivery instruction</p>
@@ -2646,9 +2653,11 @@ function PreparingOrders({ onSelectOrder, onCancel }) {
         setCurrentTime(new Date())
       }
     }, 1000)
+    window.addEventListener('restaurant_orders_refresh', fetchOrders)
 
     return () => {
       isMounted = false
+      window.removeEventListener('restaurant_orders_refresh', fetchOrders)
       if (intervalId) {
         clearInterval(intervalId)
       }
@@ -2817,6 +2826,8 @@ function PreparingOrders({ onSelectOrder, onCancel }) {
                 timePlaced={order.timePlaced}
                 eta={etaDisplay}
                 itemsSummary={order.itemsSummary}
+                note={order.note}
+                deliveryInstruction={order.deliveryInstruction}
                 photoUrl={order.photoUrl}
                 photoAlt={order.photoAlt}
                 deliveryPartnerId={order.deliveryPartnerId}
@@ -2872,6 +2883,7 @@ function ReadyOrders({ onSelectOrder }) {
             timePlaced: new Date(order.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
             eta: null, // Don't show ETA for ready orders
             itemsSummary: order.items?.map(item => `${item.quantity}x ${item.name}`).join(', ') || 'No items',
+            note: order.note || '',
             deliveryInstruction: order.deliveryInstruction || '',
             photoUrl: order.items?.[0]?.image || null,
             photoAlt: order.items?.[0]?.name || 'Order',

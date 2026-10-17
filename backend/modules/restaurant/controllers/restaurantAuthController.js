@@ -30,7 +30,7 @@ const computeIsProfileCompleted = (restaurant) => {
   if (restaurant.isProfileCompleted === true) return true;
   // Active restaurants should land on dashboard (legacy-safe).
   const completedSteps = restaurant?.onboarding?.completedSteps;
-  
+
   // If we have onboarding data, use the steps to determine completion
   if (typeof completedSteps === 'number' && completedSteps > 0) {
     return completedSteps >= 4;
@@ -450,7 +450,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       if (restaurant && restaurant.isDeleted) {
         return errorResponse(res, 403, 'Your account has been deleted. Please contact support.');
       }
-      
+
       // Check if this is a staff member (always check, regardless of restaurant search)
       // Use flexible phone query to handle different formats (+91, 10-digit, etc)
       const phoneSubQuery = normalizedPhone ? buildPhoneInQuery(normalizedPhone, 'phone') : null;
@@ -463,7 +463,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       }
 
       staffMember = await StaffManagement.findOne(staffQuery);
-      
+
       // If staff member is found, verify the restaurant they belong to still exists
       if (staffMember) {
         const staffRestaurant = await Restaurant.findById(staffMember.restaurantId).select('_id');
@@ -681,9 +681,9 @@ export const verifyOTP = asyncHandler(async (req, res) => {
                 createdNewRestaurantInLoginFlow = true;
               } catch (retryError) {
                 // If still fails, check if restaurant exists
-                  const findQuery = phone
-                    ? (buildPhoneQuery(normalizedPhone) || { phone: normalizedPhone || phone })
-                    : { email };
+                const findQuery = phone
+                  ? (buildPhoneQuery(normalizedPhone) || { phone: normalizedPhone || phone })
+                  : { email };
                 restaurant = await Restaurant.findOne(findQuery);
                 if (!restaurant) {
                   throw retryError;
@@ -725,7 +725,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
           console.log(`[PUSH-NOTIFICATION] FCM Token stored for restaurant login ${restaurant._id}: ${fcmToken} (${restaurant.platform})`);
         } else {
           if (restaurant && !staffMember) {
-             await restaurant.save();
+            await restaurant.save();
           }
         }
       }
@@ -751,7 +751,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
     }
 
     if (!restaurant && !staffMember) {
-        return errorResponse(res, 404, 'Restaurant or Staff record not found for this user');
+      return errorResponse(res, 404, 'Restaurant or Staff record not found for this user');
     }
 
     // Set refresh token in httpOnly cookie
@@ -826,11 +826,11 @@ export const register = asyncHandler(async (req, res) => {
   const existingRestaurant = await Restaurant.findOne(
     normalizedPhone
       ? {
-          $or: [
-            { email: email.toLowerCase().trim() },
-            ...(buildPhoneQuery(normalizedPhone) ? [buildPhoneQuery(normalizedPhone)] : []),
-          ],
-        }
+        $or: [
+          { email: email.toLowerCase().trim() },
+          ...(buildPhoneQuery(normalizedPhone) ? [buildPhoneQuery(normalizedPhone)] : []),
+        ],
+      }
       : { email: email.toLowerCase().trim() },
   );
 
@@ -956,7 +956,7 @@ export const login = asyncHandler(async (req, res) => {
 
   // Verify password (Skip for default number/password)
   const isDefaultLogin = (normalizedEmail === '9993911855' || normalizedEmail === '919993911855') && password === '123123';
-  
+
   const isPasswordValid = isDefaultLogin || await restaurant.comparePassword(password);
 
   if (!isPasswordValid) {
@@ -1131,7 +1131,7 @@ export const getCurrentRestaurant = asyncHandler(async (req, res) => {
   // Restaurant is attached by authenticate middleware
   const isProfileCompleted = computeIsProfileCompleted(req.restaurant);
   const isStaff = !!req.staff;
-  
+
   const userMetadata = {
     id: isStaff ? req.staff._id.toString() : req.restaurant._id.toString(),
     restaurantId: req.restaurant.restaurantId,
@@ -1366,9 +1366,9 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
         if (createError.code === 11000) {
           // Check if it's a slug duplicate error
           if (createError.keyPattern && createError.keyPattern.slug) {
-            logger.warn('Slug duplicate key error during restaurant creation, retrying with unique slug', { 
-              email, 
-              slug: createError.keyValue?.slug 
+            logger.warn('Slug duplicate key error during restaurant creation, retrying with unique slug', {
+              email,
+              slug: createError.keyValue?.slug
             });
             // Retry with unique slug
             const baseSlug = restaurantData.name
@@ -1413,9 +1413,9 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
             }
           } else {
             // Other duplicate key errors (email, googleId, etc.)
-            logger.warn('Duplicate key error during restaurant creation, retrying find', { 
+            logger.warn('Duplicate key error during restaurant creation, retrying find', {
               email,
-              keyPattern: createError.keyPattern 
+              keyPattern: createError.keyPattern
             });
             restaurant = await Restaurant.findOne({ email });
             if (!restaurant) {
@@ -1546,7 +1546,7 @@ export const getReferralHistory = asyncHandler(async (req, res) => {
 export const deleteAccount = asyncHandler(async (req, res) => {
   try {
     const restaurantId = req.restaurant._id;
-    
+
     const restaurant = await Restaurant.findById(restaurantId);
     if (!restaurant) {
       return errorResponse(res, 404, 'Restaurant not found');

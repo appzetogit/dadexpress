@@ -460,6 +460,35 @@ const RestaurantImageCarousel = React.memo(({ restaurant, priority = false }) =>
   )
 })
 
+// Animated placeholder cycling outside component to prevent recreation and re-renders
+const SearchPlaceholder = memo(() => {
+  const [index, setIndex] = useState(0)
+  const placeholdersRef = useRef(["Search for 'Pizza'", "Search for 'Burger'", "Search for 'Biryani'", "Search for 'Cakes'", "Search for 'North Indian'"])
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setIndex((prev) => (prev + 1) % placeholdersRef.current.length)
+    }, 2500)
+    return () => clearInterval(interval)
+  }, [])
+
+  return (
+    <AnimatePresence mode="wait">
+      <motion.span
+        key={index}
+        initial={{ y: 14, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: -14, opacity: 0 }}
+        transition={{ duration: 0.25 }}
+        className="text-sm sm:text-base lg:text-lg font-semibold text-gray-500 dark:text-gray-400 inline-block pointer-events-none select-none"
+      >
+        {placeholdersRef.current[index]}
+      </motion.span>
+    </AnimatePresence>
+  )
+})
+SearchPlaceholder.displayName = 'SearchPlaceholder'
+
 export default function Home() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -1857,35 +1886,7 @@ export default function Home() {
   // Removed GSAP animations - using CSS and ScrollReveal components instead for better performance
   // Auto-scroll removed - manual scroll only
 
-  // Animated placeholder cycling - Moved to sub-component to prevent global re-renders
-  const SearchPlaceholder = memo(() => {
-    const [index, setIndex] = useState(0)
-    const placeholdersRef = useRef(["Search for 'Pizza'", "Search for 'Burger'", "Search for 'Biryani'", "Search for 'Cakes'", "Search for 'North Indian'"])
 
-    useEffect(() => {
-      const interval = setInterval(() => {
-        setIndex((prev) => (prev + 1) % placeholdersRef.current.length)
-      }, 2000)
-      return () => clearInterval(interval)
-    }, [])
-
-    return (
-      <AnimatePresence mode="wait">
-        <motion.span
-          key={index}
-          initial={{ y: 16, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: -16, opacity: 0 }}
-          transition={{ duration: 0.3 }}
-          className="text-sm sm:text-base lg:text-lg font-semibold text-gray-500 dark:text-gray-400 inline-block"
-        >
-          {placeholdersRef.current[index]}
-        </motion.span>
-      </AnimatePresence>
-    )
-  })
-
-  SearchPlaceholder.displayName = 'SearchPlaceholder'
 
   // Lightweight ScrollReveal replacement - CSS only, no IntersectionObserver
   const ScrollRevealSimple = ({ children, delay = 0, className = "" }) => (
@@ -2021,11 +2022,11 @@ export default function Home() {
       </div>
 
       {/* Unified Navbar & Header Section */}
-      <div className="sticky top-0 w-full bg-white dark:bg-[#0a0a0a] z-40 shadow-sm">
+      <div className="sticky top-0 w-full bg-white dark:bg-[#0a0a0a] z-40 shadow-sm pt-[env(safe-area-inset-top,0px)]">
 
         {/* Navbar */}
         <motion.div
-          className="relative z-50 pt-2 sm:pt-3 lg:pt-4 md:hidden"
+          className="relative z-50 pt-1 sm:pt-2 lg:pt-3 md:hidden"
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: "easeOut" }}
@@ -2043,16 +2044,23 @@ export default function Home() {
           <div className="max-w-2xl lg:max-w-4xl xl:max-w-5xl mx-auto px-3 sm:px-6 lg:px-8 flex items-center gap-3 sm:gap-4 lg:gap-6">
             {/* Enhanced Search Bar */}
             <motion.div
-              className="flex-1 relative"
+              className="flex-1 relative cursor-text"
               whileHover={{ scale: 1.01 }}
               transition={{ type: "spring", stiffness: 300, damping: 20 }}
             >
-              <div className="relative bg-gray-50 dark:bg-[#1a1a1a] rounded-full shadow-sm border border-gray-200 dark:border-gray-800 p-1 sm:p-1.5 lg:p-2 transition-all duration-300 hover:shadow-md focus-within:ring-2 focus-within:ring-[#EB590E] focus-within:border-transparent">
+              <div 
+                onClick={() => {
+                  const el = document.getElementById("home-hero-search-input")
+                  if (el) el.focus()
+                }}
+                className="relative bg-gray-50 dark:bg-[#1a1a1a] rounded-full shadow-sm border border-gray-200 dark:border-gray-800 p-1 sm:p-1.5 lg:p-2 transition-all duration-300 hover:shadow-md focus-within:ring-2 focus-within:ring-[#EB590E] focus-within:border-transparent cursor-text"
+              >
                 <div className="flex items-center gap-2 sm:gap-3 lg:gap-4">
                   <Search className="h-4 w-4 sm:h-5 sm:w-5 text-[#EB590E] flex-shrink-0 ml-3 sm:ml-4" strokeWidth={2.5} />
                   <div className="flex-1 relative">
                     <div className="relative w-full">
                       <Input
+                        id="home-hero-search-input"
                         value={heroSearch}
                         onChange={(e) => {
                           setHeroSearch(e.target.value);
@@ -2062,6 +2070,9 @@ export default function Home() {
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             e.currentTarget.blur()
+                            if (heroSearch.trim()) {
+                              navigate(`/search?q=${encodeURIComponent(heroSearch.trim())}`)
+                            }
                           }
                         }}
                         aria-label="Search restaurants and food"
@@ -2069,7 +2080,7 @@ export default function Home() {
                       />
                       {/* Animated placeholder */}
                       {!heroSearch && (
-                        <div className="absolute left-0 top-1/2 -translate-y-1/2 pointer-events-none h-5 lg:h-6 overflow-hidden">
+                        <div className="absolute left-0 top-1/2 -translate-y-1/2 pointer-events-none select-none h-5 lg:h-6 overflow-hidden">
                           <SearchPlaceholder />
                         </div>
                       )}
@@ -2533,7 +2544,12 @@ export default function Home() {
                 <div
                   key={item._id || item.id || idx}
                   className="flex flex-col items-center gap-2 cursor-pointer group"
-                  onClick={() => navigate(`/user/restaurants/${item.restaurantSlug || item.restaurant?.slug || ''}`)}
+                  onClick={() => {
+                    const slug = item.restaurantSlug || item.restaurant?.slug || item.restaurant?._id || item.restaurant
+                    if (slug) {
+                      navigate(`/restaurants/${slug}`)
+                    }
+                  }}
                 >
                   <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-800">
                     {item.image ? (

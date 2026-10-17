@@ -398,9 +398,22 @@ export default function RestaurantDetails() {
   }, [restaurant?.name, cart])
 
   // Helper function to update item quantity in both local state and cart
-  const updateItemQuantity = (item, newQuantity, event = null) => {
+  const updateItemQuantity = (item, newQuantity, event = null, explicitVariation = undefined) => {
+    // Determine the variation to use:
+    // If explicitVariation is provided, use that.
+    // Otherwise check if selectedVariation matches an option in item.variations.
+    // If item has variations but selectedVariation is not from this item, default to item.variations[0].
+    let effectiveVariation = null
+    if (explicitVariation !== undefined) {
+      effectiveVariation = explicitVariation
+    } else if (item?.variations && item.variations.length > 0) {
+      effectiveVariation = item.variations.find(v => v && v.name === selectedVariation?.name) || item.variations[0]
+    } else {
+      effectiveVariation = null
+    }
+
     // Determine the correct ID to use (base ID or variation-specific ID)
-    const finalId = selectedVariation ? `${item.id}-${selectedVariation.name}` : item.id
+    const finalId = effectiveVariation ? `${item.id}-${effectiveVariation.name}` : item.id
 
     // If item has variations and we are adding it (not updating existing in modal)
     // and it's not already in specialized detail view
@@ -452,8 +465,8 @@ export default function RestaurantDetails() {
     }
 
     // Prepare cart item with all required properties
-    const finalName = selectedVariation ? `${item.name} (${selectedVariation.name})` : item.name
-    const finalPrice = selectedVariation ? selectedVariation.price : item.price
+    const finalName = effectiveVariation ? `${item.name} (${effectiveVariation.name})` : item.name
+    const finalPrice = effectiveVariation ? Number(effectiveVariation.price) : Number(item.price)
 
     const cartItem = {
       id: finalId,
@@ -465,7 +478,7 @@ export default function RestaurantDetails() {
       description: item.description,
       originalPrice: item.originalPrice || finalPrice,
       isVeg: item.foodType === 'Veg' || item.isVeg === true,
-      variation: selectedVariation ? selectedVariation.name : null
+      variation: effectiveVariation ? effectiveVariation.name : null
     }
 
     // Get source position for animation from event target
@@ -915,6 +928,11 @@ export default function RestaurantDetails() {
   // Handle item card click
   const handleItemClick = (item) => {
     setSelectedItem(item)
+    if (item?.variations && item.variations.length > 0) {
+      setSelectedVariation(item.variations[0])
+    } else {
+      setSelectedVariation(null)
+    }
     setShowItemDetail(true)
   }
 
@@ -2448,107 +2466,116 @@ export default function RestaurantDetails() {
                     )}
 
                     {/* Variations / Sizes Selection */}
-                    {selectedItem.variations && selectedItem.variations.length > 0 && (
-                      <div className="mt-4 mb-6">
-                        <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-3 uppercase tracking-wider">
-                          Select Size
-                        </h3>
-                        <div className="space-y-2">
-                          {(selectedItem.variations || []).filter(v => v != null).map((v, i) => (
-                            <button
-                              key={i}
-                              onClick={() => setSelectedVariation(v)}
-                              className={`w-full flex items-center justify-between p-3 rounded-xl border-2 transition-all ${selectedVariation?.name === v.name
-                                ? "border-[#EB590E] bg-orange-50 dark:bg-[#EB590E]/10 text-[#EB590E]"
-                                : "border-gray-100 dark:border-gray-800 hover:border-gray-200 dark:hover:border-gray-700 text-gray-700 dark:text-gray-300"
-                                }`}
-                            >
-                              <span className="text-sm font-semibold">{v.name}</span>
-                              <span className="text-sm font-bold">₹{v.price}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                    {(() => {
+                      const activeVariation = (selectedItem.variations && selectedItem.variations.length > 0)
+                        ? (selectedItem.variations.find(v => v && v.name === selectedVariation?.name) || selectedItem.variations[0])
+                        : null
+                      const currentVariationPrice = activeVariation ? Number(activeVariation.price) : Number(selectedItem.price)
+                      const cartId = activeVariation ? `${selectedItem.id}-${activeVariation.name}` : selectedItem.id
+                      const currentQty = quantities[cartId] || 0
 
-                  {/* Bottom Action Bar */}
-                  <div className="border-t border-gray-200 dark:border-gray-800 px-4 py-4 bg-white dark:bg-[#1a1a1a]">
-                    <div className="flex items-center gap-4">
-                      {/* Quantity Selector */}
-                      <div className={`flex items-center gap-3 border-2 rounded-lg px-3 h-[44px] bg-white dark:bg-[#2a2a2a] ${shouldShowGrayscale
-                        ? 'border-gray-300 dark:border-gray-700 opacity-50'
-                        : 'border-gray-300 dark:border-gray-700'
-                        }`}>
-                        <button
-                          onClick={(e) => {
-                            if (!shouldShowGrayscale) {
-                              const cartId = selectedVariation ? `${selectedItem.id}-${selectedVariation.name}` : selectedItem.id
-                              updateItemQuantity(selectedItem, Math.max(0, (quantities[cartId] || 0) - 1), e)
-                            }
-                          }}
-                          disabled={(quantities[selectedVariation ? `${selectedItem.id}-${selectedVariation.name}` : selectedItem.id] || 0) === 0 || shouldShowGrayscale}
-                          className={`${shouldShowGrayscale
-                            ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
-                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white disabled:text-gray-300 dark:disabled:text-gray-600 disabled:cursor-not-allowed'
-                            }`}
-                        >
-                          <Minus className="h-5 w-5" />
-                        </button>
-                        <span className={`text-lg font-semibold min-w-[2rem] text-center ${shouldShowGrayscale
-                          ? 'text-gray-400 dark:text-gray-600'
-                          : 'text-gray-900 dark:text-white'
-                          }`}>
-                          {quantities[selectedVariation ? `${selectedItem.id}-${selectedVariation.name}` : selectedItem.id] || 0}
-                        </span>
-                        <button
-                          onClick={(e) => {
-                            if (!shouldShowGrayscale) {
-                              const cartId = selectedVariation ? `${selectedItem.id}-${selectedVariation.name}` : selectedItem.id
-                              updateItemQuantity(selectedItem, (quantities[cartId] || 0) + 1, e)
-                            }
-                          }}
-                          disabled={shouldShowGrayscale}
-                          className={shouldShowGrayscale
-                            ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
-                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                          }
-                        >
-                          <Plus className="h-5 w-5" />
-                        </button>
-                      </div>
-
-                      {/* Add Item Button */}
-                      <Button
-                        className={`flex-1 h-[44px] rounded-lg font-semibold flex items-center justify-center gap-2 ${shouldShowGrayscale
-                          ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-600 cursor-not-allowed opacity-50'
-                          : 'bg-red-500 hover:bg-red-600 text-white'
-                          }`}
-                        onClick={(e) => {
-                          if (!shouldShowGrayscale) {
-                            const cartId = selectedVariation ? `${selectedItem.id}-${selectedVariation.name}` : selectedItem.id
-                            updateItemQuantity(selectedItem, (quantities[cartId] || 0) + 1, e)
-                            // Keep modal open if they want to add more? No, usually close it.
-                            setShowItemDetail(false)
-                            setSelectedVariation(null)
-                          }
-                        }}
-                        disabled={shouldShowGrayscale}
-                      >
-                        <span>Add item</span>
-                        <div className="flex items-center gap-1">
-                          {selectedItem.originalPrice && selectedItem.originalPrice > (selectedVariation?.price || selectedItem.price) && (
-                            <span className="text-sm line-through text-red-200">
-                              ₹{Math.round(selectedItem.originalPrice)}
-                            </span>
+                      return (
+                        <>
+                          {selectedItem.variations && selectedItem.variations.length > 0 && (
+                            <div className="mt-4 mb-6">
+                              <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-3 uppercase tracking-wider">
+                                Select Size
+                              </h3>
+                              <div className="space-y-2">
+                                {(selectedItem.variations || []).filter(v => v != null).map((v, i) => (
+                                  <button
+                                    key={i}
+                                    onClick={() => setSelectedVariation(v)}
+                                    className={`w-full flex items-center justify-between p-3 rounded-xl border-2 transition-all ${activeVariation?.name === v.name
+                                      ? "border-[#EB590E] bg-orange-50 dark:bg-[#EB590E]/10 text-[#EB590E]"
+                                      : "border-gray-100 dark:border-gray-800 hover:border-gray-200 dark:hover:border-gray-700 text-gray-700 dark:text-gray-300"
+                                      }`}
+                                  >
+                                    <span className="text-sm font-semibold">{v.name}</span>
+                                    <span className="text-sm font-bold">₹{v.price}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
                           )}
-                          <span className="text-base font-bold">
-                            ₹{Math.round(selectedVariation?.price || selectedItem.price)}
-                          </span>
                         </div>
-                      </Button>
-                    </div>
-                  </div>
+
+                        {/* Bottom Action Bar */}
+                        <div className="border-t border-gray-200 dark:border-gray-800 px-4 py-4 bg-white dark:bg-[#1a1a1a]">
+                          <div className="flex items-center gap-4">
+                            {/* Quantity Selector */}
+                            <div className={`flex items-center gap-3 border-2 rounded-lg px-3 h-[44px] bg-white dark:bg-[#2a2a2a] ${shouldShowGrayscale
+                              ? 'border-gray-300 dark:border-gray-700 opacity-50'
+                              : 'border-gray-300 dark:border-gray-700'
+                              }`}>
+                              <button
+                                onClick={(e) => {
+                                  if (!shouldShowGrayscale) {
+                                    updateItemQuantity(selectedItem, Math.max(0, currentQty - 1), e, activeVariation)
+                                  }
+                                }}
+                                disabled={currentQty === 0 || shouldShowGrayscale}
+                                className={`${shouldShowGrayscale
+                                  ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
+                                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white disabled:text-gray-300 dark:disabled:text-gray-600 disabled:cursor-not-allowed'
+                                  }`}
+                              >
+                                <Minus className="h-5 w-5" />
+                              </button>
+                              <span className={`text-lg font-semibold min-w-[2rem] text-center ${shouldShowGrayscale
+                                ? 'text-gray-400 dark:text-gray-600'
+                                : 'text-gray-900 dark:text-white'
+                                }`}>
+                                {currentQty}
+                              </span>
+                              <button
+                                onClick={(e) => {
+                                  if (!shouldShowGrayscale) {
+                                    updateItemQuantity(selectedItem, currentQty + 1, e, activeVariation)
+                                  }
+                                }}
+                                disabled={shouldShowGrayscale}
+                                className={shouldShowGrayscale
+                                  ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
+                                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                                }
+                              >
+                                <Plus className="h-5 w-5" />
+                              </button>
+                            </div>
+
+                            {/* Add Item Button */}
+                            <Button
+                              className={`flex-1 h-[44px] rounded-lg font-semibold flex items-center justify-center gap-2 ${shouldShowGrayscale
+                                ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-600 cursor-not-allowed opacity-50'
+                                : 'bg-red-500 hover:bg-red-600 text-white'
+                                }`}
+                              onClick={(e) => {
+                                if (!shouldShowGrayscale) {
+                                  updateItemQuantity(selectedItem, currentQty + 1, e, activeVariation)
+                                  setShowItemDetail(false)
+                                  setSelectedVariation(null)
+                                }
+                              }}
+                              disabled={shouldShowGrayscale}
+                            >
+                              <span>Add item</span>
+                              <div className="flex items-center gap-1">
+                                {selectedItem.originalPrice && selectedItem.originalPrice > currentVariationPrice && (
+                                  <span className="text-sm line-through text-red-200">
+                                    ₹{Math.round(selectedItem.originalPrice)}
+                                  </span>
+                                )}
+                                <span className="text-base font-bold">
+                                  ₹{Math.round(currentVariationPrice)}
+                                </span>
+                              </div>
+                            </Button>
+                          </div>
+                        </div>
+                      </>
+                    )
+                  })()}
                 </motion.div>
               </>
             )}

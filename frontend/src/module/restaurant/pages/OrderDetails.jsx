@@ -59,6 +59,7 @@ export default function OrderDetails() {
               location: `${order.address?.city || ''}, ${order.address?.state || ''}`.trim(),
               distance: 'N/A'
             },
+            note: order.note || '',
             deliveryInstruction: order.deliveryInstruction || '',
             items: order.items?.map(item => ({
               name: item.name,
@@ -599,6 +600,16 @@ export default function OrderDetails() {
         </div>
 
         {/* Delivery Instruction Section */}
+        {/* Customer Note / Cooking Instruction */}
+        {orderData.note && (
+          <div>
+            <h2 className="text-base font-bold text-gray-900 mb-3">Cooking Instructions / Note</h2>
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+              <p className="text-sm text-orange-950 font-medium">{orderData.note}</p>
+            </div>
+          </div>
+        )}
+
         {orderData.deliveryInstruction && (
           <div>
             <h2 className="text-base font-bold text-gray-900 mb-3">Delivery instruction</h2>

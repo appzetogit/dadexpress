@@ -161,9 +161,13 @@ export default function EditRestaurant() {
                     costForTwo: r.costForTwo?.toString() || "1400",
                     tableBookingPrice: r.tableBookingPrice?.toString() || "",
                     diningSettings: {
+                        ...(r.diningSettings || {}),
                         isEnabled: r.diningSettings?.isEnabled || false,
+                        isDiningOrderingEnabled: r.diningSettings?.isDiningOrderingEnabled ?? true,
                         maxGuests: r.diningSettings?.maxGuests || 6,
                         diningType: r.diningSettings?.diningType || "family-dining",
+                        billCashbackPercentage: r.diningSettings?.billCashbackPercentage ?? 10,
+                        slots: r.diningSettings?.slots || { Lunch: [], Dinner: [] }
                     }
                 })
             } catch (err) {

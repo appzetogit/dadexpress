@@ -22,9 +22,10 @@ const getStatusColor = (orderStatus) => {
 }
 
 const getPaymentStatusColor = (paymentStatus) => {
-  if (paymentStatus === "Paid") return "text-emerald-600"
-  if (paymentStatus === "Unpaid" || paymentStatus === "Failed") return "text-red-600"
-  return "text-slate-600"
+  if (paymentStatus === "Paid" || paymentStatus === "Collected") return "text-emerald-600"
+  if (paymentStatus === "Unpaid" || paymentStatus === "Failed" || paymentStatus === "Not Collected") return "text-red-600"
+  if (paymentStatus === "Refunded") return "text-sky-600"
+  return "text-amber-600"
 }
 
 export default function OrdersTable({
@@ -250,9 +251,15 @@ export default function OrdersTable({
                     <div className="text-sm font-medium text-slate-900">
                       ₹{order.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
-                    <div className={`text-xs mt-0.5 ${getPaymentStatusColor(order.paymentStatus)}`}>
-                      {order.paymentStatus}
-                    </div>
+                    {(() => {
+                      const isCash = order.paymentType === 'Cash on Delivery' || order.payment?.method === 'cash' || order.payment?.method === 'cod';
+                      const badgeText = isCash ? (order.paymentCollectionStatus || (order.status === 'delivered' ? 'Paid' : 'Unpaid')) : order.paymentStatus;
+                      return (
+                        <div className={`text-xs mt-0.5 ${getPaymentStatusColor(badgeText)}`}>
+                          {badgeText}
+                        </div>
+                      );
+                    })()}
                   </td>
                 )}
                 {(visibleColumns.paymentType !== false) && (
@@ -294,16 +301,22 @@ export default function OrdersTable({
                 )}
                 {(visibleColumns.paymentCollectionStatus !== false) && (
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex flex-col">
-                      <span className={`text-sm font-medium ${getPaymentStatusColor(order.paymentStatus)}`}>
-                        {order.paymentStatus || "Pending"}
-                      </span>
-                      {order.paymentCollectionStatus && (
-                        <span className="text-xs text-slate-500 mt-0.5">
-                          {order.paymentCollectionStatus}
-                        </span>
-                      )}
-                    </div>
+                    {(() => {
+                      const isCash = order.paymentType === 'Cash on Delivery' || order.payment?.method === 'cash' || order.payment?.method === 'cod';
+                      const statusText = isCash ? (order.paymentCollectionStatus || (order.status === 'delivered' ? 'Collected' : 'Not Collected')) : (order.paymentStatus || 'Pending');
+                      return (
+                        <div className="flex flex-col">
+                          <span className={`text-sm font-medium ${getPaymentStatusColor(statusText)}`}>
+                            {statusText}
+                          </span>
+                          {isCash && (
+                            <span className="text-[11px] text-slate-400 mt-0.5">
+                              {order.paymentStatus === 'Paid' ? 'Paid' : 'COD'}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </td>
                 )}
                 {visibleColumns.orderStatus && (

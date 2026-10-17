@@ -107,6 +107,24 @@ export const getOrders = asyncHandler(async (req, res) => {
       if (hasZoneMatch || hasRestaurantMatch) {
         const discoverOr = [];
 
+        // HARD GATE: If rider's cash-in-hand exceeds cash limit, exclude unassigned cash/cod orders
+        let isCashBlocked = false;
+        try {
+          const BusinessSettings = (await import('../../admin/models/BusinessSettings.js')).default;
+          const settings = await BusinessSettings.getSettings();
+          const totalCashLimit = Math.max(0, Number(settings?.deliveryCashLimit) || 0);
+
+          if (totalCashLimit > 0) {
+            const wallet = await DeliveryWallet.findOrCreateByDeliveryId(delivery._id);
+            const cashInHand = Math.max(0, Number(wallet?.cashInHand) || 0);
+            if (cashInHand >= totalCashLimit) {
+              isCashBlocked = true;
+            }
+          }
+        } catch (err) {
+          console.error('Error checking cash limit in getOrders discover mode:', err);
+        }
+
         // Always include already-assigned orders
         discoverOr.push({ deliveryPartnerId: delivery._id });
 
@@ -116,7 +134,13 @@ export const getOrders = asyncHandler(async (req, res) => {
             { deliveryPartnerId: null },
             { deliveryPartnerId: { $exists: false } }
           ],
-          status: { $in: ['pending', 'confirmed', 'preparing', 'ready'] }
+          status: { $in: ['pending', 'confirmed', 'preparing', 'ready'] },
+          ...(isCashBlocked ? {
+            $and: [
+              { 'payment.method': { $nin: ['cash', 'cod'] } },
+              { paymentMethod: { $nin: ['cash', 'cod'] } }
+            ]
+          } : {})
         };
 
         // Zone-based match (new primary path)
@@ -246,7 +270,29 @@ export const getPendingOrdersForMe = asyncHandler(async (req, res) => {
       .limit(5)
       .lean();
 
-    return successResponse(res, 200, 'Pending orders fetched', { orders: pendingOrders || [] });
+    // Filter out cash orders if partner has reached or exceeded the global delivery cash limit
+    let filteredPendingOrders = pendingOrders || [];
+    try {
+      const BusinessSettings = (await import('../../admin/models/BusinessSettings.js')).default;
+      const settings = await BusinessSettings.getSettings();
+      const totalCashLimit = Math.max(0, Number(settings?.deliveryCashLimit) || 0);
+
+      if (totalCashLimit > 0) {
+        const wallet = await DeliveryWallet.findOrCreateByDeliveryId(delivery._id);
+        const cashInHand = Math.max(0, Number(wallet?.cashInHand) || 0);
+
+        if (cashInHand >= totalCashLimit) {
+          filteredPendingOrders = filteredPendingOrders.filter(order => {
+            const method = normalizeDeliveryPaymentMethod(order.payment?.method || order.paymentMethod);
+            return method !== 'cash';
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Error applying cash limit check in getPendingOrdersForMe:', err);
+    }
+
+    return successResponse(res, 200, 'Pending orders fetched', { orders: filteredPendingOrders });
   } catch (error) {
     logger.error(`Error fetching pending orders for delivery partner: ${error.message}`);
     return errorResponse(res, 500, 'Failed to fetch pending orders');
@@ -474,13 +520,11 @@ export const acceptOrder = asyncHandler(async (req, res) => {
           orderId,
           isCashOrder
         });
-        /*
         return errorResponse(
           res,
           403,
           `Cash limit exhausted. Please deposit cash first to accept next cash order. (Cash in hand: ₹${cashInHand.toFixed(2)}, Limit: ₹${totalCashLimit.toFixed(2)})`
         );
-        */
       }
     } catch (cashLimitCheckError) {
       console.error('❌ Cash limit check failed during acceptOrder:', cashLimitCheckError);

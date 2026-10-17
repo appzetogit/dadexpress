@@ -185,7 +185,43 @@ export default function DeliveryFinanceReport() {
     }
   }
 
-    const formatCurrency = (value) => {
+  const handleExport = (exportType) => {
+    if (settlements.length === 0) {
+      toast.error("No data to export")
+      return
+    }
+
+    const exportData = settlements.map((s, index) => ({
+      sl: index + 1,
+      orderNumber: s.orderNumber,
+      date: format(new Date(s.createdAt), "dd MMM yyyy HH:mm"),
+      deliveryName: s.deliveryName || "N/A",
+      distance: `${(s.deliveryEarning?.distance ?? 0).toFixed(2)} km`,
+      basePayout: s.deliveryEarning?.basePayout ?? 0,
+      totalEarning: s.deliveryEarning?.totalEarning ?? 0,
+      status: "Delivered"
+    }))
+
+    const headers = [
+      { key: "sl", label: "SL" },
+      { key: "orderNumber", label: "Order #" },
+      { key: "date", label: "Date" },
+      { key: "deliveryName", label: "Delivery Boy" },
+      { key: "distance", label: "Distance" },
+      { key: "basePayout", label: "Base Payout" },
+      { key: "totalEarning", label: "Total Earning" },
+      { key: "status", label: "Status" },
+    ]
+
+    switch (exportType) {
+      case "csv": exportReportsToCSV(exportData, headers, "delivery_finance_report"); break
+      case "excel": exportReportsToExcel(exportData, headers, "delivery_finance_report"); break
+      case "pdf": exportReportsToPDF(exportData, headers, "delivery_finance_report", "Delivery Finance Report"); break
+      case "json": exportReportsToJSON(exportData, "delivery_finance_report"); break
+    }
+  }
+
+  const formatCurrency = (value) => {
       const amount = parseAmount(value)
       return new Intl.NumberFormat("en-IN", {
         style: "currency",

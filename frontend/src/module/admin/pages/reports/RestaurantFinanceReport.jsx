@@ -237,7 +237,7 @@ export default function RestaurantFinanceReport() {
     }
   }
 
-  const handleExport = (format) => {
+  const handleExport = (exportType) => {
     if (settlements.length === 0) {
       toast.error("No data to export")
       return
@@ -265,7 +265,7 @@ export default function RestaurantFinanceReport() {
       { key: "status", label: "Status" },
     ]
 
-    switch (format) {
+    switch (exportType) {
       case "csv": exportReportsToCSV(exportData, headers, "restaurant_finance_report"); break
       case "excel": exportReportsToExcel(exportData, headers, "restaurant_finance_report"); break
       case "pdf": exportReportsToPDF(exportData, headers, "restaurant_finance_report", "Restaurant Finance Report"); break

@@ -143,7 +143,7 @@ export default function UserLayout() {
     const prevContent = meta.getAttribute("content") || ""
     meta.setAttribute(
       "content",
-      "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+      "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
     )
     return () => {
       meta.setAttribute("content", prevContent)

@@ -226,18 +226,34 @@ export function useLocation() {
         if (osmRes.ok) {
           const osmData = await osmRes.json()
           const addr = osmData?.address || {}
-          const houseRoad = [addr.house_number, addr.road].filter(Boolean).join(" ").trim()
+          // Capture POI / Campus / Building landmark name (e.g. "NIMS University", "NIMS Hospital", etc.)
+          const landmark =
+            addr.amenity ||
+            addr.university ||
+            addr.college ||
+            addr.school ||
+            addr.hospital ||
+            addr.building ||
+            addr.tourism ||
+            addr.leisure ||
+            addr.historic ||
+            addr.office ||
+            addr.commercial ||
+            addr.industrial ||
+            osmData?.name ||
+            ""
+          const houseRoad = [landmark, addr.house_number, addr.road].filter(Boolean).join(", ").trim()
           const areaRaw =
             addr.suburb ||
             addr.neighbourhood ||
             addr.city_district ||
             addr.hamlet ||
             addr.quarter ||
+            addr.village ||
             ""
           const city =
             addr.city ||
             addr.town ||
-            addr.village ||
             addr.municipality ||
             addr.county ||
             addr.state_district ||
@@ -248,7 +264,7 @@ export function useLocation() {
           const state = addr.state || ""
           const postalCode = addr.postcode || ""
 
-          const compactAddress = normalizeParts([houseRoad, area, city, state, postalCode]).join(", ")
+          const compactAddress = normalizeParts([landmark, houseRoad !== landmark ? houseRoad : "", area, city, state, postalCode]).join(", ")
           const fallbackDisplayAddress = normalizeParts(
             String(osmData?.display_name || "").split(","),
           ).join(", ")
@@ -259,11 +275,12 @@ export function useLocation() {
               city: city || "Unknown City",
               state,
               country: addr.country || "",
-              area,
+              area: area || landmark || "",
               address: resolvedAddress,
               formattedAddress: resolvedAddress,
               postalCode,
-              street: houseRoad || area || "",
+              street: houseRoad || landmark || area || "",
+              mainTitle: landmark || "",
             }
 
             reverseGeocodeCacheRef.current.set(cacheKey, {

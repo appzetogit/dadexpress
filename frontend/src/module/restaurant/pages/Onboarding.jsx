@@ -614,15 +614,30 @@ export default function RestaurantOnboarding() {
       try {
         result = JSON.parse(result)
       } catch {
+        // If raw string is directly a base64 or dataUrl
+        if (result.startsWith("data:image") || result.length > 100) {
+          return { success: true, base64: result }
+        }
         return null
       }
     }
 
-    if (!result || !result.success || !result.base64) {
+    if (!result || typeof result !== "object") {
       return null
     }
 
-    return result
+    // Support multiple common Flutter camera bridge key formats
+    const base64Data = result.base64 || result.file || result.image || result.data
+    if (!base64Data) {
+      return null
+    }
+
+    return {
+      ...result,
+      base64: base64Data,
+      mimeType: result.mimeType || "image/jpeg",
+      fileName: result.fileName
+    }
   }
 
   const convertBase64ToFile = (cameraResult, fallbackName) => {
@@ -643,21 +658,32 @@ export default function RestaurantOnboarding() {
 
   const captureImageFromLiveCamera = async (onSuccess, fallbackName) => {
     try {
-      if (!window.flutter_inappwebview?.callHandler) {
-        toast.error("Live camera is only available in the app")
-        return
+      if (window.flutter_inappwebview?.callHandler) {
+        const rawResult = await window.flutter_inappwebview.callHandler("openCamera")
+        const cameraResult = parseCameraResult(rawResult)
+        if (cameraResult) {
+          const file = convertBase64ToFile(cameraResult, fallbackName)
+          onSuccess(file)
+          toast.success("Photo captured successfully")
+          return
+        }
       }
 
-      const rawResult = await window.flutter_inappwebview.callHandler("openCamera")
-      const cameraResult = parseCameraResult(rawResult)
-      if (!cameraResult) {
-        toast.error("No photo captured from camera")
-        return
+      // Web / Mobile browser native camera fallback (opens device camera directly)
+      const input = document.createElement("input")
+      input.type = "file"
+      input.accept = "image/*"
+      input.capture = "environment" // Direct back camera on mobile
+      input.onchange = (e) => {
+        const file = e.target.files?.[0]
+        if (file) {
+          onSuccess(file)
+          toast.success("Photo captured successfully")
+        } else {
+          toast.error("No photo captured from camera")
+        }
       }
-
-      const file = convertBase64ToFile(cameraResult, fallbackName)
-      onSuccess(file)
-      toast.success("Photo captured successfully")
+      input.click()
     } catch (error) {
       console.error("Camera capture error:", error)
       toast.error("Failed to capture photo from camera")

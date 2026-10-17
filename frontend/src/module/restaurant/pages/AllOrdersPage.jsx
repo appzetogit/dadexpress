@@ -226,6 +226,7 @@ export default function AllOrdersPage() {
       customer: customerName,
       items,
       totalPrice: order.pricing?.total || 0,
+      note: order.note || '',
       reason,
       tags: tags.length > 0 ? tags : undefined,
       createdAt: order.createdAt,
@@ -635,20 +636,29 @@ export default function AllOrdersPage() {
             {/* Divider */}
             <div className="border-t border-dashed border-gray-300 my-3"></div>
 
-            {/* Order Items */}
-            <div className="space-y-2">
-              {order.items.slice(0, 1).map((item, idx) => (
-                <div key={idx} className="flex items-center justify-between">
-                  <span className="text-sm text-gray-900">
+            {/* Order Items & Total Price */}
+            <div className="flex items-end justify-between gap-3">
+              <div className="space-y-1 flex-1">
+                {order.items.slice(0, 1).map((item, idx) => (
+                  <div key={idx} className="text-sm text-gray-900">
                     {item.quantity} x {item.name}
-                  </span>
-                  <span className="text-sm font-medium text-gray-900">₹{item.price}</span>
-                </div>
-              ))}
-              {order.items.length > 1 && (
-                <p className="text-sm text-gray-500">+{order.items.length - 1} more items</p>
-              )}
+                  </div>
+                ))}
+                {order.items.length > 1 && (
+                  <p className="text-sm text-gray-500">+{order.items.length - 1} more items</p>
+                )}
+              </div>
+              <div className="text-right shrink-0">
+                <span className="text-base font-bold text-gray-900">₹{order.totalPrice}</span>
+              </div>
             </div>
+
+            {/* Customer Note */}
+            {order.note && (
+              <div className="mt-2.5 p-2 bg-orange-50 border border-orange-200 rounded text-xs text-orange-950 font-medium">
+                <span className="font-semibold text-orange-800">Note: </span>{order.note}
+              </div>
+            )}
 
             {/* Reason/Status Message */}
             {order.reason && (

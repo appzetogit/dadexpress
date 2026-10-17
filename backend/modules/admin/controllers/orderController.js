@@ -233,18 +233,18 @@ export const getOrders = asyncHandler(async (req, res) => {
     // Calculate pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    // Fetch orders with population
-    const orders = await Order.find(query)
-      .populate('userId', 'name email phone')
-      .populate('restaurantId', 'name slug')
-      .populate('deliveryPartnerId', 'name phone')
-      .sort({ createdAt: -1 })
-      .limit(parseInt(limit))
-      .skip(skip)
-      .lean();
-
-    // Get total count
-    const total = await Order.countDocuments(query);
+    // Fetch orders with population and total count concurrently for fastest response
+    const [orders, total] = await Promise.all([
+      Order.find(query)
+        .populate('userId', 'name email phone')
+        .populate('restaurantId', 'name slug')
+        .populate('deliveryPartnerId', 'name phone')
+        .sort({ createdAt: -1 })
+        .limit(parseInt(limit))
+        .skip(skip)
+        .lean(),
+      Order.countDocuments(query)
+    ]);
 
     // Batch fetch settlements for platform fee and refund status (more efficient than individual queries)
     let settlementMap = new Map();
