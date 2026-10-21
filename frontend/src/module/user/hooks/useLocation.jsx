@@ -2400,17 +2400,16 @@ export function useLocation() {
           (currentLocation.formattedAddress === "Select location" ||
             currentLocation.city === "Current Location")
 
-        // When permission is already granted, refresh GPS once in background
-        // so stale DB/localStorage coordinates do not keep showing far-away restaurants.
-        const hasExistingCoords =
-          Number.isFinite(Number(currentLocation?.latitude)) &&
-          Number.isFinite(Number(currentLocation?.longitude))
-        const shouldFetch = shouldForceRefresh || !hasInitialLocation || hasPlaceholder || hasExistingCoords
+        // FIXED: Do NOT use hasExistingCoords as a reason to re-fetch GPS.
+        // If the user already has a valid stored location (city/state set, non-placeholder),
+        // a background GPS fetch would overwrite it with the device's physical location
+        // (e.g. Indore, MP) instead of the user-selected location (e.g. Amber, Rajasthan).
+        // Only re-fetch when we truly need to: no initial location, placeholder shown, or force refresh.
+        const shouldFetch = shouldForceRefresh || !hasInitialLocation || hasPlaceholder
         const shouldUseFreshGps =
           shouldForceRefresh ||
           !hasInitialLocation ||
-          hasPlaceholder ||
-          hasExistingCoords
+          hasPlaceholder
 
         if (shouldFetch) {
           false && console.log("🔄 Fetching location - shouldForceRefresh:", shouldForceRefresh, "hasInitialLocation:", hasInitialLocation, "hasPlaceholder:", hasPlaceholder)
