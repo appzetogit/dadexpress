@@ -536,6 +536,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
         formattedAddress: geocoded.formattedAddress || "",
       }
 
+      localStorage.removeItem("isUserSelectedLocation")
       localStorage.setItem("userLocation", JSON.stringify(gpsLocationData))
       window.dispatchEvent(new CustomEvent(USER_LOCATION_UPDATED_EVENT, { detail: gpsLocationData }))
       
@@ -594,20 +595,13 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       lastReverseGeocodeCoordsRef.current = { lat: roundedLat, lng: roundedLng }
       setLoadingAddress(true)
       try {
-        if (knownAddress) {
-          setCurrentAddress(knownAddress)
-          setAddressFormData(prev => ({ ...prev, additionalDetails: knownAddress }))
-          setLoadingAddress(false)
-          return
-        }
-
         const addr = await reverseGeocode(roundedLat, roundedLng)
-        const safeFormattedAddress = sanitizeAddressText(addr.formattedAddress)
+        const safeFormattedAddress = sanitizeAddressText(knownAddress || addr.formattedAddress)
         
         setCurrentAddress(safeFormattedAddress || "Select location")
         setAddressFormData(prev => ({
           ...prev,
-          street: addr.street || prev.street,
+          street: prev.street || addr.street,
           city: addr.city || prev.city,
           state: addr.state || prev.state,
           zipCode: addr.postalCode || prev.zipCode,
@@ -615,6 +609,10 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
         }))
       } catch (error) {
         console.error("Reverse geocoding error:", error)
+        if (knownAddress) {
+          setCurrentAddress(knownAddress)
+          setAddressFormData(prev => ({ ...prev, additionalDetails: knownAddress }))
+        }
       } finally {
         setLoadingAddress(false)
       }
@@ -670,9 +668,22 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
         setDefaultAddress(savedId)
       }
 
+      // Sync active location immediately
+      const locationData = {
+        city: addressToSave.city,
+        state: addressToSave.state,
+        address: `${addressToSave.street || addressToSave.additionalDetails}, ${addressToSave.city}`,
+        latitude: addressToSave.latitude,
+        longitude: addressToSave.longitude,
+        formattedAddress: addressToSave.additionalDetails || `${addressToSave.street}, ${addressToSave.city}, ${addressToSave.state}`
+      }
+      localStorage.setItem("userLocation", JSON.stringify(locationData))
+      window.dispatchEvent(new CustomEvent(USER_LOCATION_UPDATED_EVENT, { detail: locationData }))
+
       toast.success("Address saved!")
       setShowAddressForm(false)
-      if (isCartPath) onClose()
+      onClose()
+      if (!isCartPath) navigate("/")
     } catch (error) {
       toast.error("Failed to save address")
     } finally {
@@ -687,7 +698,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       const service = new window.google.maps.places.PlacesService(googleMapRef.current)
       service.findPlaceFromQuery({
         query: query.trim(),
-        fields: ["geometry", "formatted_address", "name"],
+        fields: ["geometry", "formatted_address", "name", "address_components"],
       }, (results, status) => {
         if (status === "OK" && results?.[0]) {
           const place = results[0]
@@ -712,9 +723,30 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
     }
     if (greenMarkerRef.current) greenMarkerRef.current.setPosition({ lat, lng })
 
+    let extractedCity = ""
+    let extractedState = ""
+    let extractedZip = ""
+    if (Array.isArray(place.address_components)) {
+      for (const comp of place.address_components) {
+        const types = comp.types || []
+        if (types.includes("locality") || (!extractedCity && types.includes("administrative_area_level_2"))) {
+          extractedCity = comp.long_name
+        }
+        if (types.includes("administrative_area_level_1")) {
+          extractedState = comp.long_name
+        }
+        if (types.includes("postal_code")) {
+          extractedZip = comp.long_name
+        }
+      }
+    }
+
     setAddressFormData(prev => ({
       ...prev,
       street: place.name || prev.street,
+      city: extractedCity || prev.city,
+      state: extractedState || prev.state,
+      zipCode: extractedZip || prev.zipCode,
       additionalDetails: place.formatted_address || prev.additionalDetails
     }))
     
@@ -749,15 +781,35 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       const lat = address.location?.coordinates?.[1] ?? address.latitude
       const lng = address.location?.coordinates?.[0] ?? address.longitude
       
-      const locationData = {
-        city: address.city,
-        state: address.state,
-        address: `${address.street}, ${address.city}`,
-        latitude: lat,
-        longitude: lng,
-        formattedAddress: `${address.street}, ${address.city}, ${address.state}`
+      let selCity = address.city
+      let selState = address.state
+      const fullAddr = `${address.additionalDetails || ""} ${address.street || ""}`
+      const INDIAN_STATES = [
+        "andhra pradesh", "arunachal pradesh", "assam", "bihar", "chhattisgarh",
+        "goa", "gujarat", "haryana", "himachal pradesh", "jharkhand", "karnataka",
+        "kerala", "madhya pradesh", "maharashtra", "manipur", "meghalaya", "mizoram",
+        "nagaland", "odisha", "punjab", "rajasthan", "sikkim", "tamil nadu",
+        "telangana", "tripura", "uttar pradesh", "uttarakhand", "west bengal", "delhi"
+      ]
+      const foundState = INDIAN_STATES.find(st => fullAddr.toLowerCase().includes(st))
+      if (foundState && selState && foundState !== selState.toLowerCase()) {
+        const parts = fullAddr.split(',').map(p => p.trim()).filter(p => p.length > 0 && p.toLowerCase() !== "india" && !/^\d{6}$/.test(p))
+        if (parts.length >= 2) {
+          selState = parts[parts.length - 1].replace(/\s+\d{6}$/, '').trim()
+          selCity = parts[parts.length - 2].replace(/\s+\d{6}$/, '').trim()
+        }
       }
 
+      const locationData = {
+        city: selCity,
+        state: selState,
+        address: `${address.street}, ${selCity}`,
+        latitude: lat,
+        longitude: lng,
+        formattedAddress: `${address.street}, ${selCity}, ${selState}`
+      }
+
+      localStorage.setItem("isUserSelectedLocation", "true")
       localStorage.setItem("userLocation", JSON.stringify(locationData))
       window.dispatchEvent(new CustomEvent(USER_LOCATION_UPDATED_EVENT, { detail: locationData }))
       

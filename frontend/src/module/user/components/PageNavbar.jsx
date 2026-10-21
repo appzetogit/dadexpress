@@ -689,16 +689,64 @@ export default function PageNavbar({
 
     // Sub location: ALWAYS use city and state from location object ONLY (never from address parts)
     // Check if city and state exist in location object
-    const hasCity = location?.city && location.city.trim() !== "" && location.city !== "Unknown City"
+    const hasCity = location?.city && location.city.trim() !== "" && location.city !== "Unknown City" && location.city !== "Current Location"
     const hasState = location?.state && location.state.trim() !== ""
 
-    if (hasCity && hasState) {
+    const INDIAN_STATES = [
+      "andhra pradesh", "arunachal pradesh", "assam", "bihar", "chhattisgarh",
+      "goa", "gujarat", "haryana", "himachal pradesh", "jharkhand", "karnataka",
+      "kerala", "madhya pradesh", "maharashtra", "manipur", "meghalaya", "mizoram",
+      "nagaland", "odisha", "punjab", "rajasthan", "sikkim", "tamil nadu",
+      "telangana", "tripura", "uttar pradesh", "uttarakhand", "west bengal", "delhi"
+    ]
+
+    const mainLower = (mainLocation || "").toLowerCase()
+    const cityLower = (location?.city || "").toLowerCase()
+    const stateLower = (location?.state || "").toLowerCase()
+
+    // Detect if mainLocation mentions a state/city that contradicts location.state or location.city
+    // e.g. mainLocation has "uttar pradesh" but location.state is "madhya pradesh"
+    const detectedState = INDIAN_STATES.find(st => mainLower.includes(st))
+    let isStaleCity = false
+    if (detectedState && stateLower && detectedState !== stateLower) {
+      isStaleCity = true
+    } else if (hasCity && mainLower.includes(",") && !mainLower.includes(cityLower)) {
+      isStaleCity = true
+    }
+
+    if (isStaleCity) {
+      // Main location has a specific place (e.g. "Agra, Uttar Pradesh"), but location.city is stale (e.g. "Indore")
+      const parts = mainLocation.split(',').map(p => p.trim()).filter(p => p.length > 0 && p.toLowerCase() !== "india" && !/^\d{6}$/.test(p))
+      if (parts.length >= 2) {
+        const statePart = parts[parts.length - 1].replace(/\s+\d{6}$/, '').trim()
+        const cityPart = parts[parts.length - 2].replace(/\s+\d{6}$/, '').trim()
+        subLocation = `${cityPart}, ${statePart}`
+        // Refine mainLocation to first part so it doesn't duplicate
+        mainLocation = parts.slice(0, parts.length - 1).join(", ")
+      } else {
+        subLocation = mainLocation
+      }
+    } else if (hasCity && hasState) {
       subLocation = `${location.city}, ${location.state}`
     } else if (hasCity) {
       subLocation = location.city
     } else if (hasState) {
       subLocation = location.state
     } else {
+      const rawAddress = location?.formattedAddress || location?.address || mainLocation || ""
+      if (rawAddress) {
+        const parts = rawAddress.split(',').map(part => part.trim()).filter(part => part.length > 0)
+        const cleanParts = parts.filter(p => p.toLowerCase() !== "india" && !/^\d{6}$/.test(p))
+        if (cleanParts.length >= 2) {
+          const statePart = cleanParts[cleanParts.length - 1].replace(/\s+\d{6}$/, '').trim()
+          const cityPart = cleanParts[cleanParts.length - 2].replace(/\s+\d{6}$/, '').trim()
+          if (cityPart && statePart && !/^\d+$/.test(cityPart) && !/^\d+$/.test(statePart)) {
+            subLocation = `${cityPart}, ${statePart}`
+          }
+        } else if (cleanParts.length === 1 && !/^\d+$/.test(cleanParts[0])) {
+          subLocation = cleanParts[0]
+        }
+      }
       // If city/state not available in location object, try to extract from formattedAddress
       // This is a fallback - formattedAddress format: "Mama Loca, G-2, Princess Center 6/3, Opposite Manpasand Garden, New Palasia, Indore, 452001, India"
       if (location?.formattedAddress) {

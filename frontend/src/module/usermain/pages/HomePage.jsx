@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import Lenis from "lenis"
@@ -155,16 +155,61 @@ export default function HomePage() {
 
     // Sub location: ALWAYS use city and state from location object (never from address parts)
     // Check if city and state exist in location object
-    const hasCity = currentLocation?.city && currentLocation.city.trim() !== "" && currentLocation.city !== "Unknown City"
+    const hasCity = currentLocation?.city && currentLocation.city.trim() !== "" && currentLocation.city !== "Unknown City" && currentLocation.city !== "Current Location"
     const hasState = currentLocation?.state && currentLocation.state.trim() !== ""
 
-    if (hasCity && hasState) {
+    const INDIAN_STATES = [
+      "andhra pradesh", "arunachal pradesh", "assam", "bihar", "chhattisgarh",
+      "goa", "gujarat", "haryana", "himachal pradesh", "jharkhand", "karnataka",
+      "kerala", "madhya pradesh", "maharashtra", "manipur", "meghalaya", "mizoram",
+      "nagaland", "odisha", "punjab", "rajasthan", "sikkim", "tamil nadu",
+      "telangana", "tripura", "uttar pradesh", "uttarakhand", "west bengal", "delhi"
+    ]
+
+    const mainLower = (mainLocation || "").toLowerCase()
+    const cityLower = (currentLocation?.city || "").toLowerCase()
+    const stateLower = (currentLocation?.state || "").toLowerCase()
+
+    const detectedState = INDIAN_STATES.find(st => mainLower.includes(st))
+    let isStaleCity = false
+    if (detectedState && stateLower && detectedState !== stateLower) {
+      isStaleCity = true
+    } else if (hasCity && mainLower.includes(",") && !mainLower.includes(cityLower)) {
+      isStaleCity = true
+    }
+
+    if (isStaleCity) {
+      const parts = mainLocation.split(',').map(p => p.trim()).filter(p => p.length > 0 && p.toLowerCase() !== "india" && !/^\d{6}$/.test(p))
+      if (parts.length >= 2) {
+        const statePart = parts[parts.length - 1].replace(/\s+\d{6}$/, '').trim()
+        const cityPart = parts[parts.length - 2].replace(/\s+\d{6}$/, '').trim()
+        subLocation = `${cityPart}, ${statePart}`
+        mainLocation = parts.slice(0, parts.length - 1).join(", ")
+      } else {
+        subLocation = mainLocation
+      }
+    } else if (hasCity && hasState) {
       subLocation = `${currentLocation.city}, ${currentLocation.state}`
     } else if (hasCity) {
       subLocation = currentLocation.city
     } else if (hasState) {
       subLocation = currentLocation.state
     } else {
+      // If city/state not available in location object or stale, extract actual city and state
+      const rawAddress = currentLocation?.formattedAddress || currentLocation?.address || mainLocation || ""
+      if (rawAddress) {
+        const parts = rawAddress.split(',').map(part => part.trim()).filter(part => part.length > 0)
+        const cleanParts = parts.filter(p => p.toLowerCase() !== "india" && !/^\d{6}$/.test(p))
+        if (cleanParts.length >= 2) {
+          const statePart = cleanParts[cleanParts.length - 1].replace(/\s+\d{6}$/, '').trim()
+          const cityPart = cleanParts[cleanParts.length - 2].replace(/\s+\d{6}$/, '').trim()
+          if (cityPart && statePart && !/^\d+$/.test(cityPart) && !/^\d+$/.test(statePart)) {
+            subLocation = `${cityPart}, ${statePart}`
+          }
+        } else if (cleanParts.length === 1 && !/^\d+$/.test(cleanParts[0])) {
+          subLocation = cleanParts[0]
+        }
+      }
       // If city/state not available in location object, try to extract from formattedAddress
       // This is a fallback - formattedAddress format: "Mama Loca, G-2, Princess Center 6/3, Opposite Manpasand Garden, New Palasia, Indore, 452001, India"
       if (currentLocation?.formattedAddress) {

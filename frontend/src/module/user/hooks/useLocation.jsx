@@ -2080,8 +2080,9 @@ export function useLocation() {
               Math.abs(prevLocationCoordsRef.current.longitude - loc.longitude) > coordThreshold
 
             // Only update location state if coordinates changed significantly
-            // Final check: Is manual mode active or are we in "selecting" mode?
-            const isPausedOrLocked = isManualAddressLocked() || sessionStorage.getItem("__location_selecting_active") === "true";
+            // Final check: Is manual mode active, selecting active, or user selected a custom location?
+            const isUserSelected = typeof localStorage !== "undefined" && localStorage.getItem("isUserSelectedLocation") === "true";
+            const isPausedOrLocked = isManualAddressLocked() || sessionStorage.getItem("__location_selecting_active") === "true" || isUserSelected;
 
             // Only update location state if coordinates changed significantly (or it's the first sync)
             if (!isPausedOrLocked) {
@@ -2249,14 +2250,19 @@ export function useLocation() {
           hasInitialLocation = true
           false && console.log("📂 Loaded stored location instantly:", parsedLocation)
 
-          // Check if we should refresh in background for better address
-          const hasCompleteAddress = parsedLocation?.formattedAddress &&
+          // Only force background GPS refresh if the stored location is completely missing or a placeholder
+          const hasValidStoredAddress = Boolean(
+            parsedLocation?.city &&
+            parsedLocation.city !== "Current Location" &&
+            parsedLocation.city !== "Unknown City" &&
+            parsedLocation.city !== "Select location" &&
+            parsedLocation?.formattedAddress &&
             parsedLocation.formattedAddress !== "Select location" &&
-            !parsedLocation.formattedAddress.match(/^-?\d+\.\d+,\s*-?\d+\.\d+$/) &&
-            parsedLocation.formattedAddress.split(',').length >= 4
+            !parsedLocation.formattedAddress.match(/^-?\d+\.\d+,\s*-?\d+\.\d+$/)
+          )
 
-          if (!hasCompleteAddress) {
-            false && console.log("⚠️ Cached location incomplete, will refresh in background")
+          if (!hasValidStoredAddress) {
+            false && console.log("⚠️ Cached location placeholder or invalid, will refresh in background")
             shouldForceRefresh = true
           }
         } else {
