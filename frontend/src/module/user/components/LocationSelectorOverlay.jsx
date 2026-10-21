@@ -695,10 +695,38 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
     if (!query || !googleMapRef.current) return
     setMapLoading(true)
     try {
+      const trimmed = query.trim()
+      
+      // Primary: Use google.maps.Geocoder for comprehensive address search
+      if (window.google?.maps?.Geocoder) {
+        const geocoder = new window.google.maps.Geocoder()
+        geocoder.geocode({ address: trimmed }, (geoResults, geoStatus) => {
+          if (geoStatus === "OK" && geoResults?.[0]) {
+            const first = geoResults[0]
+            const lat = first.geometry.location.lat()
+            const lng = first.geometry.location.lng()
+            applySearchResult(lat, lng, first)
+            return
+          }
+          
+          // Fallback to PlacesService with valid fields
+          fallbackPlacesSearch(trimmed)
+        })
+      } else {
+        fallbackPlacesSearch(trimmed)
+      }
+    } catch (err) {
+      setMapLoading(false)
+      toast.error("Location search failed")
+    }
+  }
+
+  const fallbackPlacesSearch = (trimmed) => {
+    try {
       const service = new window.google.maps.places.PlacesService(googleMapRef.current)
       service.findPlaceFromQuery({
-        query: query.trim(),
-        fields: ["geometry", "formatted_address", "name", "address_components"],
+        query: trimmed,
+        fields: ["geometry", "formatted_address", "name"],
       }, (results, status) => {
         if (status === "OK" && results?.[0]) {
           const place = results[0]
@@ -710,8 +738,9 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
           toast.error("Location not found")
         }
       })
-    } catch (err) {
+    } catch {
       setMapLoading(false)
+      toast.error("Location not found")
     }
   }
 
@@ -743,7 +772,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
 
     setAddressFormData(prev => ({
       ...prev,
-      street: place.name || prev.street,
+      street: place.name || (place.formatted_address ? place.formatted_address.split(',')[0].trim() : prev.street),
       city: extractedCity || prev.city,
       state: extractedState || prev.state,
       zipCode: extractedZip || prev.zipCode,
