@@ -143,7 +143,7 @@ export default function UserLayout() {
     const prevContent = meta.getAttribute("content") || ""
     meta.setAttribute(
       "content",
-      "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+      "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content"
     )
     return () => {
       meta.setAttribute("content", prevContent)
@@ -166,7 +166,7 @@ export default function UserLayout() {
     location.pathname.startsWith("/user/profile")
 
   return (
-    <div className="min-h-screen bg-[#f5f5f5] dark:bg-[#0a0a0a] transition-colors duration-200">
+    <div className="min-h-screen min-h-[100dvh] w-full flex flex-col flex-1 bg-white dark:bg-[#0a0a0a] transition-colors duration-200">
       <CartProvider>
         <ProfileProvider>
           <OrdersProvider>
