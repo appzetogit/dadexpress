@@ -2022,7 +2022,7 @@ export default function Home() {
       </div>
 
       {/* Unified Navbar & Header Section */}
-      <div className="sticky top-0 w-full bg-white dark:bg-[#0a0a0a] z-40 shadow-sm pt-[env(safe-area-inset-top,0px)]">
+      <div className="sticky top-0 w-full bg-white dark:bg-[#0a0a0a] z-40 shadow-sm">
 
         {/* Navbar */}
         <motion.div
