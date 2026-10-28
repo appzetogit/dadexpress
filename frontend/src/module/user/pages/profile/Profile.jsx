@@ -318,9 +318,9 @@ export default function Profile() {
 
   return (
     <AnimatedPage className="min-h-screen bg-[#f5f5f5] dark:bg-[#0a0a0a]">
-      <div className="max-w-md md:max-w-2xl lg:max-w-4xl xl:max-w-5xl mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-4 sm:py-6 md:py-8 lg:py-10 pb-20 sm:pb-24">
+      <div className="max-w-md md:max-w-2xl lg:max-w-4xl xl:max-w-5xl mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-2 sm:py-4 md:py-6 lg:py-8 pb-16 sm:pb-20">
         {/* Back Arrow */}
-        <div className="mb-4">
+        <div className="mb-2 sm:mb-3">
           <Link to={backTo}>
             <Button variant="ghost" size="icon" className="h-8 w-8 p-0">
               <ArrowLeft className="h-5 w-5 text-black dark:text-white" />

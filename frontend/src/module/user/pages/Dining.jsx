@@ -230,15 +230,15 @@ export default function Dining() {
   }, [limelightItems.length])
 
   return (
-    <AnimatedPage className="bg-white dark:bg-[#0a0a0a]" style={{ minHeight: '100vh', paddingBottom: '80px', overflow: 'visible' }}>
+    <AnimatedPage className="bg-white dark:bg-[#0a0a0a]" style={{ minHeight: '100vh', paddingBottom: '60px', overflow: 'visible' }}>
       {/* Sticky Header Wrapper */}
       <div className="sticky top-0 z-40 w-full bg-white dark:bg-[#0a0a0a] shadow-sm md:hidden">
-        <div className="relative z-20 pt-2 sm:pt-3 lg:pt-4">
+        <div className="relative z-20 pt-1 sm:pt-2 lg:pt-3">
           <PageNavbar textColor="dark" zIndex={20} onNavClick={(e) => e.stopPropagation()} />
         </div>
 
         {/* Search Bar Section */}
-        <section className="relative z-20 w-full py-3 sm:py-4 md:py-5" onClick={(e) => e.stopPropagation()}>
+        <section className="relative z-20 w-full py-1.5 sm:py-2.5 md:py-3" onClick={(e) => e.stopPropagation()}>
           <div className="relative z-20 w-full px-3 sm:px-6 lg:px-8">
             <div className="w-full relative">
               <div className="relative bg-white dark:bg-[#1a1a1a] rounded-xl shadow-lg border border-gray-200 dark:border-gray-800 p-1 sm:p-1.5 transition-all duration-300 hover:shadow-xl">
@@ -271,7 +271,7 @@ export default function Dining() {
       </div>
 
       {/* Banner Section */}
-      <div className="relative w-full px-3 sm:px-4 md:px-6 lg:px-8 pb-4 sm:pb-6 cursor-pointer" onClick={() => navigate('/user/dining/restaurants')}>
+      <div className="relative w-full px-3 sm:px-4 md:px-6 lg:px-8 pb-2 sm:pb-4 cursor-pointer" onClick={() => navigate('/user/dining/restaurants')}>
         <div className="relative w-full h-[30vh] sm:h-[35vh] lg:h-[40vh] rounded-2xl overflow-hidden shadow-lg">
           {diningHeroBanners.length > 0 && (
             <AnimatePresence mode="wait">
@@ -315,7 +315,7 @@ export default function Dining() {
       </div>
 
       {/* Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 pt-6 sm:pt-8 md:pt-10 lg:pt-12 pb-6 md:pb-8 lg:pb-10">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 pt-2 sm:pt-4 md:pt-6 lg:pt-8 pb-6 md:pb-8 lg:pb-10">
         
         {/* Categories Section */}
         {categories.length > 0 && (

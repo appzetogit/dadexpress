@@ -1910,7 +1910,7 @@ export default function Home() {
   )
 
   return (
-    <div className="relative min-h-screen bg-white dark:bg-[#0a0a0a] pb-28 md:pb-24">
+    <div className="relative min-h-screen bg-white dark:bg-[#0a0a0a] pb-16 md:pb-24">
       {/* Unified Background for Entire Page - Vibrant Food Theme */}
       <div className="absolute top-0 left-0 right-0 bottom-0 pointer-events-none overflow-hidden z-0">
         {/* Main Background */}
@@ -2026,7 +2026,7 @@ export default function Home() {
 
         {/* Navbar */}
         <motion.div
-          className="relative z-50 pt-1 sm:pt-2 lg:pt-3 md:hidden"
+          className="relative z-50 pt-0 sm:pt-1 lg:pt-2 md:hidden"
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: "easeOut" }}
@@ -2036,7 +2036,7 @@ export default function Home() {
 
         {/* Search Bar and VEG MODE Container - Sticky */}
         <motion.div
-          className="w-full bg-white dark:bg-[#0a0a0a] py-3 sm:py-4 md:hidden"
+          className="w-full bg-white dark:bg-[#0a0a0a] py-1.5 sm:py-2.5 md:hidden"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
@@ -2116,7 +2116,7 @@ export default function Home() {
       </div>
 
       {/* Hero Banner Section - Moved Below Search */}
-      <div className={`relative w-full overflow-hidden mt-2 md:mt-4 mb-6 transition-all duration-300 ${(!loadingBanners && heroBannerImages.length === 0) ? 'h-0 mb-0' : 'h-[220px] sm:h-[240px] md:h-[50vh] lg:h-[60vh]'}`}>
+      <div className={`relative w-full overflow-hidden mt-1 md:mt-3 mb-3 sm:mb-4 transition-all duration-300 ${(!loadingBanners && heroBannerImages.length === 0) ? 'h-0 mb-0' : 'h-[220px] sm:h-[240px] md:h-[50vh] lg:h-[60vh]'}`}>
         {loadingBanners ? (
           <div className="absolute top-0 left-0 right-0 bottom-0 z-0 shimmer-effect mx-3 sm:mx-4 lg:mx-8 rounded-xl sm:rounded-2xl" />
         ) : heroBannerImages.length > 0 ? (
@@ -2202,7 +2202,7 @@ export default function Home() {
 
       {/* Rest of Content - Container Width with Unified Background */}
       <motion.div
-        className="relative max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 xl:px-12 space-y-0 pt-2 sm:pt-3 lg:pt-6"
+        className="relative max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 xl:px-12 space-y-0 pt-0 sm:pt-1 lg:pt-3"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.6, delay: 0.4 }}

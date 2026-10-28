@@ -18,7 +18,7 @@ export default function BottomNavigation() {
         {/* Delivery Tab */}
         <Link
           to="/user"
-          className={`flex flex-col items-center gap-1.5 px-4 sm:px-5 py-2 transition-all duration-200 relative ${isDelivery
+          className={`flex flex-col items-center gap-1 px-3 sm:px-5 py-1.5 transition-all duration-200 relative ${isDelivery
               ? "text-orange-600 dark:text-orange-500"
               : "text-gray-600 dark:text-gray-400"
             }`}
@@ -38,7 +38,7 @@ export default function BottomNavigation() {
         {/* Under 250 Tab */}
         <Link
           to="/user/under-250"
-          className={`flex flex-col items-center gap-1.5 px-4 sm:px-5 py-2 transition-all duration-200 relative ${isUnder250
+          className={`flex flex-col items-center gap-1 px-3 sm:px-5 py-1.5 transition-all duration-200 relative ${isUnder250
               ? "text-orange-600 dark:text-orange-500"
               : "text-gray-600 dark:text-gray-400"
             }`}
@@ -58,7 +58,7 @@ export default function BottomNavigation() {
         {/* Dining Tab */}
         <Link
           to="/user/dining"
-          className={`flex flex-col items-center gap-1.5 px-4 sm:px-5 py-2 transition-all duration-200 relative ${isDining
+          className={`flex flex-col items-center gap-1 px-3 sm:px-5 py-1.5 transition-all duration-200 relative ${isDining
               ? "text-orange-600 dark:text-orange-500"
               : "text-gray-600 dark:text-gray-400"
             }`}
@@ -78,7 +78,7 @@ export default function BottomNavigation() {
         {/* Profile Tab */}
         <Link
           to="/user/profile"
-          className={`flex flex-col items-center gap-1.5 px-4 sm:px-5 py-2 transition-all duration-200 relative ${isProfile
+          className={`flex flex-col items-center gap-1 px-3 sm:px-5 py-1.5 transition-all duration-200 relative ${isProfile
               ? "text-orange-600 dark:text-orange-500"
               : "text-gray-600 dark:text-gray-400"
             }`}

@@ -1756,7 +1756,7 @@ export function useLocation() {
                 try {
                   sessionStorage.setItem(SESSION_RESOLVED_KEY, "true")
                 } catch { }
-                
+
                 setLocation(finalLoc)
                 setPermissionGranted(true)
                 if (showLoading) setLoading(false)
@@ -1792,7 +1792,7 @@ export function useLocation() {
                   }
                   false && console.log("✅ Last resort geocoding succeeded:", lastResortLoc)
                   localStorage.setItem("userLocation", JSON.stringify(lastResortLoc))
-                  
+
                   // Mark session as resolved
                   try {
                     sessionStorage.setItem(SESSION_RESOLVED_KEY, "true")
@@ -1865,7 +1865,7 @@ export function useLocation() {
             } else {
               console.error("❌ Geolocation error:", err.code, err.message)
             }
-            
+
             // NO FALLBACK TO STALE DATA
             setError(err.code === 3 ? "Location request timed out. Please try again." : err.message)
             if (showLoading) setLoading(false)
@@ -2239,14 +2239,14 @@ export function useLocation() {
           parsedLocation.city !== "Current Location") {
           setLocation(parsedLocation)
           setPermissionGranted(true)
-          
+
           // Only set loading false immediately if the session is already resolved
           // or if it's a manual selection. This prevents the "flash" of the stale 
           // location (e.g. "Dr. BS Tomar") during the first boot of the app.
           if (isSessionResolved || isManualAddressLocked()) {
-            setLoading(false) 
+            setLoading(false)
           }
-          
+
           hasInitialLocation = true
           false && console.log("📂 Loaded stored location instantly:", parsedLocation)
 

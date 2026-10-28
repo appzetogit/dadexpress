@@ -391,16 +391,16 @@ export default function Under250() {
 
   return (
 
-    <div className="relative min-h-screen bg-white dark:bg-[#0a0a0a]">
+    <div className="relative min-h-screen bg-white dark:bg-[#0a0a0a] pb-16 md:pb-20">
       {/* Mobile Navbar - Sticky & Hidden on Desktop */}
       <div className="sticky top-0 z-40 w-full bg-white dark:bg-[#0a0a0a] shadow-sm md:hidden">
-        <div className="relative z-50 pt-2 sm:pt-3 pb-2">
+        <div className="relative z-50 pt-1 sm:pt-2 pb-1">
           <PageNavbar textColor="black" zIndex={20} showProfile={true} />
         </div>
       </div>
 
       {/* Banner Section */}
-      <div className="relative w-full overflow-hidden min-h-[30vh] sm:min-h-[39vh] lg:min-h-[50vh] mt-2 md:mt-4">
+      <div className="relative w-full overflow-hidden min-h-[30vh] sm:min-h-[39vh] lg:min-h-[50vh] mt-1 md:mt-3">
         {/* Banner Images */}
         {bannerImages.length > 0 && (
           <div className="absolute top-0 left-0 right-0 bottom-0 z-0 mx-3 sm:mx-4 lg:mx-8 rounded-xl sm:rounded-2xl overflow-hidden">
@@ -447,7 +447,7 @@ export default function Under250() {
       </div>
 
       {/* Content Section */}
-      <div className="relative max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 xl:px-12 space-y-0 pt-2 sm:pt-3 md:pt-4 lg:pt-6 pb-6 md:pb-8 lg:pb-10">
+      <div className="relative max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 xl:px-12 space-y-0 pt-1 sm:pt-2 md:pt-3 lg:pt-5 pb-6 md:pb-8 lg:pb-10">
 
         <section className="space-y-1 sm:space-y-1.5">
           <div
