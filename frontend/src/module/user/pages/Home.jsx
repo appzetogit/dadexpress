@@ -3068,7 +3068,7 @@ export default function Home() {
                 setVegModeContext(false)
                 setPrevVegMode(false)
               }}
-              className="fixed inset-0 bg-black/30 z-[9998] backdrop-blur-sm"
+              className="fixed inset-0 bg-black/40 z-[9998]"
             />
 
             {/* Popup */}
@@ -3200,7 +3200,7 @@ export default function Home() {
                 setVegMode(true)
                 // prevVegMode stays true (from before), which is correct
               }}
-              className="fixed inset-0 bg-black/50 z-[9998] backdrop-blur-sm"
+              className="fixed inset-0 bg-black/50 z-[9998]"
             />
 
             {/* Popup */}
