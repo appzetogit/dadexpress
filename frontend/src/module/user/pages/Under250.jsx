@@ -396,7 +396,7 @@ export default function Under250() {
       {/* Mobile Navbar - Sticky & Hidden on Desktop */}
       <div className="sticky top-0 z-40 w-full bg-white dark:bg-[#0a0a0a] shadow-sm md:hidden">
         <div className="relative z-50 pt-1 sm:pt-2 pb-1">
-          <PageNavbar textColor="black" zIndex={20} showProfile={true} />
+          <PageNavbar textColor="black" zIndex={20} />
         </div>
       </div>
 
