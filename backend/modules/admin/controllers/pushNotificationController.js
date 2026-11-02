@@ -42,11 +42,16 @@ export const sendPushNotification = asyncHandler(async (req, res) => {
     // Filter by Zone
     const isAllZones = !zone || zone === "All";
 
-    // Check if an image was uploaded
-    let notificationImage = imageUrl || '/dadexpress.jpeg'; // default image specified by user
+    // Check if an image was uploaded - ensure absolute HTTPS url for Firebase
+    let notificationImage = imageUrl || 'https://dadexpress.in/dadexpress.jpeg';
     if (req.file) {
         // If file uploaded via middleware
         notificationImage = req.file.path || req.file.url || notificationImage;
+    }
+    if (notificationImage && typeof notificationImage === 'string' && !notificationImage.startsWith('http://') && !notificationImage.startsWith('https://')) {
+        const baseUrl = (process.env.CORS_ORIGIN || 'https://dadexpress.in').replace(/\/+$/, '');
+        const cleanPath = notificationImage.startsWith('/') ? notificationImage : `/${notificationImage}`;
+        notificationImage = `${baseUrl}${cleanPath}`;
     }
 
     if (sendTo === "Customer") {

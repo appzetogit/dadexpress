@@ -305,8 +305,12 @@ export default function Cart() {
           const cartRestaurantName = cart[0].restaurant;
 
           console.log("🔄 Fetching restaurant data by restaurantId from cart:", cartRestaurantId)
-          const response = await restaurantAPI.getRestaurantById(cartRestaurantId)
+          const response = await restaurantAPI.getRestaurantById(`${cartRestaurantId}?includeDetails=true`)
           const data = response?.data?.data?.restaurant || response?.data?.restaurant
+          const menuData = response?.data?.data?.menu
+          if (data && menuData) {
+            data.menu = menuData
+          }
 
           if (data) {
             // CRITICAL: Validate that fetched restaurant matches cart items
@@ -793,6 +797,80 @@ export default function Cart() {
     }
   }, [])
 
+    // Helper to parse time string like "20-25 mins", "20-25", "25 min", "25"
+  const parseDeliveryTimeRange = (timeStr) => {
+    if (!timeStr || typeof timeStr !== 'string') return null;
+    const match = timeStr.match(/(\d+)(?:\s*-\s*(\d+))?/);
+    if (!match) return null;
+    const min = parseInt(match[1], 10);
+    const max = match[2] ? parseInt(match[2], 10) : min;
+    return { min, max };
+  };
+
+  // Dynamically calculate accurate Delivery Time based on Menu items' preparation time + travel buffer
+  const calculatedDeliveryTime = useMemo(() => {
+    let maxPrepMin = 0;
+    let maxPrepMax = 0;
+    let hasPrepTime = false;
+
+    // Build menu lookup map if menu is available on restaurantData
+    const menuItemsMap = new Map();
+    if (restaurantData?.menu?.sections && Array.isArray(restaurantData.menu.sections)) {
+      restaurantData.menu.sections.forEach(s => {
+        (s.items || []).forEach(it => {
+          if (it._id || it.id) menuItemsMap.set(String(it._id || it.id), it);
+        });
+        (s.subsections || []).forEach(sub => {
+          (sub.items || []).forEach(it => {
+            if (it._id || it.id) menuItemsMap.set(String(it._id || it.id), it);
+          });
+        });
+      });
+    }
+
+    cart.forEach(item => {
+      let prepStr = item.preparationTime || item.prepTime;
+      if (!prepStr && menuItemsMap.has(String(item.id))) {
+        prepStr = menuItemsMap.get(String(item.id))?.preparationTime;
+      }
+      const parsed = parseDeliveryTimeRange(prepStr);
+      if (parsed) {
+        hasPrepTime = true;
+        maxPrepMin = Math.max(maxPrepMin, parsed.min);
+        maxPrepMax = Math.max(maxPrepMax, parsed.max);
+      }
+    });
+
+    const restDeliveryParsed = parseDeliveryTimeRange(restaurantData?.estimatedDeliveryTime);
+
+    // Realistic delivery travel buffer (time for rider to reach restaurant + deliver to user)
+    const TRAVEL_BUFFER_MIN = 10;
+    const TRAVEL_BUFFER_MAX = 15;
+
+    // If cart items have preparation time configured in Menu:
+    if (hasPrepTime && maxPrepMax > 0) {
+      let minDelivery = maxPrepMin + TRAVEL_BUFFER_MIN;
+      let maxDelivery = maxPrepMax + TRAVEL_BUFFER_MAX;
+
+      // If restaurant has a valid realistic delivery time configured (>= 20 mins)
+      if (restDeliveryParsed && restDeliveryParsed.min >= 20) {
+        minDelivery = Math.max(minDelivery, restDeliveryParsed.min);
+        maxDelivery = Math.max(maxDelivery, restDeliveryParsed.max);
+      }
+
+      return `${minDelivery}-${maxDelivery} mins`;
+    }
+
+    // If restaurant has realistic estimatedDeliveryTime configured (at least 20 mins)
+    if (restDeliveryParsed && restDeliveryParsed.min >= 20) {
+      const raw = String(restaurantData.estimatedDeliveryTime).trim();
+      return raw.toLowerCase().includes('min') ? raw : `${raw} mins`;
+    }
+
+    // Safe realistic food delivery fallback (never 10-15 mins)
+    return "25-35 mins";
+  }, [cart, restaurantData]);
+
   // Use backend pricing if available, otherwise fallback to database settings
   const subtotal = pricing?.subtotal || cart.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 1), 0)
   const fallbackDeliveryFee = (() => {
@@ -1067,7 +1145,8 @@ export default function Cart() {
         quantity: item.quantity || 1,
         image: item.image || "",
         description: item.description || "",
-        isVeg: item.isVeg !== false
+        isVeg: item.isVeg !== false,
+        preparationTime: item.preparationTime || item.prepTime || ""
       }))
 
       console.log("📋 Order items to send:", orderItems)
@@ -1560,7 +1639,7 @@ export default function Cart() {
               <div className="min-w-0">
                 <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400">{restaurantName}</p>
                 <p className="text-sm md:text-base font-medium text-gray-800 dark:text-white truncate">
-                  {restaurantData?.estimatedDeliveryTime || "10-15 mins"} to <span className="font-semibold">Location</span>
+                  {calculatedDeliveryTime} to <span className="font-semibold">Location</span>
                   <span className="text-gray-400 dark:text-gray-500 ml-1 text-xs md:text-sm">{defaultAddress ? (formatFullAddress(defaultAddress) || defaultAddress?.formattedAddress || defaultAddress?.address || defaultAddress?.city || "Select address") : "Select address"}</span>
                 </p>
               </div>
@@ -1854,7 +1933,7 @@ export default function Cart() {
                 <div className="flex items-center gap-3 md:gap-4">
                   <Clock className="h-4 w-4 md:h-5 md:w-5 text-gray-500 dark:text-gray-400" />
                   <div className="flex-1">
-                    <p className="text-sm md:text-base text-gray-800 dark:text-gray-200">Delivery in <span className="font-semibold">{restaurantData?.estimatedDeliveryTime || "10-15 mins"}</span></p>
+                    <p className="text-sm md:text-base text-gray-800 dark:text-gray-200">Delivery in <span className="font-semibold">{calculatedDeliveryTime}</span></p>
                   </div>
                 </div>
               </div>

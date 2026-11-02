@@ -478,7 +478,8 @@ export default function RestaurantDetails() {
       description: item.description,
       originalPrice: item.originalPrice || finalPrice,
       isVeg: item.foodType === 'Veg' || item.isVeg === true,
-      variation: effectiveVariation ? effectiveVariation.name : null
+      variation: effectiveVariation ? effectiveVariation.name : null,
+      preparationTime: item.preparationTime || item.prepTime || null
     }
 
     // Get source position for animation from event target

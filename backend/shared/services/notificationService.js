@@ -11,6 +11,18 @@ const logger = winston.createLogger({
     ],
 });
 
+const formatValidImageUrl = (url) => {
+    if (!url || typeof url !== 'string') return null;
+    const trimmed = url.trim();
+    if (!trimmed || trimmed === 'null' || trimmed === 'undefined') return null;
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+        return trimmed;
+    }
+    const baseUrl = (process.env.CORS_ORIGIN || 'https://dadexpress.in').replace(/\/+$/, '');
+    const cleanPath = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+    return `${baseUrl}${cleanPath}`;
+};
+
 class NotificationService {
     /**
      * Send a push notification to a specific device
@@ -25,10 +37,9 @@ class NotificationService {
             return null;
         }
 
-        const logoUrl = process.env.CORS_ORIGIN ? `${process.env.CORS_ORIGIN}/dadexpress.jpeg` : '/dadexpress.jpeg';
         const notificationTitle = notification.title || 'DadExpress';
         const notificationBody = notification.body || '';
-        const notificationImage = notification.image || logoUrl;
+        const validImageUrl = formatValidImageUrl(notification.image || notification.imageUrl || 'https://dadexpress.in/dadexpress.jpeg');
 
         // FCM data values must all be strings
         const stringData = {};
@@ -41,13 +52,13 @@ class NotificationService {
             notification: {
                 title: notificationTitle,
                 body: notificationBody,
-                ...(notificationImage ? { imageUrl: notificationImage } : {})
+                ...(validImageUrl ? { imageUrl: validImageUrl } : {})
             },
             data: {
                 ...stringData,
                 title: notificationTitle,
                 body: notificationBody,
-                image: notificationImage,
+                image: validImageUrl || "",
                 click_action: data.click_action || '/'
             },
             android: {
@@ -61,7 +72,7 @@ class NotificationService {
                     channelId: 'dadexpress_notifications',
                     defaultSound: true,
                     defaultVibrateTimings: true,
-                    ...(notificationImage ? { imageUrl: notificationImage } : {})
+                    ...(validImageUrl ? { imageUrl: validImageUrl } : {})
                 }
             },
             apns: {
@@ -81,14 +92,13 @@ class NotificationService {
                         'mutable-content': 1
                     }
                 },
-                ...(notificationImage ? { fcm_options: { image: notificationImage } } : {})
+                ...(validImageUrl ? { fcm_options: { image: validImageUrl } } : {})
             },
             webpush: {
                 notification: {
                     title: notificationTitle,
                     body: notificationBody,
-                    icon: notificationImage,
-                    badge: logoUrl,
+                    ...(validImageUrl ? { icon: validImageUrl, badge: validImageUrl } : {}),
                     vibrate: [200, 100, 200]
                 },
                 fcmOptions: {
@@ -123,10 +133,9 @@ class NotificationService {
         const cleanTokens = tokens.filter(t => typeof t === 'string' && t.trim().length > 0 && t !== 'undefined' && t !== 'null');
         if (cleanTokens.length === 0) return null;
 
-        const logoUrl = process.env.CORS_ORIGIN ? `${process.env.CORS_ORIGIN}/dadexpress.jpeg` : '/dadexpress.jpeg';
         const notificationTitle = notification.title || 'DadExpress';
         const notificationBody = notification.body || '';
-        const notificationImage = notification.image || logoUrl;
+        const validImageUrl = formatValidImageUrl(notification.image || notification.imageUrl || 'https://dadexpress.in/dadexpress.jpeg');
 
         // FCM data values must all be strings
         const stringData = {};
@@ -139,13 +148,13 @@ class NotificationService {
             notification: {
                 title: notificationTitle,
                 body: notificationBody,
-                ...(notificationImage ? { imageUrl: notificationImage } : {})
+                ...(validImageUrl ? { imageUrl: validImageUrl } : {})
             },
             data: {
                 ...stringData,
                 title: notificationTitle,
                 body: notificationBody,
-                image: notificationImage,
+                image: validImageUrl || "",
                 click_action: data.click_action || '/'
             },
             android: {
@@ -159,7 +168,7 @@ class NotificationService {
                     channelId: 'dadexpress_notifications',
                     defaultSound: true,
                     defaultVibrateTimings: true,
-                    ...(notificationImage ? { imageUrl: notificationImage } : {})
+                    ...(validImageUrl ? { imageUrl: validImageUrl } : {})
                 }
             },
             apns: {
@@ -179,14 +188,13 @@ class NotificationService {
                         'mutable-content': 1
                     }
                 },
-                ...(notificationImage ? { fcm_options: { image: notificationImage } } : {})
+                ...(validImageUrl ? { fcm_options: { image: validImageUrl } } : {})
             },
             webpush: {
                 notification: {
                     title: notificationTitle,
                     body: notificationBody,
-                    icon: notificationImage,
-                    badge: logoUrl,
+                    ...(validImageUrl ? { icon: validImageUrl, badge: validImageUrl } : {}),
                     vibrate: [200, 100, 200]
                 },
                 fcmOptions: {
