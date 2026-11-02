@@ -5,7 +5,7 @@ import BottomNavbar from "../components/BottomNavbar"
 import MenuOverlay from "../components/MenuOverlay"
 import NewOrderNotification from "../components/NewOrderNotification"
 import { useRestaurantNotifications } from "../hooks/useRestaurantNotifications"
-import { 
+import {
   Home,
   ShoppingBag,
   Store,
@@ -23,6 +23,18 @@ import { formatCurrency, usdToInr } from "../utils/currency"
 import { restaurantAPI } from "@/lib/api"
 import { toast } from "sonner"
 
+const getOrderRestaurantAmount = (order) => {
+  if (order.restaurantPayout !== undefined && order.restaurantPayout !== null && Number(order.restaurantPayout) > 0) {
+    return Number(order.restaurantPayout);
+  }
+  const isCancelledOrRejected = ['cancelled', 'rejected'].includes(order.status?.toLowerCase());
+  if (isCancelledOrRejected && order.restaurantPayout !== undefined && order.restaurantPayout !== null) {
+    return Number(order.restaurantPayout);
+  }
+  const foodPrice = Number((order.pricing?.subtotal || 0) - (order.pricing?.discount || 0));
+  return foodPrice > 0 ? foodPrice : (Number(order.pricing?.total) || Number(order.total) || 0);
+};
+
 export default function OrdersPage() {
   const navigate = useNavigate()
   // Default to "all" to show all orders (active + history)
@@ -38,11 +50,11 @@ export default function OrdersPage() {
   // Handle new table bookings
   useEffect(() => {
     if (newBooking) {
-        toast(`New table booking for ${newBooking.guests} guest(s) at ${newBooking.timeSlot}`, {
-            icon: '🍽️',
-            duration: 8000,
-        })
-        clearNewBooking()
+      toast(`New table booking for ${newBooking.guests} guest(s) at ${newBooking.timeSlot}`, {
+        icon: '🍽️',
+        duration: 8000,
+      })
+      clearNewBooking()
     }
   }, [newBooking, clearNewBooking])
 
@@ -53,10 +65,10 @@ export default function OrdersPage() {
     let rafId = null;
     if (!isMobile) {
       lenis = new Lenis({
-      duration: 1.2,
-      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-      smoothWheel: true,
-    })
+        duration: 1.2,
+        easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+        smoothWheel: true,
+      })
       function raf(time) {
         lenis.raf(time)
         rafId = requestAnimationFrame(raf)
@@ -74,13 +86,13 @@ export default function OrdersPage() {
     const paymentTransactions = getTransactionsByType("payment")
     const today = new Date()
     today.setHours(0, 0, 0, 0)
-    
+
     const thisWeek = new Date(today)
     thisWeek.setDate(today.getDate() - 7)
-    
+
     const thisMonth = new Date(today)
     thisMonth.setMonth(today.getMonth() - 1)
-    
+
     const parseDate = (dateString) => {
       // Parse date string like "01 Jun 2023" or "07 Feb 2023"
       try {
@@ -98,15 +110,15 @@ export default function OrdersPage() {
       }
       return new Date(0)
     }
-    
+
     let todayCount = 0
     let weekCount = 0
     let monthCount = 0
-    
+
     paymentTransactions.forEach(transaction => {
       const transactionDate = parseDate(transaction.date)
       transactionDate.setHours(0, 0, 0, 0)
-      
+
       if (transactionDate >= today) {
         todayCount++
       }
@@ -117,14 +129,14 @@ export default function OrdersPage() {
         monthCount++
       }
     })
-    
+
     return [
       { label: "Today", count: todayCount },
       { label: "This Week", count: weekCount },
       { label: "This Month", count: monthCount }
     ]
   }
-  
+
   const summaryCards = calculateSummaryCards()
 
   // Fetch orders from API
@@ -133,9 +145,9 @@ export default function OrdersPage() {
       try {
         setLoading(true)
         setError(null)
-        
+
         const response = await restaurantAPI.getOrders()
-        
+
         if (response.data?.success && response.data.data?.orders) {
           // Transform API orders to match component structure
           const transformedOrders = response.data.data.orders.map(order => {
@@ -145,7 +157,7 @@ export default function OrdersPage() {
             const diffMins = Math.floor(diffMs / 60000)
             const diffHours = Math.floor(diffMs / 3600000)
             const diffDays = Math.floor(diffMs / 86400000)
-            
+
             let timeAgo = ""
             if (diffMins < 1) {
               timeAgo = "Just now"
@@ -159,14 +171,14 @@ export default function OrdersPage() {
               const weeks = Math.floor(diffDays / 7)
               timeAgo = `${weeks} week${weeks > 1 ? 's' : ''} ago`
             }
-            
+
             return {
               id: order.orderId || order._id,
               mongoId: order._id,
               items: order.items?.length || 0,
               timeAgo: timeAgo,
               deliveryType: order.deliveryFleet === 'standard' ? 'Home Delivery' : 'Express Delivery',
-              amount: order.pricing?.total || 0,
+              amount: getOrderRestaurantAmount(order),
               status: order.status || 'pending',
               createdAt: order.createdAt,
               customerName: order.userId?.name || 'Customer',
@@ -174,7 +186,7 @@ export default function OrdersPage() {
               address: order.address
             }
           })
-          
+
           setOrders(transformedOrders)
         } else {
           setOrders([])
@@ -215,7 +227,7 @@ export default function OrdersPage() {
               const diffMins = Math.floor(diffMs / 60000)
               const diffHours = Math.floor(diffMs / 3600000)
               const diffDays = Math.floor(diffMs / 86400000)
-              
+
               let timeAgo = ""
               if (diffMins < 1) {
                 timeAgo = "Just now"
@@ -229,14 +241,14 @@ export default function OrdersPage() {
                 const weeks = Math.floor(diffDays / 7)
                 timeAgo = `${weeks} week${weeks > 1 ? 's' : ''} ago`
               }
-              
+
               return {
                 id: order.orderId || order._id,
                 mongoId: order._id,
                 items: order.items?.length || 0,
                 timeAgo: timeAgo,
                 deliveryType: order.deliveryFleet === 'standard' ? 'Home Delivery' : 'Express Delivery',
-                amount: order.pricing?.total || 0,
+                amount: getOrderRestaurantAmount(order),
                 status: order.status || 'pending',
                 createdAt: order.createdAt,
                 customerName: order.userId?.name || 'Customer',
@@ -268,7 +280,7 @@ export default function OrdersPage() {
               const diffMins = Math.floor(diffMs / 60000)
               const diffHours = Math.floor(diffMs / 3600000)
               const diffDays = Math.floor(diffMs / 86400000)
-              
+
               let timeAgo = ""
               if (diffMins < 1) {
                 timeAgo = "Just now"
@@ -282,14 +294,14 @@ export default function OrdersPage() {
                 const weeks = Math.floor(diffDays / 7)
                 timeAgo = `${weeks} week${weeks > 1 ? 's' : ''} ago`
               }
-              
+
               return {
                 id: order.orderId || order._id,
                 mongoId: order._id,
                 items: order.items?.length || 0,
                 timeAgo: timeAgo,
                 deliveryType: order.deliveryFleet === 'standard' ? 'Home Delivery' : 'Express Delivery',
-                amount: order.pricing?.total || 0,
+                amount: getOrderRestaurantAmount(order),
                 status: order.status || 'pending',
                 createdAt: order.createdAt,
                 customerName: order.userId?.name || 'Customer',
@@ -310,40 +322,40 @@ export default function OrdersPage() {
   // Calculate filter tab counts dynamically from actual orders
   // Show active orders (pending, confirmed, preparing, ready) and history orders (delivered, cancelled)
   const filterTabs = [
-    { 
-      id: "all", 
-      label: "All", 
-      count: orders.length 
+    {
+      id: "all",
+      label: "All",
+      count: orders.length
     },
-    { 
-      id: "pending", 
-      label: "Pending", 
-      count: orders.filter(o => o.status === 'pending').length 
+    {
+      id: "pending",
+      label: "Pending",
+      count: orders.filter(o => o.status === 'pending').length
     },
-    { 
-      id: "confirmed", 
-      label: "Confirmed", 
-      count: orders.filter(o => o.status === 'confirmed').length 
+    {
+      id: "confirmed",
+      label: "Confirmed",
+      count: orders.filter(o => o.status === 'confirmed').length
     },
-    { 
-      id: "preparing", 
-      label: "Preparing", 
-      count: orders.filter(o => o.status === 'preparing').length 
+    {
+      id: "preparing",
+      label: "Preparing",
+      count: orders.filter(o => o.status === 'preparing').length
     },
-    { 
-      id: "ready", 
-      label: "Ready", 
-      count: orders.filter(o => o.status === 'ready').length 
+    {
+      id: "ready",
+      label: "Ready",
+      count: orders.filter(o => o.status === 'ready').length
     },
-    { 
-      id: "delivered", 
-      label: "Delivered", 
-      count: orders.filter(o => o.status === 'delivered').length 
+    {
+      id: "delivered",
+      label: "Delivered",
+      count: orders.filter(o => o.status === 'delivered').length
     },
-    { 
-      id: "cancelled", 
-      label: "Cancelled", 
-      count: orders.filter(o => o.status === 'cancelled').length 
+    {
+      id: "cancelled",
+      label: "Cancelled",
+      count: orders.filter(o => o.status === 'cancelled').length
     }
   ]
 
@@ -379,7 +391,7 @@ export default function OrdersPage() {
   // Format status for display
   const formatStatus = (status) => {
     if (!status) return 'Unknown'
-    return status.split('_').map(word => 
+    return status.split('_').map(word =>
       word.charAt(0).toUpperCase() + word.slice(1)
     ).join(' ')
   }
@@ -389,7 +401,7 @@ export default function OrdersPage() {
       {/* Main Content */}
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-4 py-3 sticky top-0 z-50 flex items-center gap-3">
-        <button 
+        <button
           onClick={() => navigate((window.history?.state?.idx ?? 0) > 0 ? -1 : "/restaurant")}
           className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
         >
@@ -450,11 +462,10 @@ export default function OrdersPage() {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setActiveFilterTab(tab.id)}
-                className={`relative z-10 flex-shrink-0 px-4 py-2 rounded-full text-sm md:text-base font-medium transition-colors ${
-                  activeFilterTab === tab.id
-                    ? "text-white"
-                    : "bg-white text-gray-600 hover:bg-gray-100"
-                }`}
+                className={`relative z-10 flex-shrink-0 px-4 py-2 rounded-full text-sm md:text-base font-medium transition-colors ${activeFilterTab === tab.id
+                  ? "text-white"
+                  : "bg-white text-gray-600 hover:bg-gray-100"
+                  }`}
               >
                 {activeFilterTab === tab.id && (
                   <motion.div
@@ -479,8 +490,8 @@ export default function OrdersPage() {
           ) : error ? (
             <div className="text-center py-12">
               <p className="text-red-600 text-base md:text-lg mb-2">Error: {error}</p>
-              <button 
-                onClick={() => window.location.reload()} 
+              <button
+                onClick={() => window.location.reload()}
                 className="text-blue-600 hover:underline"
               >
                 Retry
@@ -490,62 +501,62 @@ export default function OrdersPage() {
             <div className="text-center py-12">
               <CheckCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
               <p className="text-gray-600 text-base md:text-lg">
-                {activeFilterTab === 'all' 
-                  ? 'No orders found' 
+                {activeFilterTab === 'all'
+                  ? 'No orders found'
                   : `No ${activeFilterTab} orders found`}
               </p>
             </div>
           ) : (
             filteredOrders.map((order, index) => (
-            <motion.div
-              key={order.id || order.mongoId}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: index * 0.1, ease: [0.4, 0, 0.2, 1] }}
-              whileHover={{ y: -4, scale: 1.01 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <Card 
-                className="bg-white shadow-sm border-0 hover:shadow-md transition-shadow cursor-pointer"
-                onClick={() => navigate(`/restaurant/orders/${order.mongoId || order.id}`)}
+              <motion.div
+                key={order.id || order.mongoId}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: index * 0.1, ease: [0.4, 0, 0.2, 1] }}
+                whileHover={{ y: -4, scale: 1.01 }}
+                whileTap={{ scale: 0.98 }}
               >
-                <CardContent className="p-3 md:p-5 py-0 gap-0">
-                  {/* Header Row */}
-                  <div className="flex items-start justify-between mb-2 md:mb-3">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-gray-900 font-bold text-sm md:text-base mb-1 leading-tight">
-                        Order #{order.id}
-                      </p>
-                      <p className="text-gray-500 text-xs md:text-sm mb-1.5">
-                        {order.items} Item{order.items !== 1 ? 's' : ''} • {order.customerName}
-                      </p>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`inline-flex items-center gap-1 ${getStatusBadgeColor(order.status)} text-[10px] md:text-xs font-medium px-2 py-0.5 rounded-full`}>
-                          <CheckCircle className="w-2.5 h-2.5 md:w-3 md:h-3" />
-                          {formatStatus(order.status)}
-                        </span>
-                        <span className="text-gray-500 text-[10px] md:text-xs">
-                          {order.timeAgo}
-                        </span>
+                <Card
+                  className="bg-white shadow-sm border-0 hover:shadow-md transition-shadow cursor-pointer"
+                  onClick={() => navigate(`/restaurant/orders/${order.mongoId || order.id}`)}
+                >
+                  <CardContent className="p-3 md:p-5 py-0 gap-0">
+                    {/* Header Row */}
+                    <div className="flex items-start justify-between mb-2 md:mb-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-gray-900 font-bold text-sm md:text-base mb-1 leading-tight">
+                          Order #{order.id}
+                        </p>
+                        <p className="text-gray-500 text-xs md:text-sm mb-1.5">
+                          {order.items} Item{order.items !== 1 ? 's' : ''} • {order.customerName}
+                        </p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`inline-flex items-center gap-1 ${getStatusBadgeColor(order.status)} text-[10px] md:text-xs font-medium px-2 py-0.5 rounded-full`}>
+                            <CheckCircle className="w-2.5 h-2.5 md:w-3 md:h-3" />
+                            {formatStatus(order.status)}
+                          </span>
+                          <span className="text-gray-500 text-[10px] md:text-xs">
+                            {order.timeAgo}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  
-                  {/* Footer Row */}
-                  <div className="flex items-center justify-between pt-2 md:pt-3 border-t border-gray-100 pb-3 md:pb-0">
-                    <span className="text-blue-600 text-xs md:text-sm font-medium">
-                      {order.deliveryType}
-                    </span>
-                    <div className="text-right">
-                      <p className="text-gray-500 text-[10px] md:text-xs mb-0.5">Amount</p>
-                      <p className="text-gray-900 font-bold text-sm md:text-base">
-                        ₹{order.amount?.toFixed(2) || '0.00'}
-                      </p>
+
+                    {/* Footer Row */}
+                    <div className="flex items-center justify-between pt-2 md:pt-3 border-t border-gray-100 pb-3 md:pb-0">
+                      <span className="text-blue-600 text-xs md:text-sm font-medium">
+                        {order.deliveryType}
+                      </span>
+                      <div className="text-right">
+                        <p className="text-gray-500 text-[10px] md:text-xs mb-0.5">Amount</p>
+                        <p className="text-gray-900 font-bold text-sm md:text-base">
+                          ₹{order.amount?.toFixed(2) || '0.00'}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
+                  </CardContent>
+                </Card>
+              </motion.div>
             ))
           )}
         </div>
@@ -553,7 +564,7 @@ export default function OrdersPage() {
 
       {/* Bottom Navigation Bar - Mobile Only */}
       <BottomNavbar onMenuClick={() => setShowMenu(true)} />
-      
+
       {/* Menu Overlay */}
       <MenuOverlay showMenu={showMenu} setShowMenu={setShowMenu} />
 

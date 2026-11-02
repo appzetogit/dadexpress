@@ -114,23 +114,29 @@ export const sendPushNotification = asyncHandler(async (req, res) => {
 
     console.log(`[PUSH NOTIFICATION] Payload:`, notificationPayload);
 
-    // Firebase limits multicast to 500 tokens at a time.
+    // Firebase limits multicast to 500 tokens at a time. Send in parallel for high speed!
     const batchSize = 500;
-    let successCount = 0;
-    let failureCount = 0;
-
+    const batches = [];
     for (let i = 0; i < tokens.length; i += batchSize) {
-        const batchTokens = tokens.slice(i, i + batchSize);
-        const response = await notificationService.sendMulticastNotification(
+        batches.push(tokens.slice(i, i + batchSize));
+    }
+
+    const batchResults = await Promise.all(
+        batches.map(batchTokens => notificationService.sendMulticastNotification(
             batchTokens,
             notificationPayload,
             { type: "admin_push", click_action: "/" }
-        );
+        ))
+    );
+
+    let successCount = 0;
+    let failureCount = 0;
+    batchResults.forEach(response => {
         if (response) {
-            successCount += response.successCount;
-            failureCount += response.failureCount;
+            successCount += response.successCount || 0;
+            failureCount += response.failureCount || 0;
         }
-    }
+    });
 
     console.log(`[PUSH NOTIFICATION] Results - Success: ${successCount}, Failures: ${failureCount}`);
 

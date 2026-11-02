@@ -1024,6 +1024,7 @@ io.on('connection', (socket) => {
           });
         }
       }
+      conversations.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
       socket.emit('support-conversations-list', conversations);
     } catch (error) {
       console.error('❌ Error getting support conversations:', error);

@@ -202,7 +202,7 @@ export default function SearchResults() {
     return null
   }
 
-  // Fetch MENU ITEMS when search query changes (case-insensitive via backend)
+  // Fetch MENU ITEMS when search query changes (case-insensitive via backend, strictly filtered by zone)
   useEffect(() => {
     if (!query.trim()) {
       setMenuItems([])
@@ -211,7 +211,16 @@ export default function SearchResults() {
     const fetchItems = async () => {
       try {
         setLoadingItems(true)
-        const res = await publicAPI.searchMenuItems(query.trim(), 20)
+        const activeZoneId = zoneId || (typeof window !== 'undefined' ? localStorage.getItem('userZoneId') : null)
+        const params = {}
+        if (activeZoneId) {
+          params.zoneId = activeZoneId
+        }
+        if (location?.latitude && location?.longitude) {
+          params.lat = location.latitude
+          params.lng = location.longitude
+        }
+        const res = await publicAPI.searchMenuItems(query.trim(), 20, params)
         if (res.data?.success && res.data?.data?.items) {
           setMenuItems(res.data.data.items)
         } else {
@@ -225,20 +234,23 @@ export default function SearchResults() {
       }
     }
     fetchItems()
-  }, [query])
+  }, [query, zoneId, location?.latitude, location?.longitude])
 
-  // Fetch restaurants from API
+  // Fetch restaurants from API (strictly filtered by zone)
   useEffect(() => {
     const fetchRestaurants = async () => {
       try {
         setLoadingRestaurants(true)
         console.log('🔄 Fetching restaurants from API...')
-        // Optional: Add zoneId if available (for sorting/filtering, but show all restaurants)
+        const activeZoneId = zoneId || (typeof window !== 'undefined' ? localStorage.getItem('userZoneId') : null)
         const params = { isActive: true }
-        if (zoneId) {
-          params.zoneId = zoneId
+        if (activeZoneId) {
+          params.zoneId = activeZoneId
         }
-        // Add comment above - only show restaurants from user zone
+        if (location?.latitude && location?.longitude) {
+          params.latitude = location.latitude
+          params.longitude = location.longitude
+        }
         const response = await restaurantAPI.getRestaurants(params)
 
         console.log('📦 Full API Response:', response)
@@ -348,7 +360,7 @@ export default function SearchResults() {
     }
 
     fetchRestaurants()
-  }, [zoneId, isOutOfService])
+  }, [zoneId, isOutOfService, location?.latitude, location?.longitude])
 
   // Update search query when URL changes
   useEffect(() => {

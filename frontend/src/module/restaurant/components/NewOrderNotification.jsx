@@ -59,7 +59,7 @@ export default function NewOrderNotification({ order, onClose, onViewOrder }) {
                   <span className="text-gray-600 font-medium">Total Amount</span>
                 </div>
                 <span className="text-2xl font-bold text-green-600">
-                  ₹{order.total?.toFixed(2) || '0.00'}
+                  ₹{Number(order.restaurantPayout || (order.pricing?.subtotal ? (order.pricing.subtotal - (order.pricing.discount || 0)) : order.total) || 0).toFixed(2)}
                 </span>
               </div>
 

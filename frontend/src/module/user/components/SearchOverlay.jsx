@@ -77,7 +77,8 @@ export default function SearchOverlay({ isOpen, onClose, searchValue, onSearchCh
 
       try {
         setLoading(true)
-        const response = await publicAPI.searchMenuItems(searchValue)
+        const savedZoneId = typeof window !== 'undefined' ? localStorage.getItem('userZoneId') : null;
+        const response = await publicAPI.searchMenuItems(searchValue, 50, savedZoneId ? { zoneId: savedZoneId } : {})
         if (response.data.success && response.data.data.items) {
           setFoods(response.data.data.items.map(item => ({
             id: item.id || item._id,

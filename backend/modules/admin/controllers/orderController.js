@@ -12,6 +12,15 @@ import { notifyUserOrderUpdate } from '../../order/services/userNotificationServ
  * GET /api/admin/orders
  * Query params: status, page, limit, search, fromDate, toDate, restaurant, paymentStatus
  */
+import { clearDashboardStatsCache } from "./adminController.js";
+
+// In-memory cache for admin orders (TTL: 5 seconds) to ensure INSTANT loading and prevent DB thrashing
+const adminOrdersCache = new Map();
+const ORDERS_CACHE_TTL_MS = 5 * 1000;
+
+export const clearAdminOrdersCache = () => {
+  adminOrdersCache.clear();
+};
 export const getOrders = asyncHandler(async (req, res) => {
   try {
     const {
@@ -27,6 +36,27 @@ export const getOrders = asyncHandler(async (req, res) => {
       customer,
       cancelledBy
     } = req.query;
+
+    const safeLimit = Math.min(Math.max(parseInt(limit) || 50, 1), 5000);
+
+    const cacheKey = JSON.stringify({
+      status: status || "all",
+      page: page || 1,
+      limit: safeLimit,
+      search: search || "",
+      fromDate: fromDate || "",
+      toDate: toDate || "",
+      restaurant: restaurant || "",
+      paymentStatus: paymentStatus || "",
+      zone: zone || "",
+      customer: customer || "",
+      cancelledBy: cancelledBy || ""
+    });
+
+    const cached = adminOrdersCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp < ORDERS_CACHE_TTL_MS)) {
+      return successResponse(res, 200, "Orders retrieved successfully", cached.data);
+    }
 
     // Build query
     const query = {
@@ -231,7 +261,7 @@ export const getOrders = asyncHandler(async (req, res) => {
     }
 
     // Calculate pagination
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const skip = (parseInt(page) - 1) * safeLimit;
 
     // Fetch orders with population and total count concurrently for fastest response
     const [orders, total] = await Promise.all([
@@ -240,7 +270,7 @@ export const getOrders = asyncHandler(async (req, res) => {
         .populate('restaurantId', 'name slug')
         .populate('deliveryPartnerId', 'name phone')
         .sort({ createdAt: -1 })
-        .limit(parseInt(limit))
+        .limit(safeLimit)
         .skip(skip)
         .lean(),
       Order.countDocuments(query)
@@ -434,15 +464,17 @@ export const getOrders = asyncHandler(async (req, res) => {
       };
     });
 
-    return successResponse(res, 200, 'Orders retrieved successfully', {
+    const responsePayload = {
       orders: transformedOrders,
       pagination: {
         page: parseInt(page),
-        limit: parseInt(limit),
+        limit: safeLimit,
         total,
-        pages: Math.ceil(total / parseInt(limit))
+        pages: Math.ceil(total / safeLimit)
       }
-    });
+    };
+    adminOrdersCache.set(cacheKey, { timestamp: Date.now(), data: responsePayload });
+    return successResponse(res, 200, 'Orders retrieved successfully', responsePayload);
   } catch (error) {
     console.error('Error fetching admin orders:', error);
     return errorResponse(res, 500, 'Failed to fetch orders');
@@ -547,6 +579,8 @@ const findOrderByIdOrOrderId = async (id) => {
  * PATCH /api/admin/orders/:id/accept
  */
 export const acceptOrder = asyncHandler(async (req, res) => {
+  clearAdminOrdersCache();
+  clearDashboardStatsCache();
   try {
     const { id } = req.params;
     const order = await findOrderByIdOrOrderId(id);
@@ -678,6 +712,8 @@ export const acceptOrder = asyncHandler(async (req, res) => {
  * PATCH /api/admin/orders/:id/reject
  */
 export const rejectOrder = asyncHandler(async (req, res) => {
+  clearAdminOrdersCache();
+  clearDashboardStatsCache();
   try {
     const { id } = req.params;
     const { reason } = req.body;
@@ -2620,6 +2656,8 @@ export const resendDeliveryNotification = asyncHandler(async (req, res) => {
  * PATCH /api/admin/orders/:id/cancel
  */
 export const cancelOrder = asyncHandler(async (req, res) => {
+  clearAdminOrdersCache();
+  clearDashboardStatsCache();
   try {
     const { id } = req.params;
     const { reason } = req.body;

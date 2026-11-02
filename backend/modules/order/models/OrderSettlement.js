@@ -167,6 +167,7 @@ const orderSettlementSchema = new mongoose.Schema({
 });
 
 // Indexes
+orderSettlementSchema.index({ orderId: 1 });
 orderSettlementSchema.index({ restaurantId: 1, settlementStatus: 1 });
 orderSettlementSchema.index({ deliveryPartnerId: 1, settlementStatus: 1 });
 orderSettlementSchema.index({ settlementStatus: 1, createdAt: -1 });

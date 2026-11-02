@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react"
-import { Search, Info, Send, Loader2, User as UserIcon, Trash2 } from "lucide-react"
+import { Search, Info, Send, Loader2, User as UserIcon, Trash2, ArrowLeft, RefreshCw } from "lucide-react"
 import io from "socket.io-client"
 import { BACKEND_BASE_URL } from "@/lib/api/config"
 import { adminAPI } from "@/lib/api"
@@ -15,6 +15,7 @@ export default function Chattings() {
   const [adminProfile, setAdminProfile] = useState(null)
   
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [messagesLoading, setMessagesLoading] = useState(false)
   const [connected, setConnected] = useState(false)
 
@@ -75,8 +76,10 @@ export default function Chattings() {
           }
         })
       )
+      enhancedConvs.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0))
       setConversations(enhancedConvs)
       setLoading(false)
+      setRefreshing(false)
     })
 
     socketRef.current.on("incoming-support-message", (payload) => {
@@ -85,18 +88,18 @@ export default function Chattings() {
         const index = prev.findIndex((c) => c.room === payload.room)
         if (index !== -1) {
           const updated = [...prev]
-          updated[index] = {
-            ...updated[index],
-            lastMessage: payload.message.text,
-            timestamp: payload.message.timestamp,
+          const existing = updated[index]
+          const moved = {
+            ...existing,
+            lastMessage: payload.message?.text || existing.lastMessage,
+            timestamp: payload.message?.timestamp || new Date().toISOString(),
           }
-          // Move to top
-          const item = updated.splice(index, 1)[0]
-          return [item, ...updated]
+          updated.splice(index, 1)
+          return [moved, ...updated]
         } else {
-             // If new conversation, trigger a refresh of list
-             socketRef.current.emit("get-support-conversations")
-             return prev
+          // If new conversation, trigger a refresh of list
+          socketRef.current?.emit("get-support-conversations")
+          return prev
         }
       })
 
@@ -119,14 +122,12 @@ export default function Chattings() {
     })
 
     socketRef.current.on("new-message", (payload) => {
-        if (selectedConversation && payload.room === selectedConversation.room) {
-            // Already handled by incoming-support-message if it's admin/user
-            // but just to be sure we don't duplicate:
-            setMessages((prev) => {
-                if (prev.some((m) => messageKey(m) === messageKey(payload.message))) return prev
-                return [...prev, payload.message]
-            })
-        }
+      if (selectedConversation && payload.room === selectedConversation.room) {
+        setMessages((prev) => {
+          if (prev.some((m) => messageKey(m) === messageKey(payload.message))) return prev
+          return [...prev, payload.message]
+        })
+      }
     })
 
     socketRef.current.on("message-deleted", (payload) => {
@@ -142,6 +143,16 @@ export default function Chattings() {
       if (socketRef.current) socketRef.current.disconnect()
     }
   }, [backendUrl, selectedConversation])
+
+  const handleRefresh = () => {
+    if (socketRef.current && connected) {
+      setRefreshing(true)
+      socketRef.current.emit("get-support-conversations")
+      if (selectedConversation) {
+        socketRef.current.emit("get-chat-messages", { room: selectedConversation.room })
+      }
+    }
+  }
 
   // DB-based search for users in support chat.
   useEffect(() => {
@@ -231,20 +242,56 @@ export default function Chattings() {
   }
 
   return (
-    <div className="p-4 lg:p-6 bg-slate-50 min-h-screen">
-      <div className="max-w-7xl mx-auto">
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="grid grid-cols-1 lg:grid-cols-2 h-[calc(100vh-8rem)]">
+    <div className="p-3 sm:p-4 lg:p-6 bg-slate-50 min-h-[calc(100vh-4rem)] flex flex-col">
+      <style>{`
+        .custom-chat-scroll::-webkit-scrollbar {
+          width: 6px;
+        }
+        .custom-chat-scroll::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .custom-chat-scroll::-webkit-scrollbar-thumb {
+          background: #cbd5e1;
+          border-radius: 9999px;
+        }
+        .custom-chat-scroll::-webkit-scrollbar-thumb:hover {
+          background: #94a3b8;
+        }
+      `}</style>
+
+      <div className="max-w-7xl w-full mx-auto flex-1 min-h-0 flex flex-col">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex-1 min-h-[550px] max-h-[calc(100vh-6.5rem)] flex flex-col">
+          <div className="grid grid-cols-1 lg:grid-cols-2 flex-1 min-h-0 h-full overflow-hidden">
             {/* Left Panel - Conversation List */}
-            <div className="border-r border-slate-200 flex flex-col">
-              <div className="p-6 border-b border-slate-200">
+            <div className={`border-r border-slate-200 flex flex-col h-full min-h-0 overflow-hidden bg-white ${
+              selectedConversation ? "hidden lg:flex" : "flex"
+            }`}>
+              {/* Header */}
+              <div className="p-4 lg:p-6 border-b border-slate-200 flex-shrink-0 bg-white">
                 <div className="flex items-center justify-between mb-4">
-                  <h1 className="text-2xl font-bold text-slate-900">Support Chat</h1>
-                  <span className={`w-3 h-3 rounded-full ${connected ? "bg-green-500" : "bg-red-500"}`} title={connected ? "Connected" : "Disconnected"} />
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-xl lg:text-2xl font-bold text-slate-900">Support Chat</h1>
+                    <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-blue-100 text-blue-700">
+                      {filteredConversations.length}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleRefresh}
+                      disabled={refreshing || !connected}
+                      title="Refresh conversations"
+                      className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors disabled:opacity-40"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin text-blue-600" : ""}`} />
+                    </button>
+                    <span className={`w-2.5 h-2.5 rounded-full ${connected ? "bg-green-500 animate-pulse" : "bg-red-500"}`} title={connected ? "Connected" : "Disconnected"} />
+                    <span className="text-xs font-semibold text-slate-500 hidden sm:inline">{connected ? "Connected" : "Disconnected"}</span>
+                  </div>
                 </div>
                 
                 {/* Search Bar */}
-                <div className="relative mb-4">
+                <div className="relative mb-3">
                   <input
                     type="text"
                     placeholder="Search by name or phone"
@@ -257,13 +304,13 @@ export default function Chattings() {
 
                 <div className="flex items-center gap-2 border-b border-slate-200">
                   <span className="px-4 py-2 text-sm font-bold border-b-2 border-blue-600 text-blue-600">
-                    Customers
+                    Customers ({filteredConversations.length})
                   </span>
                 </div>
               </div>
 
-              {/* Conversation List */}
-              <div className="flex-1 overflow-y-auto">
+              {/* Conversation List Scroll Area */}
+              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain custom-chat-scroll">
                 {loading ? (
                    <div className="flex flex-col items-center justify-center h-full p-6">
                       <Loader2 className="w-8 h-8 text-blue-600 animate-spin mb-2" />
@@ -282,9 +329,10 @@ export default function Chattings() {
                     {filteredConversations.map((conversation) => (
                       <button
                         key={conversation.id}
+                        type="button"
                         onClick={() => setSelectedConversation(conversation)}
                         className={`w-full p-4 text-left hover:bg-slate-50 transition-colors ${
-                          selectedConversation?.id === conversation.id ? "bg-blue-50/50" : ""
+                          selectedConversation?.id === conversation.id ? "bg-blue-50/70 border-l-4 border-blue-600" : ""
                         }`}
                       >
                         <div className="flex items-center gap-3">
@@ -304,15 +352,15 @@ export default function Chattings() {
                               <h3 className="text-sm font-bold text-slate-900 truncate">
                                 {conversation.name}
                               </h3>
-                              <span className="text-[10px] text-slate-400 font-bold uppercase">
+                              <span className="text-[10px] text-slate-400 font-bold uppercase shrink-0 ml-2">
                                 {formatTime(conversation.timestamp)}
                               </span>
                             </div>
-                            <p className="text-[11px] text-slate-500 font-semibold mb-1">
+                            <p className="text-[11px] text-slate-500 font-semibold mb-1 truncate">
                               {conversation.phone}
                             </p>
                             <p className="text-sm text-slate-600 truncate font-medium">
-                              {conversation.lastMessage}
+                              {conversation.lastMessage || "No messages yet"}
                             </p>
                           </div>
                         </div>
@@ -324,13 +372,24 @@ export default function Chattings() {
             </div>
 
             {/* Right Panel - Conversation View */}
-            <div className="flex flex-col relative bg-slate-50/30">
+            <div className={`flex flex-col relative bg-slate-50/30 h-full min-h-0 overflow-hidden ${
+              !selectedConversation ? "hidden lg:flex" : "flex"
+            }`}>
               {selectedConversation ? (
                 <>
                   {/* Conversation Header */}
-                  <div className="p-4 px-6 border-b border-slate-200 bg-white">
-                    <div className="flex items-center gap-3">
-                      <div className="w-11 h-11 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0 overflow-hidden border border-slate-100">
+                  <div className="p-4 px-4 lg:px-6 border-b border-slate-200 bg-white flex-shrink-0 flex items-center justify-between">
+                    <div className="flex items-center gap-3 min-w-0">
+                      {/* Mobile back button */}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedConversation(null)}
+                        className="lg:hidden p-1.5 -ml-1 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors"
+                        title="Back to conversations"
+                      >
+                        <ArrowLeft className="w-5 h-5" />
+                      </button>
+                      <div className="w-10 h-10 lg:w-11 lg:h-11 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0 overflow-hidden border border-slate-100">
                         {selectedConversation.avatar ? (
                           <img loading="lazy" decoding="async"
                             src={selectedConversation.avatar}
@@ -341,18 +400,20 @@ export default function Chattings() {
                           <UserIcon className="w-5 h-5 text-slate-400" />
                         )}
                       </div>
-                      <div>
-                        <h2 className="text-base font-bold text-slate-900">{selectedConversation.name}</h2>
+                      <div className="min-w-0">
+                        <h2 className="text-sm lg:text-base font-bold text-slate-900 truncate">{selectedConversation.name}</h2>
                         <div className="flex items-center gap-2">
                            <span className="w-2 h-2 rounded-full bg-green-500" />
-                           <p className="text-xs text-slate-500 font-bold uppercase tracking-wide">Active Session</p>
+                           <p className="text-[11px] lg:text-xs text-slate-500 font-bold uppercase tracking-wide truncate">
+                             {selectedConversation.phone !== "N/A" ? `${selectedConversation.phone} • Active Session` : "Active Session"}
+                           </p>
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  {/* Messages Area */}
-                  <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                  {/* Messages Area Scroll Container */}
+                  <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 lg:p-6 space-y-4 custom-chat-scroll">
                     {messagesLoading ? (
                         <div className="flex items-center justify-center h-full">
                            <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
@@ -367,8 +428,8 @@ export default function Chattings() {
                             const isMe = msg.senderType === "admin"
                             return (
                                 <div key={messageKey(msg) || idx} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
-                                    <div className={`flex items-end gap-1.5 ${isMe ? "flex-row-reverse" : "flex-row"}`}>
-                                      <div className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-sm shadow-sm ${
+                                    <div className={`flex items-end gap-1.5 ${isMe ? "flex-row-reverse" : "flex-row"} max-w-[85%] sm:max-w-[75%]`}>
+                                      <div className={`rounded-2xl px-4 py-2.5 text-sm shadow-sm ${
                                           isMe 
                                           ? "bg-blue-600 text-white rounded-br-none" 
                                           : "bg-white text-slate-800 border border-slate-100 rounded-bl-none"
@@ -395,23 +456,23 @@ export default function Chattings() {
                     <div ref={messagesEndRef} />
                   </div>
 
-                  {/* Message Input */}
-                  <div className="p-6 border-t border-slate-200 bg-white">
+                  {/* Message Input Footer */}
+                  <div className="p-3 lg:p-4 border-t border-slate-200 bg-white flex-shrink-0">
                     <form 
                         onSubmit={(e) => { e.preventDefault(); sendMessage(); }}
-                        className="flex items-center gap-3"
+                        className="flex items-center gap-2 sm:gap-3"
                     >
                       <input
                         type="text"
                         placeholder="Type a message..."
                         value={message}
                         onChange={(e) => setMessage(e.target.value)}
-                        className="flex-1 px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm font-medium"
+                        className="flex-1 px-4 py-2.5 sm:py-3 border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm font-medium"
                       />
                       <button 
                          type="submit"
                          disabled={!message.trim() || !connected}
-                         className="px-6 py-3 text-sm font-bold rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-all shadow-md disabled:bg-slate-300 disabled:shadow-none"
+                         className="px-4 sm:px-6 py-2.5 sm:py-3 text-sm font-bold rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-all shadow-md disabled:bg-slate-300 disabled:shadow-none shrink-0"
                       >
                         Send
                       </button>

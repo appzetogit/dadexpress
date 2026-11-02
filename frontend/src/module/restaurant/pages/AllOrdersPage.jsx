@@ -52,6 +52,7 @@ const currentWeekDates = getCurrentWeek()
 const lastWeekDates = getLastWeek()
 
 const dateRangeOptions = [
+  { label: "all orders", isAll: true },
   { label: "last 2 days", getDates: getLast2Days },
   { label: "this week", getDates: getCurrentWeek },
   { label: "last week", getDates: getLastWeek },
@@ -115,9 +116,9 @@ export default function AllOrdersPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [showCalendar, setShowCalendar] = useState(false)
   const [showDateRangePopup, setShowDateRangePopup] = useState(false)
-  const [selectedDateRange, setSelectedDateRange] = useState(dateRangeOptions[1]) // Default to "this week"
-  const [startDate, setStartDate] = useState(currentWeekDates.start)
-  const [endDate, setEndDate] = useState(currentWeekDates.end)
+  const [selectedDateRange, setSelectedDateRange] = useState(dateRangeOptions[0]) // Default to "all orders"
+  const [startDate, setStartDate] = useState(null)
+  const [endDate, setEndDate] = useState(null)
   const calendarRef = useRef(null)
   
   // Filter states
@@ -216,6 +217,22 @@ export default function AllOrdersPage() {
     const allVeg = items.every(item => item.isVeg !== false)
     if (allVeg && items.length > 0) tags.push('VEG ONLY')
     
+    // Calculate restaurant amount (exclude DadExpress platform fee, delivery fee, and GST)
+    const isCancelledOrRejected = ['CANCELLED', 'REJECTED'].includes(status)
+    let restaurantAmount = 0
+    if (order.restaurantPayout !== undefined && order.restaurantPayout !== null && Number(order.restaurantPayout) > 0) {
+      restaurantAmount = Number(order.restaurantPayout)
+    } else if (isCancelledOrRejected && order.restaurantPayout !== undefined && order.restaurantPayout !== null) {
+      restaurantAmount = Number(order.restaurantPayout)
+    } else {
+      const foodPrice = Number((order.pricing?.subtotal || 0) - (order.pricing?.discount || 0))
+      restaurantAmount = foodPrice > 0 ? foodPrice : (Number(order.pricing?.total) || Number(order.total) || 0)
+    }
+
+    const formattedTotalPrice = Number(restaurantAmount) % 1 === 0
+      ? String(restaurantAmount)
+      : Number(restaurantAmount).toFixed(2)
+
     return {
       id: order.orderId || order._id?.toString() || '',
       status,
@@ -225,7 +242,8 @@ export default function AllOrdersPage() {
       address,
       customer: customerName,
       items,
-      totalPrice: order.pricing?.total || 0,
+      totalPrice: formattedTotalPrice,
+      restaurantPayout: restaurantAmount,
       note: order.note || '',
       reason,
       tags: tags.length > 0 ? tags : undefined,
@@ -254,16 +272,18 @@ export default function AllOrdersPage() {
           // Transform orders
           const transformedOrders = response.data.data.orders.map(transformOrder)
           
-          // Filter by date range
-          const filteredByDate = transformedOrders.filter(order => {
-            if (!order.createdAt) return false
-            const orderDate = new Date(order.createdAt)
-            const start = new Date(startDate)
-            start.setHours(0, 0, 0, 0)
-            const end = new Date(endDate)
-            end.setHours(23, 59, 59, 999)
-            return orderDate >= start && orderDate <= end
-          })
+          // Filter by date range (show all if "all orders" is selected)
+          const filteredByDate = (selectedDateRange?.isAll || !startDate || !endDate)
+            ? transformedOrders
+            : transformedOrders.filter(order => {
+                if (!order.createdAt) return false
+                const orderDate = new Date(order.createdAt)
+                const start = new Date(startDate)
+                start.setHours(0, 0, 0, 0)
+                const end = new Date(endDate)
+                end.setHours(23, 59, 59, 999)
+                return orderDate >= start && orderDate <= end
+              })
           
           setOrders(filteredByDate)
         } else {
@@ -284,7 +304,7 @@ export default function AllOrdersPage() {
     if (!restaurantData) return // Don't fetch if restaurant data is not loaded yet
     
     fetchOrders()
-  }, [startDate, endDate, restaurantData, transformOrder])
+  }, [startDate, endDate, selectedDateRange, restaurantData, transformOrder])
 
   // Close calendar when clicking outside
   useEffect(() => {
@@ -323,6 +343,11 @@ export default function AllOrdersPage() {
     if (option.custom) {
       setShowDateRangePopup(false)
       setShowCalendar(true)
+    } else if (option.isAll) {
+      setSelectedDateRange(option)
+      setStartDate(null)
+      setEndDate(null)
+      setShowDateRangePopup(false)
     } else {
       const dates = option.getDates()
       setSelectedDateRange(option)
@@ -333,12 +358,17 @@ export default function AllOrdersPage() {
   }
 
   const formatDateRange = () => {
+    if (selectedDateRange?.isAll || (!startDate && !endDate)) return "All time"
     if (!startDate || !endDate) return "Select date range"
     const startDay = startDate.getDate()
     const endDay = endDate.getDate()
-    const month = startDate.toLocaleString('en-US', { month: 'short' })
+    const startMonth = startDate.toLocaleString('en-US', { month: 'short' })
+    const endMonth = endDate.toLocaleString('en-US', { month: 'short' })
     const year = startDate.getFullYear().toString().slice(-2)
-    return `${startDay} - ${endDay} ${month}'${year}`
+    if (startMonth === endMonth) {
+      return `${startDay} - ${endDay} ${startMonth}'${year}`
+    }
+    return `${startDay} ${startMonth} - ${endDay} ${endMonth}'${year}`
   }
 
   const handleCopyOrderId = (orderId, e) => {

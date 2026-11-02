@@ -15,76 +15,20 @@ class NotificationService {
     /**
      * Send a push notification to a specific device
      * @param {string} token - FCM registration token
-     * @param {Object} notification - Notification object { title, body }
+     * @param {Object} notification - Notification object { title, body, image }
      * @param {Object} data - Optional data payload
      * @param {string} platform - 'web', 'ios', 'android', 'app'
      */
     async sendPushNotification(token, notification, data = {}, platform = 'web') {
-        if (!token) {
-            logger.warn('FCM token is missing, skipping notification');
+        if (!token || typeof token !== 'string' || token.trim().length === 0 || token === 'undefined' || token === 'null') {
+            logger.warn('FCM token is invalid or missing, skipping notification');
             return null;
         }
 
         const logoUrl = process.env.CORS_ORIGIN ? `${process.env.CORS_ORIGIN}/dadexpress.jpeg` : '/dadexpress.jpeg';
-
-        const message = {
-            token: token,
-            data: {
-                ...data,
-                title: notification.title,
-                body: notification.body,
-                image: notification.image || logoUrl,
-                click_action: data.click_action || '/',
-            },
-        };
-
-        // Platform specific optimizations
-        if (platform === 'ios') {
-            message.apns = {
-                payload: {
-                    aps: {
-                        sound: 'default',
-                        badge: 1,
-                        'mutable-content': 1
-                    },
-                },
-            };
-            if (notification.image) {
-                message.apns.fcm_options = { image: notification.image };
-            }
-        } else if (platform === 'android' || platform === 'app') {
-            message.android = {
-                priority: 'high',
-                ttl: 3600000, // 1 hour TTL
-            };
-        } else if (platform === 'web') {
-            message.webpush = {
-                fcmOptions: {
-                    link: data.link || data.click_action || '/'
-                }
-            };
-        }
-
-        try {
-            const response = await admin.messaging().send(message);
-            logger.info('Successfully sent push notification:', response);
-            return response;
-        } catch (error) {
-            if (error.code === 'messaging/registration-token-not-registered') {
-                logger.warn('FCM token is no longer valid, should be removed from database');
-            }
-            logger.error('Error sending push notification:', error);
-            return null;
-        }
-    }
-
-    /**
-     * Send notification to a list of tokens
-     */
-    async sendMulticastNotification(tokens, notification, data = {}) {
-        if (!tokens || tokens.length === 0) return null;
-
-        const cleanTokens = tokens.filter(t => !!t);
+        const notificationTitle = notification.title || 'DadExpress';
+        const notificationBody = notification.body || '';
+        const notificationImage = notification.image || logoUrl;
 
         // FCM data values must all be strings
         const stringData = {};
@@ -92,58 +36,215 @@ class NotificationService {
             stringData[key] = String(val ?? '');
         }
 
-        const logoUrl = process.env.CORS_ORIGIN ? `${process.env.CORS_ORIGIN}/dadexpress.jpeg` : '/dadexpress.jpeg';
-
         const message = {
-            tokens: cleanTokens,
+            token: token.trim(),
+            notification: {
+                title: notificationTitle,
+                body: notificationBody,
+                ...(notificationImage ? { imageUrl: notificationImage } : {})
+            },
             data: {
                 ...stringData,
-                title: notification.title,
-                body: notification.body,
-                image: notification.image || logoUrl,
+                title: notificationTitle,
+                body: notificationBody,
+                image: notificationImage,
                 click_action: data.click_action || '/'
             },
             android: {
-                priority: 'high'
+                priority: 'high',
+                ttl: 3600000, // 1 hour TTL
+                notification: {
+                    title: notificationTitle,
+                    body: notificationBody,
+                    sound: 'default',
+                    priority: 'high',
+                    channelId: 'dadexpress_notifications',
+                    defaultSound: true,
+                    defaultVibrateTimings: true,
+                    ...(notificationImage ? { imageUrl: notificationImage } : {})
+                }
             },
             apns: {
+                headers: {
+                    'apns-priority': '10',
+                    'apns-push-type': 'alert'
+                },
                 payload: {
                     aps: {
+                        alert: {
+                            title: notificationTitle,
+                            body: notificationBody
+                        },
                         sound: 'default',
                         badge: 1,
+                        'content-available': 1,
                         'mutable-content': 1
-                    },
+                    }
                 },
+                ...(notificationImage ? { fcm_options: { image: notificationImage } } : {})
             },
             webpush: {
+                notification: {
+                    title: notificationTitle,
+                    body: notificationBody,
+                    icon: notificationImage,
+                    badge: logoUrl,
+                    vibrate: [200, 100, 200]
+                },
+                fcmOptions: {
+                    link: data.link || data.click_action || '/'
+                }
+            }
+        };
+
+        try {
+            const response = await admin.messaging().send(message);
+            logger.info('Successfully sent push notification:', response);
+            return response;
+        } catch (error) {
+            const code = error.code;
+            if (code === 'messaging/registration-token-not-registered' || 
+                code === 'messaging/invalid-registration-token' ||
+                code === 'messaging/invalid-argument') {
+                logger.warn(`FCM token is no longer valid (${token.substring(0, 15)}...), cleaning up from DB`);
+                this.cleanupDeadTokens([token]).catch(() => {});
+            }
+            logger.error('Error sending push notification:', error.code, error.message);
+            return null;
+        }
+    }
+
+    /**
+     * Send notification to a list of tokens (multicast)
+     */
+    async sendMulticastNotification(tokens, notification, data = {}) {
+        if (!tokens || tokens.length === 0) return null;
+
+        const cleanTokens = tokens.filter(t => typeof t === 'string' && t.trim().length > 0 && t !== 'undefined' && t !== 'null');
+        if (cleanTokens.length === 0) return null;
+
+        const logoUrl = process.env.CORS_ORIGIN ? `${process.env.CORS_ORIGIN}/dadexpress.jpeg` : '/dadexpress.jpeg';
+        const notificationTitle = notification.title || 'DadExpress';
+        const notificationBody = notification.body || '';
+        const notificationImage = notification.image || logoUrl;
+
+        // FCM data values must all be strings
+        const stringData = {};
+        for (const [key, val] of Object.entries(data)) {
+            stringData[key] = String(val ?? '');
+        }
+
+        const message = {
+            tokens: cleanTokens,
+            notification: {
+                title: notificationTitle,
+                body: notificationBody,
+                ...(notificationImage ? { imageUrl: notificationImage } : {})
+            },
+            data: {
+                ...stringData,
+                title: notificationTitle,
+                body: notificationBody,
+                image: notificationImage,
+                click_action: data.click_action || '/'
+            },
+            android: {
+                priority: 'high',
+                ttl: 3600000,
+                notification: {
+                    title: notificationTitle,
+                    body: notificationBody,
+                    sound: 'default',
+                    priority: 'high',
+                    channelId: 'dadexpress_notifications',
+                    defaultSound: true,
+                    defaultVibrateTimings: true,
+                    ...(notificationImage ? { imageUrl: notificationImage } : {})
+                }
+            },
+            apns: {
+                headers: {
+                    'apns-priority': '10',
+                    'apns-push-type': 'alert'
+                },
+                payload: {
+                    aps: {
+                        alert: {
+                            title: notificationTitle,
+                            body: notificationBody
+                        },
+                        sound: 'default',
+                        badge: 1,
+                        'content-available': 1,
+                        'mutable-content': 1
+                    }
+                },
+                ...(notificationImage ? { fcm_options: { image: notificationImage } } : {})
+            },
+            webpush: {
+                notification: {
+                    title: notificationTitle,
+                    body: notificationBody,
+                    icon: notificationImage,
+                    badge: logoUrl,
+                    vibrate: [200, 100, 200]
+                },
                 fcmOptions: {
                     link: notification.click_action || data.click_action || data.link || '/'
                 }
             }
         };
 
-        if (notification.image) {
-            message.apns.fcm_options = { image: notification.image };
-        }
-
         try {
             const response = await admin.messaging().sendEachForMulticast(message);
             logger.info(`[FCM] ${response.successCount}/${cleanTokens.length} messages sent successfully`);
 
-            // Log per-token errors for debugging
-            if (response.failureCount > 0) {
+            // Automatically clean up dead tokens from database so future sends are clean and fast!
+            if (response.failureCount > 0 && Array.isArray(response.responses)) {
+                const deadTokens = [];
                 response.responses.forEach((resp, idx) => {
                     if (!resp.success) {
-                        logger.error(`[FCM] Token #${idx} failed: ${resp.error?.code} - ${resp.error?.message}`);
-                        logger.error(`[FCM] Failed token: ${cleanTokens[idx]}`);
+                        const code = resp.error?.code;
+                        if (code === 'messaging/registration-token-not-registered' || 
+                            code === 'messaging/invalid-registration-token' ||
+                            code === 'messaging/invalid-argument') {
+                            deadTokens.push(cleanTokens[idx]);
+                        }
                     }
                 });
+                if (deadTokens.length > 0) {
+                    this.cleanupDeadTokens(deadTokens).catch(() => {});
+                }
             }
 
             return response;
         } catch (error) {
             logger.error('[FCM] Error sending multicast notification:', error.code, error.message);
             return null;
+        }
+    }
+
+    /**
+     * Clean up dead/unregistered FCM tokens from User, Delivery, and Restaurant collections
+     */
+    async cleanupDeadTokens(deadTokens) {
+        if (!Array.isArray(deadTokens) || deadTokens.length === 0) return;
+        try {
+            const { default: User } = await import('../../modules/auth/models/User.js');
+            const { default: Delivery } = await import('../../modules/delivery/models/Delivery.js');
+            const { default: Restaurant } = await import('../../modules/restaurant/models/Restaurant.js');
+
+            await Promise.allSettled([
+                User.updateMany({ fcmToken: { $in: deadTokens } }, { $unset: { fcmToken: "" } }),
+                User.updateMany({ fcmTokenMobile: { $in: deadTokens } }, { $unset: { fcmTokenMobile: "" } }),
+                Delivery.updateMany({ fcmToken: { $in: deadTokens } }, { $unset: { fcmToken: "" } }),
+                Delivery.updateMany({ fcmTokenMobile: { $in: deadTokens } }, { $unset: { fcmTokenMobile: "" } }),
+                Restaurant.updateMany({ fcmToken: { $in: deadTokens } }, { $unset: { fcmToken: "" } }),
+                Restaurant.updateMany({ fcmTokenMobile: { $in: deadTokens } }, { $unset: { fcmTokenMobile: "" } })
+            ]);
+            logger.info(`[FCM] Cleaned up ${deadTokens.length} invalid/dead tokens from database.`);
+        } catch (err) {
+            logger.warn(`[FCM] Failed to cleanup dead tokens: ${err.message}`);
         }
     }
 }

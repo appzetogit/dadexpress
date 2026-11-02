@@ -138,13 +138,37 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
     // Query orders that were delivered in the current cycle
     // First try with deliveredAt, if not found, use tracking.delivered.timestamp as fallback
     // First, find all orders that have already been settled for the restaurant
+    // IMPORTANT: In OrderSettlement, restaurantId is strictly a mongoose ObjectId.
+    // Passing custom string IDs (e.g. 'REST002514') in $in causes Mongoose to throw a CastError,
+    // which was silently failing and leaving settledOrderIds = [], causing settled orders to still appear as "Not yet settled".
     let settledOrderIds = [];
     try {
-      const settledSettlements = await mongoose.model('OrderSettlement').find({
-        restaurantId: { $in: restaurantIdVariations },
-        restaurantSettled: true
-      }).select('orderId').lean();
-      settledOrderIds = settledSettlements.map(s => s.orderId);
+      const validRestaurantObjectIds = [];
+      if (restaurant._id && mongoose.Types.ObjectId.isValid(restaurant._id.toString())) {
+        validRestaurantObjectIds.push(new mongoose.Types.ObjectId(restaurant._id.toString()));
+      }
+      if (restaurant.id && mongoose.Types.ObjectId.isValid(restaurant.id.toString())) {
+        const idObj = new mongoose.Types.ObjectId(restaurant.id.toString());
+        if (!validRestaurantObjectIds.some(o => o.equals(idObj))) {
+          validRestaurantObjectIds.push(idObj);
+        }
+      }
+
+      if (validRestaurantObjectIds.length > 0) {
+        const OrderSettlementModel = mongoose.model('OrderSettlement');
+        const settledSettlements = await OrderSettlementModel.find({
+          restaurantId: { $in: validRestaurantObjectIds },
+          $or: [
+            { restaurantSettled: true },
+            { 'metadata.restaurantFinanceReportMarked': true }
+          ]
+        }).select('orderId').lean();
+
+        settledOrderIds = settledSettlements
+          .map(s => (s.orderId?._id || s.orderId)?.toString())
+          .filter(Boolean)
+          .map(id => (mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : id));
+      }
     } catch (settleErr) {
       console.warn('⚠️ Could not fetch settled status:', settleErr.message);
     }
@@ -338,37 +362,37 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
     const currentCycleStartFormatted = formatCycleDate(currentCycleStart);
     const currentCycleEndFormatted = formatCycleDate(currentCycleEnd);
 
-    // Get past cycles orders if date range provided
+    // Get past cycles orders if date range provided (or 'all' for all orders)
     let pastCyclesData = null;
-    if (startDate && endDate) {
-      const start = new Date(startDate);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
+    const isAllOrders = startDate === 'all' || endDate === 'all';
+    if ((startDate && endDate) || isAllOrders) {
+      let pastOrderConditions = [restaurantIdQuery];
+      let startObj = null;
+      let endObj = null;
 
-      // Query orders that were delivered in the past cycle
-      // Use the same robust query logic as current cycle
+      if (!isAllOrders) {
+        startObj = new Date(startDate);
+        startObj.setHours(0, 0, 0, 0);
+        endObj = new Date(endDate);
+        endObj.setHours(23, 59, 59, 999);
+
+        pastOrderConditions.push({
+          $or: [
+            { deliveredAt: { $gte: startObj, $lte: endObj } },
+            { 'tracking.delivered.timestamp': { $gte: startObj, $lte: endObj } },
+            { createdAt: { $gte: startObj, $lte: endObj } },
+            { updatedAt: { $gte: startObj, $lte: endObj } }
+          ]
+        });
+      }
+
       let pastCycleOrders = await Order.find({
         status: 'delivered',
-        $and: [
-          restaurantIdQuery,
-          {
-            $or: [
-              { deliveredAt: { $gte: start, $lte: end } },
-              { 'tracking.delivered.timestamp': { $gte: start, $lte: end } },
-              {
-                $and: [
-                  { deliveredAt: { $exists: false } },
-                  { 'tracking.delivered.timestamp': { $exists: false } },
-                  { createdAt: { $gte: start, $lte: end } }
-                ]
-              }
-            ]
-          }
-        ]
+        $and: pastOrderConditions
       })
       .populate('userId', 'name phone email')
-      .select('orderId userId items pricing payment status address createdAt deliveredAt tracking')
+      .select('orderId userId items pricing payment status address createdAt deliveredAt tracking updatedAt')
+      .sort({ createdAt: -1 })
       .lean();
 
       console.log(`📊 Finance API - Past cycle orders found: ${pastCycleOrders.length} for date range ${startDate} to ${endDate}`);
@@ -490,9 +514,12 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
     }));
 
       pastCyclesData = {
-        dateRange: {
-          start: formatCycleDate(start),
-          end: formatCycleDate(end)
+        dateRange: isAllOrders ? {
+          start: { day: 'All', month: 'Time', year: '' },
+          end: { day: 'All', month: 'Time', year: '' }
+        } : {
+          start: formatCycleDate(startObj),
+          end: formatCycleDate(endObj)
         },
         totalOrders: pastCycleOrders.length,
         totalOrderValue: Math.round(pastCycleTotal * 100) / 100,
@@ -547,7 +574,7 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
         totalOrders: currentCycleOrders.length,
         totalOrderValue: Math.round(currentCycleTotal * 100) / 100,
         totalCommission: Math.round(currentCycleCommission * 100) / 100,
-        estimatedPayout: availablePayout, // Show available balance after pending withdrawals
+        estimatedPayout: currentCyclePayout, // Real earnings of current cycle orders
         payoutDate: null, // Will be set when payout is processed
         orders: currentCycleOrdersData // Include orders array in response
       },

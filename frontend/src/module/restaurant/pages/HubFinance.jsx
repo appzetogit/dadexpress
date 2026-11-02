@@ -140,8 +140,12 @@ export default function HubFinance() {
 
   // Parse date range string to extract start and end dates
   const parseDateRange = (dateRangeStr) => {
-    // Format: "14 Nov - 14 Dec'25"
+    // Format: "14 Nov - 14 Dec'25" or "All orders"
     try {
+      if (!dateRangeStr) return null
+      if (dateRangeStr === "All orders" || dateRangeStr === "All Time") {
+        return { startDate: "all", endDate: "all" }
+      }
       const parts = dateRangeStr.split(' - ')
       if (parts.length !== 2) return null
       
@@ -201,6 +205,19 @@ export default function HubFinance() {
 
     try {
       setLoadingPastCycles(true)
+      if (startDate === 'all' || endDate === 'all') {
+        const response = await restaurantAPI.getFinance({
+          startDate: 'all',
+          endDate: 'all'
+        })
+        if (response.data?.success && response.data?.data?.pastCycles) {
+          setPastCyclesData(response.data.data.pastCycles)
+        } else {
+          setPastCyclesData(null)
+        }
+        return
+      }
+
       // Validate dates and format as ISO strings
       const startDateObj = startDate instanceof Date ? startDate : new Date(startDate)
       const endDateObj = endDate instanceof Date ? endDate : new Date(endDate)
@@ -740,7 +757,13 @@ export default function HubFinance() {
                       ₹{(financeData?.currentCycle?.estimatedPayout || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
                     <p className="text-sm text-gray-600 mb-4">
-                      {financeData?.currentCycle?.totalOrders || 0} {financeData?.currentCycle?.totalOrders === 1 ? 'order' : 'orders'} (Not yet settled)
+                      {(financeData?.currentCycle?.totalOrders || 0) > 0 ? (
+                        <>
+                          {financeData.currentCycle.totalOrders} {financeData.currentCycle.totalOrders === 1 ? 'order' : 'orders'} (Not yet settled)
+                        </>
+                      ) : (
+                        <span className="text-emerald-600 font-semibold">All orders settled</span>
+                      )}
                     </p>
                     {(financeData?.wallet?.totalBalance || 0) > 0 && (
                       <button
@@ -753,6 +776,35 @@ export default function HubFinance() {
                         <Wallet className="h-5 w-5" />
                         Withdraw from Wallet
                       </button>
+                    )}
+                    {financeData?.currentCycle?.orders && financeData.currentCycle.orders.length > 0 && (
+                      <div className="mt-4 pt-4 border-t border-gray-200 space-y-3">
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          Current Cycle Orders ({financeData.currentCycle.orders.length})
+                        </p>
+                        {financeData.currentCycle.orders.map((order, index) => (
+                          <div key={order.orderId || index} className="border-b border-gray-100 pb-3 last:border-b-0 last:pb-0">
+                            <div className="flex justify-between items-start">
+                              <div className="flex-1">
+                                <p className="text-sm font-semibold text-gray-900 mb-1">
+                                  Order ID: {order.orderId || 'N/A'}
+                                </p>
+                                <p className="text-xs text-gray-600">
+                                  {order.foodNames || (order.items && order.items.map(item => item.name).join(', ')) || 'N/A'}
+                                </p>
+                              </div>
+                              <div className="text-right ml-4">
+                                <p className="text-sm font-bold text-gray-900">
+                                  ₹{(order.payout || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  Earning
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </>
                 )}
@@ -855,6 +907,12 @@ export default function HubFinance() {
                                 
                                 const ranges = getDateRanges()
                                 const dateOptions = [
+                                  { 
+                                    label: "All orders", 
+                                    range: "All orders",
+                                    startDate: "all",
+                                    endDate: "all"
+                                  },
                                   { 
                                     label: "Last 7 days", 
                                     range: formatDateRange(ranges.last7DaysStart, ranges.today),

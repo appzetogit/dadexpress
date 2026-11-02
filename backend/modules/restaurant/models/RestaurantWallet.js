@@ -135,6 +135,18 @@ restaurantWalletSchema.virtual('pendingBalance').get(function() {
 
 // Method to add transaction and update balances
 restaurantWalletSchema.methods.addTransaction = function(transactionData) {
+  // CRITICAL IDEMPOTENCY: Do not add duplicate payment transactions for the same order
+  if (transactionData.type === 'payment' && transactionData.orderId) {
+    const orderIdStr = transactionData.orderId.toString();
+    const existing = (this.transactions || []).find(
+      t => t.orderId && t.orderId.toString() === orderIdStr && t.type === 'payment'
+    );
+    if (existing) {
+      console.warn(`⚠️ [RestaurantWallet] Duplicate payment skipped for order ${orderIdStr}`);
+      return existing;
+    }
+  }
+
   const transaction = {
     ...transactionData,
     createdAt: new Date()

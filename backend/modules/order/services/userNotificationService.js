@@ -5,8 +5,8 @@ import notificationService from '../../../shared/services/notificationService.js
 
 /**
  * Notify user about order status update
- * @param {string} orderId - Order ID
- * @param {string} status - New status
+ * @param {string} orderId - Order ID (MongoDB ObjectId or orderId string)
+ * @param {string} status - New status ('confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered', 'cancelled')
  */
 export async function notifyUserOrderUpdate(orderId, status) {
     try {
@@ -22,37 +22,67 @@ export async function notifyUserOrderUpdate(orderId, status) {
             return;
         }
 
-        // Fetch User for FCM token
+        // Fetch User for FCM token and platform
         const customer = await User.findById(order.userId).select('fcmToken fcmTokenMobile platform').lean();
+        if (!customer) {
+            console.warn(`⚠️ User Notification: Customer ${order.userId} not found`);
+            return;
+        }
+
         const fcmTokensSet = new Set();
-        if (customer?.fcmToken) fcmTokensSet.add(JSON.stringify({ token: customer.fcmToken, plat: 'web' }));
-        if (customer?.fcmTokenMobile) fcmTokensSet.add(JSON.stringify({ token: customer.fcmTokenMobile, plat: 'app' }));
+        if (customer.fcmToken) fcmTokensSet.add(JSON.stringify({ token: customer.fcmToken, plat: 'web' }));
+        if (customer.fcmTokenMobile) fcmTokensSet.add(JSON.stringify({ token: customer.fcmTokenMobile, plat: customer.platform || 'app' }));
 
         const fcmTokens = Array.from(fcmTokensSet).map(s => JSON.parse(s));
 
-        for (const { token, plat } of fcmTokens) {
-            const statusMessages = {
-                confirmed: 'Your order has been confirmed! 🎉',
-                pending: 'Your order has been placed and is awaiting confirmation! ⏳',
-                preparing: 'Your order is being prepared! 🍳',
-                ready: 'Your order is ready for pickup! 🥡',
-                out_for_delivery: 'Your order is out for delivery! 🛵',
-                delivered: 'Your order has been delivered! Enjoy your meal! 🍽️',
-                cancelled: 'Your order has been cancelled. ❌'
-            };
+        const isCancelled = status === 'cancelled';
+        const titleMap = {
+            confirmed: 'Order Confirmed! 🎉',
+            pending: 'Order Placed! ⏳',
+            preparing: 'Preparing Your Order! 🍳',
+            ready: 'Order Ready for Pickup! 🥡',
+            out_for_delivery: 'Out for Delivery! 🛵',
+            delivered: 'Order Delivered! 🍽️',
+            cancelled: 'Order Cancelled ❌'
+        };
 
+        const title = titleMap[status] || 'Order Update';
+
+        let body = `Your order status changed to ${status}`;
+        if (isCancelled) {
+            if (order.cancellationReason && order.cancellationReason.trim()) {
+                body = `Your order #${order.orderId} was cancelled: ${order.cancellationReason}`;
+            } else {
+                body = `Your order #${order.orderId} has been cancelled.`;
+            }
+        } else {
+            const statusMessages = {
+                confirmed: `Your order #${order.orderId} has been confirmed! 🎉`,
+                pending: `Your order #${order.orderId} has been placed and is awaiting confirmation! ⏳`,
+                preparing: `Your order #${order.orderId} is being prepared! 🍳`,
+                ready: `Your order #${order.orderId} is ready for pickup! 🥡`,
+                out_for_delivery: `Your order #${order.orderId} is out for delivery! 🛵`,
+                delivered: `Your order #${order.orderId} has been delivered! Enjoy your meal! 🍽️`
+            };
+            body = statusMessages[status] || body;
+        }
+
+        for (const { token, plat } of fcmTokens) {
             await notificationService.sendPushNotification(
                 token,
                 {
-                    title: 'Order Update',
-                    body: statusMessages[status] || `Your order status changed to ${status}`
+                    title,
+                    body,
+                    image: order.items?.[0]?.image || '/dadexpress.jpeg'
                 },
                 {
-                    orderId: order.orderId,
+                    orderId: String(order.orderId),
+                    orderDbId: String(order._id),
                     type: 'order_status',
+                    status: String(status),
                     click_action: `/orders/${order.orderId}`
                 },
-                customer.platform || plat || 'web'
+                plat || customer.platform || 'web'
             );
 
             console.log(`✅ Push notification sent to customer ${order.userId} (${plat}) for status: ${status}`);
@@ -65,14 +95,20 @@ export async function notifyUserOrderUpdate(orderId, status) {
             const io = getIO ? getIO() : null;
 
             if (io) {
-                // Rooms are usually formatted as order:${orderId} or user:${userId}
-                io.to(`order:${order._id.toString()}`).emit('order_status_update', {
-                    title: "Order Update",
-                    message: `Your order status is now: ${status}`,
+                const socketPayload = {
+                    title,
+                    message: body,
                     status: status,
                     orderId: order.orderId,
+                    orderDbId: order._id.toString(),
+                    cancellationReason: order.cancellationReason || null,
                     updatedAt: new Date()
-                });
+                };
+
+                // Emit to order-specific rooms and user room
+                io.to(`order:${order._id.toString()}`).emit('order_status_update', socketPayload);
+                io.to(`order:${order.orderId}`).emit('order_status_update', socketPayload);
+                io.to(`user:${order.userId.toString()}`).emit('order_status_update', socketPayload);
                 console.log(`📢 Socket notification sent to customer for order ${order.orderId}`);
             }
         } catch (socketError) {

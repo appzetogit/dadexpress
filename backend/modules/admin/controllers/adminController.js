@@ -116,11 +116,24 @@ const getDashboardChartBuckets = (period, now) => {
  * Get Admin Dashboard Statistics
  * GET /api/admin/dashboard/stats
  */
+// In-memory cache for dashboard stats (TTL: 25 seconds) to ensure INSTANT loading and prevent DB thrashing
+const dashboardStatsCache = new Map();
+const DASHBOARD_CACHE_TTL_MS = 25 * 1000;
+
+export const clearDashboardStatsCache = () => {
+  dashboardStatsCache.clear();
+};
 export const getDashboardStats = asyncHandler(async (req, res) => {
   try {
     const { period, zone } = req.query;
     const now = new Date();
     const zoneIdString = zone && zone !== "all" ? String(zone) : null;
+
+    const cacheKey = `${zoneIdString || "all"}:${period || "overall"}`;
+    const cached = dashboardStatsCache.get(cacheKey);
+    if (cached && (now.getTime() - cached.timestamp < DASHBOARD_CACHE_TTL_MS)) {
+      return successResponse(res, 200, "Dashboard stats retrieved successfully", cached.data);
+    }
 
     // Calculate date ranges
     let periodStart = null;
@@ -448,7 +461,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
 
     const totalGST = Math.round((revenueData.totalTax || 0) * 100) / 100;
 
-    return successResponse(res, 200, "Dashboard stats retrieved successfully", {
+    const resultPayload = {
       revenue: { total: revenueData.totalRevenue, last30Days: revenueData.last30DaysRevenue, currency: "INR" },
       commission: { total: Math.round(totalCommission * 100) / 100, last30Days: Math.round(last30DaysCommission * 100) / 100, currency: "INR" },
       platformFee: { total: Math.round(totalPlatformFee * 100) / 100, last30Days: Math.round(last30DaysPlatformFee * 100) / 100, currency: "INR" },
@@ -485,7 +498,9 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       addons: { total: totalAddons },
       customers: { total: customersCount },
       orderStats: { pending: pendingOrdersCount, completed: totalOrders }
-    });
+    };
+    dashboardStatsCache.set(cacheKey, { timestamp: Date.now(), data: resultPayload });
+    return successResponse(res, 200, "Dashboard stats retrieved successfully", resultPayload);
   } catch (error) {
     logger.error(`Error fetching dashboard stats: ${error.message}`);
     return errorResponse(res, 500, "Failed to fetch dashboard statistics");

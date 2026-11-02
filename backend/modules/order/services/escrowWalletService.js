@@ -83,7 +83,7 @@ export const releaseEscrow = async (orderId) => {
 
     // Credit restaurant wallet with net earning (food price - commission)
     // Example: ₹200 order, 15% commission = ₹30, restaurant gets ₹170
-    if (settlement.restaurantEarning.netEarning > 0) {
+    if (settlement.restaurantEarning.netEarning > 0 && settlement.restaurantEarning.status !== 'credited') {
       await creditRestaurantWallet(
         settlement.restaurantId,
         settlement.orderId,
@@ -168,13 +168,23 @@ const creditRestaurantWallet = async (restaurantId, orderId, netAmount, orderNum
     const RestaurantWallet = (await import('../../restaurant/models/RestaurantWallet.js')).default;
     const wallet = await RestaurantWallet.findOrCreateByRestaurantId(restaurantId);
     
+    // IDEMPOTENCY CHECK: Ensure this order has not already been credited to restaurant wallet
+    const orderIdStr = orderId?.toString();
+    const existingTransaction = wallet.transactions?.find(t => 
+      t.orderId && t.orderId.toString() === orderIdStr && t.type === 'payment'
+    );
+    if (existingTransaction) {
+      console.warn(`⚠️ [creditRestaurantWallet] Payment already exists in wallet for order ${orderNumber} (${orderIdStr}). Skipping duplicate credit.`);
+      return existingTransaction;
+    }
+
     // Create description with breakdown
     let description = `Payment for order ${orderNumber}`;
     if (foodPrice && commission) {
       description = `Payment for order ${orderNumber} (Order: ₹${foodPrice}, Commission: ₹${commission}, Net: ₹${netAmount})`;
     }
     
-    wallet.addTransaction({
+    const newTx = wallet.addTransaction({
       amount: netAmount, // Credit net amount (₹170)
       type: 'payment',
       status: 'Completed',
@@ -220,6 +230,16 @@ const creditDeliveryWallet = async (deliveryId, orderId, amount, orderNumber, ti
     const paymentMethod = settlement?.userPayment?.paymentMethod || 'other';
     const isCOD = paymentMethod.toLowerCase() === 'cash' || paymentMethod.toLowerCase() === 'cod';
     
+    // IDEMPOTENCY CHECK: Ensure this order has not already been credited to delivery wallet
+    const orderIdStr = orderId?.toString();
+    const existingTransaction = wallet.transactions?.find(t => 
+      t.orderId && t.orderId.toString() === orderIdStr && t.type === 'payment'
+    );
+    if (existingTransaction) {
+      console.warn(`⚠️ [creditDeliveryWallet] Payment already exists in delivery wallet for order ${orderNumber} (${orderIdStr}). Skipping duplicate credit.`);
+      return existingTransaction;
+    }
+
     let description = `Payment for order ${orderNumber}`;
     if (tipAmount > 0) {
       description = `Delivery earnings for Order #${orderNumber} (incl. ₹${tipAmount.toFixed(2)} tip)`;

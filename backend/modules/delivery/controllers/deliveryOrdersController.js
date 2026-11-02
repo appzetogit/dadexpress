@@ -2265,7 +2265,12 @@ export const completeDelivery = asyncHandler(async (req, res) => {
         if (restaurant._id) {
           const restaurantWallet = await RestaurantWallet.findOrCreateByRestaurantId(restaurant._id);
 
-          // Update restaurant wallet (ONLY if escrow didn't handle it)
+          const orderIdForTransaction = (orderMongoId || order._id)?.toString();
+          const existingRestaurantTransaction = restaurantWallet.transactions?.find(
+            t => t.orderId && t.orderId.toString() === orderIdForTransaction && t.type === 'payment'
+          );
+
+          // Update restaurant wallet (ONLY if escrow didn't handle it AND no transaction exists)
           if (existingRestaurantTransaction) {
             console.warn(`⚠️ Restaurant earning already added for order ${orderIdForLog}, skipping wallet update`);
           } else if (!settlementHandledByEscrow) {

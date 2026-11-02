@@ -2422,14 +2422,26 @@ export const publicAPI = {
     return apiClient.get(`${API_ENDPOINTS.MENU.ITEMS}/${id}`);
   },
   getCategoryItems: (categoryName, params = {}) => {
+    const savedZoneId = typeof window !== 'undefined' ? localStorage.getItem('userZoneId') : null;
     return apiClient.get(
       API_ENDPOINTS.MENU.ITEMS_BY_CATEGORY.replace(":categoryName", categoryName),
-      { params }
+      {
+        params: {
+          ...(savedZoneId ? { zoneId: savedZoneId } : {}),
+          ...params
+        }
+      }
     );
   },
-  searchMenuItems: (query, limit = 50) => {
+  searchMenuItems: (query, limit = 50, extraParams = {}) => {
+    const savedZoneId = typeof window !== 'undefined' ? localStorage.getItem('userZoneId') : null;
     return apiClient.get(API_ENDPOINTS.MENU.ITEMS, {
-      params: { search: query, limit }
+      params: {
+        search: query,
+        limit,
+        ...(savedZoneId ? { zoneId: savedZoneId } : {}),
+        ...(typeof extraParams === 'object' ? extraParams : {})
+      }
     });
   }
 };

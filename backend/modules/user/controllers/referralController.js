@@ -279,10 +279,30 @@ export const getReferralAnalytics = asyncHandler(async (req, res) => {
  */
 export const getReferralUsers = asyncHandler(async (req, res) => {
     try {
-        const { page = 1, limit = 10, status } = req.query;
-        const query = status ? { status } : {};
+        const { page = 1, limit = 20, status, search } = req.query;
+        let query = status ? { status } : {};
 
-        const skip = (parseInt(page) - 1) * parseInt(limit);
+        if (search && search.trim()) {
+            const searchRegex = new RegExp(search.trim(), "i");
+            const matchedUsers = await User.find({
+                $or: [
+                    { name: searchRegex },
+                    { email: searchRegex },
+                    { phone: searchRegex }
+                ]
+            }).select("_id").lean();
+
+            const userIds = matchedUsers.map(u => u._id);
+            query.$or = [
+                { referrer: { $in: userIds } },
+                { referee: { $in: userIds } }
+            ];
+        }
+
+        const isAll = limit === "all";
+        const parsedLimit = isAll ? 10000 : Math.max(1, parseInt(limit) || 20);
+        const parsedPage = Math.max(1, parseInt(page) || 1);
+        const skip = isAll ? 0 : (parsedPage - 1) * parsedLimit;
 
         const logs = await ReferralLog.find(query)
             .populate("referrer", "name email phone")
@@ -290,7 +310,7 @@ export const getReferralUsers = asyncHandler(async (req, res) => {
             .populate("orderId", "orderId total")
             .sort({ createdAt: -1 })
             .skip(skip)
-            .limit(parseInt(limit));
+            .limit(parsedLimit);
 
         const totalLogs = await ReferralLog.countDocuments(query);
 
@@ -298,8 +318,9 @@ export const getReferralUsers = asyncHandler(async (req, res) => {
             logs,
             pagination: {
                 total: totalLogs,
-                page: parseInt(page),
-                pages: Math.ceil(totalLogs / limit) || 1
+                page: parsedPage,
+                limit: isAll ? totalLogs : parsedLimit,
+                pages: isAll ? 1 : (Math.ceil(totalLogs / parsedLimit) || 1)
             }
         });
     } catch (error) {

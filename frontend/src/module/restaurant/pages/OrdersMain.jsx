@@ -92,7 +92,11 @@ function CompletedOrders({ onSelectOrder }) {
             deliveryInstruction: order.deliveryInstruction || '',
             photoUrl: order.items?.[0]?.image || null,
             photoAlt: order.items?.[0]?.name || 'Order',
-            amount: order.restaurantPayout ?? (order.pricing?.total || order.total || 0)
+            amount: (order.restaurantPayout !== undefined && order.restaurantPayout !== null && Number(order.restaurantPayout) > 0)
+              ? Number(order.restaurantPayout)
+              : (((order.pricing?.subtotal || 0) - (order.pricing?.discount || 0)) > 0 
+                  ? ((order.pricing?.subtotal || 0) - (order.pricing?.discount || 0)) 
+                  : (order.pricing?.total || order.total || 0))
           }))
 
           transformedOrders.sort((a, b) => {
@@ -307,7 +311,11 @@ function CancelledOrders({ onSelectOrder }) {
             deliveryInstruction: order.deliveryInstruction || '',
             photoUrl: order.items?.[0]?.image || null,
             photoAlt: order.items?.[0]?.name || 'Order',
-            amount: order.restaurantPayout ?? (order.pricing?.total || order.total || 0)
+            amount: (order.restaurantPayout !== undefined && order.restaurantPayout !== null)
+              ? Number(order.restaurantPayout)
+              : (((order.pricing?.subtotal || 0) - (order.pricing?.discount || 0)) > 0 
+                  ? ((order.pricing?.subtotal || 0) - (order.pricing?.discount || 0)) 
+                  : (order.pricing?.total || order.total || 0))
           }))
 
           transformedOrders.sort((a, b) => {

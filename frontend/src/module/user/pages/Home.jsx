@@ -542,7 +542,8 @@ export default function Home() {
     const fetchItems = async () => {
       try {
         setLoadingItems(true)
-        const res = await publicAPI.searchMenuItems(query, 20)
+        const activeZoneId = resolvedZoneId || zoneId || (typeof window !== 'undefined' ? localStorage.getItem('userZoneId') : null)
+        const res = await publicAPI.searchMenuItems(query, 20, activeZoneId ? { zoneId: activeZoneId } : {})
         if (res.data?.success && res.data?.data?.items) {
           setMenuItems(res.data.data.items)
         } else {

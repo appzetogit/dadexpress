@@ -83,12 +83,27 @@ const getCurrentCycleAvailablePayout = async (restaurantId) => {
 
   let settledOrderIds = [];
   try {
-    const OrderSettlement = mongoose.model('OrderSettlement');
-    const settledSettlements = await OrderSettlement.find({
-      ...restaurantIdQuery,
-      restaurantSettled: true
-    }).select('orderId').lean();
-    settledOrderIds = settledSettlements.map(s => s.orderId);
+    const validRestaurantObjectIds = [];
+    const restIdStr = restaurantId?.toString?.() || String(restaurantId);
+    if (mongoose.Types.ObjectId.isValid(restIdStr)) {
+      validRestaurantObjectIds.push(new mongoose.Types.ObjectId(restIdStr));
+    }
+
+    if (validRestaurantObjectIds.length > 0) {
+      const OrderSettlement = mongoose.model('OrderSettlement');
+      const settledSettlements = await OrderSettlement.find({
+        restaurantId: { $in: validRestaurantObjectIds },
+        $or: [
+          { restaurantSettled: true },
+          { 'metadata.restaurantFinanceReportMarked': true }
+        ]
+      }).select('orderId').lean();
+
+      settledOrderIds = settledSettlements
+        .map(s => (s.orderId?._id || s.orderId)?.toString())
+        .filter(Boolean)
+        .map(id => (mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : id));
+    }
   } catch (err) {
     logger.warn('Could not fetch settled status: ' + err.message);
   }

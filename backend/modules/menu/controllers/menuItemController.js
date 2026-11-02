@@ -1,28 +1,149 @@
 import Menu from '../../restaurant/models/Menu.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
+import Zone from '../../admin/models/Zone.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import asyncHandler from '../../../shared/middleware/asyncHandler.js';
 import mongoose from 'mongoose';
 
 /**
- * Get all menu items with filtering
+ * Check if a point is within a zone polygon using ray casting algorithm
+ */
+function isPointInZone(lat, lng, zoneCoordinates) {
+    if (!zoneCoordinates || zoneCoordinates.length < 3) return false;
+
+    let inside = false;
+    for (let i = 0, j = zoneCoordinates.length - 1; i < zoneCoordinates.length; j = i++) {
+        const coordI = zoneCoordinates[i];
+        const coordJ = zoneCoordinates[j];
+
+        const xi = typeof coordI === 'object' ? (coordI.latitude || coordI.lat) : null;
+        const yi = typeof coordI === 'object' ? (coordI.longitude || coordI.lng) : null;
+        const xj = typeof coordJ === 'object' ? (coordJ.latitude || coordJ.lat) : null;
+        const yj = typeof coordJ === 'object' ? (coordJ.longitude || coordJ.lng) : null;
+
+        if (xi === null || yi === null || xj === null || yj === null) continue;
+
+        const intersect = ((yi > lng) !== (yj > lng)) &&
+            (lat < (xj - xi) * (lng - yi) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+    }
+    return inside;
+}
+
+/**
+ * Helper to calculate distance between two coordinates in km (Haversine)
+ */
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Earth radius in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
+
+/**
+ * Resolve active restaurant IDs filtered by user zone / coordinates
+ */
+async function getActiveRestaurantIdsForZone(zoneId, lat, lng) {
+    let targetZone = null;
+    const userLat = parseFloat(lat);
+    const userLng = parseFloat(lng);
+
+    if (zoneId) {
+        if (mongoose.Types.ObjectId.isValid(zoneId)) {
+            targetZone = await Zone.findById(zoneId).lean();
+        }
+        if (!targetZone) {
+            targetZone = await Zone.findOne({
+                $or: [{ _id: zoneId }, { name: zoneId }]
+            }).lean();
+        }
+    }
+
+    if (!targetZone && !isNaN(userLat) && !isNaN(userLng)) {
+        const allZones = await Zone.find({ isActive: true }).lean();
+        for (const z of allZones) {
+            if (isPointInZone(userLat, userLng, z.coordinates)) {
+                targetZone = z;
+                break;
+            }
+        }
+    }
+
+    const baseRestaurantFilter = {
+        isActive: true,
+        approvedAt: { $ne: null }
+    };
+
+    // If a specific zone was requested / identified:
+    if (targetZone && Array.isArray(targetZone.coordinates) && targetZone.coordinates.length >= 3) {
+        const allRestaurants = await Restaurant.find(baseRestaurantFilter)
+            .select('_id location name')
+            .lean();
+
+        const BUFFER_DISTANCE = 1.5; // 1.5km buffer around zone boundaries, matching restaurantController
+        const matchedIds = allRestaurants
+            .filter(r => {
+                const rLat = r.location?.latitude ?? (Array.isArray(r.location?.coordinates) ? r.location.coordinates[1] : null);
+                const rLng = r.location?.longitude ?? (Array.isArray(r.location?.coordinates) ? r.location.coordinates[0] : null);
+                if (rLat == null || rLng == null || isNaN(rLat) || isNaN(rLng)) return false;
+
+                // 1. Strict polygon check
+                if (isPointInZone(rLat, rLng, targetZone.coordinates)) return true;
+
+                // 2. Buffer margin check for boundary cases
+                for (const vertex of targetZone.coordinates) {
+                    const vLat = vertex.latitude || vertex.lat;
+                    const vLng = vertex.longitude || vertex.lng;
+                    if (vLat && vLng && calculateDistance(rLat, rLng, vLat, vLng) <= BUFFER_DISTANCE) {
+                        return true;
+                    }
+                }
+                return false;
+            })
+            .map(r => r._id);
+
+        console.log(`🔍 [MENU-ITEMS-ZONE] Zone "${targetZone.name}" (${targetZone._id}): matched ${matchedIds.length} restaurants out of ${allRestaurants.length}`);
+        return matchedIds;
+    }
+
+    // Fallback if no zone specified at all
+    const fallbackRestaurants = await Restaurant.find(baseRestaurantFilter).select('_id').lean();
+    return fallbackRestaurants.map(r => r._id);
+}
+
+/**
+ * Get all menu items with filtering (strictly filtered by user's zone if provided)
  * GET /api/menu/items
  */
 export const getItems = asyncHandler(async (req, res) => {
-    const { category, search, limit = 50, offset = 0 } = req.query;
+    const { category, search, limit = 50, offset = 0, zoneId, latitude, longitude, lat, lng } = req.query;
 
-    // Since items are nested in Sections/Subsections, we have to find Menus that contain them
-    // This is not very efficient for large datasets, but given the current schema, this is the way.
+    const activeRestaurantIds = await getActiveRestaurantIdsForZone(
+        zoneId,
+        latitude || lat,
+        longitude || lng
+    );
 
-    const query = { isActive: true };
+    // If zone was specified but has no restaurants, return empty results immediately
+    if (!activeRestaurantIds || activeRestaurantIds.length === 0) {
+        return successResponse(res, 200, 'Items retrieved successfully', {
+            items: [],
+            total: 0,
+            limit: parseInt(limit),
+            offset: parseInt(offset)
+        });
+    }
 
-    // Find all active restaurants first to ensure we only get items from active ones
-    const activeRestaurants = await Restaurant.find({ isActive: true }).select('_id').lean();
-    const activeRestaurantIds = activeRestaurants.map(r => r._id);
+    const query = {
+        isActive: true,
+        restaurant: { $in: activeRestaurantIds }
+    };
 
-    query.restaurant = { $in: activeRestaurantIds };
-
-    const menus = await Menu.find(query).populate('restaurant', 'name slug profileImage rating estimatedDeliveryTime location').lean();
+    const menus = await Menu.find(query).populate('restaurant', 'name slug profileImage rating estimatedDeliveryTime location cuisines').lean();
 
     let allItems = [];
 
@@ -114,18 +235,26 @@ export const getItemById = asyncHandler(async (req, res) => {
 });
 
 /**
- * Get items by category slug/name
+ * Get items by category slug/name (strictly filtered by user's zone if provided)
  * GET /api/menu/categories/:categoryName/items
  */
 export const getItemsByCategory = asyncHandler(async (req, res) => {
     const { categoryName } = req.params;
-    const { limit = 50, offset = 0 } = req.query;
+    const { limit = 50, offset = 0, zoneId, latitude, longitude, lat, lng } = req.query;
 
-    // Same logic as getItems but specifically for a category
-    // In our schema, category is a string field on the item
+    const activeRestaurantIds = await getActiveRestaurantIdsForZone(
+        zoneId,
+        latitude || lat,
+        longitude || lng
+    );
 
-    const activeRestaurants = await Restaurant.find({ isActive: true }).select('_id').lean();
-    const activeRestaurantIds = activeRestaurants.map(r => r._id);
+    if (!activeRestaurantIds || activeRestaurantIds.length === 0) {
+        return successResponse(res, 200, 'Category items retrieved successfully', {
+            items: [],
+            total: 0,
+            categoryName
+        });
+    }
 
     const menus = await Menu.find({
         restaurant: { $in: activeRestaurantIds },
