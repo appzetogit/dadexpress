@@ -866,6 +866,10 @@ export default function OrdersMain() {
         setPopupOrder(newOrder)
         setShowNewOrderPopup(true)
         setCountdown(240) // Reset countdown to 4 minutes
+        if (newOrder.preparationTime) {
+          const parsed = parseInt(newOrder.preparationTime, 10);
+          if (parsed > 0) setPrepTime(parsed);
+        }
       }
     }
   }, [isRestaurantOnline, newOrder])
@@ -949,6 +953,10 @@ export default function OrdersMain() {
             setPopupOrder(orderForPopup)
             setShowNewOrderPopup(true)
             setCountdown(240)
+            if (latestConfirmedOrder.preparationTime) {
+              const parsed = parseInt(latestConfirmedOrder.preparationTime, 10);
+              if (parsed > 0) setPrepTime(parsed);
+            }
           }
         }
       } catch (error) {

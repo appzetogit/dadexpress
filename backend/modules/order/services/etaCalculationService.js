@@ -201,6 +201,15 @@ class ETACalculationService {
           reason = 'RESTAURANT_DELAYED';
           break;
 
+        case 'RESTAURANT_ACCEPTED':
+          // Restaurant accepted: preserve the updated ETA which already includes restaurant preparationTime
+          newETA = {
+            min: currentETA.min,
+            max: currentETA.max
+          };
+          reason = 'RESTAURANT_ACCEPTED';
+          break;
+
         case 'RIDER_ASSIGNED':
           // Rider assigned, recalculate with actual rider location
           newETA = await this.recalculateWithRider(order, eventData);

@@ -365,8 +365,11 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       const restaurantPrepTime = parseInt(preparationTime, 10);
       const initialPrepTime = order.preparationTime || 0;
       
-      // Calculate additional time restaurant is adding
+      // Calculate additional time restaurant is adding (difference from initial)
       const additionalTime = Math.max(0, restaurantPrepTime - initialPrepTime);
+      
+      // Save the updated preparation time
+      order.preparationTime = restaurantPrepTime;
       
       // Update ETA with additional time (add to both min and max)
       if (order.eta) {
@@ -382,9 +385,10 @@ export const acceptOrder = asyncHandler(async (req, res) => {
         order.estimatedDeliveryTime = Math.ceil((order.eta.min + order.eta.max) / 2);
       } else {
         // If ETA doesn't exist, create it
+        const baseDelivery = order.estimatedDeliveryTime || 30;
         order.eta = {
-          min: (order.estimatedDeliveryTime || 30) + additionalTime,
-          max: (order.estimatedDeliveryTime || 30) + additionalTime,
+          min: baseDelivery + additionalTime,
+          max: baseDelivery + additionalTime + 5,
           additionalTime: additionalTime,
           lastUpdated: new Date()
         };
@@ -413,7 +417,25 @@ export const acceptOrder = asyncHandler(async (req, res) => {
         // Continue even if ETA update fails
       }
 
-      // Notify about status update
+      // Notify customer that order is preparing and time is updated
+      try {
+        await notifyUserOrderUpdate(order._id.toString(), 'preparing');
+      } catch (userNotifError) {
+        console.error('Error notifying user about order acceptance:', userNotifError);
+      }
+
+      // Emit ETA update directly via Socket so customer tracking screen updates instantly!
+      try {
+        const etaWebSocketService = (await import('../../order/services/etaWebSocketService.js')).default;
+        await etaWebSocketService.emitETAUpdate(order._id.toString(), {
+          minETA: order.eta?.min || order.estimatedDeliveryTime,
+          maxETA: order.eta?.max || order.estimatedDeliveryTime
+        }, order);
+      } catch (wsErr) {
+        console.error('Error emitting ETA update on accept:', wsErr);
+      }
+
+      // Notify restaurant
       try {
         await notifyRestaurantOrderUpdate(order._id.toString(), 'preparing');
       } catch (notifError) {
