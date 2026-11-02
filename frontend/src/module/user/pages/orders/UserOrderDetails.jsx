@@ -304,9 +304,15 @@ export default function UserOrderDetails() {
               <span className="text-gray-500">Item total</span>
               <span className="text-gray-800">₹{Number(pricing.subtotal || pricing.total || 0).toFixed(2)}</span>
             </div>
+            {Number(pricing.platformFee || 0) > 0 && (
+              <div className="flex justify-between">
+                <span className="text-gray-500">Platform fee</span>
+                <span className="text-gray-800">₹{Number(pricing.platformFee).toFixed(2)}</span>
+              </div>
+            )}
             <div className="flex justify-between">
               <span className="text-gray-500">GST (govt. taxes)</span>
-              <span className="text-gray-800">₹{Number(pricing.tax || 0).toFixed(2)}</span>
+              <span className="text-gray-800">₹{Number(pricing.tax ?? pricing.gst ?? 0).toFixed(2)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-500">Delivery fee</span>

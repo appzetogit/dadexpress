@@ -594,9 +594,14 @@ export default function OrderTracking() {
               deliveryState: apiOrder.deliveryState || null,
               createdAt: apiOrder.createdAt || null,
               updatedAt: apiOrder.updatedAt || null,
-              totalAmount: apiOrder.pricing?.total || apiOrder.totalAmount || 0,
-              deliveryFee: apiOrder.pricing?.deliveryFee || apiOrder.deliveryFee || 0,
-              gst: apiOrder.pricing?.gst || apiOrder.gst || 0,
+              subtotal: apiOrder.pricing?.subtotal ?? apiOrder.subtotal ?? 0,
+              totalAmount: apiOrder.pricing?.total ?? apiOrder.totalAmount ?? 0,
+              deliveryFee: apiOrder.pricing?.deliveryFee ?? apiOrder.deliveryFee ?? 0,
+              platformFee: apiOrder.pricing?.platformFee ?? apiOrder.platformFee ?? 0,
+              gst: apiOrder.pricing?.tax ?? apiOrder.pricing?.gst ?? apiOrder.gst ?? apiOrder.tax ?? 0,
+              tax: apiOrder.pricing?.tax ?? apiOrder.pricing?.gst ?? apiOrder.tax ?? apiOrder.gst ?? 0,
+              pricing: apiOrder.pricing || null,
+              items: apiOrder.items || order?.items || [],
               paymentMethod: apiOrder.paymentMethod || null,
               eta: apiOrder.eta || null,
               estimatedDeliveryTime: apiOrder.estimatedDeliveryTime ?? null,
@@ -733,10 +738,13 @@ export default function OrderTracking() {
             deliveryState: apiOrder.deliveryState || null,
             createdAt: apiOrder.createdAt || null,
             updatedAt: apiOrder.updatedAt || null,
-            totalAmount: apiOrder.pricing?.total || apiOrder.totalAmount || 0,
-            deliveryFee: apiOrder.pricing?.deliveryFee || apiOrder.deliveryFee || 0,
-            gst: apiOrder.pricing?.gst || apiOrder.pricing?.tax || apiOrder.gst || apiOrder.tax || 0,
-            platformFee: apiOrder.pricing?.platformFee || apiOrder.platformFee || 0,
+            subtotal: apiOrder.pricing?.subtotal ?? apiOrder.subtotal ?? 0,
+            totalAmount: apiOrder.pricing?.total ?? apiOrder.totalAmount ?? 0,
+            deliveryFee: apiOrder.pricing?.deliveryFee ?? apiOrder.deliveryFee ?? 0,
+            gst: apiOrder.pricing?.tax ?? apiOrder.pricing?.gst ?? apiOrder.gst ?? apiOrder.tax ?? 0,
+            tax: apiOrder.pricing?.tax ?? apiOrder.pricing?.gst ?? apiOrder.tax ?? apiOrder.gst ?? 0,
+            platformFee: apiOrder.pricing?.platformFee ?? apiOrder.platformFee ?? 0,
+            pricing: apiOrder.pricing || null,
             paymentMethod: apiOrder.paymentMethod || null,
             eta: apiOrder.eta || null,
             estimatedDeliveryTime: apiOrder.estimatedDeliveryTime ?? null,
@@ -1310,10 +1318,13 @@ export default function OrderTracking() {
           deliveryState: apiOrder.deliveryState || null,
           createdAt: apiOrder.createdAt || null,
           updatedAt: apiOrder.updatedAt || null,
-          totalAmount: apiOrder.pricing?.total || apiOrder.totalAmount || 0,
-          deliveryFee: apiOrder.pricing?.deliveryFee || apiOrder.deliveryFee || 0,
-          gst: apiOrder.pricing?.gst || apiOrder.pricing?.tax || apiOrder.gst || apiOrder.tax || 0,
-          platformFee: apiOrder.pricing?.platformFee || apiOrder.platformFee || 0,
+          subtotal: apiOrder.pricing?.subtotal ?? apiOrder.subtotal ?? 0,
+          totalAmount: apiOrder.pricing?.total ?? apiOrder.totalAmount ?? 0,
+          deliveryFee: apiOrder.pricing?.deliveryFee ?? apiOrder.deliveryFee ?? 0,
+          gst: apiOrder.pricing?.tax ?? apiOrder.pricing?.gst ?? apiOrder.gst ?? apiOrder.tax ?? 0,
+          tax: apiOrder.pricing?.tax ?? apiOrder.pricing?.gst ?? apiOrder.tax ?? apiOrder.gst ?? 0,
+          platformFee: apiOrder.pricing?.platformFee ?? apiOrder.platformFee ?? 0,
+          pricing: apiOrder.pricing || null,
           eta: apiOrder.eta || null,
           estimatedDeliveryTime: apiOrder.estimatedDeliveryTime ?? null,
           deliveryInstruction: apiOrder.deliveryInstruction || '',
@@ -2205,19 +2216,24 @@ export default function OrderTracking() {
               <p className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-1">Bill Summary</p>
               <div className="flex justify-between items-center text-sm">
                 <span className="text-gray-600">Item Total</span>
-                <span className="text-gray-900 font-medium">₹{Number((order?.totalAmount || 0) - (order?.deliveryFee || 0) - (order?.gst || 0) - (order?.platformFee || 0)).toFixed(2)}</span>
+                <span className="text-gray-900 font-medium">₹{Number(
+                  order?.pricing?.subtotal ??
+                  order?.subtotal ??
+                  order?.items?.reduce((sum, it) => sum + ((Number(it.price) || 0) * (Number(it.quantity) || 1)), 0) ??
+                  ((order?.totalAmount || 0) - (order?.deliveryFee || 0) - (order?.gst || 0) - (order?.platformFee || 0))
+                ).toFixed(2)}</span>
               </div>
               <div className="flex justify-between items-center text-sm">
                 <span className="text-gray-600">Delivery Fee</span>
-                <span className="text-gray-900 font-medium">₹{order?.deliveryFee || 0}</span>
+                <span className="text-gray-900 font-medium">₹{Number(order?.pricing?.deliveryFee ?? order?.deliveryFee ?? 0).toFixed(2)}</span>
               </div>
               <div className="flex justify-between items-center text-sm">
                 <span className="text-gray-600">Platform Fee</span>
-                <span className="text-gray-900 font-medium">₹{order?.platformFee || 0}</span>
+                <span className="text-gray-900 font-medium">₹{Number(order?.pricing?.platformFee ?? order?.platformFee ?? 0).toFixed(2)}</span>
               </div>
               <div className="flex justify-between items-center text-sm">
                 <span className="text-gray-600">Taxes & Charges</span>
-                <span className="text-gray-900 font-medium">₹{order?.gst || 0}</span>
+                <span className="text-gray-900 font-medium">₹{Number(order?.pricing?.tax ?? order?.pricing?.gst ?? order?.gst ?? order?.tax ?? 0).toFixed(2)}</span>
               </div>
               {Number(order?.customerTip || 0) > 0 && (
                 <div className="flex justify-between items-center text-sm">
