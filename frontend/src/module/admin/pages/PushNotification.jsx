@@ -146,10 +146,9 @@ export default function PushNotification() {
 
       if (response && response.data && response.data.success) {
         alert(
-          response.data.message ||
-          (editingNotificationId
+          editingNotificationId
             ? "Push notification updated successfully!"
-            : "Push notifications sent successfully!"),
+            : "Push notification sent successfully!"
         );
         await fetchNotifications()
         handleReset()

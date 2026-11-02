@@ -162,7 +162,7 @@ export const sendPushNotification = asyncHandler(async (req, res) => {
         updatedBy: adminId,
     });
 
-    return successResponse(res, 200, `Push notifications sent successfully! Delivered: ${successCount}, Failed: ${failureCount}`, {
+    return successResponse(res, 200, "Push notification sent successfully!", {
         successCount,
         failureCount
     });
