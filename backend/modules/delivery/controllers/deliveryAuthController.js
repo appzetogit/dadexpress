@@ -386,6 +386,11 @@ export const refreshToken = asyncHandler(async (req, res) => {
       return errorResponse(res, 401, 'Delivery boy not found or inactive');
     }
 
+    // Reject refresh tokens issued before the rider's last logout
+    if (delivery.loggedOutAt && decoded.iat && decoded.iat < Math.floor(new Date(delivery.loggedOutAt).getTime() / 1000)) {
+      return errorResponse(res, 401, 'Session logged out. Please login again.');
+    }
+
     // Note: We've removed the strict DB comparison for multi-device support
     /*
     if (delivery.refreshToken !== refreshToken) {
@@ -417,6 +422,8 @@ export const logout = asyncHandler(async (req, res) => {
   if (req.delivery) {
     // Clear refresh token from database
     req.delivery.refreshToken = null;
+    // Invalidate all tokens issued before now (old tokens restored from backup won't work)
+    req.delivery.loggedOutAt = new Date();
     await req.delivery.save();
   }
 

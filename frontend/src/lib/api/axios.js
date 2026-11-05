@@ -1,7 +1,7 @@
 import axios from "axios";
 import { toast } from "sonner";
 import { API_BASE_URL, BACKEND_BASE_URL } from "./config.js";
-import { decodeToken, getRoleFromToken } from "../utils/auth.js";
+import { decodeToken, getRoleFromToken, clearModuleAuth } from "../utils/auth.js";
 
 const safeStorage = {
   getItem(key) {
@@ -960,6 +960,19 @@ apiClient.interceptors.response.use(
           // If refresh endpoint itself returns 401 with no clear message,
           // treat it as auth failure only when module token is already expired.
           (status === 401 && isRefreshEndpointError && !lowerMsg);
+
+        // Delivery only: rider had logged out (old token e.g. restored from phone backup) -> clear and go to login
+        const originalMsg = String(error.response?.data?.message || "").toLowerCase();
+        if (
+          getAuthContextFromRequest(originalRequest)?.module === "delivery" &&
+          (lowerMsg.includes("session logged out") || originalMsg.includes("session logged out"))
+        ) {
+          clearModuleAuth("delivery");
+          if (typeof window !== "undefined" && !window.location.pathname.startsWith("/delivery/sign-in")) {
+            window.location.replace("/delivery/sign-in");
+          }
+          return Promise.reject(refreshError);
+        }
 
         // For network / server/transient refresh errors (not real auth failures),
         // don't log the user out – keep tokens and let the app retry later.

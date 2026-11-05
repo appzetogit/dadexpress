@@ -266,6 +266,8 @@ export const getOrders = asyncHandler(async (req, res) => {
     // Fetch orders with population and total count concurrently for fastest response
     const [orders, total] = await Promise.all([
       Order.find(query)
+        // Skip heavy map route polylines - not used by admin order list/reports (big payload saver)
+        .select('-deliveryState.routeToPickup.coordinates -deliveryState.routeToDelivery.coordinates')
         .populate('userId', 'name email phone')
         .populate('restaurantId', 'name slug')
         .populate('deliveryPartnerId', 'name phone')

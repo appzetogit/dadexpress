@@ -596,6 +596,9 @@ export default function RestaurantDetails() {
 
       // Helper function to apply all filters to a single item
       const filterItem = (item) => {
+        // Hide items marked out of stock by restaurant (isAvailable === false)
+        if (item.isAvailable === false) return false
+
         // Under 250 filter
         if (showOnlyUnder250) {
           if (item.isAvailable === false) return false
@@ -938,7 +941,9 @@ export default function RestaurantDetails() {
   }
 
   // Helper function to calculate final price after discount
-  const normalizePrice = (value) => {
+  // Declared as function declarations (hoisted) because processedMenuData useMemo
+  // above calls getFinalPrice during render, before this line is reached.
+  function normalizePrice(value) {
     if (typeof value === "number") return value
     if (typeof value === "string") {
       const parsed = Number(value.replace(/[^\d.]/g, ""))
@@ -947,7 +952,7 @@ export default function RestaurantDetails() {
     return 0
   }
 
-  const getFinalPrice = (item) => {
+  function getFinalPrice(item) {
     // If discount exists, calculate from originalPrice, otherwise use price directly
     if (item.originalPrice && item.discountAmount && item.discountAmount > 0) {
       // Calculate discounted price from originalPrice
@@ -961,7 +966,7 @@ export default function RestaurantDetails() {
     }
     // Otherwise, use price as the final price
     return Math.max(0, normalizePrice(item.price));
-  };
+  }
 
 
   // Highlight offers/texts for the blue offer line

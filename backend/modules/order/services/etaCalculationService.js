@@ -40,7 +40,8 @@ class ETACalculationService {
       restaurantId,
       restaurantLocation,
       userLocation,
-      riderLocation = null // Optional: if rider is already assigned
+      riderLocation = null, // Optional: if rider is already assigned
+      preparationTime = null // Optional: max item preparation time (minutes) from order items
     } = orderData;
 
     try {
@@ -58,7 +59,12 @@ class ETACalculationService {
       }
 
       // 2. Calculate restaurant preparation time
-      const restaurantPrepTime = await this.getRestaurantPrepTime(restaurantId);
+      // Use item preparation time when provided, so prep time is counted only once.
+      // Otherwise fall back to restaurant-level estimate (existing behaviour).
+      const itemPrepTime = Number(preparationTime);
+      const restaurantPrepTime = Number.isFinite(itemPrepTime) && itemPrepTime > 0
+        ? itemPrepTime
+        : await this.getRestaurantPrepTime(restaurantId);
       
       // 3. Calculate restaurant load delay (pending orders)
       const restaurantLoadDelay = await this.getRestaurantLoadDelay(restaurantId);

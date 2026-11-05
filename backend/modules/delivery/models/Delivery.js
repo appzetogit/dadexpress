@@ -241,6 +241,8 @@ const deliverySchema = new mongoose.Schema(
     },
     // Last login
     lastLogin: Date,
+    // Set on logout - tokens issued before this time are rejected (e.g. restored from phone backup)
+    loggedOutAt: Date,
     // Verification
     verifiedAt: Date,
     verifiedBy: {

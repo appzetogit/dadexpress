@@ -50,6 +50,7 @@ import { getAllDeliveryOrders, saveDeliveryOrderStatus, DELIVERY_ORDER_STATUS } 
 import { addDeliveryNotification, getUnreadDeliveryNotificationCount } from "../utils/deliveryNotifications"
 import { deliveryAPI, restaurantAPI, uploadAPI, zoneAPI } from "@/lib/api"
 import { useDeliveryNotificationContext } from "../context/DeliveryNotificationContext"
+import { markDeliveryOrderRejected } from "../hooks/useDeliveryNotifications"
 import { getGoogleMapsApiKey } from "@/lib/utils/googleMapsApiKey"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
 import { Loader } from "@googlemaps/js-api-loader"
@@ -2115,6 +2116,9 @@ export default function DeliveryHome() {
     if (rejectedOrderId) {
       rejectedOrderIdsRef.current.add(rejectedOrderId)
     }
+    // Save on phone so this rejected order doesn't pop up again after app reopen
+    markDeliveryOrderRejected(mongoId)
+    markDeliveryOrderRejected(orderIdString)
 
     stopAlertAudio()
     setShowRejectPopup(false)
@@ -2137,6 +2141,9 @@ export default function DeliveryHome() {
     if (rejectedOrderId) {
       rejectedOrderIdsRef.current.add(rejectedOrderId)
     }
+    // Save on phone so this rejected order doesn't pop up again after app reopen
+    markDeliveryOrderRejected(mongoId)
+    markDeliveryOrderRejected(orderIdString)
 
     stopAlertAudio()
     setShowRejectPopup(false)

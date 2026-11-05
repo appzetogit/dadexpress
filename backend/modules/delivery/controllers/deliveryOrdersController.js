@@ -2007,9 +2007,11 @@ export const completeDelivery = asyncHandler(async (req, res) => {
 
 
 
-    // Update order to delivered
-    const updatedOrder = await Order.findByIdAndUpdate(
-      orderMongoId,
+    // Update order to delivered - atomically, only if not already delivered.
+    // Prevents duplicate wallet credits when the complete request arrives multiple
+    // times at once (double tap / network retry): only the first request wins.
+    const updatedOrder = await Order.findOneAndUpdate(
+      { _id: orderMongoId, status: { $ne: 'delivered' } },
       {
         $set: updateData
       },
@@ -2020,6 +2022,36 @@ export const completeDelivery = asyncHandler(async (req, res) => {
       .lean();
 
     if (!updatedOrder) {
+      // Another concurrent request already marked this order delivered - return idempotent success
+      const alreadyDeliveredOrder = await Order.findOne({ _id: orderMongoId, status: 'delivered' })
+        .populate('restaurantId', 'name location address phone ownerPhone')
+        .populate('userId', 'name phone')
+        .lean();
+
+      if (alreadyDeliveredOrder) {
+        let earnings = null;
+        try {
+          const wallet = await DeliveryWallet.findOne({ deliveryId: delivery._id }).lean();
+          const existingTransaction = wallet?.transactions?.find(
+            t => t.orderId && t.orderId.toString() === orderMongoId.toString() && t.type === 'payment'
+          );
+          if (existingTransaction) {
+            earnings = {
+              amount: existingTransaction.amount,
+              transactionId: existingTransaction._id?.toString()
+            };
+          }
+        } catch (lookupError) {
+          console.warn('⚠️ Could not read existing earnings for already delivered order:', lookupError.message);
+        }
+
+        return successResponse(res, 200, 'Order already delivered', {
+          order: alreadyDeliveredOrder,
+          earnings,
+          message: 'Order was already marked as delivered'
+        });
+      }
+
       return errorResponse(res, 500, 'Failed to update order status');
     }
 

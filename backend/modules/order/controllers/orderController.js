@@ -648,12 +648,13 @@ export const createOrder = async (req, res) => {
         const etaResult = await etaCalculationService.calculateInitialETA({
           restaurantId: assignedRestaurantId,
           restaurantLocation,
-          userLocation
+          userLocation,
+          preparationTime: maxPreparationTime
         });
 
-        // Add preparation time to ETA (use max preparation time)
-        const finalMinETA = etaResult.minETA + maxPreparationTime;
-        const finalMaxETA = etaResult.maxETA + maxPreparationTime;
+        // Preparation time is already included inside calculateInitialETA (counted once)
+        const finalMinETA = etaResult.minETA;
+        const finalMaxETA = etaResult.maxETA;
 
         // Update order with ETA (including preparation time)
         order.eta = {

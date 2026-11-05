@@ -167,8 +167,16 @@ export default function OrdersPage({ statusKey = "all" }) {
     }
   }, [])
 
+  // Tracks the latest fetch so a slow older response (e.g. from "All Orders" page)
+  // cannot overwrite the list after switching to another tab like "Pending".
+  const latestFetchIdRef = useRef(0)
+  // Number of order fetches currently running (used to skip overlapping polls)
+  const inFlightFetchesRef = useRef(0)
+
   const fetchOrders = useCallback(async (options = {}) => {
     const { silent = false, withRingCheck = false } = options
+    const fetchId = ++latestFetchIdRef.current
+    inFlightFetchesRef.current += 1
 
     try {
       if (!silent) setIsLoading(true)
@@ -185,6 +193,9 @@ export default function OrdersPage({ statusKey = "all" }) {
       }
 
       const response = await adminAPI.getOrders(params)
+
+      // Ignore stale response if a newer fetch has started meanwhile
+      if (fetchId !== latestFetchIdRef.current) return
 
       if (response.data?.success && response.data?.data?.orders) {
         const nextOrders = response.data.data.orders
@@ -214,12 +225,14 @@ export default function OrdersPage({ statusKey = "all" }) {
         setOrders([])
       }
     } catch (error) {
+      if (fetchId !== latestFetchIdRef.current) return
       console.error("Error fetching orders:", error)
       if (!silent) {
         toast.error(error.response?.data?.message || "Failed to fetch orders")
       }
       setOrders([])
     } finally {
+      inFlightFetchesRef.current = Math.max(0, inFlightFetchesRef.current - 1)
       if (!silent) setIsLoading(false)
     }
   }, [statusKey, playDefaultRing, isPendingOrder])
@@ -234,6 +247,8 @@ export default function OrdersPage({ statusKey = "all" }) {
     if (statusKey !== "all") return undefined
 
     const pollId = setInterval(() => {
+      // Skip this poll if previous request is still loading (avoid piling heavy requests on server)
+      if (inFlightFetchesRef.current > 0) return
       fetchOrders({ silent: true, withRingCheck: true })
     }, 15000)
 

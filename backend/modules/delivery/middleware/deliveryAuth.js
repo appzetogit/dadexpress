@@ -37,6 +37,11 @@ export const authenticate = async (req, res, next) => {
       return errorResponse(res, 401, 'Delivery boy not found');
     }
 
+    // Reject access tokens issued before the rider's last logout (e.g. restored from phone backup)
+    if (delivery.loggedOutAt && decoded.iat && decoded.iat < Math.floor(new Date(delivery.loggedOutAt).getTime() / 1000)) {
+      return errorResponse(res, 401, 'Session logged out. Please login again.');
+    }
+
     // Allow blocked/pending status partners to access (they can see rejection reason or verification message)
     // Only block if account is inactive AND not blocked/pending (blocked/pending partners can login)
     if (!delivery.isActive && delivery.status !== 'blocked' && delivery.status !== 'pending') {

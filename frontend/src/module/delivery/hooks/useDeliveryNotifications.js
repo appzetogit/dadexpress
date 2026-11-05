@@ -5,6 +5,30 @@ import { deliveryAPI } from '@/lib/api';
 import alertSound from '@/assets/audio/alert.mp3';
 import originalSound from '@/assets/audio/original.mp3';
 
+// Orders rejected by this rider - saved on phone so they don't pop up again after app reopen
+const REJECTED_ORDERS_KEY = 'delivery_rejected_order_ids';
+
+const getRejectedOrderIds = () => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(REJECTED_ORDERS_KEY) || '[]');
+    return new Set(Array.isArray(parsed) ? parsed.map(String) : []);
+  } catch {
+    return new Set();
+  }
+};
+
+export const markDeliveryOrderRejected = (orderId) => {
+  if (!orderId) return;
+  try {
+    const ids = [...getRejectedOrderIds()].filter(id => id !== String(orderId));
+    ids.push(String(orderId));
+    // Keep only the latest 100 entries
+    localStorage.setItem(REJECTED_ORDERS_KEY, JSON.stringify(ids.slice(-100)));
+  } catch {
+    // Ignore storage errors
+  }
+};
+
 export const useDeliveryNotifications = () => {
   // CRITICAL: All hooks must be called unconditionally and in the same order every render
   // Order: useRef -> useState -> useEffect -> useCallback
@@ -12,7 +36,9 @@ export const useDeliveryNotifications = () => {
   // Step 1: All refs first (unconditional)
   const socketRef = useRef(null);
   const audioRef = useRef(null);
-  
+  // Orders already shown while the app is open (memory only - resets on app reopen)
+  const shownOrderIdsRef = useRef(new Set());
+
   // Step 2: All state hooks (unconditional)
   const [newOrder, setNewOrder] = useState(null);
   const [orderReady, setOrderReady] = useState(null);
@@ -235,17 +261,24 @@ export const useDeliveryNotifications = () => {
         const response = await deliveryAPI.getPendingOrdersForMe();
         const orders = response?.data?.data?.orders || [];
         if (orders.length > 0) {
-          // Only trigger notification for the latest order not already shown
-          const latestOrder = orders[0];
-          const lastShownKey = `delivery_last_shown_order_${deliveryPartnerId}`;
-          const lastShownId = localStorage.getItem(lastShownKey);
-          const thisOrderId = latestOrder._id?.toString() || latestOrder.orderId;
-          
-          if (thisOrderId && thisOrderId !== lastShownId) {
+          // Pick the latest pending order not shown in this app session and not rejected by rider.
+          // "Shown" is kept in memory only, so after app reopen a pending order pops up again.
+          const rejectedIds = getRejectedOrderIds();
+          const orderToShow = orders.find((order) => {
+            const mongoId = order._id?.toString();
+            const readableId = order.orderId ? String(order.orderId) : null;
+            if (!mongoId && !readableId) return false;
+            if ((mongoId && shownOrderIdsRef.current.has(mongoId)) || (readableId && shownOrderIdsRef.current.has(readableId))) return false;
+            if ((mongoId && rejectedIds.has(mongoId)) || (readableId && rejectedIds.has(readableId))) return false;
+            return true;
+          });
+
+          if (orderToShow) {
             // New order found via polling that socket may have missed
-            setNewOrder(normalizeIncomingOrderNotification(latestOrder));
+            if (orderToShow._id) shownOrderIdsRef.current.add(orderToShow._id.toString());
+            if (orderToShow.orderId) shownOrderIdsRef.current.add(String(orderToShow.orderId));
+            setNewOrder(normalizeIncomingOrderNotification(orderToShow));
             playNotificationSound();
-            localStorage.setItem(lastShownKey, thisOrderId);
           }
         }
       } catch (err) {
@@ -452,7 +485,11 @@ export const useDeliveryNotifications = () => {
         return;
       }
 
-      setNewOrder(normalizeIncomingOrderNotification(orderData));
+      const normalizedNewOrder = normalizeIncomingOrderNotification(orderData);
+      // Remember as shown so polling doesn't pop the same order again in this session
+      if (normalizedNewOrder?.orderMongoId) shownOrderIdsRef.current.add(String(normalizedNewOrder.orderMongoId));
+      if (normalizedNewOrder?.orderId) shownOrderIdsRef.current.add(String(normalizedNewOrder.orderId));
+      setNewOrder(normalizedNewOrder);
       // Audio is handled by DeliveryHome.jsx in a loop until action is taken
     });
 
@@ -468,7 +505,10 @@ export const useDeliveryNotifications = () => {
       }
 
       // Treat it the same as new_order for now - delivery partner can accept it
-      setNewOrder(normalizeIncomingOrderNotification(orderData));
+      const normalizedAvailableOrder = normalizeIncomingOrderNotification(orderData);
+      if (normalizedAvailableOrder?.orderMongoId) shownOrderIdsRef.current.add(String(normalizedAvailableOrder.orderMongoId));
+      if (normalizedAvailableOrder?.orderId) shownOrderIdsRef.current.add(String(normalizedAvailableOrder.orderId));
+      setNewOrder(normalizedAvailableOrder);
       // Audio is handled by DeliveryHome.jsx in a loop until action is taken
     });
 

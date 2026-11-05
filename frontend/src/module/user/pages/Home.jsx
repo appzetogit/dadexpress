@@ -97,6 +97,14 @@ const RestaurantItem = React.memo(({ restaurant, isFavorite, onToggleFavorite, n
   const isRestaurantOpen = restaurant.isActive && restaurant.isAcceptingOrders
   const favorite = isFavorite(restaurantSlug)
 
+  // Closed restaurants: show "Closed" badge and block opening the menu
+  const blockIfClosed = (e) => {
+    if (!isRestaurantOpen) e.preventDefault()
+  }
+  const openRestaurant = () => {
+    if (isRestaurantOpen) navigate(`/user/restaurants/${restaurantSlug}`)
+  }
+
   const displayedMenuItems = useMemo(() => {
     if (!restaurant.menuItems) return [];
     if (!vegMode) return restaurant.menuItems;
@@ -104,9 +112,9 @@ const RestaurantItem = React.memo(({ restaurant, isFavorite, onToggleFavorite, n
   }, [restaurant.menuItems, vegMode]);
 
   return (
-    <div className="space-y-5">
+    <div className={`space-y-5 ${!isRestaurantOpen ? 'opacity-60 grayscale' : ''}`}>
       <div className="flex items-start justify-between">
-        <Link to={`/user/restaurants/${restaurantSlug}`} className="space-y-1.5 flex-1 group">
+        <Link to={`/user/restaurants/${restaurantSlug}`} onClick={blockIfClosed} className={`space-y-1.5 flex-1 group ${!isRestaurantOpen ? 'cursor-not-allowed' : ''}`}>
           <div className="flex items-center gap-3">
             <h2 className="text-xl md:text-3xl font-black text-gray-900 dark:text-gray-100 group-hover:text-[#EB590E] transition-colors">
               {restaurant.name}
@@ -115,6 +123,11 @@ const RestaurantItem = React.memo(({ restaurant, isFavorite, onToggleFavorite, n
               {restaurant.rating?.toFixed(1) || '0.0'}
               <Star className="h-2.5 w-2.5 md:h-4 md:w-4 fill-white" />
             </div>
+            {!isRestaurantOpen && (
+              <span className="bg-red-600 text-white text-[10px] md:text-sm font-bold px-2 py-0.5 md:py-1 rounded-lg">
+                Closed
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2 text-[10px] md:text-sm text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider">
             <span className="flex items-center gap-1">
@@ -140,9 +153,9 @@ const RestaurantItem = React.memo(({ restaurant, isFavorite, onToggleFavorite, n
           >
             <Bookmark className={`h-5 w-5 md:h-6 md:w-6 ${favorite ? "fill-red-500 text-red-500" : ""}`} />
           </Button>
-          <Link to={`/user/restaurants/${restaurantSlug}`}>
-            <Button variant="outline" size="sm" className="flex rounded-xl font-black text-xs md:text-sm border-2 border-gray-900 dark:border-white hover:bg-[#EB590E] hover:text-white hover:border-[#EB590E] transition-all px-4 py-3 md:px-6 md:py-5">
-              VIEW MENU
+          <Link to={`/user/restaurants/${restaurantSlug}`} onClick={blockIfClosed} className={!isRestaurantOpen ? 'cursor-not-allowed' : ''}>
+            <Button variant="outline" size="sm" disabled={!isRestaurantOpen} className="flex rounded-xl font-black text-xs md:text-sm border-2 border-gray-900 dark:border-white hover:bg-[#EB590E] hover:text-white hover:border-[#EB590E] transition-all px-4 py-3 md:px-6 md:py-5">
+              {isRestaurantOpen ? 'VIEW MENU' : 'CLOSED'}
             </Button>
           </Link>
         </div>
@@ -159,7 +172,7 @@ const RestaurantItem = React.memo(({ restaurant, isFavorite, onToggleFavorite, n
                 <div
                   key={item.id}
                   className="flex-shrink-0 w-40 md:w-64 bg-white dark:bg-[#1a1a1a] rounded-[24px] border border-gray-100 dark:border-gray-800 overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer transform hover:-translate-y-2 group"
-                  onClick={() => navigate(`/user/restaurants/${restaurantSlug}`)}
+                  onClick={openRestaurant}
                 >
                   <div className="relative h-28 md:h-44 overflow-hidden">
                     <OptimizedImage
@@ -193,9 +206,10 @@ const RestaurantItem = React.memo(({ restaurant, isFavorite, onToggleFavorite, n
                         variant="outline"
                         size="sm"
                         className="bg-[#FFF2EB] text-[#EB590E] border-[#EB590E] hover:bg-[#EB590E] hover:text-white h-7 md:h-9 px-4 md:px-6 text-[10px] md:text-sm font-black rounded-lg"
+                        disabled={!isRestaurantOpen}
                         onClick={(e) => {
                           e.stopPropagation()
-                          navigate(`/user/restaurants/${restaurantSlug}`)
+                          openRestaurant()
                         }}
                       >
                         ADD
@@ -206,7 +220,7 @@ const RestaurantItem = React.memo(({ restaurant, isFavorite, onToggleFavorite, n
               ))}
               <div
                 className="flex-shrink-0 w-32 md:w-48 bg-gray-50 dark:bg-[#1a1a1a]/50 rounded-[24px] border-2 border-dashed border-gray-200 dark:border-gray-800 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-[#EB590E] hover:bg-[#FFF2EB] transition-all group"
-                onClick={() => navigate(`/user/restaurants/${restaurantSlug}`)}
+                onClick={openRestaurant}
               >
                 <div className="w-10 h-10 md:w-14 md:h-14 bg-white dark:bg-[#1a1a1a] rounded-full flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
                   <ArrowRight className="h-5 w-5 md:h-7 md:w-7 text-[#EB590E]" />
@@ -512,7 +526,17 @@ export default function Home() {
   const [prevVegMode, setPrevVegMode] = useState(vegMode)
   const [showVegModePopup, setShowVegModePopup] = useState(false)
   const [showSwitchOffPopup, setShowSwitchOffPopup] = useState(false)
-  const [vegModeOption, setVegModeOption] = useState("pure-veg") // "all" or "pure-veg"
+  // "all" or "pure-veg" - persisted so the choice survives app reopen (default "pure-veg")
+  const [vegModeOption, setVegModeOption] = useState(() => {
+    try {
+      return localStorage.getItem("userVegModeOption") === "all" ? "all" : "pure-veg"
+    } catch {
+      return "pure-veg"
+    }
+  })
+  useEffect(() => {
+    try { localStorage.setItem("userVegModeOption", vegModeOption) } catch { }
+  }, [vegModeOption])
   const [isApplyingVegMode, setIsApplyingVegMode] = useState(false)
   const [isSwitchingOffVegMode, setIsSwitchingOffVegMode] = useState(false)
   const [popupPosition, setPopupPosition] = useState({ top: 0, right: 0 })
