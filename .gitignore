@@ -3,3 +3,5 @@ temp_auto_push.bat
 temp_interactive_push.bat
 
 backend/images/
+config.bat
+node_modules
